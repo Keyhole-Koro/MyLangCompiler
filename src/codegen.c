@@ -290,6 +290,9 @@ static int collect_locals(CompilerContext *cc, ASTNode *node, char **locals)
         for (int s = 0; s < slots; s++) {
             locals[count++] = node->var_decl.name;
         }
+        if (node->var_decl.init) {
+            count += collect_locals(cc, node->var_decl.init, locals + count);
+        }
         break; }
     case AST_FOR:
         // Collect locals from the init part (e.g. for (int i = ...))
@@ -306,8 +309,58 @@ static int collect_locals(CompilerContext *cc, ASTNode *node, char **locals)
             count += collect_locals(cc, node->if_stmt.then_stmt, locals + count);
         if (node->if_stmt.else_stmt)
             count += collect_locals(cc, node->if_stmt.else_stmt, locals + count);
+        count += collect_locals(cc, node->if_stmt.cond, locals + count);
         break;
-    // Add other cases (AST_WHILE, AST_BLOCK, etc.) if needed
+    case AST_STMT_EXPR:
+        count += collect_locals(cc, node->stmt_expr.block, locals + count);
+        break;
+    case AST_EXPR_STMT:
+        count += collect_locals(cc, node->expr_stmt.expr, locals + count);
+        break;
+    case AST_RETURN:
+        count += collect_locals(cc, node->ret.expr, locals + count);
+        break;
+    case AST_YIELD:
+        count += collect_locals(cc, node->yield_stmt.expr, locals + count);
+        break;
+    case AST_WHILE:
+        count += collect_locals(cc, node->while_stmt.cond, locals + count);
+        count += collect_locals(cc, node->while_stmt.body, locals + count);
+        break;
+    case AST_DO_WHILE:
+        count += collect_locals(cc, node->do_while_stmt.cond, locals + count);
+        count += collect_locals(cc, node->do_while_stmt.body, locals + count);
+        break;
+    case AST_BINARY:
+        count += collect_locals(cc, node->binary.left, locals + count);
+        count += collect_locals(cc, node->binary.right, locals + count);
+        break;
+    case AST_ASSIGN:
+        count += collect_locals(cc, node->assign.left, locals + count);
+        count += collect_locals(cc, node->assign.right, locals + count);
+        break;
+    case AST_UNARY:
+        count += collect_locals(cc, node->unary.operand, locals + count);
+        break;
+    case AST_TERNARY:
+        count += collect_locals(cc, node->ternary.cond, locals + count);
+        count += collect_locals(cc, node->ternary.then_expr, locals + count);
+        count += collect_locals(cc, node->ternary.else_expr, locals + count);
+        break;
+    case AST_CALL:
+        for(int i=0; i<node->call.arg_count; i++)
+             count += collect_locals(cc, node->call.args[i], locals + count);
+        break;
+    case AST_MEMBER_ACCESS:
+        count += collect_locals(cc, node->member_access.lhs, locals + count);
+        break;
+    case AST_ARROW_ACCESS:
+        count += collect_locals(cc, node->arrow_access.lhs, locals + count);
+        break;
+    case AST_SIZEOF:
+        // sizeof usually doesn't evaluate, but for safety in this simple compiler
+        count += collect_locals(cc, node->sizeof_expr.expr, locals + count);
+        break;
     default:
         break;
     }
@@ -927,6 +980,9 @@ static int collect_local_type_info(CompilerContext *cc, ASTNode *node, LocalInfo
             set_localinfo_from_type(cc, &arr[n], node->var_decl.var_type);
         }
         n++;
+        if (node->var_decl.init) {
+            n += collect_local_type_info(cc, node->var_decl.init, arr ? (arr + n) : NULL);
+        }
         break;
     case AST_FOR:
         if (node->for_stmt.init)
@@ -939,6 +995,56 @@ static int collect_local_type_info(CompilerContext *cc, ASTNode *node, LocalInfo
         n += collect_local_type_info(cc, node->if_stmt.then_stmt, arr ? (arr + n) : NULL);
         if (node->if_stmt.else_stmt)
             n += collect_local_type_info(cc, node->if_stmt.else_stmt, arr ? (arr + n) : NULL);
+        n += collect_local_type_info(cc, node->if_stmt.cond, arr ? (arr + n) : NULL);
+        break;
+    case AST_STMT_EXPR:
+        n += collect_local_type_info(cc, node->stmt_expr.block, arr ? (arr + n) : NULL);
+        break;
+    case AST_EXPR_STMT:
+        n += collect_local_type_info(cc, node->expr_stmt.expr, arr ? (arr + n) : NULL);
+        break;
+    case AST_RETURN:
+        n += collect_local_type_info(cc, node->ret.expr, arr ? (arr + n) : NULL);
+        break;
+    case AST_YIELD:
+        n += collect_local_type_info(cc, node->yield_stmt.expr, arr ? (arr + n) : NULL);
+        break;
+    case AST_WHILE:
+        n += collect_local_type_info(cc, node->while_stmt.cond, arr ? (arr + n) : NULL);
+        n += collect_local_type_info(cc, node->while_stmt.body, arr ? (arr + n) : NULL);
+        break;
+    case AST_DO_WHILE:
+        n += collect_local_type_info(cc, node->do_while_stmt.cond, arr ? (arr + n) : NULL);
+        n += collect_local_type_info(cc, node->do_while_stmt.body, arr ? (arr + n) : NULL);
+        break;
+    case AST_BINARY:
+        n += collect_local_type_info(cc, node->binary.left, arr ? (arr + n) : NULL);
+        n += collect_local_type_info(cc, node->binary.right, arr ? (arr + n) : NULL);
+        break;
+    case AST_ASSIGN:
+        n += collect_local_type_info(cc, node->assign.left, arr ? (arr + n) : NULL);
+        n += collect_local_type_info(cc, node->assign.right, arr ? (arr + n) : NULL);
+        break;
+    case AST_UNARY:
+        n += collect_local_type_info(cc, node->unary.operand, arr ? (arr + n) : NULL);
+        break;
+    case AST_TERNARY:
+        n += collect_local_type_info(cc, node->ternary.cond, arr ? (arr + n) : NULL);
+        n += collect_local_type_info(cc, node->ternary.then_expr, arr ? (arr + n) : NULL);
+        n += collect_local_type_info(cc, node->ternary.else_expr, arr ? (arr + n) : NULL);
+        break;
+    case AST_CALL:
+        for(int i=0; i<node->call.arg_count; i++)
+             n += collect_local_type_info(cc, node->call.args[i], arr ? (arr + n) : NULL);
+        break;
+    case AST_MEMBER_ACCESS:
+        n += collect_local_type_info(cc, node->member_access.lhs, arr ? (arr + n) : NULL);
+        break;
+    case AST_ARROW_ACCESS:
+        n += collect_local_type_info(cc, node->arrow_access.lhs, arr ? (arr + n) : NULL);
+        break;
+    case AST_SIZEOF:
+        n += collect_local_type_info(cc, node->sizeof_expr.expr, arr ? (arr + n) : NULL);
         break;
     default:
         break;
@@ -1602,6 +1708,12 @@ static void _gen_expr(CompilerContext *cc, ASTNode *node, StringBuilder *sb, con
         sb_append(sb, "%s:\n", label_end);
         break;
     }
+    case AST_STMT_EXPR:
+        gen_stmt(cc, node->stmt_expr.block, sb, params, param_count, locals, local_count);
+        // Assuming yield put the result in r1
+        if (strcmp(target_reg, "r1") != 0)
+            sb_append(sb, "  mov %s, r1\n", target_reg);
+        break;
     case AST_NUMBER:
         sb_append(sb, "  \n; load constant %s into %s\n", node->number.value, target_reg);
         sb_append(sb, "  movi  %s, %s\n", target_reg, node->number.value);
@@ -1827,6 +1939,10 @@ static void gen_stmt_internal(CompilerContext *cc, ASTNode *node, StringBuilder 
         sb_append(sb, "  \n; return\n");
         if (cc->return_label)
             sb_append(sb, "  jmp %s\n", cc->return_label);
+        break;
+    case AST_YIELD:
+        gen_expr(cc, node->yield_stmt.expr, sb, "r1", params, param_count, locals, local_count);
+        // r1 = yield value. We just fall through.
         break;
     case AST_BLOCK:
         for (int i = 0; i < node->block.count; i++)

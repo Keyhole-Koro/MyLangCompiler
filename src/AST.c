@@ -34,6 +34,8 @@ char *astType2str(ASTNodeType type) {
         case AST_SIZEOF: return "AST_SIZEOF";
         case AST_TERNARY: return "AST_TERNARY";
         case AST_IMPORT: return "AST_IMPORT";
+        case AST_YIELD: return "AST_YIELD";
+        case AST_STMT_EXPR: return "AST_STMT_EXPR";
     }
     return "<unknown>";
 }

@@ -63,6 +63,7 @@ typedef enum {
     BREAK,    // break
     CONTINUE, // continue
     RETURN,   // return
+    YIELD,    // yield
     TYPEDEF,  // typedef
     STRUCT,   // struct
     UNION,    // union

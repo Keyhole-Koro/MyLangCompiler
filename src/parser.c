@@ -315,11 +315,23 @@ ASTNode *new_return(ASTNode *expr) {
     node->ret.expr = expr;
     return node;
 }
+ASTNode *new_yield(ASTNode *expr) {
+    ASTNode *node = malloc(sizeof(ASTNode));
+    node->type = AST_YIELD;
+    node->yield_stmt.expr = expr;
+    return node;
+}
 ASTNode *new_block(ASTNode **stmts, int count) {
     ASTNode *node = malloc(sizeof(ASTNode));
     node->type = AST_BLOCK;
     node->block.stmts = stmts;
     node->block.count = count;
+    return node;
+}
+ASTNode *new_stmt_expr(ASTNode *block) {
+    ASTNode *node = malloc(sizeof(ASTNode));
+    node->type = AST_STMT_EXPR;
+    node->stmt_expr.block = block;
     return node;
 }
 ASTNode *new_call(char *name, ASTNode **args, int arg_count) {
@@ -421,6 +433,7 @@ ASTNode *parse_expr(Token **cur);
 ASTNode *parse_variable_declaration(Token **cur, int need_semicolon);
 ASTNode *parse_struct(Token **cur);
 ASTNode *parse_type(Token **cur);
+ASTNode *parse_block(Token **cur);
 
 ASTNode *parse_primary(Token **cur) {
 
@@ -480,6 +493,11 @@ ASTNode *parse_primary(Token **cur) {
 
     if ((*cur)->kind == L_PARENTHESES) {
         *cur = (*cur)->next;
+        if ((*cur)->kind == L_BRACE) {
+            ASTNode *block = parse_block(cur);
+            if (!expect(cur, R_PARENTHESES)) parse_error("expected ')' after statement expression", token_head, *cur);
+            return new_stmt_expr(block);
+        }
         ASTNode *node = parse_expr(cur);
         if (!expect(cur, R_PARENTHESES)) parse_error("expected ')'", token_head, *cur);
         return node;
@@ -864,6 +882,7 @@ ASTNode** parse_param_list(Token **cur, int *out_count) {
 }
 
 ASTNode *parse_stmt(Token **cur);
+ASTNode *parse_block(Token **cur);
 
 ASTNode *parse_block(Token **cur) {
     if (!expect(cur, L_BRACE)) parse_error("expected '{'", token_head, *cur);
@@ -1031,6 +1050,12 @@ ASTNode *parse_stmt(Token **cur) {
     if ((*cur)->kind == DO) return parse_do_while_stmt(cur);
     if ((*cur)->kind == FOR) return parse_for_stmt(cur);
     if ((*cur)->kind == RETURN) return parse_return_stmt(cur);
+    if ((*cur)->kind == YIELD) {
+        *cur = (*cur)->next;
+        ASTNode *expr = parse_expr(cur);
+        if (!expect(cur, SEMICOLON)) parse_error("expected ';' after yield", token_head, *cur);
+        return new_yield(expr);
+    }
 
     if ((*cur)->kind == BREAK) {
         *cur = (*cur)->next;
@@ -1224,10 +1249,18 @@ void print_ast(ASTNode *node, int indent) {
         INDENT; printf("Return\n");
         print_ast(node->ret.expr, indent+1);
         break;
+    case AST_YIELD:
+        INDENT; printf("Yield\n");
+        print_ast(node->yield_stmt.expr, indent+1);
+        break;
     case AST_BLOCK:
         INDENT; printf("Block\n");
         for (int i = 0; i < node->block.count; i++)
             print_ast(node->block.stmts[i], indent+1);
+        break;
+    case AST_STMT_EXPR:
+        INDENT; printf("StmtExpr\n");
+        print_ast(node->stmt_expr.block, indent+1);
         break;
     case AST_FUNDEF:
         INDENT; printf("Function:  %s\n", node->fundef.name);
@@ -1417,10 +1450,18 @@ void fprint_ast(FILE *out, ASTNode *node, int indent) {
         INDENT; fprintf(out, "Return\n");
         fprint_ast(out, node->ret.expr, indent+1);
         break;
+    case AST_YIELD:
+        INDENT; fprintf(out, "Yield\n");
+        fprint_ast(out, node->yield_stmt.expr, indent+1);
+        break;
     case AST_BLOCK:
         INDENT; fprintf(out, "Block\n");
         for (int i = 0; i < node->block.count; i++)
             fprint_ast(out, node->block.stmts[i], indent+1);
+        break;
+    case AST_STMT_EXPR:
+        INDENT; fprintf(out, "StmtExpr\n");
+        fprint_ast(out, node->stmt_expr.block, indent+1);
         break;
     case AST_FUNDEF:
         INDENT; fprintf(out, "Function:  %s\n", node->fundef.name);
@@ -1575,16 +1616,21 @@ void free_ast(ASTNode *node) {
             free_ast(node->if_stmt.then_stmt);
             if (node->if_stmt.else_stmt) free_ast(node->if_stmt.else_stmt);
             break;
-        case AST_RETURN:
-            free_ast(node->ret.expr);
-            break;
-        case AST_BLOCK:
-            for (int i = 0; i < node->block.count; i++)
-                free_ast(node->block.stmts[i]);
-            free(node->block.stmts);
-            break;
-        case AST_FUNDEF:
-            if (node->fundef.ret_type) free_ast(node->fundef.ret_type);
+            case AST_RETURN:
+                    free_ast(node->ret.expr);
+                    break;
+            case AST_YIELD:
+                    free_ast(node->yield_stmt.expr);
+                    break;
+            case AST_BLOCK:
+                    for (int i = 0; i < node->block.count; i++)
+                        free_ast(node->block.stmts[i]);
+                    free(node->block.stmts);
+                    break;
+            case AST_STMT_EXPR:
+                    free_ast(node->stmt_expr.block);
+                    break;
+            case AST_FUNDEF:            if (node->fundef.ret_type) free_ast(node->fundef.ret_type);
             free(node->fundef.name);
             for (int i = 0; i < node->fundef.param_count; i++)
                 free_ast(node->fundef.params[i]);

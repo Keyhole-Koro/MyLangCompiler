@@ -34,6 +34,7 @@ StringTokenKindMap reservedWords[] = {
     {"if", IF}, {"else", ELSE}, {"while", WHILE}, {"do", DO}, {"for", FOR},
     {"switch", SWITCH}, {"case", CASE}, {"default", DEFAULT},
     {"break", BREAK}, {"continue", CONTINUE}, {"return", RETURN},
+    {"yield", YIELD},
     {"typedef", TYPEDEF}, {"struct", STRUCT}, {"union", UNION}, {"enum", ENUM},
     {"import", IMPORT}, {"from", FROM}
 };
@@ -104,6 +105,7 @@ char *tokenkind2str(TokenKind kind) {
         case BREAK: return "BREAK";
         case CONTINUE: return "CONTINUE";
         case RETURN: return "RETURN";
+        case YIELD: return "YIELD";
         case TYPEDEF: return "TYPEDEF";
         case STRUCT: return "STRUCT";
         case UNION: return "UNION";

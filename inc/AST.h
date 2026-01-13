@@ -36,6 +36,8 @@ typedef enum {
     AST_SIZEOF,
     AST_TERNARY,
     AST_IMPORT,
+    AST_YIELD,
+    AST_STMT_EXPR,
 } ASTNodeType;
 
 typedef enum {
@@ -78,7 +80,9 @@ struct ASTNode {
         struct { ASTNode *expr; } expr_stmt;
         struct { ASTNode *cond, *then_stmt, *else_stmt; } if_stmt;
         struct { ASTNode *expr; } ret;
+        struct { ASTNode *expr; } yield_stmt;
         struct { ASTNode **stmts; int count; } block;
+        struct { ASTNode *block; } stmt_expr;
         struct { 
             ASTNode *ret_type;
             char *name;
