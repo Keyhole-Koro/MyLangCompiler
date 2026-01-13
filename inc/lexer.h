@@ -64,6 +64,8 @@ typedef enum {
     CONTINUE, // continue
     RETURN,   // return
     YIELD,    // yield
+    OF,       // of
+    UNDERSCORE, // _
     TYPEDEF,  // typedef
     STRUCT,   // struct
     UNION,    // union

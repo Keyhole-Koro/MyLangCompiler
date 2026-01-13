@@ -12,6 +12,7 @@ typedef enum {
     AST_VAR_DECL,
     AST_ASSIGN,
     AST_UNARY,
+    AST_CAST,
     AST_EXPR_STMT,
     AST_IF,
     AST_RETURN,
@@ -38,6 +39,7 @@ typedef enum {
     AST_IMPORT,
     AST_YIELD,
     AST_STMT_EXPR,
+    AST_CASE,
 } ASTNodeType;
 
 typedef enum {
@@ -48,6 +50,12 @@ typedef enum {
 } TypeModifier;
 
 typedef struct ASTNode ASTNode;
+
+typedef struct {
+    ASTNode *key;
+    ASTNode *expr;
+} CaseItem;
+
 struct ASTNode {
     ASTNodeType type;
     union {
@@ -75,6 +83,10 @@ struct ASTNode {
             ASTNode *src_type;
             char *alias;
         } typedef_stmt;
+        struct {
+            ASTNode *type;
+            ASTNode *expr;
+        } cast;
         
         struct { TokenKind op; ASTNode *operand; } unary;
         struct { ASTNode *expr; } expr_stmt;
@@ -83,6 +95,12 @@ struct ASTNode {
         struct { ASTNode *expr; } yield_stmt;
         struct { ASTNode **stmts; int count; } block;
         struct { ASTNode *block; } stmt_expr;
+        struct {
+            ASTNode *target;
+            CaseItem *cases;
+            int case_count;
+            ASTNode *default_expr;
+        } case_expr;
         struct { 
             ASTNode *ret_type;
             char *name;

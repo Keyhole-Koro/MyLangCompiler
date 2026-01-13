@@ -10,6 +10,7 @@ char *astType2str(ASTNodeType type) {
         case AST_VAR_DECL: return "AST_VAR_DECL";
         case AST_ASSIGN: return "AST_ASSIGN";
         case AST_UNARY: return "AST_UNARY";
+        case AST_CAST: return "AST_CAST";
         case AST_EXPR_STMT: return "AST_EXPR_STMT";
         case AST_IF: return "AST_IF";
         case AST_RETURN: return "AST_RETURN";
@@ -36,6 +37,7 @@ char *astType2str(ASTNodeType type) {
         case AST_IMPORT: return "AST_IMPORT";
         case AST_YIELD: return "AST_YIELD";
         case AST_STMT_EXPR: return "AST_STMT_EXPR";
+        case AST_CASE: return "AST_CASE";
     }
     return "<unknown>";
 }

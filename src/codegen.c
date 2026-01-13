@@ -59,6 +59,8 @@ typedef struct {
     int struct_count;
     TypedefInfo *typedefs;
     int typedef_count;
+    LocalInfo *globals_info;
+    int globals_count;
     LocalInfo *locals_info;
     int locals_count;
     StrItem *strings;
@@ -73,6 +75,8 @@ typedef struct {
 #define cg_struct_count  (cc->struct_count)
 #define cg_typedefs      (cc->typedefs)
 #define cg_typedef_count (cc->typedef_count)
+#define cg_globals_info  (cc->globals_info)
+#define cg_globals_count (cc->globals_count)
 #define cg_locals_info   (cc->locals_info)
 #define cg_locals_count  (cc->locals_count)
 #define cg_strings       (cc->strings)
@@ -173,8 +177,10 @@ static int local_index_last(const char *name, char **locals, int local_count)
 }
 
 static const LocalInfo *find_local_info(CompilerContext *cc, const char *name);
+static const LocalInfo *find_global_info(CompilerContext *cc, const char *name);
 
 static const StructInfo *find_struct(CompilerContext *cc, const char *type_name);
+static int typeinfo_from_type_ast(CompilerContext *cc, ASTNode *type_node, TypeInfo *out);
 
 static void gen_lvalue_addr(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char *target_reg,
                             char **params, int param_count,
@@ -323,6 +329,15 @@ static int collect_locals(CompilerContext *cc, ASTNode *node, char **locals)
     case AST_YIELD:
         count += collect_locals(cc, node->yield_stmt.expr, locals + count);
         break;
+    case AST_CASE:
+        count += collect_locals(cc, node->case_expr.target, locals + count);
+        for (int i = 0; i < node->case_expr.case_count; i++) {
+            count += collect_locals(cc, node->case_expr.cases[i].key, locals + count);
+            count += collect_locals(cc, node->case_expr.cases[i].expr, locals + count);
+        }
+        if (node->case_expr.default_expr)
+            count += collect_locals(cc, node->case_expr.default_expr, locals + count);
+        break;
     case AST_WHILE:
         count += collect_locals(cc, node->while_stmt.cond, locals + count);
         count += collect_locals(cc, node->while_stmt.body, locals + count);
@@ -341,6 +356,9 @@ static int collect_locals(CompilerContext *cc, ASTNode *node, char **locals)
         break;
     case AST_UNARY:
         count += collect_locals(cc, node->unary.operand, locals + count);
+        break;
+    case AST_CAST:
+        count += collect_locals(cc, node->cast.expr, locals + count);
         break;
     case AST_TERNARY:
         count += collect_locals(cc, node->ternary.cond, locals + count);
@@ -666,6 +684,7 @@ static int infer_expr_type(CompilerContext *cc, ASTNode *expr, TypeInfo *out) {
     switch (expr->type) {
     case AST_IDENTIFIER: {
         const LocalInfo *li = find_local_info(cc, expr->identifier.name);
+        if (!li) li = find_global_info(cc, expr->identifier.name);
         if (!li) return 0;
         out->base_type = li->base_type;
         out->pointer_level = li->pointer_level;
@@ -781,6 +800,25 @@ static int infer_expr_type(CompilerContext *cc, ASTNode *expr, TypeInfo *out) {
             return 1;
         }
         return 0;
+    case AST_CAST:
+        if (expr->cast.type && typeinfo_from_type_ast(cc, expr->cast.type, out)) {
+            return 1;
+        }
+        if (expr->cast.expr) return infer_expr_type(cc, expr->cast.expr, out);
+        return 0;
+    case AST_CASE: {
+        TypeInfo t = {0};
+        if (expr->case_expr.case_count > 0 &&
+            infer_expr_type(cc, expr->case_expr.cases[0].expr, &t)) {
+            *out = t;
+            return 1;
+        }
+        if (expr->case_expr.default_expr && infer_expr_type(cc, expr->case_expr.default_expr, &t)) {
+            *out = t;
+            return 1;
+        }
+        return 0;
+    }
     case AST_TERNARY: {
         TypeInfo t = {0};
         if (infer_expr_type(cc, expr->ternary.then_expr, &t)) {
@@ -816,6 +854,36 @@ static int typeinfo_total_size_bytes(CompilerContext *cc, const TypeInfo *info) 
     }
     if (sz <= 0) sz = SLOT_SIZE;
     return (int)sz;
+}
+
+static void ensure_data_section(CompilerContext *cc) {
+    if (!cg_data_sb_inited) { sb_init(&cg_data_sb); cg_data_sb_inited = 1; }
+}
+
+static void emit_zero_bytes(StringBuilder *sb, int count) {
+    if (count < 1) count = SLOT_SIZE;
+    sb_append(sb, "  .byte ");
+    for (int i = 0; i < count; i++) {
+        sb_append(sb, "%s0", (i == 0) ? "" : ", ");
+    }
+    sb_append(sb, "\n");
+}
+
+static void emit_global_decl(CompilerContext *cc, ASTNode *var_decl) {
+    if (!var_decl || var_decl->type != AST_VAR_DECL) return;
+    ensure_data_section(cc);
+
+    int bytes = SLOT_SIZE;
+    if (var_decl->var_decl.var_type) {
+        TypeInfo ti = {0};
+        if (typeinfo_from_type_ast(cc, var_decl->var_decl.var_type, &ti)) {
+            bytes = typeinfo_total_size_bytes(cc, &ti);
+        }
+    }
+    if (bytes < 1) bytes = SLOT_SIZE;
+
+    sb_append(&cg_data_sb, "%s:\n", var_decl->var_decl.name ? var_decl->var_decl.name : "");
+    emit_zero_bytes(&cg_data_sb, bytes);
 }
 
 static int pointer_step_bytes(CompilerContext *cc, const TypeInfo *info) {
@@ -906,6 +974,13 @@ static const LocalInfo *find_local_info(CompilerContext *cc, const char *name) {
     return NULL;
 }
 
+static const LocalInfo *find_global_info(CompilerContext *cc, const char *name) {
+    for (int i = 0; i < cg_globals_count; i++) {
+        if (strcmp(cg_globals_info[i].name, name) == 0) return &cg_globals_info[i];
+    }
+    return NULL;
+}
+
 static void set_localinfo_from_type(CompilerContext *cc, LocalInfo *info, ASTNode *type_node) {
     if (!info) return;
     info->base_type = "";
@@ -966,6 +1041,19 @@ static void set_localinfo_from_type(CompilerContext *cc, LocalInfo *info, ASTNod
     if (info->is_array && info->dims_count > 0) info->array_length = info->dims[0];
 }
 
+static int typeinfo_from_type_ast(CompilerContext *cc, ASTNode *type_node, TypeInfo *out) {
+    if (!out) return 0;
+    LocalInfo tmp = {0};
+    set_localinfo_from_type(cc, &tmp, type_node);
+    out->base_type = tmp.base_type;
+    out->pointer_level = tmp.pointer_level;
+    out->type_modifiers = tmp.type_modifiers;
+    out->is_array = tmp.is_array;
+    out->dims_count = tmp.dims_count;
+    for (int i = 0; i < tmp.dims_count && i < 8; i++) out->dims[i] = tmp.dims[i];
+    return tmp.base_type != NULL;
+}
+
 static int collect_local_type_info(CompilerContext *cc, ASTNode *node, LocalInfo *arr) {
     int n = 0;
     if (!node) return 0;
@@ -1008,6 +1096,15 @@ static int collect_local_type_info(CompilerContext *cc, ASTNode *node, LocalInfo
         break;
     case AST_YIELD:
         n += collect_local_type_info(cc, node->yield_stmt.expr, arr ? (arr + n) : NULL);
+        break;
+    case AST_CASE:
+        n += collect_local_type_info(cc, node->case_expr.target, arr ? (arr + n) : NULL);
+        for (int i = 0; i < node->case_expr.case_count; i++) {
+            n += collect_local_type_info(cc, node->case_expr.cases[i].key, arr ? (arr + n) : NULL);
+            n += collect_local_type_info(cc, node->case_expr.cases[i].expr, arr ? (arr + n) : NULL);
+        }
+        if (node->case_expr.default_expr)
+            n += collect_local_type_info(cc, node->case_expr.default_expr, arr ? (arr + n) : NULL);
         break;
     case AST_WHILE:
         n += collect_local_type_info(cc, node->while_stmt.cond, arr ? (arr + n) : NULL);
@@ -1635,8 +1732,10 @@ static void gen_assign(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
         exit(1);
     }
     gen_expr(cc, node->assign.right, sb, "r1", params, param_count, locals, local_count);
+    sb_append(sb, "  push r1\n");
     gen_lvalue_addr(cc, node->assign.left, sb, "r3", params, param_count, locals, local_count);
     int is_byte = lvalue_is_byte(cc, node->assign.left);
+    sb_append(sb, "  pop r1\n");
     emit_store_to_addr(sb, "r3", "r1", is_byte);
     if (target_reg && strcmp(target_reg, "r1") != 0) {
         sb_append(sb, "  mov %s, r1\n", target_reg);
@@ -1714,9 +1813,68 @@ static void _gen_expr(CompilerContext *cc, ASTNode *node, StringBuilder *sb, con
         if (strcmp(target_reg, "r1") != 0)
             sb_append(sb, "  mov %s, r1\n", target_reg);
         break;
+    case AST_CASE: {
+        int lbl_end = next_label(cc);
+        int lbl_default = next_label(cc);
+        
+        // Evaluate target into r1
+        gen_expr(cc, node->case_expr.target, sb, "r1", params, param_count, locals, local_count);
+        
+        // Save target (r1) to stack because evaluating keys will clobber it
+        sb_append(sb, "  push r1\n");
+        
+        int *case_lbls = malloc(sizeof(int) * node->case_expr.case_count);
+        for(int i=0; i<node->case_expr.case_count; i++) {
+            case_lbls[i] = next_label(cc);
+            
+            // Evaluate Key into r1
+            gen_expr(cc, node->case_expr.cases[i].key, sb, "r1", params, param_count, locals, local_count);
+            // Move Key to r2
+            sb_append(sb, "  mov r2, r1\n");
+            
+            // Restore Target to r1 (peek from stack)
+            // sp points to the saved value.
+            sb_append(sb, "  load r1, sp\n");
+            
+            // Compare Target (r1) vs Key (r2)
+            sb_append(sb, "  cmp r1, r2\n");
+            sb_append(sb, "  jz b_case_%d\n", case_lbls[i]);
+        }
+        
+        // Cleanup stack (pop target) before jumping to default
+        sb_append(sb, "  pop r1\n");
+        sb_append(sb, "  jmp b_default_%d\n", lbl_default);
+
+        for(int i=0; i<node->case_expr.case_count; i++) {
+            sb_append(sb, "b_case_%d:\n", case_lbls[i]);
+            // We matched. Stack still has the target pushed!
+            // We must pop it before executing the expression (to keep stack balanced)
+            // Or we can rely on the fact that expression evaluation should be stack-neutral,
+            // and we pop it after?
+            // Wait, if we jump here, we skipped the `pop r1` above.
+            // So we MUST pop here.
+            sb_append(sb, "  pop r1\n"); 
+            
+            gen_expr(cc, node->case_expr.cases[i].expr, sb, target_reg, params, param_count, locals, local_count);
+            sb_append(sb, "  jmp b_case_end_%d\n", lbl_end);
+        }
+        free(case_lbls);
+        
+        sb_append(sb, "b_default_%d:\n", lbl_default);
+        if (node->case_expr.default_expr) {
+            gen_expr(cc, node->case_expr.default_expr, sb, target_reg, params, param_count, locals, local_count);
+        } else {
+            sb_append(sb, "  movi %s, 0\n", target_reg);
+        }
+        sb_append(sb, "b_case_end_%d:\n", lbl_end);
+        break;
+    }
     case AST_NUMBER:
         sb_append(sb, "  \n; load constant %s into %s\n", node->number.value, target_reg);
         sb_append(sb, "  movi  %s, %s\n", target_reg, node->number.value);
+        break;
+    case AST_CAST:
+        _gen_expr(cc, node->cast.expr, sb, target_reg, params, param_count, locals, local_count, 0);
         break;
     case AST_UNARY:
         switch (node->unary.op)
@@ -2177,6 +2335,20 @@ char *codegen(ASTNode *root)
         }
     }
 
+    // Pass 3: Global variables (zero-initialized for now)
+    if (root && root->type == AST_BLOCK) {
+        for (int i = 0; i < root->block.count; i++) {
+            ASTNode *n = root->block.stmts[i];
+            if (n->type == AST_VAR_DECL) {
+                cg_globals_info = (LocalInfo*)realloc(cg_globals_info, sizeof(LocalInfo) * (cg_globals_count + 1));
+                cg_globals_info[cg_globals_count].name = n->var_decl.name;
+                set_localinfo_from_type(cc, &cg_globals_info[cg_globals_count], n->var_decl.var_type);
+                cg_globals_count++;
+                emit_global_decl(cc, n);
+            }
+        }
+    }
+
     // Output __START__ (main) first
     for (int i = 0; i < root->block.count; i++)
     {
@@ -2215,6 +2387,11 @@ char *codegen(ASTNode *root)
         free(cg_typedefs);
         cg_typedefs = NULL;
         cg_typedef_count = 0;
+    }
+    if (cg_globals_info) {
+        free(cg_globals_info);
+        cg_globals_info = NULL;
+        cg_globals_count = 0;
     }
     // free string pool
     if (cg_strings) {

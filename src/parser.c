@@ -34,6 +34,9 @@ StructTable g_struct_table = { NULL, 0 };
 
 FunctionTable g_func_table = { NULL, 0 };
 TypeTable g_type_table = { NULL, 0 };
+// When set, parse_postfix will stop before consuming an ARROW token. Used to
+// let 'case ... of' clauses treat '->' as a separator instead of a member op.
+static int g_stop_at_arrow = 0;
 
 void add_function(ASTNode *fn) {
     g_func_table.funcs = realloc(g_func_table.funcs, sizeof(ASTNode*) * (g_func_table.count + 1));
@@ -163,6 +166,13 @@ ASTNode *new_unary(TokenKind op, ASTNode *operand) {
     node->type = AST_UNARY;
     node->unary.op = op;
     node->unary.operand = operand;
+    return node;
+}
+ASTNode *new_cast(ASTNode *type, ASTNode *expr) {
+    ASTNode *node = malloc(sizeof(ASTNode));
+    node->type = AST_CAST;
+    node->cast.type = type;
+    node->cast.expr = expr;
     return node;
 }
 ASTNode *new_assign(ASTNode *left, ASTNode *right) {
@@ -334,6 +344,15 @@ ASTNode *new_stmt_expr(ASTNode *block) {
     node->stmt_expr.block = block;
     return node;
 }
+ASTNode *new_case_expr(ASTNode *target, CaseItem *cases, int case_count, ASTNode *default_expr) {
+    ASTNode *node = malloc(sizeof(ASTNode));
+    node->type = AST_CASE;
+    node->case_expr.target = target;
+    node->case_expr.cases = cases;
+    node->case_expr.case_count = case_count;
+    node->case_expr.default_expr = default_expr;
+    return node;
+}
 ASTNode *new_call(char *name, ASTNode **args, int arg_count) {
     ASTNode *node = malloc(sizeof(ASTNode));
     node->type = AST_CALL;
@@ -435,6 +454,28 @@ ASTNode *parse_struct(Token **cur);
 ASTNode *parse_type(Token **cur);
 ASTNode *parse_block(Token **cur);
 
+// Parse an expression but stop before consuming an ARROW token (used for
+// distinguishing case-pattern arrows from member access).
+static ASTNode *parse_expr_until_arrow(Token **cur) {
+    int prev = g_stop_at_arrow;
+    g_stop_at_arrow = 1;
+    ASTNode *node = parse_expr(cur);
+    g_stop_at_arrow = prev;
+    return node;
+}
+
+// Look ahead to see if the current tokens form a function declaration/defn.
+static int looks_like_function(Token *cur) {
+    Token *t = cur;
+    while (t && (t->kind == CONST || t->kind == UNSIGNED || t->kind == SIGNED)) {
+        t = t->next;
+    }
+    if (!t || !is_type(t->kind, t)) return 0;
+    t = t->next; // past base type
+    while (t && t->kind == ASTARISK) t = t->next;
+    return t && t->kind == IDENTIFIER && t->next && t->next->kind == L_PARENTHESES;
+}
+
 ASTNode *parse_primary(Token **cur) {
 
     if ((*cur)->kind == NUMBER) {
@@ -447,12 +488,37 @@ ASTNode *parse_primary(Token **cur) {
         *cur = (*cur)->next;
         return node;
     }
-    if ((*cur)->kind == CHAR_LITERAL) {
-        ASTNode *node = new_char_literal((*cur)->value);
-        *cur = (*cur)->next;
-        return node;
-    }
+    if ((*cur)->kind == CASE) {
+        *cur = (*cur)->next; // consume CASE
+        ASTNode *target = parse_expr(cur);
+        if (!expect(cur, OF)) parse_error("expected 'of' after case target", token_head, *cur);
+        if (!expect(cur, L_BRACE)) parse_error("expected '{' after of", token_head, *cur);
+        
+        CaseItem *cases = NULL;
+        int count = 0;
+        ASTNode *default_expr = NULL;
 
+        while ((*cur)->kind != R_BRACE && (*cur)->kind != EOT) {
+            if ((*cur)->kind == UNDERSCORE) {
+                *cur = (*cur)->next;
+                if (!expect(cur, ARROW)) parse_error("expected '->' after _", token_head, *cur);
+                if (default_expr) parse_error("duplicate default case", token_head, *cur);
+                default_expr = parse_expr(cur);
+            } else {
+                ASTNode *key = parse_expr_until_arrow(cur);
+                if (!expect(cur, ARROW)) parse_error("expected '->' after case key", token_head, *cur);
+                ASTNode *expr = parse_expr(cur);
+                cases = realloc(cases, sizeof(CaseItem) * (count + 1));
+                cases[count].key = key;
+                cases[count].expr = expr;
+                count++;
+            }
+            if (!expect(cur, SEMICOLON)) parse_error("expected ';' after case expression", token_head, *cur);
+        }
+        if (!expect(cur, R_BRACE)) parse_error("expected '}'", token_head, *cur);
+        return new_case_expr(target, cases, count, default_expr);
+    }
+    
     if ((*cur)->kind == IDENTIFIER) {
         char *name = (*cur)->value;
         *cur = (*cur)->next;
@@ -636,8 +702,16 @@ ASTNode *parse_postfix(Token **cur) {
             char *member_name = (*cur)->value;
             *cur = (*cur)->next;
             node = new_member_access(node, member_name);
-        }
+        } 
         else if ((*cur)->kind == ARROW) {
+            // If we're in a context that should stop at a case-arrow, only
+            // treat this as member access when followed by an identifier.
+            if (!(*cur)->next || (*cur)->next->kind != IDENTIFIER) break;
+            if (g_stop_at_arrow) {
+                // Case arrow is always followed by a non-identifier expression start
+                // (e.g., number, 'case', '(' etc). Let those fall out to caller.
+                // Otherwise, consume as member access.
+            }
             *cur = (*cur)->next;
             if ((*cur)->kind != IDENTIFIER)
                 parse_error("expected identifier after '->'", token_head, *cur);
@@ -653,6 +727,17 @@ ASTNode *parse_postfix(Token **cur) {
 
 ASTNode *parse_unary(Token **cur) {
     printf("parse_unary: cur kind = %s\n", tokenkind2str((*cur)->kind));
+    if ((*cur)->kind == L_PARENTHESES) {
+        Token *tmp = (*cur)->next;
+        if (tmp && is_type(tmp->kind, tmp)) {
+            Token *after_type = tmp;
+            ASTNode *cast_type = parse_type(&after_type);
+            if (after_type && after_type->kind == R_PARENTHESES) {
+                *cur = after_type->next;
+                return new_cast(cast_type, parse_unary(cur));
+            }
+        }
+    }
     if ((*cur)->kind == SUB) {
         *cur = (*cur)->next;
         return new_unary(SUB, parse_unary(cur));
@@ -1139,10 +1224,10 @@ ASTNode* parse_toplevel(Token **cur) {
     if ((*cur)->kind == TYPEDEF) return parse_typedef(cur);
     if ((*cur)->kind == STRUCT) return parse_struct(cur);
     if (is_type((*cur)->kind, *cur)) {
-        Token *save = *cur;
-        ASTNode *fn = parse_fundef(cur);
-        if (fn || *cur != save) return fn; // definition returns node; declaration returns NULL but consumes tokens
-        *cur = save;
+        if (looks_like_function(*cur)) {
+            return parse_fundef(cur);
+        }
+        return parse_variable_declaration(cur, 1);
     }
     ASTNode *stmt = parse_stmt(cur);
     if (!stmt) parse_error("unexpected toplevel construct", token_head, *cur);
@@ -1235,6 +1320,13 @@ void print_ast(ASTNode *node, int indent) {
         INDENT; printf("Sizeof\n");
         print_ast(node->sizeof_expr.expr, indent+1);
         break;
+    case AST_CAST:
+        INDENT; printf("Cast\n");
+        INDENT; printf("  Type:\n");
+        print_ast(node->cast.type, indent+2);
+        INDENT; printf("  Expr:\n");
+        print_ast(node->cast.expr, indent+2);
+        break;
     case AST_EXPR_STMT:
         INDENT; printf("ExprStmt\n");
         print_ast(node->expr_stmt.expr, indent+1);
@@ -1261,6 +1353,21 @@ void print_ast(ASTNode *node, int indent) {
     case AST_STMT_EXPR:
         INDENT; printf("StmtExpr\n");
         print_ast(node->stmt_expr.block, indent+1);
+        break;
+    case AST_CASE:
+        INDENT; printf("CaseExpr\n");
+        INDENT; printf("  Target:\n");
+        print_ast(node->case_expr.target, indent+2);
+        for(int i=0; i<node->case_expr.case_count; i++) {
+            INDENT; printf("  Case:\n");
+            print_ast(node->case_expr.cases[i].key, indent+3);
+            INDENT; printf("  =>\n");
+            print_ast(node->case_expr.cases[i].expr, indent+3);
+        }
+        if (node->case_expr.default_expr) {
+            INDENT; printf("  Default:\n");
+            print_ast(node->case_expr.default_expr, indent+2);
+        }
         break;
     case AST_FUNDEF:
         INDENT; printf("Function:  %s\n", node->fundef.name);
@@ -1436,6 +1543,13 @@ void fprint_ast(FILE *out, ASTNode *node, int indent) {
         INDENT; fprintf(out, "Sizeof\n");
         fprint_ast(out, node->sizeof_expr.expr, indent+1);
         break;
+    case AST_CAST:
+        INDENT; fprintf(out, "Cast\n");
+        INDENT; fprintf(out, "  Type:\n");
+        fprint_ast(out, node->cast.type, indent+2);
+        INDENT; fprintf(out, "  Expr:\n");
+        fprint_ast(out, node->cast.expr, indent+2);
+        break;
     case AST_EXPR_STMT:
         INDENT; fprintf(out, "ExprStmt\n");
         fprint_ast(out, node->expr_stmt.expr, indent+1);
@@ -1462,6 +1576,21 @@ void fprint_ast(FILE *out, ASTNode *node, int indent) {
     case AST_STMT_EXPR:
         INDENT; fprintf(out, "StmtExpr\n");
         fprint_ast(out, node->stmt_expr.block, indent+1);
+        break;
+    case AST_CASE:
+        INDENT; fprintf(out, "CaseExpr\n");
+        INDENT; fprintf(out, "  Target:\n");
+        fprint_ast(out, node->case_expr.target, indent+2);
+        for(int i=0; i<node->case_expr.case_count; i++) {
+            INDENT; fprintf(out, "  Case:\n");
+            fprint_ast(out, node->case_expr.cases[i].key, indent+3);
+            INDENT; fprintf(out, "  =>\n");
+            fprint_ast(out, node->case_expr.cases[i].expr, indent+3);
+        }
+        if (node->case_expr.default_expr) {
+            INDENT; fprintf(out, "  Default:\n");
+            fprint_ast(out, node->case_expr.default_expr, indent+2);
+        }
         break;
     case AST_FUNDEF:
         INDENT; fprintf(out, "Function:  %s\n", node->fundef.name);
@@ -1627,10 +1756,18 @@ void free_ast(ASTNode *node) {
                         free_ast(node->block.stmts[i]);
                     free(node->block.stmts);
                     break;
-            case AST_STMT_EXPR:
-                    free_ast(node->stmt_expr.block);
-                    break;
-            case AST_FUNDEF:            if (node->fundef.ret_type) free_ast(node->fundef.ret_type);
+                case AST_STMT_EXPR:
+                        free_ast(node->stmt_expr.block);
+                        break;
+                    case AST_CASE:
+                            free_ast(node->case_expr.target);
+                            for(int i=0; i<node->case_expr.case_count; i++) {
+                                free_ast(node->case_expr.cases[i].key);
+                                free_ast(node->case_expr.cases[i].expr);
+                            }
+                            free(node->case_expr.cases);
+                            if (node->case_expr.default_expr) free_ast(node->case_expr.default_expr);
+                            break;                case AST_FUNDEF:            if (node->fundef.ret_type) free_ast(node->fundef.ret_type);
             free(node->fundef.name);
             for (int i = 0; i < node->fundef.param_count; i++)
                 free_ast(node->fundef.params[i]);
