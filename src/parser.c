@@ -704,13 +704,16 @@ ASTNode *parse_postfix(Token **cur) {
             node = new_member_access(node, member_name);
         } 
         else if ((*cur)->kind == ARROW) {
-            // If we're in a context that should stop at a case-arrow, only
-            // treat this as member access when followed by an identifier.
+            // For case expressions we set g_stop_at_arrow. Treat "expr ->" as a
+            // case separator, except when the arrow is a genuine member-access
+            // (identifier/struct access followed by an identifier).
             if (!(*cur)->next || (*cur)->next->kind != IDENTIFIER) break;
             if (g_stop_at_arrow) {
-                // Case arrow is always followed by a non-identifier expression start
-                // (e.g., number, 'case', '(' etc). Let those fall out to caller.
-                // Otherwise, consume as member access.
+                if (!(node->type == AST_IDENTIFIER ||
+                      node->type == AST_MEMBER_ACCESS ||
+                      node->type == AST_ARROW_ACCESS)) {
+                    break; // stop at case arrow
+                }
             }
             *cur = (*cur)->next;
             if ((*cur)->kind != IDENTIFIER)
