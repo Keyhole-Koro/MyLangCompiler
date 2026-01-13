@@ -72,6 +72,8 @@ struct ASTNode {
             ASTNode *var_type;
             char *name;
             ASTNode *init;
+            int is_exported;
+            char *package;
         } var_decl;
         
         struct {
@@ -107,6 +109,8 @@ struct ASTNode {
             ASTNode **params;
             int param_count;
             ASTNode *body;
+            int is_exported;
+            char *package;
         } fundef;
         struct {
             ASTNode *type;

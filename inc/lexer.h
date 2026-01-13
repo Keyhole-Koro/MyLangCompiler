@@ -72,6 +72,8 @@ typedef enum {
     ENUM,     // enum
     SIZEOF,   // sizeof
     IMPORT,   // import
+    EXPORT,   // export
+    PACKAGE,  // package
     FROM,     // from
 
     L_PARENTHESES, // (

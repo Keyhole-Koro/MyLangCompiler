@@ -37,7 +37,7 @@ StringTokenKindMap reservedWords[] = {
     {"yield", YIELD},
     {"of", OF}, {"_", UNDERSCORE},
     {"typedef", TYPEDEF}, {"struct", STRUCT}, {"union", UNION}, {"enum", ENUM},
-    {"import", IMPORT}, {"from", FROM}
+    {"import", IMPORT}, {"from", FROM}, {"export", EXPORT}, {"package", PACKAGE}
 };
 
 char *tokenkind2str(TokenKind kind) {
@@ -115,6 +115,8 @@ char *tokenkind2str(TokenKind kind) {
         case ENUM: return "ENUM";
         case IMPORT: return "IMPORT";
         case FROM: return "FROM";
+        case EXPORT: return "EXPORT";
+        case PACKAGE: return "PACKAGE";
 
         case NUMBER: return "NUMBER";
         case STRING_LITERAL: return "STRING_LITERAL";

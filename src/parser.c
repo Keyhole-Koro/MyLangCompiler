@@ -38,6 +38,19 @@ TypeTable g_type_table = { NULL, 0 };
 // let 'case ... of' clauses treat '->' as a separator instead of a member op.
 static int g_stop_at_arrow = 0;
 
+// Package/export state
+static char *g_current_package = "main";
+
+typedef struct {
+    char *orig;
+    char *mangled;
+} ExportEntry;
+static ExportEntry *g_exports = NULL;
+static int g_export_count = 0;
+
+static char **g_imported_packages = NULL;
+static int g_imported_pkg_count = 0;
+
 void add_function(ASTNode *fn) {
     g_func_table.funcs = realloc(g_func_table.funcs, sizeof(ASTNode*) * (g_func_table.count + 1));
     g_func_table.funcs[g_func_table.count++] = fn;
@@ -121,6 +134,8 @@ ASTNode *new_var_decl(ASTNode *type, char *name, ASTNode *init) {
     node->var_decl.var_type = type;
     node->var_decl.name = strdup(name);
     node->var_decl.init = init;
+    node->var_decl.is_exported = 0;
+    node->var_decl.package = NULL;
     return node;
 }
 
@@ -139,6 +154,8 @@ ASTNode* new_fundef(ASTNode *ret_type, char *name, ASTNode **params, int param_c
     node->fundef.params = params;
     node->fundef.param_count = param_count;
     node->fundef.body = body;
+    node->fundef.is_exported = 0;
+    node->fundef.package = NULL;
     return node;
 }
 ASTNode *new_number(char *val) {
@@ -453,6 +470,7 @@ ASTNode *parse_variable_declaration(Token **cur, int need_semicolon);
 ASTNode *parse_struct(Token **cur);
 ASTNode *parse_type(Token **cur);
 ASTNode *parse_block(Token **cur);
+static char *mangle(const char *pkg, const char *name);
 
 // Parse an expression but stop before consuming an ARROW token (used for
 // distinguishing case-pattern arrows from member access).
@@ -572,6 +590,37 @@ ASTNode *parse_primary(Token **cur) {
 
     return NULL;
 }
+
+static void add_export(const char *orig, const char *mangled) {
+    g_exports = realloc(g_exports, sizeof(ExportEntry) * (g_export_count + 1));
+    g_exports[g_export_count].orig = strdup(orig);
+    g_exports[g_export_count].mangled = strdup(mangled);
+    g_export_count++;
+}
+
+static const char *find_export_mangled(const char *orig) {
+    for (int i = 0; i < g_export_count; i++) {
+        if (strcmp(g_exports[i].orig, orig) == 0) return g_exports[i].mangled;
+    }
+    return NULL;
+}
+
+static int is_imported_package(const char *name) {
+    for (int i = 0; i < g_imported_pkg_count; i++) {
+        if (strcmp(g_imported_packages[i], name) == 0) return 1;
+    }
+    return 0;
+}
+
+static char *mangle(const char *pkg, const char *name) {
+    size_t len = strlen(pkg) + 1 + strlen(name) + 1;
+    char *buf = malloc(len);
+    snprintf(buf, len, "%s_%s", pkg, name);
+    return buf;
+}
+
+// rewrite helpers forward decl
+static void rewrite_node(ASTNode *node, char **scope, int scope_count);
 ASTNode *parse_base_type(Token **cur) {
     if (!is_type((*cur)->kind, *cur))
         parse_error("expected type", token_head, *cur);
@@ -701,7 +750,14 @@ ASTNode *parse_postfix(Token **cur) {
                 parse_error("expected identifier after '.'", token_head, *cur);
             char *member_name = (*cur)->value;
             *cur = (*cur)->next;
-            node = new_member_access(node, member_name);
+            // Package qualification: pkg.symbol -> identifier "pkg_symbol"
+            if (node->type == AST_IDENTIFIER && is_imported_package(node->identifier.name)) {
+                char buf[256];
+                snprintf(buf, sizeof(buf), "%s_%s", node->identifier.name, member_name);
+                node = new_identifier(buf);
+            } else {
+                node = new_member_access(node, member_name);
+            }
         } 
         else if ((*cur)->kind == ARROW) {
             // For case expressions we set g_stop_at_arrow. Treat "expr ->" as a
@@ -721,6 +777,23 @@ ASTNode *parse_postfix(Token **cur) {
             char *member_name = (*cur)->value;
             *cur = (*cur)->next;
             node = new_arrow_access(node, member_name);
+        } else if ((*cur)->kind == L_PARENTHESES && node->type == AST_IDENTIFIER) {
+            // Support calls after we rewrote identifiers (e.g., pkg.symbol -> pkg_symbol)
+            *cur = (*cur)->next;
+            ASTNode **args = NULL;
+            int arg_count = 0;
+            if ((*cur)->kind != R_PARENTHESES) {
+                while (1) {
+                    ASTNode *arg = parse_expr(cur);
+                    args = realloc(args, sizeof(ASTNode*) * (arg_count + 1));
+                    args[arg_count++] = arg;
+                    if ((*cur)->kind == COMMA) { *cur = (*cur)->next; continue; }
+                    break;
+                }
+            }
+            if (!expect(cur, R_PARENTHESES))
+                parse_error("expected ')' after args", token_head, *cur);
+            node = new_call(node->identifier.name, args, arg_count);
         } else {
             break;
         }
@@ -1191,6 +1264,16 @@ ASTNode* parse_fundef(Token **cur) {
 
 ASTNode *parse_import(Token **cur) {
     if (!expect(cur, IMPORT)) parse_error("expected 'import'", token_head, *cur);
+
+    // Form: import packageName;
+    if ((*cur)->kind == IDENTIFIER && (*cur)->next && (*cur)->next->kind == SEMICOLON) {
+        g_imported_packages = realloc(g_imported_packages, sizeof(char*) * (g_imported_pkg_count + 1));
+        g_imported_packages[g_imported_pkg_count++] = strdup((*cur)->value);
+        *cur = (*cur)->next; // consume ident
+        expect(cur, SEMICOLON);
+        return NULL;
+    }
+
     if (!expect(cur, L_BRACE)) parse_error("expected '{'", token_head, *cur);
     
     char **symbols = NULL;
@@ -1223,14 +1306,47 @@ ASTNode *parse_import(Token **cur) {
 }
 
 ASTNode* parse_toplevel(Token **cur) {
+    if ((*cur)->kind == PACKAGE) {
+        *cur = (*cur)->next;
+        if ((*cur)->kind != IDENTIFIER) parse_error("expected package name", token_head, *cur);
+        g_current_package = strdup((*cur)->value);
+        *cur = (*cur)->next;
+        if (!expect(cur, SEMICOLON)) parse_error("expected ';' after package name", token_head, *cur);
+        return NULL;
+    }
+
+    int want_export = 0;
+    if ((*cur)->kind == EXPORT) {
+        want_export = 1;
+        *cur = (*cur)->next;
+    }
+
     if ((*cur)->kind == IMPORT) return parse_import(cur);
     if ((*cur)->kind == TYPEDEF) return parse_typedef(cur);
     if ((*cur)->kind == STRUCT) return parse_struct(cur);
     if (is_type((*cur)->kind, *cur)) {
         if (looks_like_function(*cur)) {
-            return parse_fundef(cur);
+            ASTNode *fn = parse_fundef(cur);
+            if (fn && want_export) {
+                fn->fundef.is_exported = 1;
+                fn->fundef.package = strdup(g_current_package);
+                const char *m = mangle(g_current_package, fn->fundef.name);
+                add_export(fn->fundef.name, m);
+                free(fn->fundef.name);
+                fn->fundef.name = strdup(m);
+            }
+            return fn;
         }
-        return parse_variable_declaration(cur, 1);
+        ASTNode *vd = parse_variable_declaration(cur, 1);
+        if (vd && want_export) {
+            vd->var_decl.is_exported = 1;
+            vd->var_decl.package = strdup(g_current_package);
+            const char *m = mangle(g_current_package, vd->var_decl.name);
+            add_export(vd->var_decl.name, m);
+            free(vd->var_decl.name);
+            vd->var_decl.name = strdup(m);
+        }
+        return vd;
     }
     ASTNode *stmt = parse_stmt(cur);
     if (!stmt) parse_error("unexpected toplevel construct", token_head, *cur);
@@ -1245,7 +1361,177 @@ ASTNode* parse_program(Token **cur) {
         nodes = realloc(nodes, sizeof(ASTNode*) * (count+1));
         nodes[count++] = node;
     }
-    return new_block(nodes, count);
+    ASTNode *prog = new_block(nodes, count);
+    // rewrite identifiers for exported symbols in this package
+    char *scope_buf[128] = {0};
+    rewrite_node(prog, scope_buf, 0);
+    return prog;
+}
+
+// ---------------- Identifier rewrite for exported symbols ----------------
+
+static int scope_contains(char **scope, int scope_count, const char *name) {
+    for (int i = scope_count - 1; i >= 0; i--) {
+        if (strcmp(scope[i], name) == 0) return 1;
+    }
+    return 0;
+}
+
+static void rewrite_node(ASTNode *node, char **scope, int scope_count);
+
+static void rewrite_case_expr(ASTNode *node, char **scope, int scope_count) {
+    rewrite_node(node->case_expr.target, scope, scope_count);
+    for (int i = 0; i < node->case_expr.case_count; i++) {
+        rewrite_node(node->case_expr.cases[i].key, scope, scope_count);
+        rewrite_node(node->case_expr.cases[i].expr, scope, scope_count);
+    }
+    if (node->case_expr.default_expr) rewrite_node(node->case_expr.default_expr, scope, scope_count);
+}
+
+static void rewrite_node(ASTNode *node, char **scope, int scope_count) {
+    if (!node) return;
+    switch (node->type) {
+    case AST_IDENTIFIER: {
+        const char *m = NULL;
+        if (!scope_contains(scope, scope_count, node->identifier.name)) {
+            m = find_export_mangled(node->identifier.name);
+        }
+        if (m) {
+            free(node->identifier.name);
+            node->identifier.name = strdup(m);
+        }
+        break;
+    }
+    case AST_CALL: {
+        const char *m = NULL;
+        if (!scope_contains(scope, scope_count, node->call.name)) {
+            m = find_export_mangled(node->call.name);
+        }
+        if (m) {
+            free(node->call.name);
+            node->call.name = strdup(m);
+        }
+        for (int i = 0; i < node->call.arg_count; i++) {
+            rewrite_node(node->call.args[i], scope, scope_count);
+        }
+        break;
+    }
+    case AST_VAR_DECL: {
+        rewrite_node(node->var_decl.var_type, scope, scope_count);
+        if (node->var_decl.init) rewrite_node(node->var_decl.init, scope, scope_count);
+        // add to scope after init rewrite
+        scope[scope_count++] = node->var_decl.name;
+        break;
+    }
+    case AST_PARAM:
+        scope[scope_count++] = node->param.name;
+        break;
+    case AST_FUNDEF: {
+        int local_cap = 64;
+        char **local_scope = malloc(sizeof(char*) * local_cap);
+        int local_count = 0;
+        // params
+        for (int i = 0; i < node->fundef.param_count; i++) {
+            if (local_count >= local_cap) {
+                local_cap *= 2;
+                local_scope = realloc(local_scope, sizeof(char*) * local_cap);
+            }
+            local_scope[local_count++] = node->fundef.params[i]->param.name;
+        }
+        rewrite_node(node->fundef.body, local_scope, local_count);
+        free(local_scope);
+        break;
+    }
+    case AST_BLOCK: {
+        int local_cap = 64;
+        char **local_scope = malloc(sizeof(char*) * local_cap);
+        memcpy(local_scope, scope, sizeof(char*) * scope_count);
+        int local_count = scope_count;
+        for (int i = 0; i < node->block.count; i++) {
+            if (node->block.stmts[i] && node->block.stmts[i]->type == AST_VAR_DECL) {
+                if (local_count >= local_cap) {
+                    local_cap *= 2;
+                    local_scope = realloc(local_scope, sizeof(char*) * local_cap);
+                }
+                // rewrite declaration and init first
+                rewrite_node(node->block.stmts[i], local_scope, local_count);
+                local_scope[local_count++] = node->block.stmts[i]->var_decl.name;
+            } else {
+                rewrite_node(node->block.stmts[i], local_scope, local_count);
+            }
+        }
+        free(local_scope);
+        break;
+    }
+    case AST_ASSIGN:
+        rewrite_node(node->assign.left, scope, scope_count);
+        rewrite_node(node->assign.right, scope, scope_count);
+        break;
+    case AST_BINARY:
+        rewrite_node(node->binary.left, scope, scope_count);
+        rewrite_node(node->binary.right, scope, scope_count);
+        break;
+    case AST_UNARY:
+        rewrite_node(node->unary.operand, scope, scope_count);
+        break;
+    case AST_TERNARY:
+        rewrite_node(node->ternary.cond, scope, scope_count);
+        rewrite_node(node->ternary.then_expr, scope, scope_count);
+        rewrite_node(node->ternary.else_expr, scope, scope_count);
+        break;
+    case AST_IF:
+        rewrite_node(node->if_stmt.cond, scope, scope_count);
+        rewrite_node(node->if_stmt.then_stmt, scope, scope_count);
+        if (node->if_stmt.else_stmt) rewrite_node(node->if_stmt.else_stmt, scope, scope_count);
+        break;
+    case AST_WHILE:
+        rewrite_node(node->while_stmt.cond, scope, scope_count);
+        rewrite_node(node->while_stmt.body, scope, scope_count);
+        break;
+    case AST_DO_WHILE:
+        rewrite_node(node->do_while_stmt.cond, scope, scope_count);
+        rewrite_node(node->do_while_stmt.body, scope, scope_count);
+        break;
+    case AST_FOR:
+        rewrite_node(node->for_stmt.init, scope, scope_count);
+        rewrite_node(node->for_stmt.cond, scope, scope_count);
+        rewrite_node(node->for_stmt.inc, scope, scope_count);
+        rewrite_node(node->for_stmt.body, scope, scope_count);
+        break;
+    case AST_RETURN:
+        rewrite_node(node->ret.expr, scope, scope_count);
+        break;
+    case AST_EXPR_STMT:
+        rewrite_node(node->expr_stmt.expr, scope, scope_count);
+        break;
+    case AST_MEMBER_ACCESS:
+        rewrite_node(node->member_access.lhs, scope, scope_count);
+        break;
+    case AST_ARROW_ACCESS:
+        rewrite_node(node->arrow_access.lhs, scope, scope_count);
+        break;
+    case AST_CASE:
+        rewrite_case_expr(node, scope, scope_count);
+        break;
+    case AST_STMT_EXPR:
+        rewrite_node(node->stmt_expr.block, scope, scope_count);
+        break;
+    case AST_IMPORT:
+    case AST_STRING_LITERAL:
+    case AST_CHAR_LITERAL:
+    case AST_SIZEOF:
+    case AST_INIT_LIST:
+    case AST_TYPE:
+    case AST_TYPE_ARRAY:
+    case AST_STRUCT:
+    case AST_STRUCT_MEMBER:
+    case AST_TYPEDEF_STRUCT:
+    case AST_TYPEDEF:
+        // no-op
+        break;
+    default:
+        break;
+    }
 }
 
 void print_ast(ASTNode *node, int indent) {
