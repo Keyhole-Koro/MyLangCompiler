@@ -17,6 +17,7 @@ typedef enum {
     AST_IF,
     AST_RETURN,
     AST_BLOCK,
+    AST_FUN_LITERAL,
     AST_FUNDEF,
     AST_PARAM,
     AST_CALL,
@@ -97,6 +98,12 @@ struct ASTNode {
         struct { ASTNode *expr; } yield_stmt;
         struct { ASTNode **stmts; int count; } block;
         struct { ASTNode *block; } stmt_expr;
+        struct {
+            ASTNode **params;
+            int param_count;
+            ASTNode *body;
+            ASTNode *ret_type; // set during lowering (from declaration type)
+        } fun_literal;
         struct {
             ASTNode *target;
             CaseItem *cases;

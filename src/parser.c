@@ -51,6 +51,15 @@ static int g_export_count = 0;
 static char **g_imported_packages = NULL;
 static int g_imported_pkg_count = 0;
 
+typedef struct {
+    char *name;   // alias name in source
+    char *target; // hoisted function name (NULL means shadow/stop rewrite)
+} FunAlias;
+
+static ASTNode **g_hoisted_funcs = NULL;
+static int g_hoisted_count = 0;
+static int g_funlit_counter = 0;
+
 void add_function(ASTNode *fn) {
     g_func_table.funcs = realloc(g_func_table.funcs, sizeof(ASTNode*) * (g_func_table.count + 1));
     g_func_table.funcs[g_func_table.count++] = fn;
@@ -156,6 +165,15 @@ ASTNode* new_fundef(ASTNode *ret_type, char *name, ASTNode **params, int param_c
     node->fundef.body = body;
     node->fundef.is_exported = 0;
     node->fundef.package = NULL;
+    return node;
+}
+ASTNode *new_fun_literal(ASTNode **params, int param_count, ASTNode *body) {
+    ASTNode *node = malloc(sizeof(ASTNode));
+    node->type = AST_FUN_LITERAL;
+    node->fun_literal.params = params;
+    node->fun_literal.param_count = param_count;
+    node->fun_literal.body = body;
+    node->fun_literal.ret_type = NULL;
     return node;
 }
 ASTNode *new_number(char *val) {
@@ -470,6 +488,8 @@ ASTNode *parse_variable_declaration(Token **cur, int need_semicolon);
 ASTNode *parse_struct(Token **cur);
 ASTNode *parse_type(Token **cur);
 ASTNode *parse_block(Token **cur);
+ASTNode* parse_param(Token **cur);
+ASTNode** parse_param_list(Token **cur, int *out_count);
 static char *mangle(const char *pkg, const char *name);
 
 // Parse an expression but stop before consuming an ARROW token (used for
@@ -492,6 +512,42 @@ static int looks_like_function(Token *cur) {
     t = t->next; // past base type
     while (t && t->kind == ASTARISK) t = t->next;
     return t && t->kind == IDENTIFIER && t->next && t->next->kind == L_PARENTHESES;
+}
+
+// Detect (param list) { ... } function literals without consuming tokens.
+static int looks_like_fun_literal(Token *cur) {
+    if (!cur || cur->kind != L_PARENTHESES) return 0;
+    Token *t = cur->next;
+    if (!t) return 0;
+    // Empty parameter list
+    if (t->kind == R_PARENTHESES) {
+        return t->next && t->next->kind == L_BRACE;
+    }
+    while (1) {
+        while (t && (t->kind == CONST || t->kind == UNSIGNED || t->kind == SIGNED)) t = t->next;
+        if (!t || !is_type(t->kind, t)) return 0;
+        t = t->next; // base type
+        while (t && t->kind == ASTARISK) t = t->next;
+        if (!t || t->kind != IDENTIFIER) return 0;
+        t = t->next;
+        // optional array suffixes
+        while (t && t->kind == L_BRACKET) {
+            t = t->next;
+            if (!t) return 0;
+            if (t->kind == NUMBER) t = t->next;
+            if (!t || t->kind != R_BRACKET) return 0;
+            t = t->next;
+        }
+        if (t && t->kind == COMMA) {
+            t = t->next;
+            continue;
+        }
+        if (t && t->kind == R_PARENTHESES) {
+            t = t->next;
+            return t && t->kind == L_BRACE;
+        }
+        return 0;
+    }
 }
 
 ASTNode *parse_primary(Token **cur) {
@@ -575,6 +631,18 @@ ASTNode *parse_primary(Token **cur) {
         return node;
     }
 
+    if ((*cur)->kind == L_PARENTHESES && looks_like_fun_literal(*cur)) {
+        *cur = (*cur)->next; // consume '('
+        ASTNode **params = NULL;
+        int param_count = 0;
+        if ((*cur)->kind != R_PARENTHESES) {
+            params = parse_param_list(cur, &param_count);
+        }
+        if (!expect(cur, R_PARENTHESES)) parse_error("expected ')' after function literal parameters", token_head, *cur);
+        ASTNode *body = parse_block(cur);
+        return new_fun_literal(params, param_count, body);
+    }
+
     if ((*cur)->kind == L_PARENTHESES) {
         *cur = (*cur)->next;
         if ((*cur)->kind == L_BRACE) {
@@ -621,6 +689,8 @@ static char *mangle(const char *pkg, const char *name) {
 
 // rewrite helpers forward decl
 static void rewrite_node(ASTNode *node, char **scope, int scope_count);
+static void lower_fun_literals_block(ASTNode *block, const char *func_prefix, FunAlias *aliases, int alias_count);
+static void ensure_no_fun_literals(ASTNode *node);
 ASTNode *parse_base_type(Token **cur) {
     if (!is_type((*cur)->kind, *cur))
         parse_error("expected type", token_head, *cur);
@@ -1362,6 +1432,18 @@ ASTNode* parse_program(Token **cur) {
         nodes[count++] = node;
     }
     ASTNode *prog = new_block(nodes, count);
+    lower_fun_literals_block(prog, "g", NULL, 0);
+    if (g_hoisted_count > 0) {
+        prog->block.stmts = realloc(prog->block.stmts, sizeof(ASTNode*) * (prog->block.count + g_hoisted_count));
+        for (int i = 0; i < g_hoisted_count; i++) {
+            prog->block.stmts[prog->block.count + i] = g_hoisted_funcs[i];
+        }
+        prog->block.count += g_hoisted_count;
+        g_hoisted_count = 0;
+        free(g_hoisted_funcs);
+        g_hoisted_funcs = NULL;
+    }
+    ensure_no_fun_literals(prog);
     // rewrite identifiers for exported symbols in this package
     char *scope_buf[128] = {0};
     rewrite_node(prog, scope_buf, 0);
@@ -1534,6 +1616,313 @@ static void rewrite_node(ASTNode *node, char **scope, int scope_count) {
     }
 }
 
+static const char *alias_lookup(FunAlias *aliases, int count, const char *name) {
+    for (int i = count - 1; i >= 0; i--) {
+        if (strcmp(aliases[i].name, name) == 0) return aliases[i].target;
+    }
+    return NULL;
+}
+
+static void alias_push(FunAlias **aliases, int *count, const char *name, const char *target) {
+    *aliases = realloc(*aliases, sizeof(FunAlias) * (*count + 1));
+    (*aliases)[*count].name = strdup(name);
+    (*aliases)[*count].target = target ? strdup(target) : NULL;
+    (*count)++;
+}
+
+static FunAlias *alias_copy(FunAlias *aliases, int count, int *out_count) {
+    FunAlias *copy = NULL;
+    *out_count = 0;
+    for (int i = 0; i < count; i++) {
+        alias_push(&copy, out_count, aliases[i].name, aliases[i].target);
+    }
+    return copy;
+}
+
+static void lower_fun_literals_node(ASTNode *node, const char *func_prefix, FunAlias **aliases, int *alias_count);
+
+static void lower_fun_literals_block(ASTNode *block, const char *func_prefix, FunAlias *aliases, int alias_count) {
+    if (!block || block->type != AST_BLOCK) return;
+    int local_count = 0;
+    FunAlias *local_aliases = alias_copy(aliases, alias_count, &local_count);
+
+    ASTNode **new_stmts = NULL;
+    int new_count = 0;
+
+    for (int i = 0; i < block->block.count; i++) {
+        ASTNode *stmt = block->block.stmts[i];
+        if (!stmt) continue;
+
+        if (stmt->type == AST_VAR_DECL &&
+            stmt->var_decl.init &&
+            stmt->var_decl.init->type == AST_FUN_LITERAL) {
+            char buf[128];
+            snprintf(buf, sizeof(buf), "%s_lam%d", func_prefix ? func_prefix : "g", g_funlit_counter++);
+            ASTNode *lit = stmt->var_decl.init;
+            ASTNode *fn = new_fundef(stmt->var_decl.var_type, buf,
+                                     lit->fun_literal.params, lit->fun_literal.param_count,
+                                     lit->fun_literal.body);
+            fn->fundef.is_exported = 0;
+            fn->fundef.package = NULL;
+            add_function(fn);
+            g_hoisted_funcs = realloc(g_hoisted_funcs, sizeof(ASTNode*) * (g_hoisted_count + 1));
+            g_hoisted_funcs[g_hoisted_count++] = fn;
+            // Process the hoisted function body (fresh scope)
+            lower_fun_literals_block(fn->fundef.body, buf, NULL, 0);
+            // Add alias for this block after hoisting
+            alias_push(&local_aliases, &local_count, stmt->var_decl.name, buf);
+            continue;
+        }
+
+        if (stmt->type == AST_VAR_DECL) {
+            // Shadow this name in current scope before processing init
+            alias_push(&local_aliases, &local_count, stmt->var_decl.name, NULL);
+            if (stmt->var_decl.init)
+                lower_fun_literals_node(stmt->var_decl.init, func_prefix, &local_aliases, &local_count);
+            new_stmts = realloc(new_stmts, sizeof(ASTNode*) * (new_count + 1));
+            new_stmts[new_count++] = stmt;
+            continue;
+        }
+
+        lower_fun_literals_node(stmt, func_prefix, &local_aliases, &local_count);
+        new_stmts = realloc(new_stmts, sizeof(ASTNode*) * (new_count + 1));
+        new_stmts[new_count++] = stmt;
+    }
+
+    free(block->block.stmts);
+    block->block.stmts = new_stmts;
+    block->block.count = new_count;
+
+    for (int i = 0; i < local_count; i++) {
+        free(local_aliases[i].name);
+        if (local_aliases[i].target) free(local_aliases[i].target);
+    }
+    free(local_aliases);
+}
+
+static void lower_fun_literals_node(ASTNode *node, const char *func_prefix, FunAlias **aliases, int *alias_count) {
+    if (!node) return;
+    switch (node->type) {
+    case AST_IDENTIFIER: {
+        const char *rep = alias_lookup(*aliases, *alias_count, node->identifier.name);
+        if (rep) {
+            free(node->identifier.name);
+            node->identifier.name = strdup(rep);
+        }
+        break;
+    }
+    case AST_CALL: {
+        const char *rep = alias_lookup(*aliases, *alias_count, node->call.name);
+        if (rep) {
+            free(node->call.name);
+            node->call.name = strdup(rep);
+        }
+        for (int i = 0; i < node->call.arg_count; i++)
+            lower_fun_literals_node(node->call.args[i], func_prefix, aliases, alias_count);
+        break;
+    }
+    case AST_ASSIGN:
+        lower_fun_literals_node(node->assign.left, func_prefix, aliases, alias_count);
+        lower_fun_literals_node(node->assign.right, func_prefix, aliases, alias_count);
+        break;
+    case AST_BINARY:
+        lower_fun_literals_node(node->binary.left, func_prefix, aliases, alias_count);
+        lower_fun_literals_node(node->binary.right, func_prefix, aliases, alias_count);
+        break;
+    case AST_UNARY:
+        lower_fun_literals_node(node->unary.operand, func_prefix, aliases, alias_count);
+        break;
+    case AST_TERNARY:
+        lower_fun_literals_node(node->ternary.cond, func_prefix, aliases, alias_count);
+        lower_fun_literals_node(node->ternary.then_expr, func_prefix, aliases, alias_count);
+        lower_fun_literals_node(node->ternary.else_expr, func_prefix, aliases, alias_count);
+        break;
+    case AST_IF:
+        lower_fun_literals_node(node->if_stmt.cond, func_prefix, aliases, alias_count);
+        lower_fun_literals_node(node->if_stmt.then_stmt, func_prefix, aliases, alias_count);
+        lower_fun_literals_node(node->if_stmt.else_stmt, func_prefix, aliases, alias_count);
+        break;
+    case AST_WHILE:
+        lower_fun_literals_node(node->while_stmt.cond, func_prefix, aliases, alias_count);
+        lower_fun_literals_node(node->while_stmt.body, func_prefix, aliases, alias_count);
+        break;
+    case AST_DO_WHILE:
+        lower_fun_literals_node(node->do_while_stmt.cond, func_prefix, aliases, alias_count);
+        lower_fun_literals_node(node->do_while_stmt.body, func_prefix, aliases, alias_count);
+        break;
+    case AST_FOR:
+        lower_fun_literals_node(node->for_stmt.init, func_prefix, aliases, alias_count);
+        lower_fun_literals_node(node->for_stmt.cond, func_prefix, aliases, alias_count);
+        lower_fun_literals_node(node->for_stmt.inc, func_prefix, aliases, alias_count);
+        lower_fun_literals_node(node->for_stmt.body, func_prefix, aliases, alias_count);
+        break;
+    case AST_RETURN:
+        lower_fun_literals_node(node->ret.expr, func_prefix, aliases, alias_count);
+        break;
+    case AST_YIELD:
+        lower_fun_literals_node(node->yield_stmt.expr, func_prefix, aliases, alias_count);
+        break;
+    case AST_EXPR_STMT:
+        lower_fun_literals_node(node->expr_stmt.expr, func_prefix, aliases, alias_count);
+        break;
+    case AST_MEMBER_ACCESS:
+        lower_fun_literals_node(node->member_access.lhs, func_prefix, aliases, alias_count);
+        break;
+    case AST_ARROW_ACCESS:
+        lower_fun_literals_node(node->arrow_access.lhs, func_prefix, aliases, alias_count);
+        break;
+    case AST_CAST:
+        lower_fun_literals_node(node->cast.expr, func_prefix, aliases, alias_count);
+        break;
+    case AST_BLOCK: {
+        lower_fun_literals_block(node, func_prefix, *aliases, *alias_count);
+        break;
+    }
+    case AST_FUNDEF: {
+        int copy_count = 0;
+        FunAlias *copy = alias_copy(*aliases, *alias_count, &copy_count);
+        // params shadow aliases
+        for (int i = 0; i < node->fundef.param_count; i++) {
+            alias_push(&copy, &copy_count, node->fundef.params[i]->param.name, NULL);
+        }
+        lower_fun_literals_block(node->fundef.body, node->fundef.name, copy, copy_count);
+        for (int i = 0; i < copy_count; i++) {
+            free(copy[i].name);
+            if (copy[i].target) free(copy[i].target);
+        }
+        free(copy);
+        break;
+    }
+    case AST_CASE:
+        lower_fun_literals_node(node->case_expr.target, func_prefix, aliases, alias_count);
+        for (int i = 0; i < node->case_expr.case_count; i++) {
+            lower_fun_literals_node(node->case_expr.cases[i].key, func_prefix, aliases, alias_count);
+            lower_fun_literals_node(node->case_expr.cases[i].expr, func_prefix, aliases, alias_count);
+        }
+        lower_fun_literals_node(node->case_expr.default_expr, func_prefix, aliases, alias_count);
+        break;
+    case AST_STMT_EXPR:
+        lower_fun_literals_node(node->stmt_expr.block, func_prefix, aliases, alias_count);
+        break;
+    default:
+        break;
+    }
+}
+
+static void ensure_no_fun_literals(ASTNode *node) {
+    if (!node) return;
+    switch (node->type) {
+    case AST_FUN_LITERAL:
+        fprintf(stderr, "internal error: leftover function literal after lowering\n");
+        exit(1);
+    case AST_VAR_DECL:
+        ensure_no_fun_literals(node->var_decl.var_type);
+        ensure_no_fun_literals(node->var_decl.init);
+        break;
+    case AST_ASSIGN:
+        ensure_no_fun_literals(node->assign.left);
+        ensure_no_fun_literals(node->assign.right);
+        break;
+    case AST_BINARY:
+        ensure_no_fun_literals(node->binary.left);
+        ensure_no_fun_literals(node->binary.right);
+        break;
+    case AST_UNARY:
+        ensure_no_fun_literals(node->unary.operand);
+        break;
+    case AST_TERNARY:
+        ensure_no_fun_literals(node->ternary.cond);
+        ensure_no_fun_literals(node->ternary.then_expr);
+        ensure_no_fun_literals(node->ternary.else_expr);
+        break;
+    case AST_IF:
+        ensure_no_fun_literals(node->if_stmt.cond);
+        ensure_no_fun_literals(node->if_stmt.then_stmt);
+        ensure_no_fun_literals(node->if_stmt.else_stmt);
+        break;
+    case AST_WHILE:
+        ensure_no_fun_literals(node->while_stmt.cond);
+        ensure_no_fun_literals(node->while_stmt.body);
+        break;
+    case AST_DO_WHILE:
+        ensure_no_fun_literals(node->do_while_stmt.cond);
+        ensure_no_fun_literals(node->do_while_stmt.body);
+        break;
+    case AST_FOR:
+        ensure_no_fun_literals(node->for_stmt.init);
+        ensure_no_fun_literals(node->for_stmt.cond);
+        ensure_no_fun_literals(node->for_stmt.inc);
+        ensure_no_fun_literals(node->for_stmt.body);
+        break;
+    case AST_RETURN:
+        ensure_no_fun_literals(node->ret.expr);
+        break;
+    case AST_YIELD:
+        ensure_no_fun_literals(node->yield_stmt.expr);
+        break;
+    case AST_EXPR_STMT:
+        ensure_no_fun_literals(node->expr_stmt.expr);
+        break;
+    case AST_MEMBER_ACCESS:
+        ensure_no_fun_literals(node->member_access.lhs);
+        break;
+    case AST_ARROW_ACCESS:
+        ensure_no_fun_literals(node->arrow_access.lhs);
+        break;
+    case AST_CAST:
+        ensure_no_fun_literals(node->cast.type);
+        ensure_no_fun_literals(node->cast.expr);
+        break;
+    case AST_CALL:
+        for (int i = 0; i < node->call.arg_count; i++) {
+            ensure_no_fun_literals(node->call.args[i]);
+        }
+        break;
+    case AST_BLOCK:
+        for (int i = 0; i < node->block.count; i++) {
+            ensure_no_fun_literals(node->block.stmts[i]);
+        }
+        break;
+    case AST_STMT_EXPR:
+        ensure_no_fun_literals(node->stmt_expr.block);
+        break;
+    case AST_CASE:
+        ensure_no_fun_literals(node->case_expr.target);
+        for (int i = 0; i < node->case_expr.case_count; i++) {
+            ensure_no_fun_literals(node->case_expr.cases[i].key);
+            ensure_no_fun_literals(node->case_expr.cases[i].expr);
+        }
+        ensure_no_fun_literals(node->case_expr.default_expr);
+        break;
+    case AST_FUNDEF:
+        ensure_no_fun_literals(node->fundef.ret_type);
+        for (int i = 0; i < node->fundef.param_count; i++) {
+            ensure_no_fun_literals(node->fundef.params[i]);
+        }
+        ensure_no_fun_literals(node->fundef.body);
+        break;
+    case AST_PARAM:
+        ensure_no_fun_literals(node->param.type);
+        break;
+    case AST_TYPE:
+        ensure_no_fun_literals(node->type_node.base_type);
+        break;
+    case AST_TYPE_ARRAY:
+        ensure_no_fun_literals(node->type_array.element_type);
+        break;
+    case AST_INIT_LIST:
+        for (int i = 0; i < node->init_list.count; i++) {
+            ensure_no_fun_literals(node->init_list.elements[i]);
+        }
+        break;
+    case AST_SIZEOF:
+        ensure_no_fun_literals(node->sizeof_expr.expr);
+        break;
+    default:
+        break;
+    }
+}
+
 void print_ast(ASTNode *node, int indent) {
     if (!node) return;
     #define INDENT for (int i = 0; i < indent; i++) printf("  ")
@@ -1638,6 +2027,15 @@ void print_ast(ASTNode *node, int indent) {
         INDENT; printf("Block\n");
         for (int i = 0; i < node->block.count; i++)
             print_ast(node->block.stmts[i], indent+1);
+        break;
+    case AST_FUN_LITERAL:
+        INDENT; printf("FunLiteral\n");
+        for (int i = 0; i < node->fun_literal.param_count; i++) {
+            INDENT; printf("  Param:\n");
+            print_ast(node->fun_literal.params[i], indent+2);
+        }
+        INDENT; printf("  Body:\n");
+        print_ast(node->fun_literal.body, indent+2);
         break;
     case AST_STMT_EXPR:
         INDENT; printf("StmtExpr\n");
@@ -2045,18 +2443,24 @@ void free_ast(ASTNode *node) {
                         free_ast(node->block.stmts[i]);
                     free(node->block.stmts);
                     break;
-                case AST_STMT_EXPR:
-                        free_ast(node->stmt_expr.block);
-                        break;
-                    case AST_CASE:
-                            free_ast(node->case_expr.target);
-                            for(int i=0; i<node->case_expr.case_count; i++) {
-                                free_ast(node->case_expr.cases[i].key);
-                                free_ast(node->case_expr.cases[i].expr);
-                            }
-                            free(node->case_expr.cases);
-                            if (node->case_expr.default_expr) free_ast(node->case_expr.default_expr);
-                            break;                case AST_FUNDEF:            if (node->fundef.ret_type) free_ast(node->fundef.ret_type);
+        case AST_STMT_EXPR:
+                free_ast(node->stmt_expr.block);
+                break;
+            case AST_CASE:
+                    free_ast(node->case_expr.target);
+                    for(int i=0; i<node->case_expr.case_count; i++) {
+                        free_ast(node->case_expr.cases[i].key);
+                        free_ast(node->case_expr.cases[i].expr);
+                    }
+                    free(node->case_expr.cases);
+                    if (node->case_expr.default_expr) free_ast(node->case_expr.default_expr);
+                    break;                case AST_FUN_LITERAL:
+            for (int i = 0; i < node->fun_literal.param_count; i++)
+                free_ast(node->fun_literal.params[i]);
+            free(node->fun_literal.params);
+            free_ast(node->fun_literal.body);
+            break;
+                case AST_FUNDEF:            if (node->fundef.ret_type) free_ast(node->fundef.ret_type);
             free(node->fundef.name);
             for (int i = 0; i < node->fundef.param_count; i++)
                 free_ast(node->fundef.params[i]);

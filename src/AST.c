@@ -15,6 +15,7 @@ char *astType2str(ASTNodeType type) {
         case AST_IF: return "AST_IF";
         case AST_RETURN: return "AST_RETURN";
         case AST_BLOCK: return "AST_BLOCK";
+        case AST_FUN_LITERAL: return "AST_FUN_LITERAL";
         case AST_FUNDEF: return "AST_FUNDEF";
         case AST_PARAM: return "AST_PARAM";
         case AST_CALL: return "AST_CALL";
