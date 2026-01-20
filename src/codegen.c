@@ -1,4 +1,5 @@
 #include "codegen.h"
+#include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -69,6 +70,10 @@ typedef struct {
     int data_sb_inited;
     int label_counter;
     const char *return_label;
+    char **defined_funcs;
+    int defined_func_count;
+    char **imports;
+    int import_count;
 } CompilerContext;
 
 #define cg_structs       (cc->structs)
@@ -153,6 +158,45 @@ static const char *arg_regs[] = {"r5", "r6", "r7"};
 
 // (usually 4)
 #define SLOT_SIZE 4
+
+static int find_name(char **arr, int count, const char *name) {
+    if (!name) return -1;
+    for (int i = 0; i < count; i++) {
+        if (arr[i] && strcmp(arr[i], name) == 0) return i;
+    }
+    return -1;
+}
+
+static void note_defined_func(CompilerContext *cc, const char *name) {
+    if (!cc || !name) return;
+    if (find_name(cc->defined_funcs, cc->defined_func_count, name) >= 0) return;
+    cc->defined_funcs = (char**)realloc(cc->defined_funcs, sizeof(char*) * (cc->defined_func_count + 1));
+    cc->defined_funcs[cc->defined_func_count++] = (char*)name; // use AST-owned storage
+}
+
+static bool func_is_defined(CompilerContext *cc, const char *name) {
+    return find_name(cc ? cc->defined_funcs : NULL, cc ? cc->defined_func_count : 0, name) >= 0;
+}
+
+static void note_import_func(CompilerContext *cc, const char *name) {
+    if (!cc || !name) return;
+    if (func_is_defined(cc, name)) return;
+    if (find_name(cc->imports, cc->import_count, name) >= 0) return;
+    cc->imports = (char**)realloc(cc->imports, sizeof(char*) * (cc->import_count + 1));
+    cc->imports[cc->import_count++] = strdup(name);
+}
+
+static void collect_imports_from_toplevel(CompilerContext *cc, ASTNode *root) {
+    if (!cc || !root || root->type != AST_BLOCK) return;
+    for (int i = 0; i < root->block.count; i++) {
+        ASTNode *n = root->block.stmts[i];
+        if (n->type == AST_IMPORT && n->import_stmt.symbol_count > 0) {
+            for (int k = 0; k < n->import_stmt.symbol_count; k++) {
+                note_import_func(cc, n->import_stmt.symbols[k]);
+            }
+        }
+    }
+}
 
 // Get offset for parameter n (first param: n=0 → bp+4)
 static int param_offset(int n) { return -(4 + n * SLOT_SIZE); }
@@ -1464,6 +1508,7 @@ static void gen_expr_binop(CompilerContext *cc, ASTNode *node, StringBuilder *sb
 static void gen_call(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char *target_reg,
               char **params, int param_count, char **locals, int local_count)
 {
+    note_import_func(cc, node->call.name);
     int argc = node->call.arg_count;
     int stack_args = argc > 3 ? (argc - 3) : 0;
 
@@ -2110,7 +2155,7 @@ static void gen_stmt_internal(CompilerContext *cc, ASTNode *node, StringBuilder 
         }
         break;
     case AST_IMPORT:
-        // Imports are resolved at parse time; no code to generate
+        // Imports handled via collect_imports_from_toplevel
         break;
     default:
         fprintf(stderr, "Codegen error: unknown stmt node %s\n", astType2str(node->type));
@@ -2203,6 +2248,18 @@ char *codegen(ASTNode *root)
     CompilerContext *cc = &ctx;
     StringBuilder sb;
     sb_init(&sb);
+
+    // Collect defined function names for import resolution
+    if (root && root->type == AST_BLOCK) {
+        for (int i = 0; i < root->block.count; i++) {
+            ASTNode *n = root->block.stmts[i];
+            if (n->type == AST_FUNDEF && n->fundef.name) {
+                note_defined_func(cc, n->fundef.name);
+            }
+        }
+    }
+    // Collect explicit imports from source
+    collect_imports_from_toplevel(cc, root);
 
     // Build struct table from toplevel AST (typedef struct and struct)
     // Assume each member consumes SLOT_SIZE and lay out sequentially
@@ -2374,6 +2431,18 @@ char *codegen(ASTNode *root)
         sb_append(&sb, "%s", cg_data_sb.buf);
     }
 
+    // Prepend imports collected during codegen
+    StringBuilder final_sb;
+    sb_init(&final_sb);
+    if (cc->import_count > 0) {
+        sb_append(&final_sb, "; imports\n");
+        for (int i = 0; i < cc->import_count; i++) {
+            sb_append(&final_sb, "import f_%s\n", cc->imports[i]);
+        }
+        sb_append(&final_sb, "\n");
+    }
+    sb_append(&final_sb, "%s", sb.buf ? sb.buf : "");
+
     // optional: free struct table memory (builder returns raw string; sb freed by caller)
     if (cg_structs) {
         for (int i = 0; i < cg_struct_count; i++) {
@@ -2399,5 +2468,17 @@ char *codegen(ASTNode *root)
         free(cg_strings); cg_strings = NULL; cg_string_count = 0;
     }
     if (cg_data_sb_inited) { sb_free(&cg_data_sb); cg_data_sb_inited = 0; }
-    return sb_dump(&sb);
+    if (cc->imports) {
+        for (int i = 0; i < cc->import_count; i++) free(cc->imports[i]);
+        free(cc->imports);
+        cc->imports = NULL;
+        cc->import_count = 0;
+    }
+    if (cc->defined_funcs) {
+        free(cc->defined_funcs);
+        cc->defined_funcs = NULL;
+        cc->defined_func_count = 0;
+    }
+    sb_free(&sb);
+    return sb_dump(&final_sb);
 }
