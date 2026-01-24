@@ -39,7 +39,9 @@ TypeTable g_type_table = { NULL, 0 };
 static int g_stop_at_arrow = 0;
 
 // Package/export state
-static char *g_current_package = "main";
+static const char g_default_package[] = "main";
+static char *g_current_package = (char *)g_default_package;
+static int g_current_package_heap = 0;
 
 typedef struct {
     char *orig;
@@ -60,6 +62,14 @@ static ASTNode **g_hoisted_funcs = NULL;
 static int g_hoisted_count = 0;
 static int g_funlit_counter = 0;
 
+static void set_current_package(const char *name) {
+    if (g_current_package_heap && g_current_package) {
+        free(g_current_package);
+    }
+    g_current_package = strdup(name ? name : g_default_package);
+    g_current_package_heap = 1;
+}
+
 void add_function(ASTNode *fn) {
     g_func_table.funcs = realloc(g_func_table.funcs, sizeof(ASTNode*) * (g_func_table.count + 1));
     g_func_table.funcs[g_func_table.count++] = fn;
@@ -67,6 +77,79 @@ void add_function(ASTNode *fn) {
 
 static const char *g_parse_filename = NULL;
 void parser_set_filename(const char *name) { g_parse_filename = name; }
+
+void parser_reset(void) {
+    // Clear function table
+    if (g_func_table.funcs) {
+        free(g_func_table.funcs);
+        g_func_table.funcs = NULL;
+        g_func_table.count = 0;
+    }
+
+    // Clear typedef/type name table
+    if (g_type_table.typenames) {
+        for (int i = 0; i < g_type_table.count; i++) {
+            free(g_type_table.typenames[i]);
+        }
+        free(g_type_table.typenames);
+        g_type_table.typenames = NULL;
+        g_type_table.count = 0;
+    }
+
+    // Clear struct table (do not free member ASTs here)
+    if (g_struct_table.structs) {
+        for (int i = 0; i < g_struct_table.count; i++) {
+            if (g_struct_table.structs[i]) {
+                free(g_struct_table.structs[i]->name);
+                free(g_struct_table.structs[i]);
+            }
+        }
+        free(g_struct_table.structs);
+        g_struct_table.structs = NULL;
+        g_struct_table.count = 0;
+    }
+
+    // Clear exports
+    if (g_exports) {
+        for (int i = 0; i < g_export_count; i++) {
+            free(g_exports[i].orig);
+            free(g_exports[i].mangled);
+        }
+        free(g_exports);
+        g_exports = NULL;
+        g_export_count = 0;
+    }
+
+    // Clear imported packages
+    if (g_imported_packages) {
+        for (int i = 0; i < g_imported_pkg_count; i++) {
+            free(g_imported_packages[i]);
+        }
+        free(g_imported_packages);
+        g_imported_packages = NULL;
+        g_imported_pkg_count = 0;
+    }
+
+    // Clear hoisted funcs list (AST nodes owned elsewhere)
+    if (g_hoisted_funcs) {
+        free(g_hoisted_funcs);
+        g_hoisted_funcs = NULL;
+    }
+    g_hoisted_count = 0;
+    g_funlit_counter = 0;
+
+    // Reset package
+    if (g_current_package_heap && g_current_package) {
+        free(g_current_package);
+    }
+    g_current_package = (char *)g_default_package;
+    g_current_package_heap = 0;
+
+    token_head = NULL;
+    root = NULL;
+    g_stop_at_arrow = 0;
+    g_parse_filename = NULL;
+}
 
 ASTNode* find_function(const char *name) {
     for (int i = 0; i < g_func_table.count; i++) {
@@ -1379,7 +1462,7 @@ ASTNode* parse_toplevel(Token **cur) {
     if ((*cur)->kind == PACKAGE) {
         *cur = (*cur)->next;
         if ((*cur)->kind != IDENTIFIER) parse_error("expected package name", token_head, *cur);
-        g_current_package = strdup((*cur)->value);
+        set_current_package((*cur)->value);
         *cur = (*cur)->next;
         if (!expect(cur, SEMICOLON)) parse_error("expected ';' after package name", token_head, *cur);
         return NULL;
@@ -2413,6 +2496,10 @@ void free_ast(ASTNode *node) {
             break;
         case AST_UNARY:
             free_ast(node->unary.operand);
+            break;
+        case AST_CAST:
+            if (node->cast.type) free_ast(node->cast.type);
+            if (node->cast.expr) free_ast(node->cast.expr);
             break;
         case AST_TERNARY:
             free_ast(node->ternary.cond);

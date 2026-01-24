@@ -4,6 +4,20 @@
 #include <string.h>
 #include <stdlib.h>
 
+static const char *g_entry_name = "main";
+
+void codegen_set_entry(const char *name) {
+    if (name && name[0]) {
+        g_entry_name = name;
+    } else {
+        g_entry_name = "main";
+    }
+}
+
+static int is_entry_name(const char *name) {
+    return name && g_entry_name && strcmp(name, g_entry_name) == 0;
+}
+
 // --- Basic struct support scaffolding ---
 typedef struct {
     const char *name;   // member name
@@ -517,6 +531,7 @@ static void emit_load_var(CompilerContext *cc, StringBuilder *sb, const char *na
                    char **locals, int local_count)
 {
     const LocalInfo *li_info = find_local_info(cc, name);
+    if (!li_info) li_info = find_global_info(cc, name);
     if (li_info && li_info->is_array) {
         // arrays decay to pointers
         emit_addr_of_var(cc, sb, name, target_reg, params, param_count, locals, local_count);
@@ -562,7 +577,8 @@ static void emit_load_var(CompilerContext *cc, StringBuilder *sb, const char *na
         {
             // fallback global
             sb_append(sb, "  movi  r2, %s\n", name);
-            sb_append(sb, "  load  %s, r2\n", target_reg);
+            int is_byte = is_char_scalar_var(cc, name);
+            emit_load_from_addr(sb, target_reg, "r2", is_byte);
         }
     }
 }
@@ -585,7 +601,8 @@ static void emit_store_var(CompilerContext *cc, StringBuilder *sb, const char *n
     {
         // fallback global
         sb_append(sb, "  movi  r3, %s\n", name);
-        sb_append(sb, "  store r3, %s\n", src_reg);
+        int is_byte = is_char_scalar_var(cc, name);
+        emit_store_to_addr(sb, "r3", src_reg, is_byte);
     }
 }
 
@@ -710,6 +727,7 @@ static int ast_type_is_char_scalar(ASTNode *type_node) {
 
 static int is_char_scalar_var(CompilerContext *cc, const char *name) {
     const LocalInfo *li = find_local_info(cc, name);
+    if (!li) li = find_global_info(cc, name);
     return (li && li->pointer_level == 0 && !li->is_array && base_type_is_char(li->base_type));
 }
 
@@ -913,6 +931,48 @@ static void emit_zero_bytes(StringBuilder *sb, int count) {
     sb_append(sb, "\n");
 }
 
+static long eval_const_expr(ASTNode *node) {
+    if (!node) return 0;
+    if (node->type == AST_NUMBER) {
+        return strtol(node->number.value, NULL, 10);
+    }
+    if (node->type == AST_CHAR_LITERAL) {
+        return (unsigned char)(node->char_literal.value ? node->char_literal.value[0] : 0);
+    }
+    if (node->type == AST_UNARY && node->unary.op == SUB) {
+        return -eval_const_expr(node->unary.operand);
+    }
+    return 0; 
+}
+
+static void emit_global_init(StringBuilder *sb, ASTNode *init_expr, int expected_bytes) {
+    if (!init_expr) {
+        emit_zero_bytes(sb, expected_bytes);
+        return;
+    }
+
+    // Evaluate constant expression
+    long val = eval_const_expr(init_expr);
+
+    if (expected_bytes == 1) {
+        // Byte init
+        sb_append(sb, "  .byte 0x%02X\n", (unsigned)(val & 0xFF));
+    } else {
+        // Word init (4 bytes) - Big Endian
+        // If expected_bytes is 4, we write 4 bytes. 
+        // If it is array or struct, this naive impl is insufficient (TODO),
+        // but works for scalar int.
+        sb_append(sb, "  .byte 0x%02X, 0x%02X, 0x%02X, 0x%02X\n",
+                  (unsigned)((val >> 24) & 0xFF),
+                  (unsigned)((val >> 16) & 0xFF),
+                  (unsigned)((val >> 8) & 0xFF),
+                  (unsigned)(val & 0xFF));
+        if (expected_bytes > 4) {
+            emit_zero_bytes(sb, expected_bytes - 4);
+        }
+    }
+}
+
 static void emit_global_decl(CompilerContext *cc, ASTNode *var_decl) {
     if (!var_decl || var_decl->type != AST_VAR_DECL) return;
     ensure_data_section(cc);
@@ -927,7 +987,11 @@ static void emit_global_decl(CompilerContext *cc, ASTNode *var_decl) {
     if (bytes < 1) bytes = SLOT_SIZE;
 
     sb_append(&cg_data_sb, "%s:\n", var_decl->var_decl.name ? var_decl->var_decl.name : "");
-    emit_zero_bytes(&cg_data_sb, bytes);
+    if (var_decl->var_decl.init) {
+        emit_global_init(&cg_data_sb, var_decl->var_decl.init, bytes);
+    } else {
+        emit_zero_bytes(&cg_data_sb, bytes);
+    }
 }
 
 static int pointer_step_bytes(CompilerContext *cc, const TypeInfo *info) {
@@ -2168,7 +2232,7 @@ void gen_func(CompilerContext *cc, ASTNode *node, StringBuilder *sb)
 
     if (node->type != AST_FUNDEF) return;
 
-    char *fname = strcmp(node->fundef.name, "main") == 0 ? "__START__" : node->fundef.name;
+    char *fname = is_entry_name(node->fundef.name) ? "__START__" : node->fundef.name;
     int param_count = node->fundef.param_count;
     char *params[16] = {0};
     for (int i = 0; i < param_count; i++)
@@ -2227,7 +2291,7 @@ void gen_func(CompilerContext *cc, ASTNode *node, StringBuilder *sb)
     sb_append(sb, "  addis sp, %d\n", (local_count + param_count) * SLOT_SIZE);
     sb_append(sb, "; epilogue\n  pop  bp\n  pop  lr\n");
 
-    // Epilogue (not for main)
+    // Epilogue (not for entry)
     if (strcmp(fname, "__START__") != 0)
     {
         sb_append(sb, "  mov  pc, lr\n");
@@ -2406,11 +2470,11 @@ char *codegen(ASTNode *root)
         }
     }
 
-    // Output __START__ (main) first
+    // Output __START__ (entry) first
     for (int i = 0; i < root->block.count; i++)
     {
         ASTNode *fn = root->block.stmts[i];
-        if (fn->type == AST_FUNDEF && strcmp(fn->fundef.name, "main") == 0)
+        if (fn->type == AST_FUNDEF && is_entry_name(fn->fundef.name))
         {
             gen_func(cc, fn, &sb);
             break;
@@ -2420,7 +2484,7 @@ char *codegen(ASTNode *root)
     for (int i = 0; i < root->block.count; i++)
     {
         ASTNode *fn = root->block.stmts[i];
-        if (fn->type == AST_FUNDEF && strcmp(fn->fundef.name, "main") != 0)
+        if (fn->type == AST_FUNDEF && !is_entry_name(fn->fundef.name))
         {
             gen_func(cc, fn, &sb);
         }
