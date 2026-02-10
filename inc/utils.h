@@ -8,7 +8,7 @@
 // Caller owns the returned NUL-terminated buffer.
 char *readSampleInput(const char *filePath);
 
-// Saves content to filePath, creating the tests/outputs directory if needed.
+// Saves content to filePath, creating parent directories as needed.
 void saveOutput(const char *filePath, const char *content);
 
 #endif

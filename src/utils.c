@@ -2,6 +2,9 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <errno.h>
+#include <limits.h>
 
 #ifdef _WIN32
 #include <direct.h>
@@ -46,25 +49,53 @@ char *readSampleInput(const char *filePath) {
     return buf;
 }
 
-static void ensure_outputs_dir(void) {
+static void normalize_slashes(char *s) {
+    for (; *s; s++) {
+        if (*s == '\\') *s = '/';
+    }
+}
+
+static int mkdir_one(const char *path) {
 #ifdef _WIN32
-    _mkdir("tests\\outputs");
+    if (_mkdir(path) != 0 && errno != EEXIST) return -1;
 #else
-    struct stat st;
-    if (stat("tests/outputs", &st) == 0) {
-        if (!S_ISDIR(st.st_mode)) {
-            fprintf(stderr, "Path tests/outputs exists and is not a directory\n");
-        }
-        return;
-    }
-    if (mkdir("tests/outputs", 0777) != 0) {
-        fprintf(stderr, "Failed to create directory tests/outputs\n");
-    }
+    if (mkdir(path, 0777) != 0 && errno != EEXIST) return -1;
 #endif
+    return 0;
+}
+
+static int mkdir_p(const char *path) {
+    if (!path || !path[0]) return 0;
+    char tmp[PATH_MAX];
+    snprintf(tmp, sizeof(tmp), "%s", path);
+    normalize_slashes(tmp);
+    size_t len = strlen(tmp);
+    if (len == 0) return 0;
+    if (tmp[len - 1] == '/') tmp[len - 1] = '\0';
+    for (char *p = tmp + 1; *p; p++) {
+        if (*p == '/') {
+            *p = '\0';
+            if (mkdir_one(tmp) != 0) return -1;
+            *p = '/';
+        }
+    }
+    if (mkdir_one(tmp) != 0) return -1;
+    return 0;
+}
+
+static void ensure_parent_dir(const char *file_path) {
+    if (!file_path || !file_path[0]) return;
+    char tmp[PATH_MAX];
+    snprintf(tmp, sizeof(tmp), "%s", file_path);
+    normalize_slashes(tmp);
+    char *slash = strrchr(tmp, '/');
+    if (!slash) return;
+    *slash = '\0';
+    mkdir_p(tmp);
 }
 
 void saveOutput(const char *filePath, const char *content) {
-    ensure_outputs_dir();
+    ensure_parent_dir(filePath);
 
     FILE *f = fopen(filePath, "wb");
     if (!f) {
