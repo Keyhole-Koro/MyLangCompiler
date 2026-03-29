@@ -21,7 +21,7 @@ static int run_directory_mode(const DriverOptions *opts) {
 
     int rc = walk_dir(&ctx, opts->input_path);
     if (rc == 0) {
-        printf("Compiled %d .ml file(s)", ctx.compiled_count);
+        printf("Compiled %d .mln file(s)", ctx.compiled_count);
         if (opts->include_masm) printf(", copied %d .masm file(s)", ctx.copied_count);
         printf(".\n");
     }

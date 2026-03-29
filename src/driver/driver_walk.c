@@ -38,7 +38,7 @@ int walk_dir(WalkCtx *ctx, const char *dir_path) {
             continue;
         }
 
-        if (is_file && has_ext(child_path, ".ml")) {
+        if (is_file && has_ext(child_path, ".mln")) {
             char *rel_out = replace_ext(relbuf, ".masm");
             char *out_path = join_path(ctx->out_root, rel_out ? rel_out : relbuf);
             if (!out_path) {

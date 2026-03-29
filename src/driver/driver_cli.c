@@ -3,7 +3,7 @@
 void driver_print_usage(const char *prog) {
     fprintf(stderr,
             "Usage:\n"
-            "  %s [options] <input.ml> <output.masm>\n"
+            "  %s [options] <input.mln> <output.masm>\n"
             "  %s [options] <input_dir> <output_dir>\n"
             "\n"
             "Options:\n"
