@@ -553,10 +553,11 @@ int expect(Token **cur, TokenKind kind) {
     return 0;
 }
 int is_type(TokenKind kind, Token *cur) {
-    if (kind == CONST || kind == UNSIGNED || kind == SIGNED) return 1;
+    if (kind == CONST) return 1;
 
     if (kind == VOID ||
-        kind == INT ||
+        kind == I32 ||
+        kind == U32 ||
         kind == CHAR ||
         kind == FLOAT ||
         kind == DOUBLE ||
@@ -588,7 +589,7 @@ static ASTNode *parse_expr_until_arrow(Token **cur) {
 // Look ahead to see if the current tokens form a function declaration/defn.
 static int looks_like_function(Token *cur) {
     Token *t = cur;
-    while (t && (t->kind == CONST || t->kind == UNSIGNED || t->kind == SIGNED)) {
+    while (t && t->kind == CONST) {
         t = t->next;
     }
     if (!t || !is_type(t->kind, t)) return 0;
@@ -607,7 +608,7 @@ static int looks_like_fun_literal(Token *cur) {
         return t->next && t->next->kind == L_BRACE;
     }
     while (1) {
-        while (t && (t->kind == CONST || t->kind == UNSIGNED || t->kind == SIGNED)) t = t->next;
+        while (t && t->kind == CONST) t = t->next;
         if (!t || !is_type(t->kind, t)) return 0;
         t = t->next; // base type
         while (t && t->kind == ASTARISK) t = t->next;
@@ -849,7 +850,7 @@ ASTNode *parse_typedef(Token **cur) {
         add_typename(typedef_name);
         return new_typedef_struct(struct_name ? struct_name : "", members, member_count, typedef_name);
     } else {
-        // typedef int MyInt;
+        // typedef i32 MyInt;
         ASTNode *type = parse_type(cur);
         if ((*cur)->kind != IDENTIFIER)
             parse_error("expected typedef name", token_head, *cur);
@@ -866,10 +867,8 @@ ASTNode *parse_typedef(Token **cur) {
 ASTNode *parse_type(Token **cur) {
     int modifiers = 0;
 
-    while ((*cur)->kind == CONST || (*cur)->kind == UNSIGNED || (*cur)->kind == SIGNED) {
+    while ((*cur)->kind == CONST) {
         if ((*cur)->kind == CONST)    modifiers |= TYPEMOD_CONST;
-        if ((*cur)->kind == UNSIGNED) modifiers |= TYPEMOD_UNSIGNED;
-        if ((*cur)->kind == SIGNED)   modifiers |= TYPEMOD_SIGNED;
         *cur = (*cur)->next;
     }
 

@@ -27,9 +27,9 @@ StringTokenKindMap operators[] = {
 };
 
 StringTokenKindMap reservedWords[] = {
-    {"sizeof", SIZEOF}, {"bool", BOOL}, {"int", INT}, {"char", CHAR}, {"float", FLOAT},
+    {"sizeof", SIZEOF}, {"bool", BOOL}, {"i32", I32}, {"u32", U32}, {"char", CHAR}, {"float", FLOAT},
     {"double", DOUBLE}, {"void", VOID}, {"long", LONG}, {"short", SHORT},
-    {"unsigned", UNSIGNED}, {"signed", SIGNED}, {"const", CONST}, {"static", STATIC},
+    {"const", CONST}, {"static", STATIC},
     {"extern", EXTERN}, {"auto", AUTO}, {"register", REGISTER},
     {"if", IF}, {"else", ELSE}, {"while", WHILE}, {"do", DO}, {"for", FOR},
     {"switch", SWITCH}, {"case", CASE}, {"default", DEFAULT},
@@ -81,15 +81,14 @@ char *tokenkind2str(TokenKind kind) {
 
         case SIZEOF: return "SIZEOF";
         case BOOL: return "BOOL";
-        case INT: return "INT";
+        case I32: return "I32";
+        case U32: return "U32";
         case CHAR: return "CHAR";
         case FLOAT: return "FLOAT";
         case DOUBLE: return "DOUBLE";
         case VOID: return "VOID";
         case LONG: return "LONG";
         case SHORT: return "SHORT";
-        case UNSIGNED: return "UNSIGNED";
-        case SIGNED: return "SIGNED";
         case CONST: return "CONST";
         case STATIC: return "STATIC";
         case EXTERN: return "EXTERN";

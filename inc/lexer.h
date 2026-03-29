@@ -36,16 +36,14 @@ typedef enum {
     ARROW,   // ->
 
     BOOL,     // bool
-    INT,      // int
+    I32,      // i32
+    U32,      // u32
     CHAR,     // char
     FLOAT,    // float
     DOUBLE,   // double
     VOID,     // void
     LONG,     // long
     SHORT,    // short
-    UNSIGNED, // unsigned
-    SIGNED,   // signed
-    
     CONST,    // const
     STATIC,   // static
     EXTERN,   // extern

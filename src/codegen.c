@@ -765,7 +765,7 @@ static int infer_expr_type(CompilerContext *cc, ASTNode *expr, TypeInfo *out) {
         return 1;
     }
     case AST_NUMBER:
-        out->base_type = "int";
+        out->base_type = "i32";
         out->pointer_level = 0;
         out->type_modifiers = 0;
         out->is_array = 0;
@@ -800,7 +800,7 @@ static int infer_expr_type(CompilerContext *cc, ASTNode *expr, TypeInfo *out) {
         return 1;
     }
     case AST_SIZEOF:
-        out->base_type = "int";
+        out->base_type = "i32";
         out->pointer_level = 0;
         out->type_modifiers = 0;
         out->is_array = 0;
@@ -824,7 +824,7 @@ static int infer_expr_type(CompilerContext *cc, ASTNode *expr, TypeInfo *out) {
                 return 1;
             }
             if (expr->binary.op == SUB && lhs.pointer_level > 0 && rhs.pointer_level > 0) {
-                out->base_type = "int";
+                out->base_type = "i32";
                 out->pointer_level = 0;
                 out->is_array = 0;
                 out->dims_count = 0;
@@ -961,7 +961,7 @@ static void emit_global_init(StringBuilder *sb, ASTNode *init_expr, int expected
         // Word init (4 bytes) - Big Endian
         // If expected_bytes is 4, we write 4 bytes. 
         // If it is array or struct, this naive impl is insufficient (TODO),
-        // but works for scalar int.
+        // but works for scalar i32.
         sb_append(sb, "  .byte 0x%02X, 0x%02X, 0x%02X, 0x%02X\n",
                   (unsigned)((val >> 24) & 0xFF),
                   (unsigned)((val >> 16) & 0xFF),
