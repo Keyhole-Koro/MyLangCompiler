@@ -1,4 +1,4 @@
-#include "lexer.h"
+#include "mylang/frontend/lexer.h"
 
 #include <string.h>
 #include <ctype.h>
@@ -6,7 +6,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-#include "utils.h"
+#include "mylang/support/utils.h"
 
 static void advance_pos(const char *start, size_t len, int *line, int *col) {
     for (size_t i = 0; i < len; i++) {

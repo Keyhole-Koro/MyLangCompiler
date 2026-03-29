@@ -6,11 +6,11 @@
 #include <errno.h>
 #include <limits.h>
 
-#include "lexer.h"
-#include "parser.h"
-#include "codegen.h"
-#include "AST.h"
-#include "utils.h"
+#include "mylang/frontend/lexer.h"
+#include "mylang/frontend/parser.h"
+#include "mylang/backend/codegen.h"
+#include "mylang/ast/AST.h"
+#include "mylang/support/utils.h"
 
 static char *build_sidecar_path(const char *out_path, const char *suffix) {
     if (!out_path || !suffix) return NULL;

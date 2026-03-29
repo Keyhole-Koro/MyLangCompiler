@@ -1,4 +1,4 @@
-#include "AST.h"
+#include "mylang/ast/AST.h"
 
 char *astType2str(ASTNodeType type) {
     switch (type) {

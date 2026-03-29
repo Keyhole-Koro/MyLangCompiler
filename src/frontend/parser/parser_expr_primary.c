@@ -1,0 +1,117 @@
+#include "mylang/frontend/parser_internal.h"
+#include "mylang/frontend/parser_ast_internal.h"
+
+static ASTNode *parse_case_primary(Token **cur) {
+    *cur = (*cur)->next;
+    ASTNode *target = parse_expr(cur);
+    if (!expect(cur, OF)) parse_error("expected 'of' after case target", token_head, *cur);
+    if (!expect(cur, L_BRACE)) parse_error("expected '{' after of", token_head, *cur);
+
+    CaseItem *cases = NULL;
+    int count = 0;
+    ASTNode *default_expr = NULL;
+
+    while ((*cur)->kind != R_BRACE && (*cur)->kind != EOT) {
+        if ((*cur)->kind == UNDERSCORE) {
+            *cur = (*cur)->next;
+            if (!expect(cur, ARROW)) parse_error("expected '->' after _", token_head, *cur);
+            if (default_expr) parse_error("duplicate default case", token_head, *cur);
+            default_expr = parse_expr(cur);
+        } else {
+            ASTNode *key = parse_expr_until_arrow(cur);
+            if (!expect(cur, ARROW)) parse_error("expected '->' after case key", token_head, *cur);
+            ASTNode *expr = parse_expr(cur);
+            cases = realloc(cases, sizeof(CaseItem) * (count + 1));
+            cases[count].key = key;
+            cases[count].expr = expr;
+            count++;
+        }
+        if (!expect(cur, SEMICOLON)) parse_error("expected ';' after case expression", token_head, *cur);
+    }
+    if (!expect(cur, R_BRACE)) parse_error("expected '}'", token_head, *cur);
+    return new_case_expr(target, cases, count, default_expr);
+}
+
+static ASTNode *parse_identifier_primary(Token **cur) {
+    char *name = (*cur)->value;
+    *cur = (*cur)->next;
+
+    if ((*cur)->kind == L_PARENTHESES) {
+        *cur = (*cur)->next;
+        ASTNode **args = NULL;
+        int arg_count = 0;
+        if ((*cur)->kind != R_PARENTHESES) {
+            while (1) {
+                ASTNode *arg = parse_expr(cur);
+                args = realloc(args, sizeof(ASTNode*) * (arg_count + 1));
+                args[arg_count++] = arg;
+                if ((*cur)->kind == COMMA) {
+                    *cur = (*cur)->next;
+                    continue;
+                }
+                break;
+            }
+        }
+
+        if (!expect(cur, R_PARENTHESES))
+            parse_error("expected ')' after args", token_head, *cur);
+        return new_call(name, args, arg_count);
+    }
+
+    ASTNode *node = new_identifier(name);
+    while ((*cur)->kind == L_BRACKET) {
+        *cur = (*cur)->next;
+        ASTNode *index = parse_expr(cur);
+
+        if (!expect(cur, R_BRACKET))
+            parse_error("expected ']' after array index", token_head, *cur);
+
+        ASTNode *add = new_binary(ADD, node, index);
+        node = new_unary(ASTARISK, add);
+    }
+
+    return node;
+}
+
+ASTNode *parse_primary(Token **cur) {
+    if ((*cur)->kind == NUMBER) {
+        ASTNode *node = new_number((*cur)->value);
+        *cur = (*cur)->next;
+        return node;
+    }
+    if ((*cur)->kind == STRING_LITERAL) {
+        ASTNode *node = new_string_literal((*cur)->value);
+        *cur = (*cur)->next;
+        return node;
+    }
+    if ((*cur)->kind == CASE) {
+        return parse_case_primary(cur);
+    }
+    if ((*cur)->kind == IDENTIFIER) {
+        return parse_identifier_primary(cur);
+    }
+    if ((*cur)->kind == L_PARENTHESES && looks_like_fun_literal(*cur)) {
+        *cur = (*cur)->next;
+        ASTNode **params = NULL;
+        int param_count = 0;
+        if ((*cur)->kind != R_PARENTHESES) {
+            params = parse_param_list(cur, &param_count);
+        }
+        if (!expect(cur, R_PARENTHESES)) parse_error("expected ')' after function literal parameters", token_head, *cur);
+        ASTNode *body = parse_block(cur);
+        return new_fun_literal(params, param_count, body);
+    }
+    if ((*cur)->kind == L_PARENTHESES) {
+        *cur = (*cur)->next;
+        if ((*cur)->kind == L_BRACE) {
+            ASTNode *block = parse_block(cur);
+            if (!expect(cur, R_PARENTHESES)) parse_error("expected ')' after statement expression", token_head, *cur);
+            return new_stmt_expr(block);
+        }
+        ASTNode *node = parse_expr(cur);
+        if (!expect(cur, R_PARENTHESES)) parse_error("expected ')'", token_head, *cur);
+        return node;
+    }
+    parse_error("expected primary", token_head, *cur);
+    return NULL;
+}

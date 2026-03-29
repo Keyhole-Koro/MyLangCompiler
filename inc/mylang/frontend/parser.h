@@ -1,8 +1,8 @@
 #ifndef PARSER_H
 #define PARSER_H
 
-#include "lexer.h"
-#include "AST.h"
+#include "mylang/frontend/lexer.h"
+#include "mylang/ast/AST.h"
 
 ASTNode* parse_program(Token **cur);
 void parser_set_filename(const char *name);

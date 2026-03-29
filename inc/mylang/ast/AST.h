@@ -1,7 +1,7 @@
 #ifndef AST_H
 #define AST_H
 
-#include "lexer.h"
+#include "mylang/frontend/lexer.h"
 
 typedef enum {
     AST_NUMBER,

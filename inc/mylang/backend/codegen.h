@@ -3,9 +3,9 @@
 
 #include <stdio.h>
 
-#include "AST.h"
-#include "parser.h"
-#include "stringBuilder.h"
+#include "mylang/ast/AST.h"
+#include "mylang/frontend/parser.h"
+#include "mylang/support/stringBuilder.h"
 
 char *codegen(ASTNode *root);
 // Set the entry function name that maps to __START__ (default: "main").

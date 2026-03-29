@@ -1,8 +1,8 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -Iinc
-SRC = $(wildcard src/*.c)
+SRC = $(shell find src -name '*.c' | sort)
 TESTS = $(wildcard tests/*.c)
-SRC_NO_MAIN = $(filter-out src/main.c, $(SRC))
+SRC_NO_MAIN = $(filter-out src/driver/main.c, $(SRC))
 OUT = test
 MYCC = mlc
 
