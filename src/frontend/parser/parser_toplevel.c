@@ -86,9 +86,9 @@ ASTNode* parse_toplevel(Token **cur) {
         }
         return vd;
     }
-    ASTNode *stmt = parse_stmt(cur);
-    if (!stmt) parse_error("unexpected toplevel construct", token_head, *cur);
-    return stmt;
+
+    parse_error("unexpected toplevel construct: only declarations and definitions are allowed", token_head, *cur);
+    return NULL;
 }
 
 ASTNode* parse_program(Token **cur) {
