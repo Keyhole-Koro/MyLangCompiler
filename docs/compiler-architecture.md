@@ -9,8 +9,9 @@ The main flow is:
 
 1. `lexer` turns source text into tokens.
 2. `parser` builds the AST and performs parser-local rewrites.
-3. `codegen` walks the AST and emits assembly text.
-4. `driver` wires file IO, parsing, code generation, and CLI behavior together.
+3. `semantic` walks the AST for compiler-level validation and future ownership checks.
+4. `codegen` walks the AST and emits assembly text.
+5. `driver` wires file IO, parsing, semantic analysis, code generation, and CLI behavior together.
 
 ## Directory Layout
 
@@ -20,6 +21,7 @@ toolchain/MyLangCompiler/
 │   ├── ast/                  # AST public types
 │   ├── backend/              # codegen public/internal interfaces
 │   ├── frontend/             # lexer/parser public/internal interfaces
+│   ├── semantic/             # semantic analysis public/internal interfaces
 │   └── support/              # reusable helpers
 ├── src/
 │   ├── ast/                  # AST node utilities
@@ -27,6 +29,7 @@ toolchain/MyLangCompiler/
 │   ├── driver/               # CLI entrypoint
 │   ├── frontend/lexer/       # tokenization
 │   ├── frontend/parser/      # parsing + parser-local lowering/rewrites
+│   ├── semantic/             # semantic analysis and validation
 │   └── support/              # string builder and misc helpers
 └── docs/                     # compiler-specific notes
 ```
@@ -68,6 +71,12 @@ Parser state is still global, but it is now grouped more clearly:
 
 The state declarations live in `inc/mylang/frontend/parser_state_internal.h`.
 That keeps general parser declarations in `parser_internal.h` smaller.
+
+## Semantic
+
+The semantic stage sits between parsing and code generation.
+It is the intended home for type-directed validation, ownership checks, borrow rules,
+and lifetime analysis so those rules stay out of backend emission.
 
 ## Backend
 
@@ -123,10 +132,12 @@ If you are onboarding to the compiler, this is a good order:
 3. `src/frontend/parser/parser_toplevel.c`
 4. `src/frontend/parser/parser_stmt.c`
 5. `src/frontend/parser/parser_expr_*.c`
-6. `inc/mylang/backend/codegen.h`
-7. `src/backend/codegen/codegen_driver.c`
-8. `src/backend/codegen/codegen_stmt.c`
-9. `src/backend/codegen/codegen_expr.c`
+6. `inc/mylang/semantic/semantic.h`
+7. `src/semantic/semantic_driver.c`
+8. `inc/mylang/backend/codegen.h`
+9. `src/backend/codegen/codegen_driver.c`
+10. `src/backend/codegen/codegen_stmt.c`
+11. `src/backend/codegen/codegen_expr.c`
 
 ## Validation
 
