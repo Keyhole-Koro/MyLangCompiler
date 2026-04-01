@@ -1,0 +1,15 @@
+
+i32 main() {
+    char *hello = "Hello";
+
+    char c = 'X';
+    /*
+    char name[4];
+    name[0] = 'J';
+    name[1] = 'o';
+    name[2] = 'e';
+    name[3] = '\0';
+    return name[0];
+    */
+    return hello[0];
+}

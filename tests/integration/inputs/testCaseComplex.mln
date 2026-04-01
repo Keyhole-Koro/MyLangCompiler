@@ -1,0 +1,34 @@
+typedef struct {
+    i32 val;
+} Data;
+
+Data g_data;
+
+i32 get_val() {
+    return 100;
+}
+
+Data* get_ptr() {
+    return &g_data;
+}
+
+i32 main() {
+    g_data.val = 0;
+
+    i32 x = 0;
+
+    // 1. Function return value
+    i32 res1 = case x of {
+        0 -> get_val();
+        _ -> 0;
+    };
+
+    // 2. Case returning pointer, used in assignment LHS (via arrow)
+    // Parentheses might be needed or not, depending on precedence, but (...) is safe.
+    (case x of {
+        0 -> get_ptr();
+        _ -> (Data*)0;
+    })->val = 300;
+
+    return res1 + g_data.val; // 100 + 300 = 400
+}

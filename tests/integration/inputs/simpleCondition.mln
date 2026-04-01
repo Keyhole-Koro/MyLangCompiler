@@ -1,0 +1,93 @@
+i32 test_eq(i32 a, i32 b) {
+    i32 r = 0;
+    if (a == b) {
+        r = 10;
+    } else {
+        r = 11;
+    }
+    return r;
+}
+
+i32 test_neq(i32 a, i32 b) {
+    i32 r = 0;
+    if (a != b) {
+        r = 20;
+    } else {
+        r = 21;
+    }
+    return r;
+}
+
+i32 test_lt(i32 a, i32 b) {
+    i32 r = 0;
+    if (a < b) {
+        r = 30;
+    } else {
+        r = 31;
+    }
+    return r;
+}
+
+i32 test_lte(i32 a, i32 b) {
+    i32 r = 0;
+    if (a <= b) {
+        r = 40;
+    } else {
+        r = 41;
+    }
+    return r;
+}
+
+i32 test_gt(i32 a, i32 b) {
+    i32 r = 0;
+    if (a > b) {
+        r = 50;
+    } else {
+        r = 51;
+    }
+    return r;
+}
+
+i32 test_gte(i32 a, i32 b) {
+    i32 r = 0;
+    if (a >= b) {
+        r = 60;
+    } else {
+        r = 61;
+    }
+    return r;
+}
+
+i32 add4(i32 a, i32 b, i32 c, i32 d) {
+    return a + b + c + d;
+}
+
+i32 main() {
+    i32 x = 2;
+    i32 y = 3;
+
+    i32 eq  = test_eq(x, y);    // 11
+
+    i32 neq = test_neq(x, y);   // 20
+    i32 lt  = test_lt(x, y);    // 30
+    i32 lte = test_lte(x, y);   // 40
+    i32 gt  = test_gt(x, y);    // 51
+    i32 gte = test_gte(x, y);   // 61
+
+    if (x > 9) {
+        x = x + 1; // x becomes 3 (not taken)
+    }
+
+    i32 z = add4(x, y, 10, 100); // 2+3+10+100=115
+
+    // Optional: add all the results so the output is unique and you can verify!
+    return eq+
+    neq +
+    lt +
+    lte +
+    gt +
+    gte +
+    z; // 11 + 20 + 30 + 40 + 51 + 61 + 115 = 328
+    // Should be: 11+20+30+40+51+61+15 = 228
+
+}
