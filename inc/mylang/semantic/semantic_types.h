@@ -7,6 +7,7 @@ typedef struct {
     const char *base_type;
     int pointer_level;
     int type_modifiers;
+    int ref_kind;
     int is_array;
     int dims[8];
     int dims_count;

@@ -29,12 +29,12 @@ StringTokenKindMap operators[] = {
 StringTokenKindMap reservedWords[] = {
     {"sizeof", SIZEOF}, {"bool", BOOL}, {"i32", I32}, {"u32", U32}, {"char", CHAR}, {"float", FLOAT},
     {"double", DOUBLE}, {"void", VOID}, {"long", LONG}, {"short", SHORT},
-    {"const", CONST}, {"static", STATIC},
+    {"const", CONST}, {"static", STATIC}, {"mut", MUT}, {"ref", REF},
     {"extern", EXTERN}, {"auto", AUTO}, {"register", REGISTER},
     {"if", IF}, {"else", ELSE}, {"while", WHILE}, {"do", DO}, {"for", FOR},
     {"switch", SWITCH}, {"case", CASE}, {"default", DEFAULT},
     {"break", BREAK}, {"continue", CONTINUE}, {"return", RETURN},
-    {"yield", YIELD},
+    {"yield", YIELD}, {"unchecked", UNCHECKED},
     {"of", OF}, {"_", UNDERSCORE},
     {"typedef", TYPEDEF}, {"struct", STRUCT}, {"union", UNION}, {"enum", ENUM},
     {"import", IMPORT}, {"from", FROM}, {"export", EXPORT}, {"package", PACKAGE}
@@ -91,6 +91,8 @@ char *tokenkind2str(TokenKind kind) {
         case SHORT: return "SHORT";
         case CONST: return "CONST";
         case STATIC: return "STATIC";
+        case MUT: return "MUT";
+        case REF: return "REF";
         case EXTERN: return "EXTERN";
         case AUTO: return "AUTO";
         case REGISTER: return "REGISTER";
@@ -106,6 +108,7 @@ char *tokenkind2str(TokenKind kind) {
         case CONTINUE: return "CONTINUE";
         case RETURN: return "RETURN";
         case YIELD: return "YIELD";
+        case UNCHECKED: return "UNCHECKED";
         case OF: return "OF";
         case UNDERSCORE: return "UNDERSCORE";
         case TYPEDEF: return "TYPEDEF";

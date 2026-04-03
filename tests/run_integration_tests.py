@@ -10,7 +10,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PROJECT_ROOT = REPO_ROOT.parents[1]
-INPUT_DIR = REPO_ROOT / "tests" / "integration" / "inputs"
+TESTS_DIR = REPO_ROOT / "tests"
 
 CC_PATH = REPO_ROOT / "mlc"
 ASM_PATH = PROJECT_ROOT / "toolchain" / "MyAssembler" / "build" / "myas"
@@ -19,41 +19,47 @@ EMU_PATH = PROJECT_ROOT / "runtime" / "MyEmulator" / "build" / "myemu"
 EMU_TIMEOUT_SEC = float(os.environ.get("EMU_TIMEOUT_SEC", "8"))
 
 TESTCASES = [
-    ("simpleFunc", ["simpleFunc.mln"], "R1", 15),
-    ("simpleCondition", ["simpleCondition.mln"], "R1", 328),
-    ("simpleFor", ["simpleFor.mln"], "R1", 5),
-    ("simplePointer", ["simplePointer.mln"], "R1", 14),
-    ("simpleBinop", ["simpleBinop.mln"], "R1", 3),
-    ("simpleWhile", ["simpleWhile.mln"], "R1", 15),
-    ("complexWhile", ["complexWhile.mln"], "R1", 16),
-    ("simpleChar", ["simpleChar.mln"], "R1", 72),
-    ("intWidth32", ["intWidth32.mln"], "R1", 20),
-    ("simpleStruct", ["simpleStruct.mln"], "R1", 10),
-    ("arrayInit", ["arrayInit.mln"], "R1", 106),
-    ("multiArray", ["multiArray.mln"], "R1", 6),
-    ("arraySizeof", ["arraySizeof.mln"], "R1", 24),
-    ("testDoWhile", ["testDoWhile.mln"], "R1", 10),
-    ("testBitwise", ["testBitwise.mln"], "R1", 29),
-    ("testOps", ["testOps.mln"], "R1", 10),
-    ("testTernary", ["testTernary.mln"], "R1", 8),
-    ("testTypedef", ["testTypedef.mln"], "R1", 1),
-    ("longProgram", ["longProgram.mln"], "R1", 77),
-    ("complex_ops", ["complex_ops.mln"], "R1", 188),
-    ("multiInclude", ["multiInclude.mln", "multiInclude_part1.mln", "multiInclude_part2.mln"], "R1", 11),
-    ("multiInclude_complex", ["multiInclude_complex.mln", "multiInclude_midA.mln", "multiInclude_midB.mln", "multiInclude_shared.mln"], "R1", 21),
-    ("testStmtExpr", ["testStmtExpr.mln"], "R1", 5),
-    ("testCaseExpr", ["testCaseExpr.mln"], "R1", 30),
-    ("testCaseStructArrow", ["testCaseStructArrow.mln"], "R1", 42),
-    ("testCaseComplex", ["testCaseComplex.mln"], "R1", 400),
-    ("testCaseExprRef", ["testCaseExprRef.mln"], "R1", 100),
-    ("nestedCaseArrow", ["nestedCaseArrow.mln"], "R1", 10),
-    ("packageSample", ["pkg_main.mln", "pkg_math.mln"], "R1", 20),
-    ("functionLiteral", ["functionLiteral.mln"], "R1", 10),
-    ("localFunctionLiteral", ["localFunctionLiteral.mln"], "R1", 10),
-    ("nestedFunctionLiteral", ["nestedFunctionLiteral.mln"], "R1", 6),
-    ("globalInit", ["globalInit.mln"], "R1", 42),
-    ("testGlobalScalar", ["testGlobalScalar.mln"], "R1", 105),
-    ("globalUninit", ["globalUninit.mln"], "R1", 83),
+    ("simpleFunc", ["succeed/function/simpleFunc.mln"], "R1", 15),
+    ("simpleCondition", ["succeed/control/simpleCondition.mln"], "R1", 328),
+    ("simpleFor", ["succeed/control/simpleFor.mln"], "R1", 5),
+    ("simplePointer", ["succeed/pointer/simplePointer.mln"], "R1", 14),
+    ("simpleBinop", ["succeed/expr/simpleBinop.mln"], "R1", 3),
+    ("simpleWhile", ["succeed/control/simpleWhile.mln"], "R1", 15),
+    ("complexWhile", ["succeed/control/complexWhile.mln"], "R1", 16),
+    ("simpleChar", ["succeed/expr/simpleChar.mln"], "R1", 72),
+    ("intWidth32", ["succeed/expr/intWidth32.mln"], "R1", 20),
+    ("simpleStruct", ["succeed/struct/simpleStruct.mln"], "R1", 10),
+    ("arrayInit", ["succeed/array/arrayInit.mln"], "R1", 106),
+    ("multiArray", ["succeed/array/multiArray.mln"], "R1", 6),
+    ("arraySizeof", ["succeed/array/arraySizeof.mln"], "R1", 24),
+    ("testDoWhile", ["succeed/control/testDoWhile.mln"], "R1", 10),
+    ("testBitwise", ["succeed/expr/testBitwise.mln"], "R1", 29),
+    ("testOps", ["succeed/expr/testOps.mln"], "R1", 10),
+    ("testTernary", ["succeed/expr/testTernary.mln"], "R1", 8),
+    ("testTypedef", ["succeed/expr/testTypedef.mln"], "R1", 1),
+    ("longProgram", ["succeed/struct/longProgram.mln"], "R1", 77),
+    ("complex_ops", ["succeed/expr/complex_ops.mln"], "R1", 188),
+    ("multiInclude", ["succeed/package/multiInclude.mln", "succeed/package/multiInclude_part1.mln", "succeed/package/multiInclude_part2.mln"], "R1", 11),
+    ("multiInclude_complex", ["succeed/package/multiInclude_complex.mln", "succeed/package/multiInclude_midA.mln", "succeed/package/multiInclude_midB.mln", "succeed/package/multiInclude_shared.mln"], "R1", 21),
+    ("testStmtExpr", ["succeed/expr/testStmtExpr.mln"], "R1", 5),
+    ("testCaseExpr", ["succeed/case/testCaseExpr.mln"], "R1", 30),
+    ("testCaseStructArrow", ["succeed/case/testCaseStructArrow.mln"], "R1", 42),
+    ("testCaseComplex", ["succeed/case/testCaseComplex.mln"], "R1", 400),
+    ("testCaseExprRef", ["succeed/case/testCaseExprRef.mln"], "R1", 100),
+    ("nestedCaseArrow", ["succeed/case/nestedCaseArrow.mln"], "R1", 10),
+    ("packageSample", ["succeed/package/pkg_main.mln", "succeed/package/pkg_math.mln"], "R1", 20),
+    ("functionLiteral", ["succeed/function/functionLiteral.mln"], "R1", 10),
+    ("localFunctionLiteral", ["succeed/function/localFunctionLiteral.mln"], "R1", 10),
+    ("nestedFunctionLiteral", ["succeed/function/nestedFunctionLiteral.mln"], "R1", 6),
+    ("globalInit", ["succeed/global/globalInit.mln"], "R1", 42),
+    ("testGlobalScalar", ["succeed/global/testGlobalScalar.mln"], "R1", 105),
+    ("globalUninit", ["succeed/global/globalUninit.mln"], "R1", 83),
+    ("phase2_refBorrow", ["succeed/semantic/phase2_refBorrow.mln"], "R1", 7),
+    ("phase2_refMut", ["succeed/semantic/phase2_refMut.mln"], "R1", 9),
+    ("phase2_unchecked", ["succeed/semantic/phase2_unchecked.mln"], "R1", 9),
+    ("phase2_refParam", ["succeed/semantic/phase2_refParam.mln"], "R1", 11),
+    ("phase2_refMutParam", ["succeed/semantic/phase2_refMutParam.mln"], "R1", 9),
+    ("phase2_uncheckedNested", ["succeed/semantic/phase2_uncheckedNested.mln"], "R1", 12),
 ]
 
 VERBOSE = False
@@ -139,7 +145,7 @@ def run_test(basename, sources, reg, expected, temp_root):
     outcomes = []
 
     for src in sources:
-        src_path = INPUT_DIR / src
+        src_path = TESTS_DIR / src
         stem = src_path.stem
         asm_path = test_dir / f"{basename}__{stem}.masm"
         bin_prelink_path = test_dir / f"{basename}__{stem}.prelink.mbin"

@@ -1,0 +1,11 @@
+typedef struct {
+    i32 x;
+} Box;
+
+i32 main() {
+    Box a;
+    a.x = 7;
+    ref Box ra = &a;
+    Box b = a;
+    return b.x;
+}

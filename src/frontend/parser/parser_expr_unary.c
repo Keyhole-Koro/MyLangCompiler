@@ -27,6 +27,13 @@ ASTNode *parse_unary(Token **cur) {
     }
     if ((*cur)->kind == AMPERSAND) {
         *cur = (*cur)->next;
+        if (g_unchecked_depth == 0 && (*cur)->kind == MUT) {
+            *cur = (*cur)->next;
+            return new_borrow_mut(parse_unary(cur));
+        }
+        if (g_unchecked_depth == 0) {
+            return new_borrow(parse_unary(cur));
+        }
         return new_unary(AMPERSAND, parse_unary(cur));
     }
     if ((*cur)->kind == ASTARISK) {
@@ -49,12 +56,18 @@ ASTNode *parse_unary(Token **cur) {
         return new_sizeof(inner);
     }
     if ((*cur)->kind == STRING_LITERAL) {
+        Token *tok = *cur;
         ASTNode *node = new_string_literal((*cur)->value);
+        node->line = tok->line;
+        node->col = tok->col;
         *cur = (*cur)->next;
         return node;
     }
     if ((*cur)->kind == CHAR_LITERAL) {
+        Token *tok = *cur;
         ASTNode *node = new_char_literal((*cur)->value);
+        node->line = tok->line;
+        node->col = tok->col;
         *cur = (*cur)->next;
         return node;
     }

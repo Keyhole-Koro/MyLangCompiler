@@ -6,6 +6,7 @@ StructTable g_struct_table = { NULL, 0 };
 FunctionTable g_func_table = { NULL, 0 };
 TypeTable g_type_table = { NULL, 0 };
 int g_stop_at_arrow = 0;
+int g_unchecked_depth = 0;
 const char g_default_package[] = "main";
 char *g_current_package = (char *)g_default_package;
 int g_current_package_heap = 0;

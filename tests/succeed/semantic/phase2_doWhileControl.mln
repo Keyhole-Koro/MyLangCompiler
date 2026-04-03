@@ -1,0 +1,10 @@
+i32 main() {
+    i32 i = 0;
+    i32 sum = 0;
+    do {
+        i++;
+        if (i == 2) continue;
+        sum = sum + i;
+    } while (i < 3);
+    return sum;
+}

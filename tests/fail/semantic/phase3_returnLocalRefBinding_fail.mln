@@ -1,0 +1,9 @@
+ref i32 bad() {
+    i32 x = 1;
+    ref i32 rx = &x;
+    return rx;
+}
+
+i32 main() {
+    return 0;
+}

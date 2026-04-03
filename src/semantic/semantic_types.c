@@ -5,6 +5,7 @@ void semantic_typeinfo_clear(SemanticTypeInfo *out) {
     out->base_type = "";
     out->pointer_level = 0;
     out->type_modifiers = 0;
+    out->ref_kind = REFKIND_NONE;
     out->is_array = 0;
     out->dims_count = 0;
     for (int i = 0; i < 8; i++) out->dims[i] = 0;
@@ -36,5 +37,6 @@ int semantic_typeinfo_from_type_ast(ASTNode *type_node, SemanticTypeInfo *out) {
     }
     out->pointer_level = node->type_node.pointer_level;
     out->type_modifiers = node->type_node.type_modifiers;
+    out->ref_kind = node->type_node.ref_kind;
     return 1;
 }
