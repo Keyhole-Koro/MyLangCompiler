@@ -7,5 +7,5 @@ i32 main() {
     a.x = 7;
 
     Box b = a;
-    return a.x;
+    return a.x; // invalid: a is moved into b, so reading a afterwards must fail
 }

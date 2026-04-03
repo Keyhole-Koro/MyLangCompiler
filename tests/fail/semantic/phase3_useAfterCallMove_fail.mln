@@ -10,5 +10,5 @@ i32 main() {
     Box a;
     a.x = 7;
     consume(a);
-    return a.x;
+    return a.x; // invalid: a is moved into consume(a), so using a afterwards must fail
 }

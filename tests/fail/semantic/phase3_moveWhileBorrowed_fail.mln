@@ -6,6 +6,6 @@ i32 main() {
     Box a;
     a.x = 7;
     ref Box ra = &a;
-    Box b = a;
+    Box b = a; // invalid: a is still shared-borrowed by ra, so moving a into b must fail
     return b.x;
 }

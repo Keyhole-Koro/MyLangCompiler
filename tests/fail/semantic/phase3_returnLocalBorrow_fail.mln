@@ -1,6 +1,6 @@
 ref i32 bad() {
     i32 x = 1;
-    return &x;
+    return &x; // invalid: returning a reference to local x would leave a dangling reference
 }
 
 i32 main() {
