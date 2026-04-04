@@ -8,6 +8,8 @@ char *astType2str(ASTNodeType type) {
         case AST_TYPE: return "AST_TYPE";
         case AST_TYPE_ARRAY: return "AST_TYPE_ARRAY";
         case AST_VAR_DECL: return "AST_VAR_DECL";
+        case AST_BORROW: return "AST_BORROW";
+        case AST_BORROW_MUT: return "AST_BORROW_MUT";
         case AST_ASSIGN: return "AST_ASSIGN";
         case AST_UNARY: return "AST_UNARY";
         case AST_CAST: return "AST_CAST";
@@ -39,6 +41,7 @@ char *astType2str(ASTNodeType type) {
         case AST_YIELD: return "AST_YIELD";
         case AST_STMT_EXPR: return "AST_STMT_EXPR";
         case AST_CASE: return "AST_CASE";
+        case AST_UNCHECKED: return "AST_UNCHECKED";
     }
     return "<unknown>";
 }

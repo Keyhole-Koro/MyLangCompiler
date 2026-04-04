@@ -1,7 +1,7 @@
 #include "mylang/frontend/parser_internal.h"
 
 int is_type(TokenKind kind, Token *cur) {
-    if (kind == CONST) return 1;
+    if (kind == CONST || kind == REF) return 1;
 
     if (kind == VOID ||
         kind == I32 ||
@@ -28,7 +28,7 @@ ASTNode *parse_expr_until_arrow(Token **cur) {
 // Look ahead to see if the current tokens form a function declaration/defn.
 int looks_like_function(Token *cur) {
     Token *t = cur;
-    while (t && t->kind == CONST) {
+    while (t && (t->kind == CONST || t->kind == REF || t->kind == MUT)) {
         t = t->next;
     }
     if (!t || !is_type(t->kind, t)) return 0;
@@ -47,7 +47,11 @@ int looks_like_fun_literal(Token *cur) {
         return t->next && t->next->kind == L_BRACE;
     }
     while (1) {
-        while (t && t->kind == CONST) t = t->next;
+        if (t && t->kind == MUT) t = t->next;
+        while (t && (t->kind == CONST || t->kind == REF)) {
+            t = t->next;
+            if (t && t->kind == MUT) t = t->next;
+        }
         if (!t || !is_type(t->kind, t)) return 0;
         t = t->next; // base type
         while (t && t->kind == ASTARISK) t = t->next;
@@ -72,4 +76,3 @@ int looks_like_fun_literal(Token *cur) {
         return 0;
     }
 }
-

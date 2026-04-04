@@ -14,6 +14,12 @@ void ensure_no_fun_literals(ASTNode *node) {
         ensure_no_fun_literals(node->assign.left);
         ensure_no_fun_literals(node->assign.right);
         break;
+    case AST_BORROW:
+        ensure_no_fun_literals(node->borrow.expr);
+        break;
+    case AST_BORROW_MUT:
+        ensure_no_fun_literals(node->borrow_mut.expr);
+        break;
     case AST_BINARY:
         ensure_no_fun_literals(node->binary.left);
         ensure_no_fun_literals(node->binary.right);
@@ -73,6 +79,9 @@ void ensure_no_fun_literals(ASTNode *node) {
         for (int i = 0; i < node->block.count; i++) {
             ensure_no_fun_literals(node->block.stmts[i]);
         }
+        break;
+    case AST_UNCHECKED:
+        ensure_no_fun_literals(node->unchecked_block.body);
         break;
     case AST_STMT_EXPR:
         ensure_no_fun_literals(node->stmt_expr.block);

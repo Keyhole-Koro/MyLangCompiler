@@ -15,14 +15,14 @@ ASTNode *new_char_literal(char *str) {
 }
 
 ASTNode *new_number(char *val) {
-    ASTNode *node = malloc(sizeof(ASTNode));
+    ASTNode *node = calloc(1, sizeof(ASTNode));
     node->type = AST_NUMBER;
     node->number.value = strdup(val);
     return node;
 }
 
 ASTNode *new_identifier(char *name) {
-    ASTNode *node = malloc(sizeof(ASTNode));
+    ASTNode *node = calloc(1, sizeof(ASTNode));
     node->type = AST_IDENTIFIER;
     node->identifier.name = strdup(name);
     return node;

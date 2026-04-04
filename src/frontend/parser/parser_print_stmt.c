@@ -28,6 +28,10 @@ int fprint_ast_stmt_node(FILE *out, ASTNode *node, int indent) {
         fprint_indent(out, indent); fprintf(out, "Block\n");
         for (int i = 0; i < node->block.count; i++) fprint_ast(out, node->block.stmts[i], indent + 1);
         return 1;
+    case AST_UNCHECKED:
+        fprint_indent(out, indent); fprintf(out, "Unchecked\n");
+        fprint_ast(out, node->unchecked_block.body, indent + 1);
+        return 1;
     case AST_STMT_EXPR:
         fprint_indent(out, indent); fprintf(out, "StmtExpr\n");
         fprint_ast(out, node->stmt_expr.block, indent + 1);

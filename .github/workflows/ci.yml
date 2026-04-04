@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        shell: bash
+        working-directory: toolchain/MyLangCompiler
+
+    steps:
+      - name: Checkout MyLangCompiler
+        uses: actions/checkout@v4
+        with:
+          path: toolchain/MyLangCompiler
+
+      - name: Checkout MyAssembler
+        uses: actions/checkout@v4
+        with:
+          repository: Keyhole-Koro/MyAssembler
+          path: toolchain/MyAssembler
+
+      - name: Checkout MyLinker
+        uses: actions/checkout@v4
+        with:
+          repository: Keyhole-Koro/MyLinker
+          path: toolchain/MyLinker
+
+      - name: Checkout MyEmulator
+        uses: actions/checkout@v4
+        with:
+          repository: Keyhole-Koro/MyEmulator
+          path: runtime/MyEmulator
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential g++
+
+      - name: Build MyLangCompiler
+        run: make all
+
+      - name: Run unit tests
+        run: make test
+
+      - name: Run semantic tests
+        run: make test-semantic
+
+      - name: Run integration tests
+        run: make test-integration

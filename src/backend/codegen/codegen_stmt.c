@@ -147,6 +147,10 @@ void gen_stmt_internal(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
                               break_label, continue_label);
         }
         break;
+    case AST_UNCHECKED:
+        gen_stmt_internal(cc, node->unchecked_block.body, sb, params, param_count, locals, local_count,
+                          break_label, continue_label);
+        break;
     case AST_IMPORT:
         break;
     default:

@@ -39,6 +39,7 @@ extern StructTable g_struct_table;
 extern FunctionTable g_func_table;
 extern TypeTable g_type_table;
 extern int g_stop_at_arrow;
+extern int g_unchecked_depth;
 extern const char g_default_package[];
 extern char *g_current_package;
 extern int g_current_package_heap;

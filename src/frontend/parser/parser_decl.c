@@ -2,9 +2,17 @@
 #include "mylang/frontend/parser_ast_internal.h"
 
 ASTNode* parse_param(Token **cur) {
+    int is_mut = 0;
+    Token *start = *cur;
+    if ((*cur)->kind == MUT) {
+        is_mut = 1;
+        *cur = (*cur)->next;
+        start = *cur;
+    }
     ASTNode *type = parse_type(cur);
     if ((*cur)->kind != IDENTIFIER) parse_error("expected param name", token_head, *cur);
-    char *name = (*cur)->value;
+    Token *name_tok = *cur;
+    char *name = name_tok->value;
     *cur = (*cur)->next;
 
     ASTNode *final_type = type;
@@ -19,7 +27,10 @@ ASTNode* parse_param(Token **cur) {
         final_type = new_type_array(final_type, size);
     }
 
-    return new_param(final_type, name);
+    ASTNode *param = new_param_mut(final_type, name, is_mut);
+    param->line = start ? start->line : name_tok->line;
+    param->col = start ? start->col : name_tok->col;
+    return param;
 }
 
 ASTNode** parse_param_list(Token **cur, int *out_count) {
@@ -38,9 +49,11 @@ ASTNode** parse_param_list(Token **cur, int *out_count) {
 }
 
 ASTNode* parse_fundef(Token **cur) {
+    Token *start = *cur;
     ASTNode *ret_type = parse_type(cur);
     if ((*cur)->kind != IDENTIFIER) parse_error("expected function name", token_head, *cur);
-    char *name = (*cur)->value;
+    Token *name_tok = *cur;
+    char *name = name_tok->value;
     *cur = (*cur)->next;
     if (!expect(cur, L_PARENTHESES)) parse_error("expected '(' after function name", token_head, *cur);
 
@@ -58,6 +71,8 @@ ASTNode* parse_fundef(Token **cur) {
 
     ASTNode *body = parse_block(cur);
     ASTNode *fndef = new_fundef(ret_type, name, params, param_count, body);
+    fndef->line = start ? start->line : name_tok->line;
+    fndef->col = start ? start->col : name_tok->col;
     add_function(fndef);
     return fndef;
 }

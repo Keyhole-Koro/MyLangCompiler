@@ -1,0 +1,8 @@
+i32 load(ref i32 rx) {
+    return *rx;
+}
+
+i32 main() {
+    i32 x = 11;
+    return load(&x);
+}

@@ -1,0 +1,5 @@
+i32 main() {
+    i32 x = 7;
+    ref i32 rx = &x;
+    return *rx;
+}

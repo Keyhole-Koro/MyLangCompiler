@@ -1,0 +1,18 @@
+i32 main() {
+    i32 x = 2;
+    i32 y = 3;
+
+    for (i32 i = 0; i < 20; i++) {
+        x++;
+        if (x > 10)
+        break;
+    } // 11
+
+    for (i32 i = 10; i > 0; i--) {
+        if (i == 6)
+        continue;
+        y--;
+    } // -6
+
+    return x + y;
+}

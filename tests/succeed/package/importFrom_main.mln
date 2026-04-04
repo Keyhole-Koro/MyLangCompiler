@@ -1,0 +1,5 @@
+import add_two from "importFrom_helper.mln";
+
+i32 main() {
+    return add_two(9);
+}

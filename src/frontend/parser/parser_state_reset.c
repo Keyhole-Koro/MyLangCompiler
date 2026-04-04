@@ -67,5 +67,6 @@ void parser_reset(void) {
     token_head = NULL;
     root = NULL;
     g_stop_at_arrow = 0;
+    g_unchecked_depth = 0;
     g_parse_filename = NULL;
 }

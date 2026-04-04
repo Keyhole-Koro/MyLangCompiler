@@ -1,0 +1,10 @@
+i32 bump(ref mut i32 rx) {
+    *rx = *rx + 1;
+    return *rx;
+}
+
+i32 main() {
+    mut i32 x = 8;
+    bump(&mut x);
+    return x;
+}

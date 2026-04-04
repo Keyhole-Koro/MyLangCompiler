@@ -30,6 +30,7 @@ void set_localinfo_from_type(CompilerContext *cc, LocalInfo *info, ASTNode *type
         ASTNode *bt = node->type_node.base_type;
         if (bt && bt->type == AST_IDENTIFIER) info->base_type = bt->identifier.name;
         info->pointer_level = node->type_node.pointer_level;
+        if (node->type_node.ref_kind != REFKIND_NONE) info->pointer_level += 1;
         info->type_modifiers = node->type_node.type_modifiers;
     } else {
         info->pointer_level = 0;

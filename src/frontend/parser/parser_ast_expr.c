@@ -1,7 +1,7 @@
 #include "mylang/frontend/parser_ast_internal.h"
 
 ASTNode *new_binary(TokenKind op, ASTNode *left, ASTNode *right) {
-    ASTNode *node = malloc(sizeof(ASTNode));
+    ASTNode *node = calloc(1, sizeof(ASTNode));
     node->type = AST_BINARY;
     node->binary.op = op;
     node->binary.left = left;
@@ -10,15 +10,29 @@ ASTNode *new_binary(TokenKind op, ASTNode *left, ASTNode *right) {
 }
 
 ASTNode *new_unary(TokenKind op, ASTNode *operand) {
-    ASTNode *node = malloc(sizeof(ASTNode));
+    ASTNode *node = calloc(1, sizeof(ASTNode));
     node->type = AST_UNARY;
     node->unary.op = op;
     node->unary.operand = operand;
     return node;
 }
 
+ASTNode *new_borrow(ASTNode *expr) {
+    ASTNode *node = calloc(1, sizeof(ASTNode));
+    node->type = AST_BORROW;
+    node->borrow.expr = expr;
+    return node;
+}
+
+ASTNode *new_borrow_mut(ASTNode *expr) {
+    ASTNode *node = calloc(1, sizeof(ASTNode));
+    node->type = AST_BORROW_MUT;
+    node->borrow_mut.expr = expr;
+    return node;
+}
+
 ASTNode *new_cast(ASTNode *type, ASTNode *expr) {
-    ASTNode *node = malloc(sizeof(ASTNode));
+    ASTNode *node = calloc(1, sizeof(ASTNode));
     node->type = AST_CAST;
     node->cast.type = type;
     node->cast.expr = expr;
@@ -26,7 +40,7 @@ ASTNode *new_cast(ASTNode *type, ASTNode *expr) {
 }
 
 ASTNode *new_assign(ASTNode *left, ASTNode *right) {
-    ASTNode *node = malloc(sizeof(ASTNode));
+    ASTNode *node = calloc(1, sizeof(ASTNode));
     node->type = AST_ASSIGN;
     node->assign.left = left;
     node->assign.right = right;
@@ -34,7 +48,7 @@ ASTNode *new_assign(ASTNode *left, ASTNode *right) {
 }
 
 ASTNode *new_ternary(ASTNode *cond, ASTNode *then_expr, ASTNode *else_expr) {
-    ASTNode *node = malloc(sizeof(ASTNode));
+    ASTNode *node = calloc(1, sizeof(ASTNode));
     node->type = AST_TERNARY;
     node->ternary.cond = cond;
     node->ternary.then_expr = then_expr;
@@ -43,7 +57,7 @@ ASTNode *new_ternary(ASTNode *cond, ASTNode *then_expr, ASTNode *else_expr) {
 }
 
 ASTNode *new_member_access(ASTNode *lhs, char *member_name) {
-    ASTNode *node = malloc(sizeof(ASTNode));
+    ASTNode *node = calloc(1, sizeof(ASTNode));
     node->type = AST_MEMBER_ACCESS;
     node->member_access.lhs = lhs;
     node->member_access.member = strdup(member_name);
@@ -51,7 +65,7 @@ ASTNode *new_member_access(ASTNode *lhs, char *member_name) {
 }
 
 ASTNode *new_arrow_access(ASTNode *lhs, char *member_name) {
-    ASTNode *node = malloc(sizeof(ASTNode));
+    ASTNode *node = calloc(1, sizeof(ASTNode));
     node->type = AST_ARROW_ACCESS;
     node->arrow_access.lhs = lhs;
     node->arrow_access.member = strdup(member_name);
@@ -59,7 +73,7 @@ ASTNode *new_arrow_access(ASTNode *lhs, char *member_name) {
 }
 
 ASTNode *new_init_list(ASTNode **elems, int count) {
-    ASTNode *node = malloc(sizeof(ASTNode));
+    ASTNode *node = calloc(1, sizeof(ASTNode));
     node->type = AST_INIT_LIST;
     node->init_list.elements = elems;
     node->init_list.count = count;
@@ -67,14 +81,14 @@ ASTNode *new_init_list(ASTNode **elems, int count) {
 }
 
 ASTNode *new_stmt_expr(ASTNode *block) {
-    ASTNode *node = malloc(sizeof(ASTNode));
+    ASTNode *node = calloc(1, sizeof(ASTNode));
     node->type = AST_STMT_EXPR;
     node->stmt_expr.block = block;
     return node;
 }
 
 ASTNode *new_case_expr(ASTNode *target, CaseItem *cases, int case_count, ASTNode *default_expr) {
-    ASTNode *node = malloc(sizeof(ASTNode));
+    ASTNode *node = calloc(1, sizeof(ASTNode));
     node->type = AST_CASE;
     node->case_expr.target = target;
     node->case_expr.cases = cases;
@@ -84,7 +98,7 @@ ASTNode *new_case_expr(ASTNode *target, CaseItem *cases, int case_count, ASTNode
 }
 
 ASTNode *new_call(char *name, ASTNode **args, int arg_count) {
-    ASTNode *node = malloc(sizeof(ASTNode));
+    ASTNode *node = calloc(1, sizeof(ASTNode));
     node->type = AST_CALL;
     node->call.name = strdup(name);
     node->call.args = args;

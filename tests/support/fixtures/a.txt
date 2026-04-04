@@ -1,0 +1,784 @@
+------------------------------
+PC: 0x00000000, Instruction: 0x51400000
+Decoded Instruction:
+-Raw: 0x51400000
+-Opcode: 0x14
+-Reg1: 0xa
+-Reg2: 0x0
+-Immediate: 0x0
+read 0 from stack at address: 0x1ffffffd
+------------------------------
+PC: 0x00000001, Instruction: 0x05490000
+Decoded Instruction:
+-Raw: 0x5490000
+-Opcode: 0x1
+-Reg1: 0xa
+-Reg2: 0x9
+-Immediate: 0x0
+Value in reg10: 0x1ffffffc
+------------------------------
+PC: 0x00000002, Instruction: 0x653FFFF4
+Decoded Instruction:
+-Raw: 0x653ffff4
+-Opcode: 0x19
+-Reg1: 0x9
+-Reg2: 0x1f
+-Immediate: 0x1ffff4
+------------------------------
+PC: 0x00000003, Instruction: 0x08200002
+Decoded Instruction:
+-Raw: 0x8200002
+-Opcode: 0x2
+-Reg1: 0x1
+-Reg2: 0x0
+-Immediate: 0x2
+------------------------------
+PC: 0x00000004, Instruction: 0x046A0000
+Decoded Instruction:
+-Raw: 0x46a0000
+-Opcode: 0x1
+-Reg1: 0x3
+-Reg2: 0xa
+-Immediate: 0x0
+Value in reg3: 0x1ffffffc
+------------------------------
+PC: 0x00000005, Instruction: 0x647FFFFC
+Decoded Instruction:
+-Raw: 0x647ffffc
+-Opcode: 0x19
+-Reg1: 0x3
+-Reg2: 0x1f
+-Immediate: 0x1ffffc
+------------------------------
+PC: 0x00000006, Instruction: 0x10610000
+Decoded Instruction:
+-Raw: 0x10610000
+-Opcode: 0x4
+-Reg1: 0x3
+-Reg2: 0x1
+-Immediate: 0x0
+------------------------------
+PC: 0x00000007, Instruction: 0x08200003
+Decoded Instruction:
+-Raw: 0x8200003
+-Opcode: 0x2
+-Reg1: 0x1
+-Reg2: 0x0
+-Immediate: 0x3
+------------------------------
+PC: 0x00000008, Instruction: 0x046A0000
+Decoded Instruction:
+-Raw: 0x46a0000
+-Opcode: 0x1
+-Reg1: 0x3
+-Reg2: 0xa
+-Immediate: 0x0
+Value in reg3: 0x1ffffffc
+------------------------------
+PC: 0x00000009, Instruction: 0x647FFFF8
+Decoded Instruction:
+-Raw: 0x647ffff8
+-Opcode: 0x19
+-Reg1: 0x3
+-Reg2: 0x1f
+-Immediate: 0x1ffff8
+------------------------------
+PC: 0x0000000A, Instruction: 0x10610000
+Decoded Instruction:
+-Raw: 0x10610000
+-Opcode: 0x4
+-Reg1: 0x3
+-Reg2: 0x1
+-Immediate: 0x0
+------------------------------
+PC: 0x0000000B, Instruction: 0x046A0000
+Decoded Instruction:
+-Raw: 0x46a0000
+-Opcode: 0x1
+-Reg1: 0x3
+-Reg2: 0xa
+-Immediate: 0x0
+Value in reg3: 0x1ffffffc
+------------------------------
+PC: 0x0000000C, Instruction: 0x647FFFFC
+Decoded Instruction:
+-Raw: 0x647ffffc
+-Opcode: 0x19
+-Reg1: 0x3
+-Reg2: 0x1f
+-Immediate: 0x1ffffc
+------------------------------
+PC: 0x0000000D, Instruction: 0x0CA30000
+Decoded Instruction:
+-Raw: 0xca30000
+-Opcode: 0x3
+-Reg1: 0x5
+-Reg2: 0x3
+-Immediate: 0x0
+------------------------------
+PC: 0x0000000E, Instruction: 0x046A0000
+Decoded Instruction:
+-Raw: 0x46a0000
+-Opcode: 0x1
+-Reg1: 0x3
+-Reg2: 0xa
+-Immediate: 0x0
+Value in reg3: 0x1ffffffc
+------------------------------
+PC: 0x0000000F, Instruction: 0x647FFFF8
+Decoded Instruction:
+-Raw: 0x647ffff8
+-Opcode: 0x19
+-Reg1: 0x3
+-Reg2: 0x1f
+-Immediate: 0x1ffff8
+------------------------------
+PC: 0x00000010, Instruction: 0x0CC30000
+Decoded Instruction:
+-Raw: 0xcc30000
+-Opcode: 0x3
+-Reg1: 0x6
+-Reg2: 0x3
+-Immediate: 0x0
+------------------------------
+PC: 0x00000011, Instruction: 0x34000007
+Decoded Instruction:
+-Raw: 0x34000007
+-Opcode: 0xd
+-Reg1: 0x0
+-Reg2: 0x0
+-Immediate: 0x7
+------------------------------
+PC: 0x00000018, Instruction: 0x51400000
+Decoded Instruction:
+-Raw: 0x51400000
+-Opcode: 0x14
+-Reg1: 0xa
+-Reg2: 0x0
+-Immediate: 0x0
+read 0 from stack at address: 0x1fffffed
+------------------------------
+PC: 0x00000019, Instruction: 0x05490000
+Decoded Instruction:
+-Raw: 0x5490000
+-Opcode: 0x1
+-Reg1: 0xa
+-Reg2: 0x9
+-Immediate: 0x0
+Value in reg10: 0x1fffffec
+------------------------------
+PC: 0x0000001A, Instruction: 0x653FFFF4
+Decoded Instruction:
+-Raw: 0x653ffff4
+-Opcode: 0x19
+-Reg1: 0x9
+-Reg2: 0x1f
+-Immediate: 0x1ffff4
+------------------------------
+PC: 0x0000001B, Instruction: 0x046A0000
+Decoded Instruction:
+-Raw: 0x46a0000
+-Opcode: 0x1
+-Reg1: 0x3
+-Reg2: 0xa
+-Immediate: 0x0
+Value in reg3: 0x1fffffec
+------------------------------
+PC: 0x0000001C, Instruction: 0x647FFFFC
+Decoded Instruction:
+-Raw: 0x647ffffc
+-Opcode: 0x19
+-Reg1: 0x3
+-Reg2: 0x1f
+-Immediate: 0x1ffffc
+------------------------------
+PC: 0x0000001D, Instruction: 0x10650000
+Decoded Instruction:
+-Raw: 0x10650000
+-Opcode: 0x4
+-Reg1: 0x3
+-Reg2: 0x5
+-Immediate: 0x0
+------------------------------
+PC: 0x0000001E, Instruction: 0x046A0000
+Decoded Instruction:
+-Raw: 0x46a0000
+-Opcode: 0x1
+-Reg1: 0x3
+-Reg2: 0xa
+-Immediate: 0x0
+Value in reg3: 0x1fffffec
+------------------------------
+PC: 0x0000001F, Instruction: 0x647FFFF8
+Decoded Instruction:
+-Raw: 0x647ffff8
+-Opcode: 0x19
+-Reg1: 0x3
+-Reg2: 0x1f
+-Immediate: 0x1ffff8
+------------------------------
+PC: 0x00000020, Instruction: 0x10660000
+Decoded Instruction:
+-Raw: 0x10660000
+-Opcode: 0x4
+-Reg1: 0x3
+-Reg2: 0x6
+-Immediate: 0x0
+------------------------------
+PC: 0x00000021, Instruction: 0x08200000
+Decoded Instruction:
+-Raw: 0x8200000
+-Opcode: 0x2
+-Reg1: 0x1
+-Reg2: 0x0
+-Immediate: 0x0
+------------------------------
+PC: 0x00000022, Instruction: 0x046A0000
+Decoded Instruction:
+-Raw: 0x46a0000
+-Opcode: 0x1
+-Reg1: 0x3
+-Reg2: 0xa
+-Immediate: 0x0
+Value in reg3: 0x1fffffec
+------------------------------
+PC: 0x00000023, Instruction: 0x647FFFFC
+Decoded Instruction:
+-Raw: 0x647ffffc
+-Opcode: 0x19
+-Reg1: 0x3
+-Reg2: 0x1f
+-Immediate: 0x1ffffc
+------------------------------
+PC: 0x00000024, Instruction: 0x10610000
+Decoded Instruction:
+-Raw: 0x10610000
+-Opcode: 0x4
+-Reg1: 0x3
+-Reg2: 0x1
+-Immediate: 0x0
+------------------------------
+PC: 0x00000025, Instruction: 0x046A0000
+Decoded Instruction:
+-Raw: 0x46a0000
+-Opcode: 0x1
+-Reg1: 0x3
+-Reg2: 0xa
+-Immediate: 0x0
+Value in reg3: 0x1fffffec
+------------------------------
+PC: 0x00000026, Instruction: 0x647FFFFC
+Decoded Instruction:
+-Raw: 0x647ffffc
+-Opcode: 0x19
+-Reg1: 0x3
+-Reg2: 0x1f
+-Immediate: 0x1ffffc
+------------------------------
+PC: 0x00000027, Instruction: 0x0C430000
+Decoded Instruction:
+-Raw: 0xc430000
+-Opcode: 0x3
+-Reg1: 0x2
+-Reg2: 0x3
+-Immediate: 0x0
+------------------------------
+PC: 0x00000028, Instruction: 0x046A0000
+Decoded Instruction:
+-Raw: 0x46a0000
+-Opcode: 0x1
+-Reg1: 0x3
+-Reg2: 0xa
+-Immediate: 0x0
+Value in reg3: 0x1fffffec
+------------------------------
+PC: 0x00000029, Instruction: 0x647FFFF8
+Decoded Instruction:
+-Raw: 0x647ffff8
+-Opcode: 0x19
+-Reg1: 0x3
+-Reg2: 0x1f
+-Immediate: 0x1ffff8
+------------------------------
+PC: 0x0000002A, Instruction: 0x0C630000
+Decoded Instruction:
+-Raw: 0xc630000
+-Opcode: 0x3
+-Reg1: 0x3
+-Reg2: 0x3
+-Immediate: 0x0
+------------------------------
+PC: 0x0000002B, Instruction: 0x1C430000
+Decoded Instruction:
+-Raw: 0x1c430000
+-Opcode: 0x7
+-Reg1: 0x2
+-Reg2: 0x3
+-Immediate: 0x0
+------------------------------
+PC: 0x0000002C, Instruction: 0x3C000006
+Decoded Instruction:
+-Raw: 0x3c000006
+-Opcode: 0xf
+-Reg1: 0x0
+-Reg2: 0x0
+-Immediate: 0x6
+------------------------------
+PC: 0x00000032, Instruction: 0x0820000B
+Decoded Instruction:
+-Raw: 0x820000b
+-Opcode: 0x2
+-Reg1: 0x1
+-Reg2: 0x0
+-Immediate: 0xb
+------------------------------
+PC: 0x00000033, Instruction: 0x046A0000
+Decoded Instruction:
+-Raw: 0x46a0000
+-Opcode: 0x1
+-Reg1: 0x3
+-Reg2: 0xa
+-Immediate: 0x0
+Value in reg3: 0x1fffffec
+------------------------------
+PC: 0x00000034, Instruction: 0x647FFFFC
+Decoded Instruction:
+-Raw: 0x647ffffc
+-Opcode: 0x19
+-Reg1: 0x3
+-Reg2: 0x1f
+-Immediate: 0x1ffffc
+------------------------------
+PC: 0x00000035, Instruction: 0x10610000
+Decoded Instruction:
+-Raw: 0x10610000
+-Opcode: 0x4
+-Reg1: 0x3
+-Reg2: 0x1
+-Immediate: 0x0
+------------------------------
+PC: 0x00000036, Instruction: 0x68000000
+Decoded Instruction:
+-Raw: 0x68000000
+-Opcode: 0x1a
+-Reg1: 0x0
+-Reg2: 0x0
+-Immediate: 0x0
+reg0: 0x0
+reg1: 0xb
+reg2: 0x0
+reg3: 0x1fffffe8
+reg4: 0x0
+reg5: 0x2
+reg6: 0x3
+reg7: 0x0
+PC: 0x37
+SP: 0x1fffffe0
+BP: 0x1fffffec
+SR: 0x7bab
+LR: 0x2d
+Flags: Zero: 0, Carry: 1, Sign: 1, Overflow: 0
+Memory dump written to debug_memory55.txt
+------------------------------
+PC: 0x00000037, Instruction: 0x046A0000
+Decoded Instruction:
+-Raw: 0x46a0000
+-Opcode: 0x1
+-Reg1: 0x3
+-Reg2: 0xa
+-Immediate: 0x0
+Value in reg3: 0x1fffffec
+------------------------------
+PC: 0x00000038, Instruction: 0x647FFFFC
+Decoded Instruction:
+-Raw: 0x647ffffc
+-Opcode: 0x19
+-Reg1: 0x3
+-Reg2: 0x1f
+-Immediate: 0x1ffffc
+------------------------------
+PC: 0x00000039, Instruction: 0x0C230000
+Decoded Instruction:
+-Raw: 0xc230000
+-Opcode: 0x3
+-Reg1: 0x1
+-Reg2: 0x3
+-Immediate: 0x0
+------------------------------
+PC: 0x0000003A, Instruction: 0x68000000
+Decoded Instruction:
+-Raw: 0x68000000
+-Opcode: 0x1a
+-Reg1: 0x0
+-Reg2: 0x0
+-Immediate: 0x0
+reg0: 0x0
+reg1: 0xb
+reg2: 0x0
+reg3: 0x1fffffe8
+reg4: 0x0
+reg5: 0x2
+reg6: 0x3
+reg7: 0x0
+PC: 0x3b
+SP: 0x1fffffe0
+BP: 0x1fffffec
+SR: 0x7bab
+LR: 0x2d
+Flags: Zero: 0, Carry: 1, Sign: 1, Overflow: 0
+Memory dump written to debug_memory59.txt
+------------------------------
+PC: 0x0000003B, Instruction: 0x6520000C
+Decoded Instruction:
+-Raw: 0x6520000c
+-Opcode: 0x19
+-Reg1: 0x9
+-Reg2: 0x0
+-Immediate: 0xc
+------------------------------
+PC: 0x0000003C, Instruction: 0x68000000
+Decoded Instruction:
+-Raw: 0x68000000
+-Opcode: 0x1a
+-Reg1: 0x0
+-Reg2: 0x0
+-Immediate: 0x0
+reg0: 0x0
+reg1: 0xb
+reg2: 0x0
+reg3: 0x1fffffe8
+reg4: 0x0
+reg5: 0x2
+reg6: 0x3
+reg7: 0x0
+PC: 0x3d
+SP: 0x1fffffec
+BP: 0x1fffffec
+SR: 0x7bab
+LR: 0x2d
+Flags: Zero: 0, Carry: 1, Sign: 1, Overflow: 0
+Memory dump written to debug_memory61.txt
+------------------------------
+PC: 0x0000003D, Instruction: 0x55400000
+Decoded Instruction:
+-Raw: 0x55400000
+-Opcode: 0x15
+-Reg1: 0xa
+-Reg2: 0x0
+-Immediate: 0x0
+Stack underflow at address: 0x1fffffec
+Popped value: 0x00000000
+------------------------------
+PC: 0x0000003E, Instruction: 0x050C0000
+Decoded Instruction:
+-Raw: 0x50c0000
+-Opcode: 0x1
+-Reg1: 0x8
+-Reg2: 0xc
+-Immediate: 0x0
+Value in reg8: 0x2d
+------------------------------
+PC: 0x0000002D, Instruction: 0x0820000A
+Decoded Instruction:
+-Raw: 0x820000a
+-Opcode: 0x2
+-Reg1: 0x1
+-Reg2: 0x0
+-Immediate: 0xa
+------------------------------
+PC: 0x0000002E, Instruction: 0x046A0000
+Decoded Instruction:
+-Raw: 0x46a0000
+-Opcode: 0x1
+-Reg1: 0x3
+-Reg2: 0xa
+-Immediate: 0x0
+Value in reg3: 0x0
+------------------------------
+PC: 0x0000002F, Instruction: 0x647FFFFC
+Decoded Instruction:
+-Raw: 0x647ffffc
+-Opcode: 0x19
+-Reg1: 0x3
+-Reg2: 0x1f
+-Immediate: 0x1ffffc
+------------------------------
+PC: 0x00000030, Instruction: 0x10610000
+Decoded Instruction:
+-Raw: 0x10610000
+-Opcode: 0x4
+-Reg1: 0x3
+-Reg2: 0x1
+-Immediate: 0x0
+------------------------------
+PC: 0x00000031, Instruction: 0x34000005
+Decoded Instruction:
+-Raw: 0x34000005
+-Opcode: 0xd
+-Reg1: 0x0
+-Reg2: 0x0
+-Immediate: 0x5
+------------------------------
+PC: 0x00000036, Instruction: 0x68000000
+Decoded Instruction:
+-Raw: 0x68000000
+-Opcode: 0x1a
+-Reg1: 0x0
+-Reg2: 0x0
+-Immediate: 0x0
+reg0: 0x0
+reg1: 0xa
+reg2: 0x0
+reg3: 0xfffffffc
+reg4: 0x0
+reg5: 0x2
+reg6: 0x3
+reg7: 0x0
+PC: 0x37
+SP: 0x1ffffff0
+BP: 0x0
+SR: 0x7bab
+LR: 0x32
+Flags: Zero: 0, Carry: 1, Sign: 1, Overflow: 0
+Memory dump written to debug_memory55.txt
+------------------------------
+PC: 0x00000037, Instruction: 0x046A0000
+Decoded Instruction:
+-Raw: 0x46a0000
+-Opcode: 0x1
+-Reg1: 0x3
+-Reg2: 0xa
+-Immediate: 0x0
+Value in reg3: 0x0
+------------------------------
+PC: 0x00000038, Instruction: 0x647FFFFC
+Decoded Instruction:
+-Raw: 0x647ffffc
+-Opcode: 0x19
+-Reg1: 0x3
+-Reg2: 0x1f
+-Immediate: 0x1ffffc
+------------------------------
+PC: 0x00000039, Instruction: 0x0C230000
+Decoded Instruction:
+-Raw: 0xc230000
+-Opcode: 0x3
+-Reg1: 0x1
+-Reg2: 0x3
+-Immediate: 0x0
+------------------------------
+PC: 0x0000003A, Instruction: 0x68000000
+Decoded Instruction:
+-Raw: 0x68000000
+-Opcode: 0x1a
+-Reg1: 0x0
+-Reg2: 0x0
+-Immediate: 0x0
+reg0: 0x0
+reg1: 0xffffffff
+reg2: 0x0
+reg3: 0xfffffffc
+reg4: 0x0
+reg5: 0x2
+reg6: 0x3
+reg7: 0x0
+PC: 0x3b
+SP: 0x1ffffff0
+BP: 0x0
+SR: 0x7bab
+LR: 0x32
+Flags: Zero: 0, Carry: 1, Sign: 1, Overflow: 0
+Memory dump written to debug_memory59.txt
+------------------------------
+PC: 0x0000003B, Instruction: 0x6520000C
+Decoded Instruction:
+-Raw: 0x6520000c
+-Opcode: 0x19
+-Reg1: 0x9
+-Reg2: 0x0
+-Immediate: 0xc
+------------------------------
+PC: 0x0000003C, Instruction: 0x68000000
+Decoded Instruction:
+-Raw: 0x68000000
+-Opcode: 0x1a
+-Reg1: 0x0
+-Reg2: 0x0
+-Immediate: 0x0
+reg0: 0x0
+reg1: 0xffffffff
+reg2: 0x0
+reg3: 0xfffffffc
+reg4: 0x0
+reg5: 0x2
+reg6: 0x3
+reg7: 0x0
+PC: 0x3d
+SP: 0x1ffffffc
+BP: 0x0
+SR: 0x7bab
+LR: 0x32
+Flags: Zero: 0, Carry: 1, Sign: 1, Overflow: 0
+Memory dump written to debug_memory61.txt
+------------------------------
+PC: 0x0000003D, Instruction: 0x55400000
+Decoded Instruction:
+-Raw: 0x55400000
+-Opcode: 0x15
+-Reg1: 0xa
+-Reg2: 0x0
+-Immediate: 0x0
+Stack underflow at address: 0x1ffffffc
+Popped value: 0xFFFFFFFF
+------------------------------
+PC: 0x0000003E, Instruction: 0x050C0000
+Decoded Instruction:
+-Raw: 0x50c0000
+-Opcode: 0x1
+-Reg1: 0x8
+-Reg2: 0xc
+-Immediate: 0x0
+Value in reg8: 0x32
+------------------------------
+PC: 0x00000032, Instruction: 0x0820000B
+Decoded Instruction:
+-Raw: 0x820000b
+-Opcode: 0x2
+-Reg1: 0x1
+-Reg2: 0x0
+-Immediate: 0xb
+------------------------------
+PC: 0x00000033, Instruction: 0x046A0000
+Decoded Instruction:
+-Raw: 0x46a0000
+-Opcode: 0x1
+-Reg1: 0x3
+-Reg2: 0xa
+-Immediate: 0x0
+Value in reg3: 0xffffffff
+------------------------------
+PC: 0x00000034, Instruction: 0x647FFFFC
+Decoded Instruction:
+-Raw: 0x647ffffc
+-Opcode: 0x19
+-Reg1: 0x3
+-Reg2: 0x1f
+-Immediate: 0x1ffffc
+------------------------------
+PC: 0x00000035, Instruction: 0x10610000
+Decoded Instruction:
+-Raw: 0x10610000
+-Opcode: 0x4
+-Reg1: 0x3
+-Reg2: 0x1
+-Immediate: 0x0
+------------------------------
+PC: 0x00000036, Instruction: 0x68000000
+Decoded Instruction:
+-Raw: 0x68000000
+-Opcode: 0x1a
+-Reg1: 0x0
+-Reg2: 0x0
+-Immediate: 0x0
+reg0: 0x0
+reg1: 0xb
+reg2: 0x0
+reg3: 0xfffffffb
+reg4: 0x0
+reg5: 0x2
+reg6: 0x3
+reg7: 0x0
+PC: 0x37
+SP: 0x20000000
+BP: 0xffffffff
+SR: 0x7bab
+LR: 0x32
+Flags: Zero: 0, Carry: 1, Sign: 1, Overflow: 0
+Memory dump written to debug_memory55.txt
+------------------------------
+PC: 0x00000037, Instruction: 0x046A0000
+Decoded Instruction:
+-Raw: 0x46a0000
+-Opcode: 0x1
+-Reg1: 0x3
+-Reg2: 0xa
+-Immediate: 0x0
+Value in reg3: 0xffffffff
+------------------------------
+PC: 0x00000038, Instruction: 0x647FFFFC
+Decoded Instruction:
+-Raw: 0x647ffffc
+-Opcode: 0x19
+-Reg1: 0x3
+-Reg2: 0x1f
+-Immediate: 0x1ffffc
+------------------------------
+PC: 0x00000039, Instruction: 0x0C230000
+Decoded Instruction:
+-Raw: 0xc230000
+-Opcode: 0x3
+-Reg1: 0x1
+-Reg2: 0x3
+-Immediate: 0x0
+------------------------------
+PC: 0x0000003A, Instruction: 0x68000000
+Decoded Instruction:
+-Raw: 0x68000000
+-Opcode: 0x1a
+-Reg1: 0x0
+-Reg2: 0x0
+-Immediate: 0x0
+reg0: 0x0
+reg1: 0xffffffff
+reg2: 0x0
+reg3: 0xfffffffb
+reg4: 0x0
+reg5: 0x2
+reg6: 0x3
+reg7: 0x0
+PC: 0x3b
+SP: 0x20000000
+BP: 0xffffffff
+SR: 0x7bab
+LR: 0x32
+Flags: Zero: 0, Carry: 1, Sign: 1, Overflow: 0
+Memory dump written to debug_memory59.txt
+------------------------------
+PC: 0x0000003B, Instruction: 0x6520000C
+Decoded Instruction:
+-Raw: 0x6520000c
+-Opcode: 0x19
+-Reg1: 0x9
+-Reg2: 0x0
+-Immediate: 0xc
+------------------------------
+PC: 0x0000003C, Instruction: 0x68000000
+Decoded Instruction:
+-Raw: 0x68000000
+-Opcode: 0x1a
+-Reg1: 0x0
+-Reg2: 0x0
+-Immediate: 0x0
+reg0: 0x0
+reg1: 0xffffffff
+reg2: 0x0
+reg3: 0xfffffffb
+reg4: 0x0
+reg5: 0x2
+reg6: 0x3
+reg7: 0x0
+PC: 0x3d
+SP: 0x2000000c
+BP: 0xffffffff
+SR: 0x7bab
+LR: 0x32
+Flags: Zero: 0, Carry: 1, Sign: 1, Overflow: 0
+Memory dump written to debug_memory61.txt
+------------------------------
+PC: 0x0000003D, Instruction: 0x55400000
+Decoded Instruction:
+-Raw: 0x55400000
+-Opcode: 0x15
+-Reg1: 0xa
+-Reg2: 0x0
+-Immediate: 0x0

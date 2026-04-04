@@ -46,6 +46,8 @@ typedef enum {
     SHORT,    // short
     CONST,    // const
     STATIC,   // static
+    MUT,      // mut
+    REF,      // ref
     EXTERN,   // extern
     AUTO,     // auto
     REGISTER, // register
@@ -62,6 +64,7 @@ typedef enum {
     CONTINUE, // continue
     RETURN,   // return
     YIELD,    // yield
+    UNCHECKED, // unchecked
     OF,       // of
     UNDERSCORE, // _
     TYPEDEF,  // typedef

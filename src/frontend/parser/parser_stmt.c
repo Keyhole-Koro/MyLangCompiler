@@ -5,6 +5,7 @@ ASTNode *parse_stmt(Token **cur);
 ASTNode *parse_block(Token **cur);
 
 ASTNode *parse_block(Token **cur) {
+    Token *start = *cur;
     if (!expect(cur, L_BRACE)) parse_error("expected '{'", token_head, *cur);
     ASTNode **stmts = NULL;
     int count = 0;
@@ -14,6 +15,8 @@ ASTNode *parse_block(Token **cur) {
     }
     if (!expect(cur, R_BRACE)) parse_error("expected '}'", token_head, *cur);
     root = new_block(stmts, count);
+    root->line = start ? start->line : 0;
+    root->col = start ? start->col : 0;
     return root;
 }
 
@@ -45,7 +48,8 @@ ASTNode *parse_for_stmt(Token **cur) {
     ASTNode *init = NULL, *cond = NULL, *inc = NULL;
 
     if ((*cur)->kind != SEMICOLON) {
-        if (is_type((*cur)->kind, *cur)) {
+        if (is_type((*cur)->kind, *cur) ||
+            ((*cur)->kind == MUT && (*cur)->next && is_type((*cur)->next->kind, (*cur)->next))) {
             init = parse_variable_declaration(cur, 0);
         } else {
             init = parse_expr(cur);
@@ -81,10 +85,14 @@ ASTNode *parse_if_stmt(Token **cur) {
     return new_if(cond, then_stmt, else_stmt);
 }
 ASTNode *parse_return_stmt(Token **cur) {
+    Token *start = *cur;
     if (!expect(cur, RETURN)) parse_error("expected 'return'", token_head, *cur);
     ASTNode *expr = parse_expr(cur);
     if (!expect(cur, SEMICOLON)) parse_error("expected ';' after return", token_head, *cur);
-    return new_return(expr);
+    ASTNode *node = new_return(expr);
+    node->line = start ? start->line : 0;
+    node->col = start ? start->col : 0;
+    return node;
 }
 ASTNode *parse_expr_stmt(Token **cur) {
     ASTNode *expr = parse_expr(cur);
@@ -112,10 +120,18 @@ static ASTNode *parse_init_list(Token **cur) {
     return new_init_list(elems, count);
 }
 ASTNode *parse_variable_declaration(Token **cur, int need_semicolon) {
+    int is_mut = 0;
+    Token *start = *cur;
+    if ((*cur)->kind == MUT) {
+        is_mut = 1;
+        *cur = (*cur)->next;
+        start = *cur;
+    }
     ASTNode *type = parse_type(cur);
     if ((*cur)->kind != IDENTIFIER)
         parse_error("expected identifier for variable name", token_head, *cur);
-    char *name = (*cur)->value;
+    Token *name_tok = *cur;
+    char *name = name_tok->value;
     *cur = (*cur)->next;
 
     ASTNode *final_type = type;
@@ -150,18 +166,28 @@ ASTNode *parse_variable_declaration(Token **cur, int need_semicolon) {
         if (!expect(cur, SEMICOLON))
             parse_error("expected ';' after variable declaration", token_head, *cur);
     }
-    return new_var_decl(final_type, name, init);
+    ASTNode *decl = new_var_decl_mut(final_type, name, init, is_mut);
+    decl->line = start ? start->line : name_tok->line;
+    decl->col = start ? start->col : name_tok->col;
+    return decl;
 }
 
 
 ASTNode *parse_variable_assignment(Token **cur) {
     if ((*cur)->kind != IDENTIFIER) parse_error("expected identifier for assignment", token_head, *cur);
-    char *name = (*cur)->value;
+    Token *name_tok = *cur;
+    char *name = name_tok->value;
     *cur = (*cur)->next;
     if (!expect(cur, ASSIGN)) parse_error("expected '=' for assignment", token_head, *cur);
     ASTNode *expr = parse_expr(cur);
     if (!expect(cur, SEMICOLON)) parse_error("expected ';' after assignment", token_head, *cur);
-    return new_assign(new_identifier(name), expr);
+    ASTNode *lhs = new_identifier(name);
+    lhs->line = name_tok->line;
+    lhs->col = name_tok->col;
+    ASTNode *assign = new_assign(lhs, expr);
+    assign->line = name_tok->line;
+    assign->col = name_tok->col;
+    return assign;
 }
 
 ASTNode *parse_stmt(Token **cur) {
@@ -169,6 +195,13 @@ ASTNode *parse_stmt(Token **cur) {
     if ((*cur)->kind == WHILE) return parse_while_stmt(cur);
     if ((*cur)->kind == DO) return parse_do_while_stmt(cur);
     if ((*cur)->kind == FOR) return parse_for_stmt(cur);
+    if ((*cur)->kind == UNCHECKED) {
+        *cur = (*cur)->next;
+        g_unchecked_depth++;
+        ASTNode *body = parse_block(cur);
+        g_unchecked_depth--;
+        return new_unchecked_block(body);
+    }
     if ((*cur)->kind == RETURN) return parse_return_stmt(cur);
     if ((*cur)->kind == YIELD) {
         *cur = (*cur)->next;
@@ -189,8 +222,8 @@ ASTNode *parse_stmt(Token **cur) {
     }
 
     if ((*cur)->kind == L_BRACE) return parse_block(cur);
+    if ((*cur)->kind == MUT && (*cur)->next && is_type((*cur)->next->kind, (*cur)->next)) return parse_variable_declaration(cur, 1);
     if (is_type((*cur)->kind, *cur)) return parse_variable_declaration(cur, 1);
 
-    printf("DEBUG: parse_stmt falling back to expr_stmt at token kind %s\n", tokenkind2str((*cur)->kind));
     return parse_expr_stmt(cur);
 }
