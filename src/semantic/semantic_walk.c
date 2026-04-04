@@ -28,6 +28,18 @@ static int semantic_type_is_copy(ASTNode *type_node) {
            strcmp(base_type, "void") == 0;
 }
 
+static int semantic_location_is_known(SemanticLocation loc) {
+    return loc.line > 0 || loc.col > 0;
+}
+
+static void note_binding_decl_if_known(SemanticContext *ctx, SemanticBinding *binding, const char *what) {
+    if (!ctx || !binding || !semantic_location_is_known(binding->decl_loc)) return;
+    semantic_note_at(ctx, binding->decl_loc, "'%s' declared here%s%s",
+                     binding->name,
+                     what ? " " : "",
+                     what ? what : "");
+}
+
 static SemanticBinding *find_binding(SemanticContext *ctx, const char *name) {
     if (!ctx || !name) return NULL;
     for (int i = ctx->binding_count - 1; i >= 0; i--) {
@@ -64,8 +76,12 @@ static void leave_scope(SemanticContext *ctx) {
             if (owner) {
                 if (binding->borrow_is_mut) {
                     owner->mutable_borrow_active = 0;
+                    owner->last_mut_borrow_loc = semantic_location_unknown();
                 } else if (owner->shared_borrow_count > 0) {
                     owner->shared_borrow_count--;
+                    if (owner->shared_borrow_count == 0) {
+                        owner->last_shared_borrow_loc = semantic_location_unknown();
+                    }
                 }
             }
         }
@@ -74,7 +90,8 @@ static void leave_scope(SemanticContext *ctx) {
     if (ctx->scope_depth > 0) ctx->scope_depth--;
 }
 
-static void declare_binding(SemanticContext *ctx, const char *name, int is_copy, int is_param) {
+static void declare_binding(SemanticContext *ctx, const char *name, int is_copy, int is_param,
+                            SemanticLocation decl_loc) {
     SemanticBinding *binding;
 
     if (!ctx || !name) return;
@@ -82,6 +99,8 @@ static void declare_binding(SemanticContext *ctx, const char *name, int is_copy,
     if (binding && binding->scope_depth == ctx->scope_depth) {
         binding->is_copy = is_copy;
         binding->moved = 0;
+        binding->decl_loc = decl_loc;
+        binding->move_loc = semantic_location_unknown();
         binding->is_param = is_param;
         binding->is_global = (!is_param && ctx->function_depth == 0);
         return;
@@ -100,10 +119,14 @@ static void declare_binding(SemanticContext *ctx, const char *name, int is_copy,
     binding->scope_depth = ctx->scope_depth;
     binding->is_param = is_param;
     binding->is_global = (!is_param && ctx->function_depth == 0);
+    binding->decl_loc = decl_loc;
+    binding->move_loc = semantic_location_unknown();
     binding->borrowed_from = NULL;
     binding->borrow_is_mut = 0;
     binding->shared_borrow_count = 0;
     binding->mutable_borrow_active = 0;
+    binding->last_shared_borrow_loc = semantic_location_unknown();
+    binding->last_mut_borrow_loc = semantic_location_unknown();
 }
 
 static void check_return_reference_escape(SemanticContext *ctx, ASTNode *expr) {
@@ -119,6 +142,7 @@ static void check_return_reference_escape(SemanticContext *ctx, ASTNode *expr) {
         if (owner && !owner->is_param && !owner->is_global) {
             semantic_error_at(ctx, semantic_location_from_ast(expr),
                               "cannot return reference to local '%s'", owner->name);
+            note_binding_decl_if_known(ctx, owner, NULL);
         }
         return;
     }
@@ -129,6 +153,7 @@ static void check_return_reference_escape(SemanticContext *ctx, ASTNode *expr) {
         if (owner && !owner->is_param && !owner->is_global) {
             semantic_error_at(ctx, semantic_location_from_ast(expr),
                               "cannot return reference to local '%s'", owner->name);
+            note_binding_decl_if_known(ctx, owner, NULL);
         }
         return;
     }
@@ -142,6 +167,7 @@ static void check_return_reference_escape(SemanticContext *ctx, ASTNode *expr) {
     if (owner && !owner->is_param && !owner->is_global) {
         semantic_error_at(ctx, semantic_location_from_ast(expr),
                           "cannot return reference to local '%s'", owner->name);
+        note_binding_decl_if_known(ctx, owner, NULL);
     }
 }
 
@@ -152,6 +178,7 @@ static void revive_binding_if_identifier(SemanticContext *ctx, ASTNode *node) {
     binding = find_binding(ctx, node->identifier.name);
     if (!binding) return;
     binding->moved = 0;
+    binding->move_loc = semantic_location_unknown();
 }
 
 static void register_borrow_binding(SemanticContext *ctx, ASTNode *binding_node) {
@@ -185,16 +212,33 @@ static void register_borrow_binding(SemanticContext *ctx, ASTNode *binding_node)
         if (owner->mutable_borrow_active || owner->shared_borrow_count > 0) {
             semantic_error_at(ctx, semantic_location_from_ast(binding_node->var_decl.init),
                               "cannot mutably borrow '%s' while it is already borrowed", owner->name);
+            if (semantic_location_is_known(owner->last_mut_borrow_loc)) {
+                semantic_note_at(ctx, owner->last_mut_borrow_loc,
+                                 "mutable borrow of '%s' starts here", owner->name);
+            } else if (semantic_location_is_known(owner->last_shared_borrow_loc)) {
+                semantic_note_at(ctx, owner->last_shared_borrow_loc,
+                                 "shared borrow of '%s' starts here", owner->name);
+            } else {
+                note_binding_decl_if_known(ctx, owner, NULL);
+            }
             return;
         }
         owner->mutable_borrow_active = 1;
+        owner->last_mut_borrow_loc = semantic_location_from_ast(binding_node->var_decl.init);
     } else {
         if (owner->mutable_borrow_active) {
             semantic_error_at(ctx, semantic_location_from_ast(binding_node->var_decl.init),
                               "cannot borrow '%s' while it is mutably borrowed", owner->name);
+            if (semantic_location_is_known(owner->last_mut_borrow_loc)) {
+                semantic_note_at(ctx, owner->last_mut_borrow_loc,
+                                 "mutable borrow of '%s' starts here", owner->name);
+            } else {
+                note_binding_decl_if_known(ctx, owner, NULL);
+            }
             return;
         }
         owner->shared_borrow_count++;
+        owner->last_shared_borrow_loc = semantic_location_from_ast(binding_node->var_decl.init);
     }
 
     binding->borrowed_from = owner->name;
@@ -212,17 +256,29 @@ static void use_identifier(SemanticContext *ctx, ASTNode *node, ExprContext expr
         (binding->mutable_borrow_active || binding->shared_borrow_count > 0)) {
         semantic_error_at(ctx, semantic_location_from_ast(node),
                           "cannot move '%s' while it is borrowed", node->identifier.name);
+        if (binding->mutable_borrow_active && semantic_location_is_known(binding->last_mut_borrow_loc)) {
+            semantic_note_at(ctx, binding->last_mut_borrow_loc,
+                             "mutable borrow of '%s' starts here", binding->name);
+        } else if (binding->shared_borrow_count > 0 &&
+                   semantic_location_is_known(binding->last_shared_borrow_loc)) {
+            semantic_note_at(ctx, binding->last_shared_borrow_loc,
+                             "shared borrow of '%s' starts here", binding->name);
+        }
         return;
     }
 
     if (binding->moved && expr_ctx != EXPRCTX_WRITE) {
         semantic_error_at(ctx, semantic_location_from_ast(node),
                           "use of moved value '%s'", node->identifier.name);
+        if (semantic_location_is_known(binding->move_loc)) {
+            semantic_note_at(ctx, binding->move_loc, "'%s' moved here", binding->name);
+        }
         return;
     }
 
     if (expr_ctx == EXPRCTX_MOVE && !binding->is_copy) {
         binding->moved = 1;
+        binding->move_loc = semantic_location_from_ast(node);
     }
 }
 
@@ -242,7 +298,8 @@ static void walk_params(SemanticContext *ctx, ASTNode **params, int param_count)
         ASTNode *param = params[i];
         semantic_walk_stmt(ctx, param);
         if (param && param->type == AST_PARAM) {
-            declare_binding(ctx, param->param.name, semantic_type_is_copy(param->param.type), 1);
+            declare_binding(ctx, param->param.name, semantic_type_is_copy(param->param.type), 1,
+                            semantic_location_from_ast(param));
         }
     }
 }
@@ -387,7 +444,7 @@ static void semantic_walk_stmt(SemanticContext *ctx, ASTNode *node) {
             semantic_walk_expr(ctx, node->var_decl.init, EXPRCTX_MOVE);
         }
         is_copy = semantic_type_is_copy(node->var_decl.var_type);
-        declare_binding(ctx, node->var_decl.name, is_copy, 0);
+        declare_binding(ctx, node->var_decl.name, is_copy, 0, semantic_location_from_ast(node));
         register_borrow_binding(ctx, node);
         break;
     case AST_EXPR_STMT:

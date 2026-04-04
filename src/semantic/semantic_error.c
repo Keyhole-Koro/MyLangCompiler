@@ -51,3 +51,15 @@ void semantic_error_at(SemanticContext *ctx, SemanticLocation loc, const char *f
     fputc('\n', stderr);
     if (ctx) ctx->error_count++;
 }
+
+void semantic_note_at(SemanticContext *ctx, SemanticLocation loc, const char *fmt, ...) {
+    va_list ap;
+    fprintf(stderr, "%s:%d:%d: note: ",
+            (ctx && ctx->filename) ? ctx->filename : "<input>",
+            loc.line,
+            loc.col);
+    va_start(ap, fmt);
+    vfprintf(stderr, fmt, ap);
+    va_end(ap);
+    fputc('\n', stderr);
+}
