@@ -12,6 +12,20 @@ ASTNode *parse_import(Token **cur) {
         return NULL;
     }
 
+    if ((*cur)->kind == IDENTIFIER && (*cur)->next && (*cur)->next->kind == FROM) {
+        char **symbols = malloc(sizeof(char *));
+        int count = 1;
+        symbols[0] = strdup((*cur)->value);
+        *cur = (*cur)->next;
+
+        if (!expect(cur, FROM)) parse_error("expected 'from'", token_head, *cur);
+        if ((*cur)->kind != STRING_LITERAL) parse_error("expected file path string", token_head, *cur);
+        char *path = (*cur)->value;
+        *cur = (*cur)->next;
+        if (!expect(cur, SEMICOLON)) parse_error("expected ';'", token_head, *cur);
+        return new_import_stmt(path, symbols, count);
+    }
+
     if (!expect(cur, L_BRACE)) parse_error("expected '{'", token_head, *cur);
 
     char **symbols = NULL;

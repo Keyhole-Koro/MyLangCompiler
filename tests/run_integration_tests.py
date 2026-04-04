@@ -41,6 +41,7 @@ TESTCASES = [
     ("complex_ops", ["succeed/expr/complex_ops.mln"], "R1", 188),
     ("multiInclude", ["succeed/package/multiInclude.mln", "succeed/package/multiInclude_part1.mln", "succeed/package/multiInclude_part2.mln"], "R1", 11),
     ("multiInclude_complex", ["succeed/package/multiInclude_complex.mln", "succeed/package/multiInclude_midA.mln", "succeed/package/multiInclude_midB.mln", "succeed/package/multiInclude_shared.mln"], "R1", 21),
+    ("importFrom", ["succeed/package/importFrom_main.mln", "succeed/package/importFrom_helper.mln"], "R1", 11),
     ("testStmtExpr", ["succeed/expr/testStmtExpr.mln"], "R1", 5),
     ("testCaseExpr", ["succeed/case/testCaseExpr.mln"], "R1", 30),
     ("testCaseStructArrow", ["succeed/case/testCaseStructArrow.mln"], "R1", 42),
