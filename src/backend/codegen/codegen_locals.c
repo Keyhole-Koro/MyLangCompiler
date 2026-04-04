@@ -11,6 +11,9 @@ int collect_locals(CompilerContext *cc, ASTNode *node, char **locals)
         for (int i = 0; i < node->block.count; i++)
             count += collect_locals(cc, node->block.stmts[i], locals + count);
         break;
+    case AST_UNCHECKED:
+        count += collect_locals(cc, node->unchecked_block.body, locals + count);
+        break;
     case AST_VAR_DECL: {
         int slots = slots_for_type(cc, node->var_decl.var_type);
         if (slots < 1) slots = 1;

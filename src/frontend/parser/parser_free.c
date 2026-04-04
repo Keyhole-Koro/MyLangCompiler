@@ -22,6 +22,12 @@ void free_ast(ASTNode *node) {
             free(node->var_decl.name);
             if (node->var_decl.init) free_ast(node->var_decl.init);
             break;
+        case AST_BORROW:
+            free_ast(node->borrow.expr);
+            break;
+        case AST_BORROW_MUT:
+            free_ast(node->borrow_mut.expr);
+            break;
         case AST_TYPE:
             free_ast(node->type_node.base_type);
             break;
@@ -70,6 +76,9 @@ void free_ast(ASTNode *node) {
                         free_ast(node->block.stmts[i]);
                     free(node->block.stmts);
                     break;
+        case AST_UNCHECKED:
+            free_ast(node->unchecked_block.body);
+            break;
         case AST_STMT_EXPR:
                 free_ast(node->stmt_expr.block);
                 break;

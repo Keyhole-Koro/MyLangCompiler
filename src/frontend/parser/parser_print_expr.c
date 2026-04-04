@@ -22,6 +22,14 @@ int fprint_ast_expr_node(FILE *out, ASTNode *node, int indent) {
         fprint_ast(out, node->assign.left, indent + 1);
         fprint_ast(out, node->assign.right, indent + 1);
         return 1;
+    case AST_BORROW:
+        fprint_indent(out, indent); fprintf(out, "Borrow\n");
+        fprint_ast(out, node->borrow.expr, indent + 1);
+        return 1;
+    case AST_BORROW_MUT:
+        fprint_indent(out, indent); fprintf(out, "BorrowMut\n");
+        fprint_ast(out, node->borrow_mut.expr, indent + 1);
+        return 1;
     case AST_UNARY:
         fprint_indent(out, indent);
         switch (node->unary.op) {

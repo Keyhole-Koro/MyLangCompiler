@@ -13,6 +13,7 @@
 #include "mylang/backend/codegen.h"
 #include "mylang/frontend/lexer.h"
 #include "mylang/frontend/parser.h"
+#include "mylang/semantic/semantic.h"
 #include "mylang/support/utils.h"
 
 typedef struct {

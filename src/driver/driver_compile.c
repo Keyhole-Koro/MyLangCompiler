@@ -15,6 +15,7 @@ int compile_one(const char *input_path, const char *output_path) {
     }
     parser_reset();
     parser_set_filename(input_path);
+    semantic_set_filename(input_path);
 
     dump_tokens(stdout, tokens);
 
@@ -23,6 +24,15 @@ int compile_one(const char *input_path, const char *output_path) {
 
     print_ast(root, 0);
     printf("AST parsing completed.\n");
+
+    if (!semantic_check(root)) {
+        fprintf(stderr, "Semantic analysis failed.\n");
+        free_ast(root);
+        free_tokens(tokens);
+        parser_reset();
+        return 1;
+    }
+    printf("Semantic analysis completed.\n");
 
     char *output = codegen(root);
     if (!output) {

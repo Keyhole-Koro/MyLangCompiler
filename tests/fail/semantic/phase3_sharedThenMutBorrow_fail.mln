@@ -1,0 +1,6 @@
+i32 main() {
+    i32 x = 1;
+    ref i32 a = &x;
+    ref mut i32 b = &mut x; // invalid: x already has an active shared borrow, so creating a mutable borrow must fail
+    return 0;
+}

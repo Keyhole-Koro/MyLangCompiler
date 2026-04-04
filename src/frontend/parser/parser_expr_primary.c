@@ -33,7 +33,8 @@ static ASTNode *parse_case_primary(Token **cur) {
 }
 
 static ASTNode *parse_identifier_primary(Token **cur) {
-    char *name = (*cur)->value;
+    Token *tok = *cur;
+    char *name = tok->value;
     *cur = (*cur)->next;
 
     if ((*cur)->kind == L_PARENTHESES) {
@@ -55,10 +56,15 @@ static ASTNode *parse_identifier_primary(Token **cur) {
 
         if (!expect(cur, R_PARENTHESES))
             parse_error("expected ')' after args", token_head, *cur);
-        return new_call(name, args, arg_count);
+        ASTNode *call = new_call(name, args, arg_count);
+        call->line = tok->line;
+        call->col = tok->col;
+        return call;
     }
 
     ASTNode *node = new_identifier(name);
+    node->line = tok->line;
+    node->col = tok->col;
     while ((*cur)->kind == L_BRACKET) {
         *cur = (*cur)->next;
         ASTNode *index = parse_expr(cur);
@@ -75,12 +81,18 @@ static ASTNode *parse_identifier_primary(Token **cur) {
 
 ASTNode *parse_primary(Token **cur) {
     if ((*cur)->kind == NUMBER) {
+        Token *tok = *cur;
         ASTNode *node = new_number((*cur)->value);
+        node->line = tok->line;
+        node->col = tok->col;
         *cur = (*cur)->next;
         return node;
     }
     if ((*cur)->kind == STRING_LITERAL) {
+        Token *tok = *cur;
         ASTNode *node = new_string_literal((*cur)->value);
+        node->line = tok->line;
+        node->col = tok->col;
         *cur = (*cur)->next;
         return node;
     }

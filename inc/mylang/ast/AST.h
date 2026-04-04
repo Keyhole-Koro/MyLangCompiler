@@ -10,6 +10,8 @@ typedef enum {
     AST_TYPE,
     AST_TYPE_ARRAY,
     AST_VAR_DECL,
+    AST_BORROW,
+    AST_BORROW_MUT,
     AST_ASSIGN,
     AST_UNARY,
     AST_CAST,
@@ -41,7 +43,14 @@ typedef enum {
     AST_YIELD,
     AST_STMT_EXPR,
     AST_CASE,
+    AST_UNCHECKED,
 } ASTNodeType;
+
+typedef enum {
+    REFKIND_NONE = 0,
+    REFKIND_SHARED,
+    REFKIND_MUT,
+} RefKind;
 
 typedef enum {
     TYPEMOD_NONE    = 0,
@@ -59,6 +68,8 @@ typedef struct {
 
 struct ASTNode {
     ASTNodeType type;
+    int line;
+    int col;
     union {
         struct { char *value; } number;
         struct { char *name; } identifier;
@@ -68,11 +79,13 @@ struct ASTNode {
             ASTNode *base_type;
             int pointer_level; // number of pointers
             int type_modifiers; // bitmask of TypeModifier
+            int ref_kind; // RefKind
         } type_node;
         struct {
             ASTNode *var_type;
             char *name;
             ASTNode *init;
+            int is_mut;
             int is_exported;
             char *package;
         } var_decl;
@@ -90,6 +103,8 @@ struct ASTNode {
             ASTNode *type;
             ASTNode *expr;
         } cast;
+        struct { ASTNode *expr; } borrow;
+        struct { ASTNode *expr; } borrow_mut;
         
         struct { TokenKind op; ASTNode *operand; } unary;
         struct { ASTNode *expr; } expr_stmt;
@@ -97,6 +112,7 @@ struct ASTNode {
         struct { ASTNode *expr; } ret;
         struct { ASTNode *expr; } yield_stmt;
         struct { ASTNode **stmts; int count; } block;
+        struct { ASTNode *body; } unchecked_block;
         struct { ASTNode *block; } stmt_expr;
         struct {
             ASTNode **params;
@@ -119,9 +135,10 @@ struct ASTNode {
             int is_exported;
             char *package;
         } fundef;
-        struct {
+        struct { 
             ASTNode *type;
             char *name;
+            int is_mut;
         } param;
         struct {
             char *name;

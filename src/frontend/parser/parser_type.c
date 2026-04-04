@@ -91,10 +91,20 @@ ASTNode *parse_typedef(Token **cur) {
 
 ASTNode *parse_type(Token **cur) {
     int modifiers = 0;
+    int ref_kind = REFKIND_NONE;
 
     while ((*cur)->kind == CONST) {
         modifiers |= TYPEMOD_CONST;
         *cur = (*cur)->next;
+    }
+
+    if ((*cur)->kind == REF) {
+        ref_kind = REFKIND_SHARED;
+        *cur = (*cur)->next;
+        if ((*cur)->kind == MUT) {
+            ref_kind = REFKIND_MUT;
+            *cur = (*cur)->next;
+        }
     }
 
     if (!is_type((*cur)->kind, *cur))
@@ -107,5 +117,5 @@ ASTNode *parse_type(Token **cur) {
         pointer_level++;
         *cur = (*cur)->next;
     }
-    return new_type_node(base_type, pointer_level, modifiers);
+    return new_type_node(base_type, pointer_level, modifiers, ref_kind);
 }

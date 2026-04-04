@@ -1,0 +1,20 @@
+typedef struct {
+    i32 val;
+} Data;
+
+Data g_data;
+Data *addr_g_data;
+
+i32 main() {
+    g_data.val = 10;
+    addr_g_data = &g_data;
+    i32 x = 10;
+
+    // Case where key is a struct member access expression
+    i32 res = case x of {
+        addr_g_data->val -> 100;
+        _ -> 200;
+    };
+
+    return res;
+}

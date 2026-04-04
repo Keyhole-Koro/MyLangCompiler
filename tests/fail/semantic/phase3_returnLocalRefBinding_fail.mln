@@ -1,0 +1,9 @@
+ref i32 bad() {
+    i32 x = 1;
+    ref i32 rx = &x;
+    return rx; // invalid: rx points to local x, so returning rx would return a dangling reference
+}
+
+i32 main() {
+    return 0;
+}

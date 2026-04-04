@@ -1,0 +1,10 @@
+i32 main() {
+    i32 x = 3;
+    unchecked {
+        i32* p = &x;
+        unchecked {
+            *p = 12;
+        }
+    }
+    return x;
+}

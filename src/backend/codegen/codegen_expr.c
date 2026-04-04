@@ -113,6 +113,12 @@ void _gen_expr(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char
     case AST_CAST:
         _gen_expr(cc, node->cast.expr, sb, target_reg, params, param_count, locals, local_count, 0);
         break;
+    case AST_BORROW:
+        gen_lvalue_addr(cc, node->borrow.expr, sb, target_reg, params, param_count, locals, local_count);
+        break;
+    case AST_BORROW_MUT:
+        gen_lvalue_addr(cc, node->borrow_mut.expr, sb, target_reg, params, param_count, locals, local_count);
+        break;
     case AST_UNARY:
         switch (node->unary.op)
         {

@@ -1,0 +1,11 @@
+typedef struct {
+    i32 x;
+} Box;
+
+i32 main() {
+    Box a;
+    a.x = 7;
+
+    Box b = a;
+    return a.x; // invalid: a is moved into b, so reading a afterwards must fail
+}
