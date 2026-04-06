@@ -47,6 +47,15 @@ int looks_like_fun_literal(Token *cur) {
         return t->next && t->next->kind == L_BRACE;
     }
     while (1) {
+        if (t && t->kind == REST) {
+            t = t->next;
+            if (t && t->kind == IDENTIFIER) t = t->next;
+            if (t && t->kind == R_PARENTHESES) {
+                t = t->next;
+                return t && t->kind == L_BRACE;
+            }
+            return 0;
+        }
         if (t && t->kind == MUT) t = t->next;
         while (t && (t->kind == CONST || t->kind == REF)) {
             t = t->next;

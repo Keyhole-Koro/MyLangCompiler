@@ -23,7 +23,7 @@ void lower_fun_literals_block(ASTNode *block, const char *func_prefix, FunAlias 
             ASTNode *lit = stmt->var_decl.init;
             ASTNode *fn = new_fundef(stmt->var_decl.var_type, buf,
                                      lit->fun_literal.params, lit->fun_literal.param_count,
-                                     lit->fun_literal.body);
+                                     lit->fun_literal.body, lit->fun_literal.is_variadic);
             fn->fundef.is_exported = 0;
             fn->fundef.package = NULL;
             add_function(fn);

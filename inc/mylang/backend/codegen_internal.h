@@ -54,6 +54,13 @@ typedef struct {
 } StrItem;
 
 typedef struct {
+    const char *name;
+    int param_count;
+    int fixed_param_count;
+    bool is_variadic;
+} FunctionSig;
+
+typedef struct {
     const char *alias;
     TypeInfo info;
 } TypedefInfo;
@@ -77,6 +84,9 @@ typedef struct {
     int defined_func_count;
     char **imports;
     int import_count;
+    FunctionSig *func_sigs;
+    int func_sig_count;
+    ASTNode *current_func;
 } CompilerContext;
 
 #define cg_structs        (cc->structs)
@@ -94,11 +104,29 @@ typedef struct {
 
 extern const char *arg_regs[];
 
+static inline ASTNode *cg_as_block(ASTNode *node) {
+    return (node && node->type == AST_BLOCK) ? node : NULL;
+}
+
+static inline ASTNode *cg_as_fundef(ASTNode *node) {
+    return (node && node->type == AST_FUNDEF) ? node : NULL;
+}
+
+static inline ASTNode *cg_as_var_decl(ASTNode *node) {
+    return (node && node->type == AST_VAR_DECL) ? node : NULL;
+}
+
+static inline ASTNode *cg_as_type_array(ASTNode *node) {
+    return (node && node->type == AST_TYPE_ARRAY) ? node : NULL;
+}
+
 void codegen_set_entry(const char *name);
 int is_entry_name(const char *name);
 int next_label(CompilerContext *cc);
 void note_defined_func(CompilerContext *cc, const char *name);
 bool func_is_defined(CompilerContext *cc, const char *name);
+int is_codegen_builtin(const char *name);
+const FunctionSig *find_func_sig(CompilerContext *cc, const char *name);
 void note_import_func(CompilerContext *cc, const char *name);
 void collect_imports_from_toplevel(CompilerContext *cc, ASTNode *root);
 void build_codegen_toplevel_info(CompilerContext *cc, ASTNode *root);
@@ -109,7 +137,7 @@ void cleanup_codegen_context(CompilerContext *cc);
 const char *intern_string_literal(CompilerContext *cc, const char *s);
 
 int param_offset(int n);
-int local_offset(int n);
+int local_offset(int param_count, int n);
 int param_index(const char *name, char **params, int param_count);
 int local_index_last(const char *name, char **locals, int local_count);
 int find_name(char **arr, int count, const char *name);

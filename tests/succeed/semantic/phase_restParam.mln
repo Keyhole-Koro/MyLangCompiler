@@ -1,0 +1,7 @@
+i32 sink(char* fmt, rest args) {
+    return 0;
+}
+
+i32 main() {
+    return sink("value={}", 42);
+}

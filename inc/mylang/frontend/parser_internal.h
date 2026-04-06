@@ -12,6 +12,13 @@
 
 typedef struct FunAlias FunAlias;
 
+static inline void set_node_loc_from_tokens(ASTNode *node, Token *primary, Token *fallback) {
+    Token *tok = primary ? primary : fallback;
+    if (!node) return;
+    node->line = tok ? tok->line : 0;
+    node->col = tok ? tok->col : 0;
+}
+
 void parse_error(const char *msg, Token *head, Token *cur);
 int expect(Token **cur, TokenKind kind);
 int is_type(TokenKind kind, Token *cur);
@@ -41,7 +48,7 @@ ASTNode *parse_conditional(Token **cur);
 ASTNode *parse_assign_expr(Token **cur);
 ASTNode *parse_expr(Token **cur);
 ASTNode *parse_param(Token **cur);
-ASTNode **parse_param_list(Token **cur, int *out_count);
+ASTNode **parse_param_list(Token **cur, int *out_count, bool *out_is_variadic);
 ASTNode *parse_block(Token **cur);
 ASTNode *parse_while_stmt(Token **cur);
 ASTNode *parse_do_while_stmt(Token **cur);
@@ -61,3 +68,4 @@ void lower_fun_literals_block(ASTNode *block, const char *func_prefix, FunAlias 
 void ensure_no_fun_literals(ASTNode *node);
 
 #endif
+#include <stdbool.h>

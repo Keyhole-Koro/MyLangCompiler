@@ -1,5 +1,15 @@
 #include "mylang/backend/codegen_internal.h"
 
+static ASTNode *cg_fundef_with_name(ASTNode *node) {
+    ASTNode *fn = cg_as_fundef(node);
+    return (fn && fn->fundef.name) ? fn : NULL;
+}
+
+static ASTNode *cg_fundef_with_body(ASTNode *node) {
+    ASTNode *fn = cg_fundef_with_name(node);
+    return (fn && fn->fundef.body) ? fn : NULL;
+}
+
 static void append_typedef_info(CompilerContext *cc, ASTNode *node) {
     LocalInfo tmp = {0};
     set_localinfo_from_type(cc, &tmp, node->typedef_stmt.src_type);
@@ -68,22 +78,39 @@ static void append_struct_info(CompilerContext *cc, const char *type_name, ASTNo
     cg_struct_count++;
 }
 
+static void append_func_sig(CompilerContext *cc, ASTNode *node) {
+    ASTNode *fn = cg_fundef_with_name(node);
+    if (!cc || !fn) return;
+    cc->func_sigs = (FunctionSig*)realloc(cc->func_sigs, sizeof(FunctionSig) * (cc->func_sig_count + 1));
+    cc->func_sigs[cc->func_sig_count].name = fn->fundef.name;
+    cc->func_sigs[cc->func_sig_count].param_count = fn->fundef.param_count;
+    cc->func_sigs[cc->func_sig_count].fixed_param_count =
+        fn->fundef.is_variadic ? (fn->fundef.param_count - 1) : fn->fundef.param_count;
+    cc->func_sigs[cc->func_sig_count].is_variadic = fn->fundef.is_variadic;
+    cc->func_sig_count++;
+}
+
 void build_codegen_toplevel_info(CompilerContext *cc, ASTNode *root) {
+    ASTNode *block = cg_as_block(root);
     cg_struct_count = 0;
     cg_structs = NULL;
     cg_typedef_count = 0;
     cg_typedefs = NULL;
-    if (!root || root->type != AST_BLOCK) return;
+    cc->func_sig_count = 0;
+    cc->func_sigs = NULL;
+    if (!block) return;
 
-    for (int i = 0; i < root->block.count; i++) {
-        ASTNode *n = root->block.stmts[i];
+    for (int i = 0; i < block->block.count; i++) {
+        ASTNode *n = block->block.stmts[i];
         if (n->type == AST_TYPEDEF) {
             append_typedef_info(cc, n);
+        } else if (cg_as_fundef(n)) {
+            append_func_sig(cc, n);
         }
     }
 
-    for (int i = 0; i < root->block.count; i++) {
-        ASTNode *n = root->block.stmts[i];
+    for (int i = 0; i < block->block.count; i++) {
+        ASTNode *n = block->block.stmts[i];
         if (n->type == AST_TYPEDEF_STRUCT) {
             append_struct_info(cc, n->typedef_struct.typedef_name, n->typedef_struct.members, n->typedef_struct.member_count);
         } else if (n->type == AST_STRUCT && n->struct_stmt.name) {
@@ -93,10 +120,11 @@ void build_codegen_toplevel_info(CompilerContext *cc, ASTNode *root) {
 }
 
 void collect_codegen_globals(CompilerContext *cc, ASTNode *root) {
-    if (!root || root->type != AST_BLOCK) return;
-    for (int i = 0; i < root->block.count; i++) {
-        ASTNode *n = root->block.stmts[i];
-        if (n->type == AST_VAR_DECL) {
+    ASTNode *block = cg_as_block(root);
+    if (!block) return;
+    for (int i = 0; i < block->block.count; i++) {
+        ASTNode *n = block->block.stmts[i];
+        if (cg_as_var_decl(n)) {
             cg_globals_info = (LocalInfo*)realloc(cg_globals_info, sizeof(LocalInfo) * (cg_globals_count + 1));
             cg_globals_info[cg_globals_count].name = n->var_decl.name;
             set_localinfo_from_type(cc, &cg_globals_info[cg_globals_count], n->var_decl.var_type);
@@ -107,17 +135,18 @@ void collect_codegen_globals(CompilerContext *cc, ASTNode *root) {
 }
 
 void emit_codegen_functions(CompilerContext *cc, ASTNode *root, StringBuilder *sb) {
-    if (!root || root->type != AST_BLOCK) return;
-    for (int i = 0; i < root->block.count; i++) {
-        ASTNode *fn = root->block.stmts[i];
-        if (fn->type == AST_FUNDEF && is_entry_name(fn->fundef.name)) {
+    ASTNode *block = cg_as_block(root);
+    if (!block) return;
+    for (int i = 0; i < block->block.count; i++) {
+        ASTNode *fn = cg_fundef_with_body(block->block.stmts[i]);
+        if (fn && is_entry_name(fn->fundef.name)) {
             gen_func(cc, fn, sb);
             break;
         }
     }
-    for (int i = 0; i < root->block.count; i++) {
-        ASTNode *fn = root->block.stmts[i];
-        if (fn->type == AST_FUNDEF && !is_entry_name(fn->fundef.name)) {
+    for (int i = 0; i < block->block.count; i++) {
+        ASTNode *fn = cg_fundef_with_body(block->block.stmts[i]);
+        if (fn && !is_entry_name(fn->fundef.name)) {
             gen_func(cc, fn, sb);
         }
     }
@@ -179,5 +208,10 @@ void cleanup_codegen_context(CompilerContext *cc) {
         free(cc->defined_funcs);
         cc->defined_funcs = NULL;
         cc->defined_func_count = 0;
+    }
+    if (cc->func_sigs) {
+        free(cc->func_sigs);
+        cc->func_sigs = NULL;
+        cc->func_sig_count = 0;
     }
 }

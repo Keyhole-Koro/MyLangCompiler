@@ -39,8 +39,25 @@ bool func_is_defined(CompilerContext *cc, const char *name) {
     return find_name(cc ? cc->defined_funcs : NULL, cc ? cc->defined_func_count : 0, name) >= 0;
 }
 
+int is_codegen_builtin(const char *name) {
+    return name &&
+           (strcmp(name, "__rest_len") == 0 ||
+            strcmp(name, "__rest_get") == 0);
+}
+
+const FunctionSig *find_func_sig(CompilerContext *cc, const char *name) {
+    if (!cc || !name) return NULL;
+    for (int i = 0; i < cc->func_sig_count; i++) {
+        if (cc->func_sigs[i].name && strcmp(cc->func_sigs[i].name, name) == 0) {
+            return &cc->func_sigs[i];
+        }
+    }
+    return NULL;
+}
+
 void note_import_func(CompilerContext *cc, const char *name) {
     if (!cc || !name) return;
+    if (is_codegen_builtin(name)) return;
     if (func_is_defined(cc, name)) return;
     if (find_name(cc->imports, cc->import_count, name) >= 0) return;
     cc->imports = (char**)realloc(cc->imports, sizeof(char*) * (cc->import_count + 1));
@@ -48,9 +65,10 @@ void note_import_func(CompilerContext *cc, const char *name) {
 }
 
 void collect_imports_from_toplevel(CompilerContext *cc, ASTNode *root) {
-    if (!cc || !root || root->type != AST_BLOCK) return;
-    for (int i = 0; i < root->block.count; i++) {
-        ASTNode *n = root->block.stmts[i];
+    ASTNode *block = cg_as_block(root);
+    if (!cc || !block) return;
+    for (int i = 0; i < block->block.count; i++) {
+        ASTNode *n = block->block.stmts[i];
         if (n->type == AST_IMPORT && n->import_stmt.symbol_count > 0) {
             for (int k = 0; k < n->import_stmt.symbol_count; k++) {
                 note_import_func(cc, n->import_stmt.symbols[k]);

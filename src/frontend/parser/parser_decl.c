@@ -2,6 +2,19 @@
 #include "mylang/frontend/parser_ast_internal.h"
 
 ASTNode* parse_param(Token **cur) {
+    if ((*cur)->kind == REST) {
+        Token *rest_tok = *cur;
+        *cur = (*cur)->next;
+        if ((*cur)->kind != IDENTIFIER) parse_error("expected rest parameter name", token_head, *cur);
+        Token *name_tok = *cur;
+        char *name = name_tok->value;
+        *cur = (*cur)->next;
+        ASTNode *param = new_param_rest(name);
+        param->line = rest_tok->line;
+        param->col = rest_tok->col;
+        return param;
+    }
+
     int is_mut = 0;
     Token *start = *cur;
     if ((*cur)->kind == MUT) {
@@ -28,20 +41,30 @@ ASTNode* parse_param(Token **cur) {
     }
 
     ASTNode *param = new_param_mut(final_type, name, is_mut);
-    param->line = start ? start->line : name_tok->line;
-    param->col = start ? start->col : name_tok->col;
+    set_node_loc_from_tokens(param, start, name_tok);
     return param;
 }
 
-ASTNode** parse_param_list(Token **cur, int *out_count) {
+ASTNode** parse_param_list(Token **cur, int *out_count, bool *out_is_variadic) {
     ASTNode **params = NULL;
     int count = 0;
+    *out_is_variadic = 0;
     if ((*cur)->kind == R_PARENTHESES) { *out_count = 0; return NULL; }
     while (1) {
         ASTNode *param = parse_param(cur);
+        if (param->type == AST_PARAM && param->param.is_rest) {
+            *out_is_variadic = 1;
+        }
         params = realloc(params, sizeof(ASTNode*) * (count + 1));
         params[count++] = param;
-        if ((*cur)->kind == COMMA) { *cur = (*cur)->next; continue; }
+        if ((*cur)->kind == COMMA) {
+            if (param->type == AST_PARAM && param->param.is_rest) {
+                parse_error("rest parameter must be the final parameter", token_head, *cur);
+            }
+            *cur = (*cur)->next;
+            if ((*cur)->kind == R_PARENTHESES) parse_error("trailing comma in parameter list", token_head, *cur);
+            continue;
+        }
         break;
     }
     *out_count = count;
@@ -58,21 +81,25 @@ ASTNode* parse_fundef(Token **cur) {
     if (!expect(cur, L_PARENTHESES)) parse_error("expected '(' after function name", token_head, *cur);
 
     int param_count = 0;
+    bool is_variadic = false;
     ASTNode **params = NULL;
     if ((*cur)->kind != R_PARENTHESES)
-        params = parse_param_list(cur, &param_count);
+        params = parse_param_list(cur, &param_count, &is_variadic);
 
     if (!expect(cur, R_PARENTHESES)) parse_error("expected ')' after parameter list", token_head, *cur);
 
     if ((*cur)->kind == SEMICOLON) {
         *cur = (*cur)->next;
-        return NULL;
+        // For now, treat declarations as fundefs with no body
+        ASTNode *fndef = new_fundef(ret_type, name, params, param_count, NULL, is_variadic);
+        set_node_loc_from_tokens(fndef, start, name_tok);
+        add_function(fndef);
+        return fndef;
     }
 
     ASTNode *body = parse_block(cur);
-    ASTNode *fndef = new_fundef(ret_type, name, params, param_count, body);
-    fndef->line = start ? start->line : name_tok->line;
-    fndef->col = start ? start->col : name_tok->col;
+    ASTNode *fndef = new_fundef(ret_type, name, params, param_count, body, is_variadic);
+    set_node_loc_from_tokens(fndef, start, name_tok);
     add_function(fndef);
     return fndef;
 }

@@ -72,6 +72,9 @@ ASTNode* parse_toplevel(Token **cur) {
         want_export = 1;
         *cur = (*cur)->next;
     }
+    if ((*cur)->kind == EXTERN) {
+        *cur = (*cur)->next;
+    }
 
     if ((*cur)->kind == IMPORT) return parse_import(cur);
     if ((*cur)->kind == TYPEDEF) return parse_typedef(cur);

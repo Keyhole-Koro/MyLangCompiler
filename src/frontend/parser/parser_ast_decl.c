@@ -34,10 +34,21 @@ ASTNode* new_param_mut(ASTNode *type, char *name, int is_mut) {
     node->param.type = type;
     node->param.name = strdup(name);
     node->param.is_mut = is_mut;
+    node->param.is_rest = 0;
     return node;
 }
 
-ASTNode* new_fundef(ASTNode *ret_type, char *name, ASTNode **params, int param_count, ASTNode *body) {
+ASTNode *new_param_rest(char *name) {
+    ASTNode *node = calloc(1, sizeof(ASTNode));
+    node->type = AST_PARAM;
+    node->param.type = NULL;
+    node->param.name = strdup(name);
+    node->param.is_mut = 0;
+    node->param.is_rest = 1;
+    return node;
+}
+
+ASTNode* new_fundef(ASTNode *ret_type, char *name, ASTNode **params, int param_count, ASTNode *body, bool is_variadic) {
     ASTNode *node = calloc(1, sizeof(ASTNode));
     node->type = AST_FUNDEF;
     node->fundef.ret_type = ret_type;
@@ -47,16 +58,18 @@ ASTNode* new_fundef(ASTNode *ret_type, char *name, ASTNode **params, int param_c
     node->fundef.body = body;
     node->fundef.is_exported = 0;
     node->fundef.package = NULL;
+    node->fundef.is_variadic = is_variadic;
     return node;
 }
 
-ASTNode *new_fun_literal(ASTNode **params, int param_count, ASTNode *body) {
+ASTNode *new_fun_literal(ASTNode **params, int param_count, ASTNode *body, bool is_variadic) {
     ASTNode *node = calloc(1, sizeof(ASTNode));
     node->type = AST_FUN_LITERAL;
     node->fun_literal.params = params;
     node->fun_literal.param_count = param_count;
     node->fun_literal.body = body;
     node->fun_literal.ret_type = NULL;
+    node->fun_literal.is_variadic = is_variadic;
     return node;
 }
 

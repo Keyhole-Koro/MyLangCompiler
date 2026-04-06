@@ -135,6 +135,14 @@ int infer_expr_type(CompilerContext *cc, ASTNode *expr, TypeInfo *out) {
         if (infer_expr_type(cc, expr->ternary.else_expr, &t)) { *out = t; return 1; }
         return 0;
     }
+    case AST_CALL:
+        if (expr->call.name &&
+            (strcmp(expr->call.name, "__rest_len") == 0 ||
+             strcmp(expr->call.name, "__rest_get") == 0)) {
+            out->base_type = "i32";
+            return 1;
+        }
+        return 0;
     default:
         return 0;
     }
