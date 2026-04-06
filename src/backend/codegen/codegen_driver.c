@@ -4,14 +4,15 @@ char *codegen(ASTNode *root)
 {
     CompilerContext ctx = {0};
     CompilerContext *cc = &ctx;
+    ASTNode *block = cg_as_block(root);
     StringBuilder sb;
     sb_init(&sb);
 
-    if (root && root->type == AST_BLOCK) {
-        for (int i = 0; i < root->block.count; i++) {
-            ASTNode *n = root->block.stmts[i];
-            if (n->type == AST_FUNDEF && n->fundef.name) {
-                note_defined_func(cc, n->fundef.name);
+    if (block) {
+        for (int i = 0; i < block->block.count; i++) {
+            ASTNode *fn = cg_as_fundef(block->block.stmts[i]);
+            if (fn && fn->fundef.name && fn->fundef.body) {
+                note_defined_func(cc, fn->fundef.name);
             }
         }
     }

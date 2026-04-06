@@ -15,8 +15,7 @@ ASTNode *parse_block(Token **cur) {
     }
     if (!expect(cur, R_BRACE)) parse_error("expected '}'", token_head, *cur);
     root = new_block(stmts, count);
-    root->line = start ? start->line : 0;
-    root->col = start ? start->col : 0;
+    set_node_loc_from_tokens(root, start, NULL);
     return root;
 }
 
@@ -90,8 +89,7 @@ ASTNode *parse_return_stmt(Token **cur) {
     ASTNode *expr = parse_expr(cur);
     if (!expect(cur, SEMICOLON)) parse_error("expected ';' after return", token_head, *cur);
     ASTNode *node = new_return(expr);
-    node->line = start ? start->line : 0;
-    node->col = start ? start->col : 0;
+    set_node_loc_from_tokens(node, start, NULL);
     return node;
 }
 ASTNode *parse_expr_stmt(Token **cur) {
@@ -167,8 +165,7 @@ ASTNode *parse_variable_declaration(Token **cur, int need_semicolon) {
             parse_error("expected ';' after variable declaration", token_head, *cur);
     }
     ASTNode *decl = new_var_decl_mut(final_type, name, init, is_mut);
-    decl->line = start ? start->line : name_tok->line;
-    decl->col = start ? start->col : name_tok->col;
+    set_node_loc_from_tokens(decl, start, name_tok);
     return decl;
 }
 

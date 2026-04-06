@@ -61,6 +61,7 @@ TESTCASES = [
     ("phase2_refParam", ["succeed/semantic/phase2_refParam.mln"], "R1", 11),
     ("phase2_refMutParam", ["succeed/semantic/phase2_refMutParam.mln"], "R1", 9),
     ("phase2_uncheckedNested", ["succeed/semantic/phase2_uncheckedNested.mln"], "R1", 12),
+    ("phase_restParam", ["succeed/semantic/phase_restParam.mln"], "R1", 0),
 ]
 
 VERBOSE = False

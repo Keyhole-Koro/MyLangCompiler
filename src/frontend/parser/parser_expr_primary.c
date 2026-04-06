@@ -106,12 +106,13 @@ ASTNode *parse_primary(Token **cur) {
         *cur = (*cur)->next;
         ASTNode **params = NULL;
         int param_count = 0;
+        bool is_variadic = false;
         if ((*cur)->kind != R_PARENTHESES) {
-            params = parse_param_list(cur, &param_count);
+            params = parse_param_list(cur, &param_count, &is_variadic);
         }
         if (!expect(cur, R_PARENTHESES)) parse_error("expected ')' after function literal parameters", token_head, *cur);
         ASTNode *body = parse_block(cur);
-        return new_fun_literal(params, param_count, body);
+        return new_fun_literal(params, param_count, body, is_variadic);
     }
     if ((*cur)->kind == L_PARENTHESES) {
         *cur = (*cur)->next;

@@ -1,0 +1,6 @@
+void printf(char *fmt, rest args);
+
+i32 main() {
+    printf("boot: %s %x %c %%", "ok", 42, '!');
+    return 0;
+}

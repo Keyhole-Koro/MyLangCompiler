@@ -1,7 +1,7 @@
 #include "mylang/backend/codegen_internal.h"
 
 int param_offset(int n) { return -(4 + n * SLOT_SIZE); }
-int local_offset(int n) { return -SLOT_SIZE * (n + 1); }
+int local_offset(int param_count, int n) { return -SLOT_SIZE * (param_count + n + 1); }
 
 int param_index(const char *name, char **params, int param_count)
 {

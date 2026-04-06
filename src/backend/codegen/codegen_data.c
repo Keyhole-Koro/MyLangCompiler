@@ -58,7 +58,8 @@ void emit_global_init(StringBuilder *sb, ASTNode *init_expr, int expected_bytes)
 }
 
 void emit_global_decl(CompilerContext *cc, ASTNode *var_decl) {
-    if (!var_decl || var_decl->type != AST_VAR_DECL) return;
+    var_decl = cg_as_var_decl(var_decl);
+    if (!var_decl) return;
     ensure_data_section(cc);
 
     int bytes = SLOT_SIZE;
@@ -101,14 +102,16 @@ int pointer_step_bytes(CompilerContext *cc, const TypeInfo *info) {
 }
 
 int array_element_size_bytes(ASTNode *array_type) {
-    if (!array_type || array_type->type != AST_TYPE_ARRAY) return SLOT_SIZE;
+    array_type = cg_as_type_array(array_type);
+    if (!array_type) return SLOT_SIZE;
     ASTNode *elem = array_type->type_array.element_type;
     if (ast_type_is_char_scalar(elem)) return 1;
     return SLOT_SIZE;
 }
 
 int array_total_elements(ASTNode *array_type) {
-    if (!array_type || array_type->type != AST_TYPE_ARRAY) return 1;
+    array_type = cg_as_type_array(array_type);
+    if (!array_type) return 1;
     int n = array_type->type_array.array_size > 0 ? array_type->type_array.array_size : 1;
     return n * array_total_elements(array_type->type_array.element_type);
 }

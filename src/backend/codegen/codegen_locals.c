@@ -112,7 +112,7 @@ int find_var_offset(const char *name, char **params, int param_count,
     if (idx >= 0)
     {
         if (is_param) *is_param = 0;
-        return local_offset(idx);
+        return local_offset(param_count, idx);
     }
     if (is_param) *is_param = -1;
     return 0;

@@ -21,6 +21,8 @@ PASS_CASES = {
     "phase2_refMutParam": "succeed/semantic/phase2_refMutParam.mln",
     "phase2_uncheckedNested": "succeed/semantic/phase2_uncheckedNested.mln",
     "phase2_doWhileControl": "succeed/semantic/phase2_doWhileControl.mln",
+    "phase_restParam": "succeed/semantic/phase_restParam.mln",
+    "phase_printfRestBuiltin": "succeed/semantic/phase_printfRestBuiltin.mln",
 }
 
 FAIL_CASES = {
@@ -51,6 +53,11 @@ FAIL_CASES = {
     "phase3_returnLocalRefBinding_fail": (
         "fail/semantic/phase3_returnLocalRefBinding_fail.mln",
         "cannot return reference to local 'x'",
+    ),
+    "phase_restNotLast_fail": (
+        "fail/semantic/phase_restNotLast_fail.mln",
+        "rest parameter must be the final parameter",
+        None,
     ),
 }
 
@@ -108,7 +115,7 @@ def check_case(case_name: str, rel_path: str, out_root: Path) -> tuple[bool, str
     return True, f"{case_name}: semantic phase smoke test passed"
 
 
-def check_fail_case(case_name: str, rel_path: str, expected: str, out_root: Path) -> tuple[bool, str]:
+def check_fail_case(case_name: str, rel_path: str, expected: str, failure_marker: str | None, out_root: Path) -> tuple[bool, str]:
     src = case_source(rel_path)
     case_dir = out_root / case_name
     case_dir.mkdir(parents=True, exist_ok=True)
@@ -129,9 +136,9 @@ def check_fail_case(case_name: str, rel_path: str, expected: str, out_root: Path
             f"STDERR:\n{result.stderr}"
         )
 
-    if "Semantic analysis failed." not in result.stderr:
+    if failure_marker and failure_marker not in result.stderr:
         return False, (
-            f"{case_name}: missing semantic failure marker\n"
+            f"{case_name}: missing failure marker '{failure_marker}'\n"
             f"STDOUT:\n{result.stdout}\n"
             f"STDERR:\n{result.stderr}"
         )
@@ -155,8 +162,13 @@ if __name__ == "__main__":
     try:
         for case_name in cases:
             if case_name in FAIL_CASES:
-                rel_path, expected = FAIL_CASES[case_name]
-                ok, message = check_fail_case(case_name, rel_path, expected, temp_root)
+                data = FAIL_CASES[case_name]
+                if len(data) == 2:
+                    rel_path, expected = data
+                    failure_marker = "Semantic analysis failed."
+                else:
+                    rel_path, expected, failure_marker = data
+                ok, message = check_fail_case(case_name, rel_path, expected, failure_marker, temp_root)
             else:
                 ok, message = check_case(case_name, PASS_CASES[case_name], temp_root)
             prefix = "PASS" if ok else "FAIL"

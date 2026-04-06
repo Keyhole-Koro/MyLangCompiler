@@ -1,6 +1,8 @@
 #ifndef MYLANG_FRONTEND_PARSER_AST_INTERNAL_H
 #define MYLANG_FRONTEND_PARSER_AST_INTERNAL_H
 
+#include <stdbool.h>
+
 #include "mylang/frontend/parser_internal.h"
 
 ASTNode *new_string_literal(char *str);
@@ -11,8 +13,9 @@ ASTNode *new_var_decl(ASTNode *type, char *name, ASTNode *init);
 ASTNode *new_var_decl_mut(ASTNode *type, char *name, ASTNode *init, int is_mut);
 ASTNode *new_param(ASTNode *type, char *name);
 ASTNode *new_param_mut(ASTNode *type, char *name, int is_mut);
-ASTNode *new_fundef(ASTNode *ret_type, char *name, ASTNode **params, int param_count, ASTNode *body);
-ASTNode *new_fun_literal(ASTNode **params, int param_count, ASTNode *body);
+ASTNode *new_param_rest(char *name);
+ASTNode *new_fundef(ASTNode *ret_type, char *name, ASTNode **params, int param_count, ASTNode *body, bool is_variadic);
+ASTNode *new_fun_literal(ASTNode **params, int param_count, ASTNode *body, bool is_variadic);
 ASTNode *new_number(char *val);
 ASTNode *new_identifier(char *name);
 ASTNode *new_binary(TokenKind op, ASTNode *left, ASTNode *right);

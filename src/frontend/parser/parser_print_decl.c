@@ -56,7 +56,11 @@ int fprint_ast_decl_node(FILE *out, ASTNode *node, int indent) {
         }
         return 1;
     case AST_PARAM:
-        fprint_indent(out, indent); fprintf(out, "Param:  %s%s\n", node->param.is_mut ? "mut " : "", node->param.name);
+        if (node->param.is_rest) {
+            fprint_indent(out, indent); fprintf(out, "Param:  rest %s\n", node->param.name);
+        } else {
+            fprint_indent(out, indent); fprintf(out, "Param:  %s%s\n", node->param.is_mut ? "mut " : "", node->param.name);
+        }
         return 1;
     case AST_STRUCT:
         fprint_indent(out, indent); fprintf(out, "Struct: %s\n", node->struct_stmt.name);
@@ -85,7 +89,8 @@ int fprint_ast_decl_node(FILE *out, ASTNode *node, int indent) {
     case AST_FUNDEF:
         fprint_indent(out, indent); fprintf(out, "Function:  %s\n", node->fundef.name);
         for (int i = 0; i < node->fundef.param_count; i++) {
-            fprint_indent(out, indent); fprintf(out, "  Param:  %s\n", node->fundef.params[i]->param.name);
+            ASTNode *param = node->fundef.params[i];
+            fprint_indent(out, indent); fprintf(out, "  Param:  %s%s\n", param->param.is_rest ? "rest " : "", param->param.name);
         }
         fprint_ast(out, node->fundef.body, indent + 1);
         return 1;

@@ -40,8 +40,7 @@ void emit_load_var(CompilerContext *cc, StringBuilder *sb, const char *name, con
         int local_idx = local_index_last(name, locals, local_count);
         if (local_idx >= 0)
         {
-            // bp-4, bp-8, ...
-            offset = -SLOT_SIZE * (local_idx + 1);
+            offset = local_offset(param_count, local_idx);
             sb_append(sb, "  \n; load local '%s' into %s\n", name, target_reg);
             sb_append(sb, "  mov   r3, bp\n");
             sb_append(sb, "  addis r3, %d\n", offset);
@@ -93,7 +92,7 @@ void emit_addr_of_var(CompilerContext *cc, StringBuilder *sb, const char *name, 
         }
         if ((li && li->is_array) || occur > 1) {
             int last = local_index_last(name, locals, local_count);
-            if (last >= 0) offset = local_offset(last);
+            if (last >= 0) offset = local_offset(param_count, last);
         }
     }
     if (is_param == -1) {

@@ -1,6 +1,7 @@
 #ifndef AST_H
 #define AST_H
 
+#include <stdbool.h>
 #include "mylang/frontend/lexer.h"
 
 typedef enum {
@@ -119,6 +120,7 @@ struct ASTNode {
             int param_count;
             ASTNode *body;
             ASTNode *ret_type; // set during lowering (from declaration type)
+            bool is_variadic;
         } fun_literal;
         struct {
             ASTNode *target;
@@ -134,11 +136,13 @@ struct ASTNode {
             ASTNode *body;
             int is_exported;
             char *package;
+            bool is_variadic;
         } fundef;
         struct { 
             ASTNode *type;
             char *name;
             int is_mut;
+            int is_rest;
         } param;
         struct {
             char *name;

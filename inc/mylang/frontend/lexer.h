@@ -76,6 +76,7 @@ typedef enum {
     EXPORT,   // export
     PACKAGE,  // package
     FROM,     // from
+    REST,     // rest
 
     L_PARENTHESES, // (
     R_PARENTHESES, // )
