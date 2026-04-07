@@ -18,6 +18,8 @@ ASTNode **g_hoisted_funcs = NULL;
 int g_hoisted_count = 0;
 int g_funlit_counter = 0;
 const char *g_parse_filename = NULL;
+EnumConstant *g_enum_constants = NULL;
+int g_enum_constant_count = 0;
 
 void add_function(ASTNode *fn) {
     g_func_table.funcs = realloc(g_func_table.funcs, sizeof(ASTNode*) * (g_func_table.count + 1));
@@ -59,4 +61,22 @@ StructDef *find_structdef(const char *name) {
         if (strcmp(g_struct_table.structs[i]->name, name) == 0) return g_struct_table.structs[i];
     }
     return NULL;
+}
+
+void add_enum_constant(const char *name, long value) {
+    g_enum_constants = realloc(g_enum_constants, sizeof(EnumConstant) * (g_enum_constant_count + 1));
+    g_enum_constants[g_enum_constant_count].name = strdup(name);
+    g_enum_constants[g_enum_constant_count].value = value;
+    g_enum_constant_count++;
+}
+
+int find_enum_constant(const char *name, long *out_value) {
+    if (!name) return 0;
+    for (int i = g_enum_constant_count - 1; i >= 0; i--) {
+        if (strcmp(g_enum_constants[i].name, name) == 0) {
+            if (out_value) *out_value = g_enum_constants[i].value;
+            return 1;
+        }
+    }
+    return 0;
 }

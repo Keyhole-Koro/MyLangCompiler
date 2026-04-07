@@ -55,6 +55,16 @@ const FunctionSig *find_func_sig(CompilerContext *cc, const char *name) {
     return NULL;
 }
 
+const EnumValueInfo *find_enum_value(CompilerContext *cc, const char *name) {
+    if (!cc || !name) return NULL;
+    for (int i = cc->enum_value_count - 1; i >= 0; i--) {
+        if (cc->enum_values[i].name && strcmp(cc->enum_values[i].name, name) == 0) {
+            return &cc->enum_values[i];
+        }
+    }
+    return NULL;
+}
+
 void note_import_func(CompilerContext *cc, const char *name) {
     if (!cc || !name) return;
     if (is_codegen_builtin(name)) return;

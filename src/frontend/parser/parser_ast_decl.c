@@ -110,6 +110,24 @@ ASTNode *new_struct(char *name, ASTNode **members, int member_count) {
     return node;
 }
 
+ASTNode *new_enum(char *name, ASTNode **members, int member_count) {
+    ASTNode *node = calloc(1, sizeof(ASTNode));
+    node->type = AST_ENUM;
+    node->enum_stmt.name = strdup(name);
+    node->enum_stmt.members = members;
+    node->enum_stmt.member_count = member_count;
+    return node;
+}
+
+ASTNode *new_enum_member(char *name, ASTNode *value, long resolved_value) {
+    ASTNode *node = calloc(1, sizeof(ASTNode));
+    node->type = AST_ENUM_MEMBER;
+    node->enum_member.name = strdup(name);
+    node->enum_member.value = value;
+    node->enum_member.resolved_value = resolved_value;
+    return node;
+}
+
 ASTNode *new_import_stmt(char *path, char **symbols, int count) {
     ASTNode *node = calloc(1, sizeof(ASTNode));
     node->type = AST_IMPORT;

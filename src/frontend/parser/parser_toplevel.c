@@ -79,6 +79,7 @@ ASTNode* parse_toplevel(Token **cur) {
     if ((*cur)->kind == IMPORT) return parse_import(cur);
     if ((*cur)->kind == TYPEDEF) return parse_typedef(cur);
     if ((*cur)->kind == STRUCT) return parse_struct(cur);
+    if ((*cur)->kind == ENUM) return parse_enum(cur);
     if (is_type((*cur)->kind, *cur)) {
         if (looks_like_function(*cur)) {
             ASTNode *fn = parse_fundef(cur);

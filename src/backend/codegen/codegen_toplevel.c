@@ -25,6 +25,18 @@ static void append_typedef_info(CompilerContext *cc, ASTNode *node) {
     cg_typedef_count++;
 }
 
+static void append_type_alias(CompilerContext *cc, const char *alias, const char *base_type) {
+    cg_typedefs = (TypedefInfo*)realloc(cg_typedefs, sizeof(TypedefInfo) * (cg_typedef_count + 1));
+    cg_typedefs[cg_typedef_count].alias = alias;
+    cg_typedefs[cg_typedef_count].info.base_type = base_type;
+    cg_typedefs[cg_typedef_count].info.pointer_level = 0;
+    cg_typedefs[cg_typedef_count].info.type_modifiers = 0;
+    cg_typedefs[cg_typedef_count].info.is_array = 0;
+    cg_typedefs[cg_typedef_count].info.dims_count = 0;
+    for (int k = 0; k < 8; k++) cg_typedefs[cg_typedef_count].info.dims[k] = 0;
+    cg_typedef_count++;
+}
+
 static void fill_member_info(CompilerContext *cc, ASTNode *mem, MemberInfo *out, int offset) {
     const char *mname = "";
     LocalInfo tmp = {0};
@@ -90,6 +102,19 @@ static void append_func_sig(CompilerContext *cc, ASTNode *node) {
     cc->func_sig_count++;
 }
 
+static void append_enum_info(CompilerContext *cc, ASTNode *node) {
+    if (!cc || !node || node->type != AST_ENUM || !node->enum_stmt.name) return;
+    append_type_alias(cc, node->enum_stmt.name, "i32");
+    for (int i = 0; i < node->enum_stmt.member_count; i++) {
+        ASTNode *member = node->enum_stmt.members[i];
+        if (!member || member->type != AST_ENUM_MEMBER) continue;
+        cc->enum_values = (EnumValueInfo*)realloc(cc->enum_values, sizeof(EnumValueInfo) * (cc->enum_value_count + 1));
+        cc->enum_values[cc->enum_value_count].name = member->enum_member.name;
+        cc->enum_values[cc->enum_value_count].value = member->enum_member.resolved_value;
+        cc->enum_value_count++;
+    }
+}
+
 void build_codegen_toplevel_info(CompilerContext *cc, ASTNode *root) {
     ASTNode *block = cg_as_block(root);
     cg_struct_count = 0;
@@ -98,12 +123,16 @@ void build_codegen_toplevel_info(CompilerContext *cc, ASTNode *root) {
     cg_typedefs = NULL;
     cc->func_sig_count = 0;
     cc->func_sigs = NULL;
+    cc->enum_value_count = 0;
+    cc->enum_values = NULL;
     if (!block) return;
 
     for (int i = 0; i < block->block.count; i++) {
         ASTNode *n = block->block.stmts[i];
         if (n->type == AST_TYPEDEF) {
             append_typedef_info(cc, n);
+        } else if (n->type == AST_ENUM) {
+            append_enum_info(cc, n);
         } else if (cg_as_fundef(n)) {
             append_func_sig(cc, n);
         }
@@ -213,5 +242,10 @@ void cleanup_codegen_context(CompilerContext *cc) {
         free(cc->func_sigs);
         cc->func_sigs = NULL;
         cc->func_sig_count = 0;
+    }
+    if (cc->enum_values) {
+        free(cc->enum_values);
+        cc->enum_values = NULL;
+        cc->enum_value_count = 0;
     }
 }

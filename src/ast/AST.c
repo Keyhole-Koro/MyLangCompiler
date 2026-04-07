@@ -27,6 +27,8 @@ char *astType2str(ASTNodeType type) {
         case AST_STRUCT: return "AST_STRUCT";
         case AST_STRUCT_MEMBER: return "AST_STRUCT_MEMBER";
         case AST_TYPEDEF_STRUCT: return "AST_TYPEDEF_STRUCT";
+        case AST_ENUM: return "AST_ENUM";
+        case AST_ENUM_MEMBER: return "AST_ENUM_MEMBER";
         case AST_STRING_LITERAL: return "AST_STRING_LITERAL";
         case AST_CHAR_LITERAL: return "AST_CHAR_LITERAL";
         case AST_MEMBER_ACCESS: return "AST_MEMBER_ACCESS";

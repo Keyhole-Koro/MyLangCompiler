@@ -174,7 +174,11 @@ void _gen_expr(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char
         break;
 
     case AST_IDENTIFIER:
-        emit_load_var(cc, sb, node->identifier.name, target_reg, params, param_count, locals, local_count);
+        if (find_enum_value(cc, node->identifier.name)) {
+            sb_append(sb, "  movi %s, %ld\n", target_reg, find_enum_value(cc, node->identifier.name)->value);
+        } else {
+            emit_load_var(cc, sb, node->identifier.name, target_reg, params, param_count, locals, local_count);
+        }
         break;
     case AST_BINARY:
         gen_expr_binop(cc, node, sb, target_reg, params, param_count, locals, local_count);

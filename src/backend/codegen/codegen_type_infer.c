@@ -10,6 +10,14 @@ static void clear_typeinfo(TypeInfo *out) {
 }
 
 static int infer_identifier_type(CompilerContext *cc, ASTNode *expr, TypeInfo *out) {
+    if (find_enum_value(cc, expr->identifier.name)) {
+        out->base_type = "i32";
+        out->pointer_level = 0;
+        out->type_modifiers = 0;
+        out->is_array = 0;
+        out->dims_count = 0;
+        return 1;
+    }
     const LocalInfo *li = find_local_info(cc, expr->identifier.name);
     if (!li) li = find_global_info(cc, expr->identifier.name);
     if (!li) return 0;

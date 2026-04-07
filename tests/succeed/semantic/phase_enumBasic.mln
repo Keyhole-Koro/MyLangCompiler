@@ -1,0 +1,15 @@
+enum Color {
+    Red,
+    Green = 2,
+    Blue,
+};
+
+Color pick(Color input) {
+    Color current = Green;
+    return current + Blue + input;
+}
+
+i32 main() {
+    Color base = Red;
+    return pick(base);
+}

@@ -33,6 +33,11 @@ typedef struct ExportEntry {
     char *mangled;
 } ExportEntry;
 
+typedef struct EnumConstant {
+    char *name;
+    long value;
+} EnumConstant;
+
 extern Token *token_head;
 extern ASTNode *root;
 extern StructTable g_struct_table;
@@ -51,6 +56,8 @@ extern ASTNode **g_hoisted_funcs;
 extern int g_hoisted_count;
 extern int g_funlit_counter;
 extern const char *g_parse_filename;
+extern EnumConstant *g_enum_constants;
+extern int g_enum_constant_count;
 
 void set_current_package(const char *name);
 void add_function(ASTNode *fn);
@@ -59,6 +66,8 @@ void add_typename(const char *name);
 int is_user_typename(const char *name);
 void add_structdef(char *name, ASTNode **members, int member_count);
 StructDef *find_structdef(const char *name);
+void add_enum_constant(const char *name, long value);
+int find_enum_constant(const char *name, long *out_value);
 void parser_reset(void);
 void parser_set_filename(const char *name);
 void add_export(const char *orig, const char *mangled);

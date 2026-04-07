@@ -1,0 +1,12 @@
+enum Color {
+    Red,
+    Green,
+    Blue,
+};
+
+i32 main() {
+    Color a = Red;
+    Color b = Green;
+    Color c = Blue;
+    return a + b + c;
+}
