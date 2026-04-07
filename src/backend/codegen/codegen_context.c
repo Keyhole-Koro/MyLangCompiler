@@ -45,6 +45,36 @@ int is_codegen_builtin(const char *name) {
             strcmp(name, "__rest_get") == 0);
 }
 
+ASTNode *cg_current_fundef_node(CompilerContext *cc) {
+    if (!cc || !cc->current_func) return NULL;
+    if (cc->current_func->type != AST_FUNDEF) return NULL;
+    return cc->current_func;
+}
+
+int cg_current_rest_info(CompilerContext *cc, const char *name, int *out_rest_index, int *out_fixed_count) {
+    ASTNode *fn = cg_current_fundef_node(cc);
+    if (!fn) return 0;
+    if (!fn->fundef.is_variadic || fn->fundef.param_count <= 0) return 0;
+
+    int rest_index = fn->fundef.param_count - 1;
+    ASTNode *rest_param = fn->fundef.params[rest_index];
+    if (!rest_param || rest_param->type != AST_PARAM || !rest_param->param.is_rest) return 0;
+    if (!name || strcmp(rest_param->param.name, name) != 0) return 0;
+
+    if (out_rest_index) *out_rest_index = rest_index;
+    if (out_fixed_count) *out_fixed_count = fn->fundef.param_count - 1;
+    return 1;
+}
+
+int cg_rest_stack_base(CompilerContext *cc, const char *name, int *out_rest_stack_base) {
+    int fixed_count = 0;
+    if (!cg_current_rest_info(cc, name, NULL, &fixed_count)) return 0;
+    if (out_rest_stack_base) {
+        *out_rest_stack_base = 8 + ((fixed_count > 3) ? ((fixed_count - 3) * SLOT_SIZE) : 0);
+    }
+    return 1;
+}
+
 const FunctionSig *find_func_sig(CompilerContext *cc, const char *name) {
     if (!cc || !name) return NULL;
     for (int i = 0; i < cc->func_sig_count; i++) {

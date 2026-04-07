@@ -1,28 +1,5 @@
 #include "mylang/backend/codegen_internal.h"
 
-static ASTNode *current_fundef(CompilerContext *cc)
-{
-    if (!cc || !cc->current_func) return NULL;
-    if (cc->current_func->type != AST_FUNDEF) return NULL;
-    return cc->current_func;
-}
-
-static int current_rest_info(CompilerContext *cc, const char *name, int *out_rest_index, int *out_fixed_count)
-{
-    ASTNode *fn = current_fundef(cc);
-    if (!fn) return 0;
-    if (!fn->fundef.is_variadic || fn->fundef.param_count <= 0) return 0;
-
-    int rest_index = fn->fundef.param_count - 1;
-    ASTNode *rest_param = fn->fundef.params[rest_index];
-    if (!rest_param || rest_param->type != AST_PARAM || !rest_param->param.is_rest) return 0;
-    if (!name || strcmp(rest_param->param.name, name) != 0) return 0;
-
-    if (out_rest_index) *out_rest_index = rest_index;
-    if (out_fixed_count) *out_fixed_count = fn->fundef.param_count - 1;
-    return 1;
-}
-
 static void gen_builtin_rest_len(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char *target_reg)
 {
     if (node->call.arg_count != 1 || !node->call.args[0] || node->call.args[0]->type != AST_IDENTIFIER) {
@@ -32,7 +9,7 @@ static void gen_builtin_rest_len(CompilerContext *cc, ASTNode *node, StringBuild
     }
 
     int rest_index = 0;
-    if (!current_rest_info(cc, node->call.args[0]->identifier.name, &rest_index, NULL)) {
+    if (!cg_current_rest_info(cc, node->call.args[0]->identifier.name, &rest_index, NULL)) {
         fprintf(stderr, "Codegen error at %d:%d: __rest_len requires a variadic function rest parameter\n",
                 node->line, node->col);
         exit(1);
@@ -54,7 +31,7 @@ static void gen_builtin_rest_get(CompilerContext *cc, ASTNode *node, StringBuild
     }
 
     int fixed_count = 0;
-    if (!current_rest_info(cc, node->call.args[0]->identifier.name, NULL, &fixed_count)) {
+    if (!cg_current_rest_info(cc, node->call.args[0]->identifier.name, NULL, &fixed_count)) {
         fprintf(stderr, "Codegen error at %d:%d: __rest_get requires a variadic function rest parameter\n",
                 node->line, node->col);
         exit(1);
