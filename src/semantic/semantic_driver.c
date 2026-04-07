@@ -1,5 +1,8 @@
 #include "mylang/semantic/semantic_internal.h"
 
+/* Initializes a fresh semantic context for one AST and runs the semantic walk
+ * that validates ownership, bindings, and enum metadata for the whole unit. */
+
 static const char *g_semantic_filename = NULL;
 
 void semantic_set_filename(const char *name) {

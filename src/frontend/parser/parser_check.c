@@ -1,5 +1,8 @@
 #include "mylang/frontend/parser_rewrite_internal.h"
 
+/* Verifies that parser lowering removed every transient function literal node
+ * before semantic analysis and code generation consume the AST. */
+
 void ensure_no_fun_literals(ASTNode *node) {
     if (!node) return;
     switch (node->type) {
