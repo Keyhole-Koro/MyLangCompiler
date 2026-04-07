@@ -1,5 +1,8 @@
 #include "mylang/frontend/parser_internal.h"
 
+/* Clears parser-global tables and temporary state so each parse starts from a
+ * clean environment without leaking declarations across translation units. */
+
 void parser_set_filename(const char *name) {
     g_parse_filename = name;
 }

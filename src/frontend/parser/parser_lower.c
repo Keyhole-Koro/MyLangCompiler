@@ -1,6 +1,9 @@
 #include "mylang/frontend/parser_rewrite_internal.h"
 #include "mylang/frontend/parser_ast_internal.h"
 
+/* Lowers function literals into synthetic top-level function definitions and
+ * rewrites local aliases so later passes only need to handle normalized AST. */
+
 static void lower_fun_literals_node(ASTNode *node, const char *func_prefix, FunAlias **aliases, int *alias_count);
 
 void lower_fun_literals_block(ASTNode *block, const char *func_prefix, FunAlias *aliases, int alias_count) {
