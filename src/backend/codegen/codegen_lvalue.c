@@ -4,6 +4,14 @@ void emit_load_var(CompilerContext *cc, StringBuilder *sb, const char *name, con
                    char **params, int param_count,
                    char **locals, int local_count)
 {
+    int rest_stack_base = 0;
+    if (cg_rest_stack_base(cc, name, &rest_stack_base)) {
+        sb_append(sb, "  \n; load rest argument base '%s' into %s\n", name, target_reg);
+        sb_append(sb, "  mov %s, bp\n", target_reg);
+        sb_append(sb, "  addis %s, %d\n", target_reg, rest_stack_base);
+        return;
+    }
+
     const LocalInfo *li_info = find_local_info(cc, name);
     if (!li_info) li_info = find_global_info(cc, name);
     if (li_info && li_info->is_array) {

@@ -25,8 +25,8 @@ void gen_func(CompilerContext *cc, ASTNode *node, StringBuilder *sb)
             ASTNode *p = fn->fundef.params[i];
             cg_locals_info[idx].name = p->param.name;
             if (p->param.is_rest) {
-                cg_locals_info[idx].base_type = "";
-                cg_locals_info[idx].pointer_level = 0;
+                cg_locals_info[idx].base_type = "i32";
+                cg_locals_info[idx].pointer_level = 1;
                 cg_locals_info[idx].type_modifiers = 0;
                 cg_locals_info[idx].is_array = 0;
                 cg_locals_info[idx].array_length = 0;

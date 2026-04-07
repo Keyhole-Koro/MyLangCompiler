@@ -37,6 +37,20 @@ static int infer_identifier_type(CompilerContext *cc, ASTNode *expr, TypeInfo *o
 }
 
 static int infer_member_type(CompilerContext *cc, ASTNode *lhs_expr, const char *member, int deref_ptr, TypeInfo *out) {
+    if (!deref_ptr &&
+        lhs_expr &&
+        lhs_expr->type == AST_IDENTIFIER &&
+        member &&
+        strcmp(member, "len") == 0 &&
+        cg_current_rest_info(cc, lhs_expr->identifier.name, NULL, NULL)) {
+        out->base_type = "i32";
+        out->pointer_level = 0;
+        out->type_modifiers = 0;
+        out->is_array = 0;
+        out->dims_count = 0;
+        return 1;
+    }
+
     TypeInfo lhs = {0};
     if (!infer_expr_type(cc, lhs_expr, &lhs)) return 0;
     if (deref_ptr) {

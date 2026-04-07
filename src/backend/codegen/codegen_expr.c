@@ -1,5 +1,20 @@
 #include "mylang/backend/codegen_internal.h"
 
+static int gen_rest_len_access(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char *target_reg) {
+    if (!cc || !node || node->type != AST_MEMBER_ACCESS) return 0;
+    if (!node->member_access.member || strcmp(node->member_access.member, "len") != 0) return 0;
+    if (!node->member_access.lhs || node->member_access.lhs->type != AST_IDENTIFIER) return 0;
+
+    int rest_index = 0;
+    if (!cg_current_rest_info(cc, node->member_access.lhs->identifier.name, &rest_index, NULL)) return 0;
+
+    sb_append(sb, "  ; load rest argument count\n");
+    sb_append(sb, "  mov r3, bp\n");
+    sb_append(sb, "  addis r3, %d\n", param_offset(rest_index));
+    emit_load_from_addr(sb, target_reg, "r3", 0);
+    return 1;
+}
+
 void gen_expr(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char *target_reg,
               char **params, int param_count,
               char **locals, int local_count) {
@@ -187,6 +202,9 @@ void _gen_expr(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char
         gen_call(cc, node, sb, target_reg, params, param_count, locals, local_count);
         break;
     case AST_MEMBER_ACCESS: {
+        if (gen_rest_len_access(cc, node, sb, target_reg)) {
+            break;
+        }
         gen_lvalue_addr(cc, node, sb, "r3", params, param_count, locals, local_count);
         {
             int isb = lvalue_is_byte(cc, node);
