@@ -30,6 +30,8 @@ ASTNode *new_expr_stmt(ASTNode *expr);
 ASTNode *new_typedef(ASTNode *src_type, char *alias);
 ASTNode *new_typedef_struct(char *struct_name, ASTNode **members, int member_count, char *typedef_name);
 ASTNode *new_struct(char *name, ASTNode **members, int member_count);
+ASTNode *new_enum(char *name, ASTNode **members, int member_count);
+ASTNode *new_enum_member(char *name, ASTNode *value, long resolved_value);
 ASTNode *new_import_stmt(char *path, char **symbols, int count);
 ASTNode *new_member_access(ASTNode *lhs, char *member_name);
 ASTNode *new_arrow_access(ASTNode *lhs, char *member_name);

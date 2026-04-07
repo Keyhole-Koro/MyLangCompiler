@@ -1,0 +1,10 @@
+enum Status {
+    Init = 5,
+    Running,
+    Done,
+};
+
+i32 main() {
+    Status current = Running;
+    return current + Done;
+}

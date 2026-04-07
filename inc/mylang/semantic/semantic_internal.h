@@ -32,12 +32,21 @@ typedef struct {
 } SemanticBinding;
 
 typedef struct {
+    const char *name;
+    long value;
+} SemanticEnumValue;
+
+typedef struct {
     const char *filename;
     int error_count;
     int scope_depth;
     int function_depth;
     int binding_count;
     SemanticBinding bindings[256];
+    int enum_type_count;
+    const char *enum_types[128];
+    int enum_value_count;
+    SemanticEnumValue enum_values[512];
 } SemanticContext;
 
 SemanticLocation semantic_location_unknown(void);

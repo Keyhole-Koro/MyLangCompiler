@@ -18,7 +18,45 @@ static ASTNode *semantic_as_param(ASTNode *node) {
     return (node && node->type == AST_PARAM) ? node : NULL;
 }
 
-static int semantic_type_is_copy(ASTNode *type_node) {
+static int semantic_enum_type_exists(SemanticContext *ctx, const char *name) {
+    if (!ctx || !name) return 0;
+    for (int i = 0; i < ctx->enum_type_count; i++) {
+        if (ctx->enum_types[i] && strcmp(ctx->enum_types[i], name) == 0) return 1;
+    }
+    return 0;
+}
+
+static int semantic_find_enum_value(SemanticContext *ctx, const char *name, long *out_value) {
+    if (!ctx || !name) return 0;
+    for (int i = ctx->enum_value_count - 1; i >= 0; i--) {
+        if (ctx->enum_values[i].name && strcmp(ctx->enum_values[i].name, name) == 0) {
+            if (out_value) *out_value = ctx->enum_values[i].value;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static void semantic_register_enum(SemanticContext *ctx, ASTNode *node) {
+    if (!ctx || !node || node->type != AST_ENUM) return;
+    if (node->enum_stmt.name && ctx->enum_type_count < (int)(sizeof(ctx->enum_types) / sizeof(ctx->enum_types[0]))) {
+        ctx->enum_types[ctx->enum_type_count++] = node->enum_stmt.name;
+    }
+    for (int i = 0; i < node->enum_stmt.member_count; i++) {
+        ASTNode *member = node->enum_stmt.members[i];
+        if (!member || member->type != AST_ENUM_MEMBER) continue;
+        if (ctx->enum_value_count >= (int)(sizeof(ctx->enum_values) / sizeof(ctx->enum_values[0]))) {
+            semantic_error_at(ctx, semantic_location_from_ast(member),
+                              "semantic enum table exhausted while tracking '%s'", member->enum_member.name);
+            return;
+        }
+        ctx->enum_values[ctx->enum_value_count].name = member->enum_member.name;
+        ctx->enum_values[ctx->enum_value_count].value = member->enum_member.resolved_value;
+        ctx->enum_value_count++;
+    }
+}
+
+static int semantic_type_is_copy(SemanticContext *ctx, ASTNode *type_node) {
     if (!type_node) return 1;
     SemanticTypeInfo info;
     const char *base_type;
@@ -30,6 +68,7 @@ static int semantic_type_is_copy(ASTNode *type_node) {
 
     base_type = info.base_type;
     if (!base_type) return 0;
+    if (semantic_enum_type_exists(ctx, base_type)) return 1;
     return strcmp(base_type, "bool") == 0 ||
            strcmp(base_type, "i32") == 0 ||
            strcmp(base_type, "u32") == 0 ||
@@ -267,6 +306,13 @@ static void use_identifier(SemanticContext *ctx, ASTNode *node, ExprContext expr
     ASTNode *ident = semantic_as_identifier(node);
 
     if (!ctx || !ident) return;
+    if (semantic_find_enum_value(ctx, ident->identifier.name, NULL)) {
+        if (expr_ctx == EXPRCTX_WRITE) {
+            semantic_error_at(ctx, semantic_location_from_ast(node),
+                              "cannot assign to enum constant '%s'", ident->identifier.name);
+        }
+        return;
+    }
     binding = find_binding(ctx, ident->identifier.name);
     if (!binding) return;
 
@@ -317,7 +363,7 @@ static void walk_params(SemanticContext *ctx, ASTNode **params, int param_count)
         semantic_walk_stmt(ctx, param);
         if (param) {
             declare_binding(ctx, param->param.name,
-                            param->param.is_rest ? 1 : semantic_type_is_copy(param->param.type), 1,
+                            param->param.is_rest ? 1 : semantic_type_is_copy(ctx, param->param.type), 1,
                             semantic_location_from_ast(param));
         }
     }
@@ -415,6 +461,8 @@ static void semantic_walk_expr(SemanticContext *ctx, ASTNode *node, ExprContext 
     case AST_STRUCT:
     case AST_STRUCT_MEMBER:
     case AST_TYPEDEF_STRUCT:
+    case AST_ENUM:
+    case AST_ENUM_MEMBER:
     case AST_IMPORT:
     case AST_DO_WHILE:
     case AST_UNCHECKED:
@@ -462,7 +510,7 @@ static void semantic_walk_stmt(SemanticContext *ctx, ASTNode *node) {
         if (node->var_decl.init) {
             semantic_walk_expr(ctx, node->var_decl.init, EXPRCTX_MOVE);
         }
-        is_copy = semantic_type_is_copy(node->var_decl.var_type);
+        is_copy = semantic_type_is_copy(ctx, node->var_decl.var_type);
         declare_binding(ctx, node->var_decl.name, is_copy, 0, semantic_location_from_ast(node));
         register_borrow_binding(ctx, node);
         break;
@@ -527,6 +575,15 @@ static void semantic_walk_stmt(SemanticContext *ctx, ASTNode *node) {
         break;
     case AST_TYPEDEF:
         semantic_walk_stmt(ctx, node->typedef_stmt.src_type);
+        break;
+    case AST_ENUM:
+        semantic_register_enum(ctx, node);
+        for (int i = 0; i < node->enum_stmt.member_count; i++) {
+            semantic_walk_stmt(ctx, node->enum_stmt.members[i]);
+        }
+        break;
+    case AST_ENUM_MEMBER:
+        semantic_walk_expr(ctx, node->enum_member.value, EXPRCTX_READ);
         break;
     case AST_STRUCT:
         walk_block_items(ctx, node->struct_stmt.members, node->struct_stmt.member_count);

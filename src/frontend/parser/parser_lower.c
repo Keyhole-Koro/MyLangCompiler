@@ -152,6 +152,14 @@ static void lower_fun_literals_node(ASTNode *node, const char *func_prefix, FunA
     case AST_STMT_EXPR:
         lower_fun_literals_node(node->stmt_expr.block, func_prefix, aliases, alias_count);
         break;
+    case AST_ENUM:
+        for (int i = 0; i < node->enum_stmt.member_count; i++) {
+            lower_fun_literals_node(node->enum_stmt.members[i], func_prefix, aliases, alias_count);
+        }
+        break;
+    case AST_ENUM_MEMBER:
+        lower_fun_literals_node(node->enum_member.value, func_prefix, aliases, alias_count);
+        break;
     default:
         break;
     }

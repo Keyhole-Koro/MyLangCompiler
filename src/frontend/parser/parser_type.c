@@ -55,6 +55,71 @@ ASTNode *parse_struct(Token **cur) {
     return new_struct(name ? name : "", NULL, 0);
 }
 
+ASTNode *parse_enum(Token **cur) {
+    if (!expect(cur, ENUM))
+        parse_error("expected 'enum'", token_head, *cur);
+    if ((*cur)->kind != IDENTIFIER)
+        parse_error("expected enum name", token_head, *cur);
+
+    Token *name_tok = *cur;
+    char *name = strdup((*cur)->value);
+    *cur = (*cur)->next;
+
+    if (!expect(cur, L_BRACE))
+        parse_error("expected '{' in enum definition", token_head, *cur);
+
+    ASTNode **members = NULL;
+    int member_count = 0;
+    long next_value = 0;
+
+    while ((*cur)->kind != R_BRACE) {
+        if ((*cur)->kind != IDENTIFIER)
+            parse_error("expected enum member name", token_head, *cur);
+
+        Token *member_tok = *cur;
+        char *member_name = strdup((*cur)->value);
+        *cur = (*cur)->next;
+
+        ASTNode *value_expr = NULL;
+        long resolved_value = next_value;
+        if ((*cur)->kind == ASSIGN) {
+            *cur = (*cur)->next;
+            if ((*cur)->kind != NUMBER) {
+                parse_error("enum member value must be a number literal", token_head, *cur);
+            }
+            value_expr = new_number((*cur)->value);
+            resolved_value = strtol((*cur)->value, NULL, 10);
+            *cur = (*cur)->next;
+        }
+
+        ASTNode *member = new_enum_member(member_name, value_expr, resolved_value);
+        set_node_loc_from_tokens(member, member_tok, NULL);
+        members = realloc(members, sizeof(ASTNode*) * (member_count + 1));
+        members[member_count++] = member;
+        add_enum_constant(member_name, resolved_value);
+        next_value = resolved_value + 1;
+        free(member_name);
+
+        if ((*cur)->kind == COMMA) {
+            *cur = (*cur)->next;
+            if ((*cur)->kind == R_BRACE) break;
+            continue;
+        }
+        break;
+    }
+
+    if (!expect(cur, R_BRACE))
+        parse_error("expected '}' after enum body", token_head, *cur);
+    if (!expect(cur, SEMICOLON))
+        parse_error("expected ';' after enum definition", token_head, *cur);
+
+    add_typename(name);
+    ASTNode *node = new_enum(name, members, member_count);
+    set_node_loc_from_tokens(node, name_tok, NULL);
+    free(name);
+    return node;
+}
+
 ASTNode *parse_typedef(Token **cur) {
     if (!expect(cur, TYPEDEF)) parse_error("expected 'typedef'", token_head, *cur);
 

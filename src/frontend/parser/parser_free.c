@@ -134,6 +134,16 @@ void free_ast(ASTNode *node) {
             free(node->typedef_struct.members);
             free(node->typedef_struct.typedef_name);
             break;
+        case AST_ENUM:
+            free(node->enum_stmt.name);
+            for (int i = 0; i < node->enum_stmt.member_count; i++)
+                free_ast(node->enum_stmt.members[i]);
+            free(node->enum_stmt.members);
+            break;
+        case AST_ENUM_MEMBER:
+            free(node->enum_member.name);
+            free_ast(node->enum_member.value);
+            break;
         case AST_MEMBER_ACCESS:
             free(node->member_access.member);
             free_ast(node->member_access.lhs);

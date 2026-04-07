@@ -115,6 +115,14 @@ void ensure_no_fun_literals(ASTNode *node) {
             ensure_no_fun_literals(node->init_list.elements[i]);
         }
         break;
+    case AST_ENUM:
+        for (int i = 0; i < node->enum_stmt.member_count; i++) {
+            ensure_no_fun_literals(node->enum_stmt.members[i]);
+        }
+        break;
+    case AST_ENUM_MEMBER:
+        ensure_no_fun_literals(node->enum_member.value);
+        break;
     case AST_SIZEOF:
         ensure_no_fun_literals(node->sizeof_expr.expr);
         break;

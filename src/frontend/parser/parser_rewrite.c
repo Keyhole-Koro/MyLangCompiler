@@ -1,5 +1,8 @@
 #include "mylang/frontend/parser_rewrite_internal.h"
 
+/* Rewrites parsed AST names into their exported/mangled form while preserving
+ * local scope bindings so later semantic/codegen passes see canonical names. */
+
 static void rewrite_case_expr(ASTNode *node, char **scope, int scope_count) {
     rewrite_node(node->case_expr.target, scope, scope_count);
     for (int i = 0; i < node->case_expr.case_count; i++) {
@@ -115,6 +118,14 @@ void rewrite_node(ASTNode *node, char **scope, int scope_count) {
         break;
     case AST_CASE:
         rewrite_case_expr(node, scope, scope_count);
+        break;
+    case AST_ENUM:
+        for (int i = 0; i < node->enum_stmt.member_count; i++) {
+            rewrite_node(node->enum_stmt.members[i], scope, scope_count);
+        }
+        break;
+    case AST_ENUM_MEMBER:
+        rewrite_node(node->enum_member.value, scope, scope_count);
         break;
     case AST_STMT_EXPR:
         rewrite_node(node->stmt_expr.block, scope, scope_count);

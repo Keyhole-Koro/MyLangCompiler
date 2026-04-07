@@ -1,0 +1,15 @@
+enum Color {
+    Red,
+    Green,
+};
+
+enum State {
+    Init = 10,
+    Busy,
+};
+
+i32 main() {
+    Color c = Green;
+    State s = Busy;
+    return c + s;
+}

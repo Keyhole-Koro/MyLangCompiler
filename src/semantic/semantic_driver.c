@@ -13,6 +13,8 @@ int semantic_check(ASTNode *root) {
     ctx.scope_depth = 0;
     ctx.function_depth = 0;
     ctx.binding_count = 0;
+    ctx.enum_type_count = 0;
+    ctx.enum_value_count = 0;
 
     semantic_walk_ast(&ctx, root);
     return ctx.error_count == 0;

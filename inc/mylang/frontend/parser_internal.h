@@ -29,6 +29,7 @@ int looks_like_fun_literal(Token *cur);
 ASTNode *parse_base_type(Token **cur);
 void parse_struct_members(Token **cur, ASTNode ***members, int *member_count);
 ASTNode *parse_struct(Token **cur);
+ASTNode *parse_enum(Token **cur);
 ASTNode *parse_typedef(Token **cur);
 ASTNode *parse_type(Token **cur);
 ASTNode *parse_primary(Token **cur);

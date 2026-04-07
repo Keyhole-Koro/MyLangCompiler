@@ -58,6 +58,15 @@ void parser_reset(void) {
     g_hoisted_count = 0;
     g_funlit_counter = 0;
 
+    if (g_enum_constants) {
+        for (int i = 0; i < g_enum_constant_count; i++) {
+            free(g_enum_constants[i].name);
+        }
+        free(g_enum_constants);
+        g_enum_constants = NULL;
+        g_enum_constant_count = 0;
+    }
+
     if (g_current_package_heap && g_current_package) {
         free(g_current_package);
     }

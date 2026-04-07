@@ -61,6 +61,11 @@ typedef struct {
 } FunctionSig;
 
 typedef struct {
+    const char *name;
+    long value;
+} EnumValueInfo;
+
+typedef struct {
     const char *alias;
     TypeInfo info;
 } TypedefInfo;
@@ -87,6 +92,8 @@ typedef struct {
     FunctionSig *func_sigs;
     int func_sig_count;
     ASTNode *current_func;
+    EnumValueInfo *enum_values;
+    int enum_value_count;
 } CompilerContext;
 
 #define cg_structs        (cc->structs)
@@ -127,6 +134,7 @@ void note_defined_func(CompilerContext *cc, const char *name);
 bool func_is_defined(CompilerContext *cc, const char *name);
 int is_codegen_builtin(const char *name);
 const FunctionSig *find_func_sig(CompilerContext *cc, const char *name);
+const EnumValueInfo *find_enum_value(CompilerContext *cc, const char *name);
 void note_import_func(CompilerContext *cc, const char *name);
 void collect_imports_from_toplevel(CompilerContext *cc, ASTNode *root);
 void build_codegen_toplevel_info(CompilerContext *cc, ASTNode *root);

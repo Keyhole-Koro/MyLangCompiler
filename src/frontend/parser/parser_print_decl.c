@@ -80,6 +80,18 @@ int fprint_ast_decl_node(FILE *out, ASTNode *node, int indent) {
         for (int i = 0; i < node->typedef_struct.member_count; i++)
             fprint_member_name(out, node->typedef_struct.members[i], indent + 1);
         return 1;
+    case AST_ENUM:
+        fprint_indent(out, indent); fprintf(out, "Enum: %s\n", node->enum_stmt.name);
+        for (int i = 0; i < node->enum_stmt.member_count; i++) {
+            ASTNode *member = node->enum_stmt.members[i];
+            fprint_indent(out, indent + 1);
+            fprintf(out, "Member: %s = %ld\n", member->enum_member.name, member->enum_member.resolved_value);
+        }
+        return 1;
+    case AST_ENUM_MEMBER:
+        fprint_indent(out, indent);
+        fprintf(out, "EnumMember: %s = %ld\n", node->enum_member.name, node->enum_member.resolved_value);
+        return 1;
     case AST_IMPORT:
         fprint_indent(out, indent); fprintf(out, "Import: %s\n", node->import_stmt.path);
         for (int i = 0; i < node->import_stmt.symbol_count; i++) {

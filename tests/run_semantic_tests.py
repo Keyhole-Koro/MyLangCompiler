@@ -23,6 +23,10 @@ PASS_CASES = {
     "phase2_doWhileControl": "succeed/semantic/phase2_doWhileControl.mln",
     "phase_restParam": "succeed/semantic/phase_restParam.mln",
     "phase_printfRestBuiltin": "succeed/semantic/phase_printfRestBuiltin.mln",
+    "phase_enumBasic": "succeed/semantic/phase_enumBasic.mln",
+    "phase_enumAutoValues": "succeed/semantic/phase_enumAutoValues.mln",
+    "phase_enumExplicitBase": "succeed/semantic/phase_enumExplicitBase.mln",
+    "phase_enumMultipleTypes": "succeed/semantic/phase_enumMultipleTypes.mln",
 }
 
 FAIL_CASES = {
@@ -57,6 +61,11 @@ FAIL_CASES = {
     "phase_restNotLast_fail": (
         "fail/semantic/phase_restNotLast_fail.mln",
         "rest parameter must be the final parameter",
+        None,
+    ),
+    "phase_enumNonLiteral_fail": (
+        "fail/semantic/phase_enumNonLiteral_fail.mln",
+        "enum member value must be a number literal",
         None,
     ),
 }
