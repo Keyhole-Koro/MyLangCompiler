@@ -25,7 +25,8 @@ int compile_one(const char *input_path, const char *output_path) {
     print_ast(root, 0);
     printf("AST parsing completed.\n");
 
-    if (!semantic_check(root)) {
+    int success = semantic_check(root);
+    if (!success) {
         fprintf(stderr, "Semantic analysis failed.\n");
         free_ast(root);
         free_tokens(tokens);

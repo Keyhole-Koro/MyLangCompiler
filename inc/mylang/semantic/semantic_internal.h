@@ -47,6 +47,8 @@ typedef struct {
     const char *enum_types[128];
     int enum_value_count;
     SemanticEnumValue enum_values[512];
+    int user_type_count;
+    const char *user_types[256];
 } SemanticContext;
 
 SemanticLocation semantic_location_unknown(void);
