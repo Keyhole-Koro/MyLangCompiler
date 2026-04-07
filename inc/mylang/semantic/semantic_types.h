@@ -15,5 +15,6 @@ typedef struct {
 
 void semantic_typeinfo_clear(SemanticTypeInfo *out);
 int semantic_typeinfo_from_type_ast(ASTNode *type_node, SemanticTypeInfo *out);
+int semantic_is_builtin_type(const char *base_type);
 
 #endif

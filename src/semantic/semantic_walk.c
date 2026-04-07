@@ -69,15 +69,7 @@ static int semantic_type_is_copy(SemanticContext *ctx, ASTNode *type_node) {
     base_type = info.base_type;
     if (!base_type) return 0;
     if (semantic_enum_type_exists(ctx, base_type)) return 1;
-    return strcmp(base_type, "bool") == 0 ||
-           strcmp(base_type, "i32") == 0 ||
-           strcmp(base_type, "u32") == 0 ||
-           strcmp(base_type, "char") == 0 ||
-           strcmp(base_type, "float") == 0 ||
-           strcmp(base_type, "double") == 0 ||
-           strcmp(base_type, "long") == 0 ||
-           strcmp(base_type, "short") == 0 ||
-           strcmp(base_type, "void") == 0;
+    return semantic_is_builtin_type(base_type);
 }
 
 static int semantic_location_is_known(SemanticLocation loc) {
@@ -348,6 +340,7 @@ static void use_identifier(SemanticContext *ctx, ASTNode *node, ExprContext expr
 
 static void semantic_walk_expr(SemanticContext *ctx, ASTNode *node, ExprContext expr_ctx);
 static void semantic_walk_stmt(SemanticContext *ctx, ASTNode *node);
+static void semantic_check_type_exists(SemanticContext *ctx, ASTNode *type_node);
 
 static void walk_case_items(SemanticContext *ctx, ASTNode *node) {
     for (int i = 0; i < node->case_expr.case_count; i++) {
@@ -500,7 +493,7 @@ static void semantic_walk_stmt(SemanticContext *ctx, ASTNode *node) {
         semantic_walk_expr(ctx, node, EXPRCTX_READ);
         break;
     case AST_TYPE:
-        semantic_walk_stmt(ctx, node->type_node.base_type);
+        semantic_check_type_exists(ctx, node);
         break;
     case AST_TYPE_ARRAY:
         semantic_walk_stmt(ctx, node->type_array.element_type);
@@ -609,6 +602,52 @@ static void semantic_walk_stmt(SemanticContext *ctx, ASTNode *node) {
     }
 }
 
+static void semantic_register_user_type(SemanticContext *ctx, const char *name) {
+    if (!ctx || !name) return;
+    if (ctx->user_type_count < (int)(sizeof(ctx->user_types) / sizeof(ctx->user_types[0]))) {
+        ctx->user_types[ctx->user_type_count++] = name;
+    }
+}
+
+static void semantic_collect_user_types(SemanticContext *ctx, ASTNode *node) {
+    if (!ctx || !node) return;
+    if (node->type == AST_BLOCK) {
+        for (int i = 0; i < node->block.count; i++) {
+            semantic_collect_user_types(ctx, node->block.stmts[i]);
+        }
+    } else if (node->type == AST_STRUCT && node->struct_stmt.name) {
+        semantic_register_user_type(ctx, node->struct_stmt.name);
+    } else if (node->type == AST_TYPEDEF_STRUCT && node->typedef_struct.typedef_name) {
+        semantic_register_user_type(ctx, node->typedef_struct.typedef_name);
+    } else if (node->type == AST_TYPEDEF && node->typedef_stmt.alias) {
+        semantic_register_user_type(ctx, node->typedef_stmt.alias);
+    }
+}
+
+static void semantic_check_type_exists(SemanticContext *ctx, ASTNode *type_node) {
+    if (!ctx || !type_node) return;
+    SemanticTypeInfo info;
+    if (!semantic_typeinfo_from_type_ast(type_node, &info)) return;
+
+    const char *base_type = info.base_type;
+    if (!base_type || base_type[0] == '\0') return;
+
+    if (semantic_enum_type_exists(ctx, base_type)) return;
+
+    for (int i = 0; i < ctx->user_type_count; i++) {
+        if (strcmp(ctx->user_types[i], base_type) == 0) return;
+    }
+
+    if (semantic_is_builtin_type(base_type)) {
+        return;
+    }
+
+    if (strcmp(base_type, "rest") == 0) return; // For variadic params
+
+    semantic_error_at(ctx, semantic_location_from_ast(type_node), "unknown type '%s'", base_type);
+}
+
 void semantic_walk_ast(SemanticContext *ctx, ASTNode *node) {
+    semantic_collect_user_types(ctx, node);
     semantic_walk_stmt(ctx, node);
 }
