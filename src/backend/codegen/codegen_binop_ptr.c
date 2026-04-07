@@ -40,23 +40,28 @@ int gen_pointer_binop(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
     ASTNode *idx_expr = lhs_ptr ? node->binary.right : node->binary.left;
     TypeInfo *ptr_t = lhs_ptr ? &lhs_t : &rhs_t;
     long step = pointer_step_bytes(cc, ptr_t);
+    const char *ptr_reg = strcmp(target_reg, "r1") == 0 ? "r2" : target_reg;
 
     if (idx_expr->type == AST_NUMBER) {
         long idx_val = strtol(idx_expr->number.value, NULL, 10);
         long offset = idx_val * step;
         if (node->binary.op == SUB && lhs_ptr) offset = -offset;
-        gen_expr(cc, ptr_expr, sb, target_reg, params, param_count, locals, local_count);
-        if (offset != 0) sb_append(sb, "  addis %s, %ld\n", target_reg, offset);
+        gen_expr(cc, ptr_expr, sb, ptr_reg, params, param_count, locals, local_count);
+        if (offset != 0) sb_append(sb, "  addis %s, %ld\n", ptr_reg, offset);
+        if (strcmp(ptr_reg, target_reg) != 0) sb_append(sb, "  mov %s, %s\n", target_reg, ptr_reg);
         return 1;
     }
 
-    gen_expr(cc, ptr_expr, sb, target_reg, params, param_count, locals, local_count);
+    gen_expr(cc, ptr_expr, sb, ptr_reg, params, param_count, locals, local_count);
+    sb_append(sb, "  push %s\n", ptr_reg);
     gen_expr(cc, idx_expr, sb, "r1", params, param_count, locals, local_count);
+    sb_append(sb, "  pop %s\n", ptr_reg);
     emit_scale_reg_const(cc, sb, "r1", step);
     if (node->binary.op == SUB && lhs_ptr) {
-        sb_append(sb, "  sub %s, r1\n", target_reg);
+        sb_append(sb, "  sub %s, r1\n", ptr_reg);
     } else {
-        sb_append(sb, "  add %s, r1\n", target_reg);
+        sb_append(sb, "  add %s, r1\n", ptr_reg);
     }
+    if (strcmp(ptr_reg, target_reg) != 0) sb_append(sb, "  mov %s, %s\n", target_reg, ptr_reg);
     return 1;
 }

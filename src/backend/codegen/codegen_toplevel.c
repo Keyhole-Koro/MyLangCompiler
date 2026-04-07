@@ -1,5 +1,16 @@
 #include "mylang/backend/codegen_internal.h"
 
+#include <limits.h>
+
+static void free_import_tokens(Token *t) {
+    while (t) {
+        Token *next = t->next;
+        free(t->value);
+        free(t);
+        t = next;
+    }
+}
+
 static ASTNode *cg_fundef_with_name(ASTNode *node) {
     ASTNode *fn = cg_as_fundef(node);
     return (fn && fn->fundef.name) ? fn : NULL;
@@ -93,6 +104,7 @@ static void append_struct_info(CompilerContext *cc, const char *type_name, ASTNo
 static void append_func_sig(CompilerContext *cc, ASTNode *node) {
     ASTNode *fn = cg_fundef_with_name(node);
     if (!cc || !fn) return;
+    if (find_func_sig(cc, fn->fundef.name)) return;
     cc->func_sigs = (FunctionSig*)realloc(cc->func_sigs, sizeof(FunctionSig) * (cc->func_sig_count + 1));
     cc->func_sigs[cc->func_sig_count].name = fn->fundef.name;
     cc->func_sigs[cc->func_sig_count].param_count = fn->fundef.param_count;
@@ -100,6 +112,131 @@ static void append_func_sig(CompilerContext *cc, ASTNode *node) {
         fn->fundef.is_variadic ? (fn->fundef.param_count - 1) : fn->fundef.param_count;
     cc->func_sigs[cc->func_sig_count].is_variadic = fn->fundef.is_variadic;
     cc->func_sig_count++;
+}
+
+static void append_imported_func_sig(CompilerContext *cc, const char *name, int param_count, int is_variadic) {
+    if (!cc || !name || find_func_sig(cc, name)) return;
+    cc->func_sigs = (FunctionSig*)realloc(cc->func_sigs, sizeof(FunctionSig) * (cc->func_sig_count + 1));
+    cc->func_sigs[cc->func_sig_count].name = strdup(name);
+    cc->func_sigs[cc->func_sig_count].param_count = param_count;
+    cc->func_sigs[cc->func_sig_count].fixed_param_count = is_variadic ? (param_count - 1) : param_count;
+    cc->func_sigs[cc->func_sig_count].is_variadic = is_variadic ? true : false;
+    cc->func_sig_count++;
+}
+
+static int import_requests_symbol(ASTNode *node, const char *name) {
+    if (!node || node->type != AST_IMPORT || !name) return 0;
+    for (int i = 0; i < node->import_stmt.symbol_count; i++) {
+        if (node->import_stmt.symbols[i] && strcmp(node->import_stmt.symbols[i], name) == 0) return 1;
+    }
+    return 0;
+}
+
+static int resolve_import_path(ASTNode *node, char *out, size_t out_size) {
+    const char *source_path = codegen_current_source_path();
+    const char *rel_path;
+    char dir_buf[PATH_MAX];
+    const char *slash;
+
+    if (!node || node->type != AST_IMPORT || !out || out_size == 0) return 0;
+    rel_path = node->import_stmt.path;
+    if (!source_path || !rel_path) return 0;
+    if (rel_path[0] == '/') {
+        snprintf(out, out_size, "%s", rel_path);
+        return 1;
+    }
+
+    snprintf(dir_buf, sizeof(dir_buf), "%s", source_path);
+    slash = strrchr(dir_buf, '/');
+    if (!slash) {
+        snprintf(out, out_size, "%s", rel_path);
+        return 1;
+    }
+    dir_buf[(size_t)(slash - dir_buf)] = '\0';
+    snprintf(out, out_size, "%s/%s", dir_buf, rel_path);
+    return 1;
+}
+
+static Token *skip_function_body(Token *tok) {
+    int depth = 0;
+    for (Token *p = tok; p; p = p->next) {
+        if (p->kind == L_BRACE) depth++;
+        else if (p->kind == R_BRACE) {
+            depth--;
+            if (depth <= 0) return p->next;
+        }
+    }
+    return tok;
+}
+
+/*
+ * Scans an imported .mln source file for function signatures and registers them
+ * in the CompilerContext. This allows the current file to resolve and call
+ * functions defined in external source files. It performs a lightweight parse
+ * of the imported file, focusing only on 'export' or 'extern' function declarations
+ * and skipping function bodies for efficiency.
+ */
+static void append_import_sigs_from_source(CompilerContext *cc, ASTNode *node) {
+    char import_path[PATH_MAX];
+    Token *tokens;
+    Token *tok;
+
+    if (!cc || !node || node->type != AST_IMPORT || !node->import_stmt.path) return;
+    if (!resolve_import_path(node, import_path, sizeof(import_path))) return;
+    if (strlen(import_path) < 4 || strcmp(import_path + strlen(import_path) - 4, ".mln") != 0) return;
+
+    tokens = lexer_from_file(import_path);
+    if (!tokens) return;
+
+    for (tok = tokens; tok && tok->kind != EOT; ) {
+        Token *scan = tok;
+        Token *name_tok = NULL;
+        Token *after_params = NULL;
+        int param_count = 0;
+        int is_variadic = 0;
+
+        if (scan->kind == EXPORT || scan->kind == EXTERN) {
+            scan = scan->next;
+            if (scan && scan->kind == EXTERN) scan = scan->next;
+        }
+
+        for (Token *p = scan; p && p->kind != EOT; p = p->next) {
+            if (p->kind == SEMICOLON) break;
+            if (p->kind == L_BRACE) break;
+            if (p->kind == IDENTIFIER && p->next && p->next->kind == L_PARENTHESES) {
+                name_tok = p;
+                break;
+            }
+        }
+
+        if (!name_tok || !import_requests_symbol(node, name_tok->value)) {
+            if (tok->kind == L_BRACE) tok = skip_function_body(tok);
+            else tok = tok->next;
+            continue;
+        }
+
+        scan = name_tok->next->next;
+        if (scan && scan->kind != R_PARENTHESES) {
+            param_count = 1;
+            for (; scan && scan->kind != R_PARENTHESES && scan->kind != EOT; scan = scan->next) {
+                if (scan->kind == REST) is_variadic = 1;
+                else if (scan->kind == COMMA) param_count++;
+            }
+        } else {
+            scan = scan ? scan : name_tok->next;
+        }
+
+        if (scan && scan->kind == R_PARENTHESES) after_params = scan->next;
+        if (after_params && (after_params->kind == SEMICOLON || after_params->kind == L_BRACE)) {
+            append_imported_func_sig(cc, name_tok->value, param_count, is_variadic);
+            tok = (after_params->kind == L_BRACE) ? skip_function_body(after_params) : after_params->next;
+            continue;
+        }
+
+        tok = tok->next;
+    }
+
+    free_import_tokens(tokens);
 }
 
 static void append_enum_info(CompilerContext *cc, ASTNode *node) {
@@ -135,6 +272,8 @@ void build_codegen_toplevel_info(CompilerContext *cc, ASTNode *root) {
             append_enum_info(cc, n);
         } else if (cg_as_fundef(n)) {
             append_func_sig(cc, n);
+        } else if (n->type == AST_IMPORT) {
+            append_import_sigs_from_source(cc, n);
         }
     }
 
