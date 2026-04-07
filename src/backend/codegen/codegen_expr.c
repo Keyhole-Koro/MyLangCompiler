@@ -15,6 +15,52 @@ static int gen_rest_len_access(CompilerContext *cc, ASTNode *node, StringBuilder
     return 1;
 }
 
+/**                                                                                                                        │
+* Generates code for accessing variadic (rest) parameters via subscripting/pointer arithmetic.                            │
+* Handles patterns like *(rest + index) or *(rest - index) by calculating the stack offset.                               │
+*/
+static int gen_rest_subscript_access(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char *target_reg,
+                                     char **params, int param_count, char **locals, int local_count, int want_address) {
+    ASTNode *expr;
+    ASTNode *rest_ident = NULL;
+    ASTNode *index_expr = NULL;
+    int rest_stack_base = 0;
+    int is_sub = 0;
+
+    if (!cc || !node || node->type != AST_UNARY || node->unary.op != ASTARISK) return 0;
+    expr = node->unary.operand;
+    if (!expr || expr->type != AST_BINARY) return 0;
+    if (expr->binary.op != ADD && expr->binary.op != SUB) return 0;
+
+    if (expr->binary.left && expr->binary.left->type == AST_IDENTIFIER &&
+        cg_rest_stack_base(cc, expr->binary.left->identifier.name, &rest_stack_base)) {
+        rest_ident = expr->binary.left;
+        index_expr = expr->binary.right;
+        is_sub = (expr->binary.op == SUB);
+    } else if (expr->binary.op == ADD &&
+               expr->binary.right && expr->binary.right->type == AST_IDENTIFIER &&
+               cg_rest_stack_base(cc, expr->binary.right->identifier.name, &rest_stack_base)) {
+        rest_ident = expr->binary.right;
+        index_expr = expr->binary.left;
+    }
+
+    if (!rest_ident || !index_expr) return 0;
+
+    gen_expr(cc, index_expr, sb, "r1", params, param_count, locals, local_count);
+    emit_scale_reg_const(cc, sb, "r1", SLOT_SIZE);
+    sb_append(sb, "  ; load rest argument base '%s' into r3\n", rest_ident->identifier.name);
+    sb_append(sb, "  mov r3, bp\n");
+    sb_append(sb, "  addis r3, %d\n", rest_stack_base);
+    if (is_sub) sb_append(sb, "  sub r3, r1\n");
+    else sb_append(sb, "  add r3, r1\n");
+    if (want_address) {
+        if (strcmp(target_reg, "r3") != 0) sb_append(sb, "  mov %s, r3\n", target_reg);
+    } else {
+        emit_load_from_addr(sb, target_reg, "r3", 0);
+    }
+    return 1;
+}
+
 void gen_expr(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char *target_reg,
               char **params, int param_count,
               char **locals, int local_count) {
@@ -163,6 +209,9 @@ void _gen_expr(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char
             sb_append(sb, "b_not_end_%d:\n", lbl_end);
             break; }
         case ASTARISK:
+            if (gen_rest_subscript_access(cc, node, sb, target_reg, params, param_count, locals, local_count, want_address)) {
+                break;
+            }
             _gen_expr(cc, node->unary.operand, sb, "r3", params, param_count, locals, local_count, 0);
             TypeInfo result_type = (TypeInfo){0};
             int have_type = infer_expr_type(cc, node, &result_type);

@@ -34,6 +34,7 @@ int compile_one(const char *input_path, const char *output_path) {
     }
     printf("Semantic analysis completed.\n");
 
+    codegen_set_source_path(input_path);
     char *output = codegen(root);
     if (!output) {
         fprintf(stderr, "Code generation failed.\n");

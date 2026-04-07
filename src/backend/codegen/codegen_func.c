@@ -51,10 +51,11 @@ void gen_func(CompilerContext *cc, ASTNode *node, StringBuilder *sb)
     sb_append(sb, "  mov bp, sp\n  addis sp, -%d\n", (local_count + param_count) * SLOT_SIZE);
 
     for (int i = 0; i < fixed_param_count && i < 3; i++) {
+        int is_byte_param = is_char_scalar_var(cc, params[i]);
         sb_append(sb, "  ; store parameter '%s' from register %s\n", params[i], arg_regs[i]);
         sb_append(sb, "  mov   r3, bp\n");
         sb_append(sb, "  addis r3, %d\n", param_offset(i));
-        sb_append(sb, "  store r3, %s\n", arg_regs[i]);
+        emit_store_to_addr(sb, "r3", arg_regs[i], is_byte_param);
     }
     if (fn->fundef.is_variadic) {
         int rest_index = param_count - 1;

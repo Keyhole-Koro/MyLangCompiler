@@ -1,6 +1,7 @@
 #include "mylang/backend/codegen_internal.h"
 
 static const char *g_entry_name = "main";
+static const char *g_source_path = NULL;
 
 void codegen_set_entry(const char *name) {
     if (name && name[0]) {
@@ -10,8 +11,16 @@ void codegen_set_entry(const char *name) {
     }
 }
 
+void codegen_set_source_path(const char *path) {
+    g_source_path = path;
+}
+
 int is_entry_name(const char *name) {
     return name && g_entry_name && strcmp(name, g_entry_name) == 0;
+}
+
+const char *codegen_current_source_path(void) {
+    return g_source_path;
 }
 
 int next_label(CompilerContext *cc) {

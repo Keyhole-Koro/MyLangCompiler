@@ -128,6 +128,8 @@ static inline ASTNode *cg_as_type_array(ASTNode *node) {
 }
 
 void codegen_set_entry(const char *name);
+void codegen_set_source_path(const char *path);
+const char *codegen_current_source_path(void);
 int is_entry_name(const char *name);
 int next_label(CompilerContext *cc);
 void note_defined_func(CompilerContext *cc, const char *name);
