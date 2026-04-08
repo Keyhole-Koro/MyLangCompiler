@@ -8,13 +8,18 @@ void gen_func(CompilerContext *cc, ASTNode *node, StringBuilder *sb)
     char *fname = is_entry_name(fn->fundef.name) ? "__START__" : fn->fundef.name;
     int param_count = fn->fundef.param_count;
     int fixed_param_count = fn->fundef.is_variadic ? (param_count - 1) : param_count;
-    char *params[16] = {0};
+    char **params = NULL;
     for (int i = 0; i < param_count; i++) {
+        if (!params) params = (char**)calloc((size_t)param_count, sizeof(char*));
         params[i] = fn->fundef.params[i]->param.name;
     }
 
-    char *locals[32] = {0};
-    int local_count = collect_locals(cc, fn->fundef.body, locals);
+    int local_count = collect_locals(cc, fn->fundef.body, NULL);
+    char **locals = NULL;
+    if (local_count > 0) {
+        locals = (char**)calloc((size_t)local_count, sizeof(char*));
+        collect_locals(cc, fn->fundef.body, locals);
+    }
 
     int locals_only_count = collect_local_type_info(cc, fn->fundef.body, NULL);
     cg_locals_count = param_count + locals_only_count;
@@ -88,4 +93,6 @@ void gen_func(CompilerContext *cc, ASTNode *node, StringBuilder *sb)
         cg_locals_info = NULL;
     }
     cg_locals_count = 0;
+    free(locals);
+    free(params);
 }

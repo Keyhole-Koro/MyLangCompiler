@@ -62,6 +62,7 @@ TESTCASES = [
     ("phase2_refParam", ["succeed/semantic/phase2_refParam.mln"], "R1", 11),
     ("phase2_refMutParam", ["succeed/semantic/phase2_refMutParam.mln"], "R1", 9),
     ("phase2_uncheckedNested", ["succeed/semantic/phase2_uncheckedNested.mln"], "R1", 12),
+    ("refImportLongLocals", ["succeed/semantic/refImportLongLocals_main.mln", "succeed/semantic/refImportLongLocals_helper.mln"], "R1", 49),
     ("phase_restParam", ["succeed/semantic/phase_restParam.mln"], "R1", 0),
 ]
 
