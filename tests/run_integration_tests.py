@@ -27,6 +27,7 @@ TESTCASES = [
     ("simpleWhile", ["succeed/control/simpleWhile.mln"], "R1", 15),
     ("complexWhile", ["succeed/control/complexWhile.mln"], "R1", 16),
     ("simpleChar", ["succeed/expr/simpleChar.mln"], "R1", 72),
+    ("stringEscape", ["succeed/expr/stringEscape.mln"], "R1", 10),
     ("intWidth32", ["succeed/expr/intWidth32.mln"], "R1", 20),
     ("simpleStruct", ["succeed/struct/simpleStruct.mln"], "R1", 10),
     ("arrayInit", ["succeed/array/arrayInit.mln"], "R1", 106),
