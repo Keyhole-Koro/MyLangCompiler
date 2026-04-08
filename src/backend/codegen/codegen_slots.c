@@ -22,25 +22,13 @@ int local_index_last(const char *name, char **locals, int local_count)
 
 int slots_for_type(CompilerContext *cc, ASTNode *type_node)
 {
+    TypeInfo ti = {0};
+    int total_bytes;
+
     if (!type_node) return 1;
-    if (type_node->type == AST_TYPE_ARRAY) {
-        int elem = slots_for_type(cc, type_node->type_array.element_type);
-        int n = type_node->type_array.array_size;
-        if (n <= 0) n = 1;
-        return elem * n;
-    }
-    if (type_node->type == AST_TYPE) {
-        if (type_node->type_node.pointer_level > 0) return 1;
-        ASTNode *bt = type_node->type_node.base_type;
-        if (bt && bt->type == AST_IDENTIFIER) {
-            const StructInfo *si = find_struct(cc, bt->identifier.name);
-            if (si) {
-                if (si->size_bytes > 0)
-                    return (si->size_bytes + SLOT_SIZE - 1) / SLOT_SIZE;
-                return si->member_count > 0 ? si->member_count : 1;
-            }
-        }
-        return 1;
-    }
-    return 1;
+    if (!typeinfo_from_type_ast(cc, type_node, &ti)) return 1;
+
+    total_bytes = typeinfo_total_size_bytes(cc, &ti);
+    if (total_bytes < 1) total_bytes = 1;
+    return (total_bytes + SLOT_SIZE - 1) / SLOT_SIZE;
 }
