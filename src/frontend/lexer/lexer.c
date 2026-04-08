@@ -16,6 +16,37 @@ static void advance_pos(const char *start, size_t len, int *line, int *col) {
     }
 }
 
+static void unescape_string_literal_inplace(char *s) {
+    char *src = s;
+    char *dst = s;
+
+    while (*src) {
+        if (*src == '\\') {
+            src++;
+            switch (*src) {
+                case 'n': *dst++ = '\n'; src++; break;
+                case 't': *dst++ = '\t'; src++; break;
+                case 'r': *dst++ = '\r'; src++; break;
+                case '0': *dst++ = '\0'; src++; break;
+                case '\\': *dst++ = '\\'; src++; break;
+                case '"': *dst++ = '"'; src++; break;
+                default:
+                    if (*src) {
+                        *dst++ = *src++;
+                    } else {
+                        *dst++ = '\\';
+                    }
+                    break;
+            }
+            continue;
+        }
+
+        *dst++ = *src++;
+    }
+
+    *dst = '\0';
+}
+
 StringTokenKindMap operators[] = {
     {"==", EQ}, {"!=", NEQ}, {"<=", LTE}, {">=", GTE}, {"&&", LAND}, {"||", LOR},
     {"<<", LSH}, {">>", RSH}, {"++", INC}, {"--", DEC}, {"*", ASTARISK}, {"->", ARROW},
@@ -329,6 +360,7 @@ Token *lexer(char *input) {
 
             memmove(buffer, buffer + 1, strlen(buffer) - 2); // Remove quotes
             buffer[strlen(buffer) - 2] = '\0';
+            unescape_string_literal_inplace(buffer);
             cur = createToken(cur, STRING_LITERAL, buffer, tok_line, tok_col);
             continue;
         }
