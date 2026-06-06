@@ -135,6 +135,9 @@ def build_all():
         for (cmd, desc), future in zip(build_commands, futures):
             result = future.result()
             if result.returncode != 0:
+                if desc == "Build MyEmulator" and "cargo: not found" in result.stderr and EMU_PATH.exists():
+                    status_line("INFO", f"cargo not found; using existing emulator: {EMU_PATH}", "33")
+                    continue
                 sys.stderr.write(result.stdout)
                 sys.stderr.write(result.stderr)
                 status_line("FATAL", f"{desc} failed", "31")
