@@ -145,5 +145,5 @@ Common validation commands:
 
 ```bash
 make -C toolchain/MyLangCompiler clean all
-python3 qa/MyTester/mlc-test.py
+python3 qa/mlc-test.py
 ```
