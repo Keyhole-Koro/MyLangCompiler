@@ -1,0 +1,102 @@
+// MyLang Comprehensive Example
+// This file demonstrates most of the grammar and features of the language.
+
+package examples;
+
+// 1. Imports
+import { print_int, print_str } from "std/io";
+import math; // Entire package
+
+// 2. Enums
+enum Color {
+    RED = 1,
+    GREEN,
+    BLUE = 4
+}
+
+// 3. Structs and Typedefs
+struct Point {
+    i32 x;
+    i32 y;
+}
+
+typedef struct Point Point2D;
+typedef i32 Integer;
+
+// 4. Global variables and Exports
+export mut i32 global_counter = 0;
+extern void external_func();
+
+// 5. Functions with various parameter types
+export i32 process_data(mut i32 x, ref mut Point p, rest args) {
+    p->x = x;
+    
+    // Local variables and Ownership
+    mut Point p2 = { x: 10, y: 20 }; // Initializer list
+    mut i32[5] arr = {1, 2, 3, 4, 5}; // Array
+    
+    // 6. Control Flow
+    if (x > 0) {
+        x = x + 1;
+    } else {
+        x = 0;
+    }
+    
+    for (mut i32 i = 0; i < 5; i++) {
+        global_counter = global_counter + arr[i];
+    }
+    
+    while (x < 100) {
+        x = x * 2;
+        if (x == 50) break;
+    }
+    
+    do {
+        x = x - 1;
+    } while (x > 80);
+
+    // 7. Ownership: Borrowing and Moving
+    ref Point r = &p2; // Shared borrow
+    // ref mut Point rm = &mut p2; // Mutable borrow (error if 'r' is still active)
+    
+    // 8. Advanced Expressions
+    
+    // Case expression
+    mut i32 status = case x of {
+        100 -> 1;
+        200 -> 2;
+        _   -> 0;
+    };
+    
+    // Function literal (Lambda)
+    mut auto f = (i32 a, i32 b) {
+        return a + b;
+    };
+    
+    // Statement expression
+    mut i32 complex_val = ({
+        mut i32 temp = x * 2;
+        yield temp + 5;
+    });
+    
+    // Cast and Sizeof
+    mut u32 size = (u32)sizeof(Point);
+    
+    // Ternary
+    mut i32 result = (status > 0) ? x : -1;
+    
+    // 9. Unchecked block for low-level pointer ops
+    unchecked {
+        i32* ptr = (i32*)0x1234;
+        *ptr = 42;
+    }
+
+    return result;
+}
+
+// 10. Simple main-like function
+i32 main() {
+    mut Point p = { x: 0, y: 0 };
+    process_data(10, &mut p);
+    return 0;
+}
