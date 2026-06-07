@@ -1,0 +1,12 @@
+// Hexadecimal (0x) and binary (0b) integer literals, normalized to decimal by
+// the lexer. Exercises them in a global initializer, locals, and expressions.
+
+i32 G = 0x100000; // 1048576
+
+i32 main() {
+    i32 a = 0xFF;          // 255
+    i32 b = 0b1010;        // 10
+    i32 c = 0x10 + 0b100;  // 16 + 4 = 20
+    i32 d = G - 0xFFF00;   // 1048576 - 1048320 = 256
+    return a + b + c + d;  // 541
+}
