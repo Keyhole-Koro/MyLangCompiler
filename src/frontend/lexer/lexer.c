@@ -214,9 +214,40 @@ bool isReservedWord(char *ptr, TokenKind *tk, char *buffer) {
     return false;
 }
 
-bool isNumber(char *ptr, char *buffer) {
+static bool is_bin_digit(char c) { return c == '0' || c == '1'; }
+
+// Recognizes decimal, hexadecimal (0x...), and binary (0b...) integer
+// literals, plus decimal floats. Hex/binary literals are normalized to their
+// decimal text in `buffer` so the rest of the pipeline (codegen -> assembler)
+// only ever sees decimal. `*src_len` receives the number of source characters
+// consumed (which differs from strlen(buffer) after normalization).
+bool isNumber(char *ptr, char *buffer, size_t *src_len) {
     char *start = ptr;
-    if (*ptr == '+' || *ptr == '-') ptr++;
+    int negative = 0;
+    if (*ptr == '+' || *ptr == '-') {
+        negative = (*ptr == '-');
+        ptr++;
+    }
+
+    // 0x / 0b prefixed integer literals.
+    if (ptr[0] == '0' && (ptr[1] == 'x' || ptr[1] == 'X' || ptr[1] == 'b' || ptr[1] == 'B')) {
+        int base = (ptr[1] == 'x' || ptr[1] == 'X') ? 16 : 2;
+        char *digits = ptr + 2;
+        char *d = digits;
+        if (base == 16) {
+            while (isxdigit((unsigned char)*d)) d++;
+        } else {
+            while (is_bin_digit(*d)) d++;
+        }
+        if (d == digits) return false; // no digits after prefix
+
+        unsigned long value = strtoul(digits, NULL, base);
+        long signed_value = negative ? -(long)value : (long)value;
+        snprintf(buffer, 64, "%ld", signed_value);
+        *src_len = (size_t)(d - start);
+        return true;
+    }
+
     char *numStart = ptr;
     while (isdigit(*ptr)) ptr++;
     if (*ptr == '.') {
@@ -227,6 +258,7 @@ bool isNumber(char *ptr, char *buffer) {
     size_t len = ptr - start;
     strncpy(buffer, start, len);
     buffer[len] = '\0';
+    *src_len = len;
     return true;
 }
 
@@ -287,6 +319,7 @@ Token *lexer(char *input) {
     Token *cur = &head;
     char *ptr = input;
     char buffer[256];
+    size_t consumed_len = 0;
     TokenKind kind;
     int line = 1;
     int col = 1;
@@ -334,12 +367,11 @@ Token *lexer(char *input) {
             continue;
         }
 
-        if (isNumber(ptr, buffer)) {
+        if (isNumber(ptr, buffer, &consumed_len)) {
             int tok_line = line, tok_col = col;
-            size_t consumed = strlen(buffer);
             cur = createToken(cur, NUMBER, buffer, tok_line, tok_col);
-            advance_pos(ptr, consumed, &line, &col);
-            ptr += consumed;
+            advance_pos(ptr, consumed_len, &line, &col);
+            ptr += consumed_len;
             continue;
         }
 
