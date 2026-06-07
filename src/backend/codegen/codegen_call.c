@@ -112,7 +112,7 @@ void gen_call(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char 
             gen_expr(cc, node->call.args[i], sb, arg_regs[i], params, param_count, locals, local_count);
         }
         sb_append(sb, "  movi r4, %d\n", rest_count);
-        sb_append(sb, "  call f_%s\n", node->call.name);
+        sb_append(sb, "  call %s\n", node->call.name);
 
         if (stack_args > 0) {
             sb_append(sb, "  ; restore sp after variadic call\n");
@@ -145,7 +145,7 @@ void gen_call(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char 
         gen_expr(cc, node->call.args[i], sb, arg_regs[i], params, param_count, locals, local_count);
     }
 
-    sb_append(sb, "  call f_%s\n", node->call.name);
+    sb_append(sb, "  call %s\n", node->call.name);
 
     if (stack_args > 0)
     {

@@ -49,7 +49,7 @@ void gen_func(CompilerContext *cc, ASTNode *node, StringBuilder *sb)
     }
 
     sb_append(sb, "\n");
-    sb_append(sb, "%s%s:\n", strcmp(fname, "__START__") == 0 ? "" : "f_", fname);
+    sb_append(sb, "%s:\n", fname);
     sb_append(sb, "; prologue\n");
     sb_append(sb, "  push lr\n");
     sb_append(sb, "  push bp\n");

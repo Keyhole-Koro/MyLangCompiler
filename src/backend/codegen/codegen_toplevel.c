@@ -358,7 +358,16 @@ char *prepend_codegen_imports(CompilerContext *cc, StringBuilder *body) {
     if (cc->import_count > 0) {
         sb_append(&final_sb, "; imports\n");
         for (int i = 0; i < cc->import_count; i++) {
-            sb_append(&final_sb, "import f_%s\n", cc->imports[i]);
+            sb_append(&final_sb, "import %s\n", cc->imports[i]);
+        }
+        sb_append(&final_sb, "\n");
+    }
+    if (cc->defined_func_count > 0) {
+        sb_append(&final_sb, "; exports\n");
+        for (int i = 0; i < cc->defined_func_count; i++) {
+            if (!is_entry_name(cc->defined_funcs[i])) {
+                sb_append(&final_sb, "export %s\n", cc->defined_funcs[i]);
+            }
         }
         sb_append(&final_sb, "\n");
     }
