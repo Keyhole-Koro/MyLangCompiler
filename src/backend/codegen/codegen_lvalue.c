@@ -56,10 +56,12 @@ void emit_load_var(CompilerContext *cc, StringBuilder *sb, const char *name, con
         }
         else
         {
-            // fallback global
-            sb_append(sb, "  movi  r2, %s\n", name);
+            // fallback global. Use r3 as the address scratch (as every other
+            // branch above does); r2 may hold a pending operand of an enclosing
+            // binary expression and must not be clobbered here.
+            sb_append(sb, "  movi  r3, %s\n", name);
             int is_byte = is_char_scalar_var(cc, name);
-            emit_load_from_addr(sb, target_reg, "r2", is_byte);
+            emit_load_from_addr(sb, target_reg, "r3", is_byte);
         }
     }
 }
