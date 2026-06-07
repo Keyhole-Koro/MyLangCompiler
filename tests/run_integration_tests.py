@@ -50,6 +50,7 @@ TESTCASES = [
     ("testCaseExprRef", ["succeed/case/testCaseExprRef.mln"], "R1", 100),
     ("nestedCaseArrow", ["succeed/case/nestedCaseArrow.mln"], "R1", 10),
     ("packageSample", ["succeed/package/pkg_main.mln", "succeed/package/pkg_math.mln"], "R1", 20),
+    ("pkgVariadic", ["succeed/package/pkgVariadic_main.mln", "succeed/package/pkgVariadic_lib.mln"], "R1", 133),
     ("functionLiteral", ["succeed/function/functionLiteral.mln"], "R1", 10),
     ("localFunctionLiteral", ["succeed/function/localFunctionLiteral.mln"], "R1", 10),
     ("nestedFunctionLiteral", ["succeed/function/nestedFunctionLiteral.mln"], "R1", 6),

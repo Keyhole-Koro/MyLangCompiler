@@ -1,0 +1,11 @@
+package vlib;
+
+// Sums all variadic arguments. Exercises the rest-arg calling convention
+// across a package boundary (`import vlib from "..."` + `vlib.sum(...)`).
+export i32 sum(i32 seed, rest args) {
+    i32 total = seed;
+    for (i32 i = 0; i < args.len; i = i + 1) {
+        total = total + args[i];
+    }
+    return total;
+}

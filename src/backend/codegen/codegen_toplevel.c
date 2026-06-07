@@ -180,6 +180,13 @@ static void append_import_sigs_from_source(CompilerContext *cc, ASTNode *node) {
     char import_path[PATH_MAX];
     Token *tokens;
     Token *tok;
+    /* A package import (`import pkg from "pkg.mln"`) carries a path but no
+     * explicit symbol list; in that case we register the signatures of every
+     * exported function under its package-mangled name `pkg_func`, matching the
+     * name the caller emits for qualified `pkg.func()` calls. */
+    int is_package_import = (node && node->import_stmt.symbol_count == 0);
+    char pkg_prefix[256];
+    pkg_prefix[0] = '\0';
 
     if (!cc || !node || node->type != AST_IMPORT || !node->import_stmt.path) return;
     if (!resolve_import_path(node, import_path, sizeof(import_path))) return;
@@ -188,14 +195,29 @@ static void append_import_sigs_from_source(CompilerContext *cc, ASTNode *node) {
     tokens = lexer_from_file(import_path);
     if (!tokens) return;
 
+    if (is_package_import) {
+        for (Token *p = tokens; p && p->kind != EOT; p = p->next) {
+            if (p->kind == PACKAGE && p->next && p->next->kind == IDENTIFIER) {
+                snprintf(pkg_prefix, sizeof(pkg_prefix), "%s", p->next->value);
+            }
+            break;
+        }
+        if (pkg_prefix[0] == '\0') {
+            free_import_tokens(tokens);
+            return;
+        }
+    }
+
     for (tok = tokens; tok && tok->kind != EOT; ) {
         Token *scan = tok;
         Token *name_tok = NULL;
         Token *after_params = NULL;
         int param_count = 0;
         int is_variadic = 0;
+        int is_exported = 0;
 
         if (scan->kind == EXPORT || scan->kind == EXTERN) {
+            is_exported = 1;
             scan = scan->next;
             if (scan && scan->kind == EXTERN) scan = scan->next;
         }
@@ -209,7 +231,11 @@ static void append_import_sigs_from_source(CompilerContext *cc, ASTNode *node) {
             }
         }
 
-        if (!name_tok || !import_requests_symbol(node, name_tok->value)) {
+        /* For a symbol-list import, only the explicitly requested symbols are
+         * registered. For a package import, every exported function is. */
+        int wanted = name_tok &&
+            (is_package_import ? is_exported : import_requests_symbol(node, name_tok->value));
+        if (!wanted) {
             if (tok->kind == L_BRACE) tok = skip_function_body(tok);
             else tok = tok->next;
             continue;
@@ -228,7 +254,13 @@ static void append_import_sigs_from_source(CompilerContext *cc, ASTNode *node) {
 
         if (scan && scan->kind == R_PARENTHESES) after_params = scan->next;
         if (after_params && (after_params->kind == SEMICOLON || after_params->kind == L_BRACE)) {
-            append_imported_func_sig(cc, name_tok->value, param_count, is_variadic);
+            if (is_package_import) {
+                char mangled[512];
+                snprintf(mangled, sizeof(mangled), "%s_%s", pkg_prefix, name_tok->value);
+                append_imported_func_sig(cc, mangled, param_count, is_variadic);
+            } else {
+                append_imported_func_sig(cc, name_tok->value, param_count, is_variadic);
+            }
             tok = (after_params->kind == L_BRACE) ? skip_function_body(after_params) : after_params->next;
             continue;
         }

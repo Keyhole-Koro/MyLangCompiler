@@ -1,5 +1,61 @@
 #include "mylang/frontend/parser_internal.h"
 #include "mylang/frontend/parser_ast_internal.h"
+#include "mylang/frontend/lexer.h"
+#include <limits.h>
+
+/* Resolves an import path relative to the file currently being parsed so that
+ * `import x from "libs/foo.mln"` finds foo.mln next to the importer. */
+static void resolve_relative_to_source(const char *rel_path, char *out, size_t out_size) {
+    const char *slash;
+    char dir_buf[PATH_MAX];
+
+    if (!rel_path || !out || out_size == 0) return;
+    if (rel_path[0] == '/' || !g_parse_filename) {
+        snprintf(out, out_size, "%s", rel_path);
+        return;
+    }
+    snprintf(dir_buf, sizeof(dir_buf), "%s", g_parse_filename);
+    slash = strrchr(dir_buf, '/');
+    if (!slash) {
+        snprintf(out, out_size, "%s", rel_path);
+        return;
+    }
+    dir_buf[(size_t)(slash - dir_buf)] = '\0';
+    snprintf(out, out_size, "%s/%s", dir_buf, rel_path);
+}
+
+/* Returns 1 if the .mln file at `rel_path` declares `package <pkg>;` at its top.
+ * Used to let `import pkg from "path"` act as a package import (enabling
+ * `pkg.func()` qualified calls) when the target file is that package's source. */
+static int import_path_declares_package(const char *rel_path, const char *pkg) {
+    char path[PATH_MAX];
+    Token *tokens;
+    int matched = 0;
+
+    if (!rel_path || !pkg) return 0;
+    if (strlen(rel_path) < 4 || strcmp(rel_path + strlen(rel_path) - 4, ".mln") != 0) return 0;
+
+    resolve_relative_to_source(rel_path, path, sizeof(path));
+    tokens = lexer_from_file(path);
+    if (!tokens) return 0;
+
+    for (Token *t = tokens; t && t->kind != EOT; t = t->next) {
+        if (t->kind == PACKAGE && t->next && t->next->kind == IDENTIFIER) {
+            matched = (strcmp(t->next->value, pkg) == 0);
+            break;
+        }
+        /* package decl must come first; stop at the first non-package toplevel token */
+        break;
+    }
+
+    for (Token *t = tokens; t;) {
+        Token *next = t->next;
+        free(t->value);
+        free(t);
+        t = next;
+    }
+    return matched;
+}
 
 ASTNode *parse_import(Token **cur) {
     if (!expect(cur, IMPORT)) parse_error("expected 'import'", token_head, *cur);
@@ -13,9 +69,7 @@ ASTNode *parse_import(Token **cur) {
     }
 
     if ((*cur)->kind == IDENTIFIER && (*cur)->next && (*cur)->next->kind == FROM) {
-        char **symbols = malloc(sizeof(char *));
-        int count = 1;
-        symbols[0] = strdup((*cur)->value);
+        char *ident = strdup((*cur)->value);
         *cur = (*cur)->next;
 
         if (!expect(cur, FROM)) parse_error("expected 'from'", token_head, *cur);
@@ -23,7 +77,21 @@ ASTNode *parse_import(Token **cur) {
         char *path = (*cur)->value;
         *cur = (*cur)->next;
         if (!expect(cur, SEMICOLON)) parse_error("expected ';'", token_head, *cur);
-        return new_import_stmt(path, symbols, count);
+
+        /* If the target file declares `package <ident>;`, treat this as a
+         * package import: register the namespace so `ident.func()` qualified
+         * calls rewrite to `ident_func`, while still emitting an import node so
+         * codegen scans the file for (variadic-aware) exported signatures. */
+        if (import_path_declares_package(path, ident)) {
+            g_imported_packages = realloc(g_imported_packages, sizeof(char*) * (g_imported_pkg_count + 1));
+            g_imported_packages[g_imported_pkg_count++] = ident;
+            char **symbols = NULL;
+            return new_import_stmt(path, symbols, 0);
+        }
+
+        char **symbols = malloc(sizeof(char *));
+        symbols[0] = ident;
+        return new_import_stmt(path, symbols, 1);
     }
 
     if (!expect(cur, L_BRACE)) parse_error("expected '{'", token_head, *cur);
