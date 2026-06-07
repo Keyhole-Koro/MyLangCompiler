@@ -12,9 +12,13 @@ void emit_cond_jump(CompilerContext *cc, ASTNode *left, ASTNode *right, TokenKin
                     char **params, int param_count, char **locals, int local_count,
                     const char *trueLabel, const char *falseLabel)
 {
-    // Generate left and right expressions into r2 and r3
+    // Generate left and right expressions into r2 and r3. The right operand may
+    // itself be an expression that clobbers r2 (e.g. a binary op evaluates its
+    // own operands through r2/r1), so preserve the left result across it.
     gen_expr(cc, left, sb, "r2", params, param_count, locals, local_count);
+    sb_append(sb, "  push r2\n");
     gen_expr(cc, right, sb, "r3", params, param_count, locals, local_count);
+    sb_append(sb, "  pop r2\n");
     sb_append(sb, "  cmp r2, r3\n");
 
     // Emit jump instructions based on operator

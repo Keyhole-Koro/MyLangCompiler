@@ -1,0 +1,27 @@
+// Regression: an `if` condition comparing a local against the sum of two
+// globals must not clobber the left operand while evaluating the right.
+// Previously `remainder >= A + B` loaded `remainder` into r2, then the global
+// loads reused r2, so the comparison (and the guarded writes) used garbage.
+
+i32 A = 8;
+i32 B = 4;
+
+i32 main() {
+    i32 remainder = 100;
+    i32 out = 0;
+
+    // remainder (100) >= A + B (12) is true; the then-branch must run.
+    if (remainder >= A + B) {
+        out = remainder - (A + B); // 100 - 12 = 88
+    } else {
+        out = 1;
+    }
+
+    // And the false path must be taken when it should be.
+    i32 small = 3;
+    if (small >= A + B) {
+        out = out + 1000; // must NOT run
+    }
+
+    return out; // expect 88
+}
