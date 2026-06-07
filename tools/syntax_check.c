@@ -10,6 +10,7 @@
 
 static const char *default_grammar_path =
     "../MyLangSyntaxEngine/tests/fixtures/grammars/mylang_lsp.grammar";
+static const char *default_table_cache_path = "mylang-syntax-check.table";
 
 static void free_tokens(Token *token) {
     while (token) {
@@ -158,6 +159,20 @@ static int build_token_map(const SyntaxGrammar *grammar, int *map) {
     return 0;
 }
 
+static SyntaxTable *load_or_build_table(SyntaxGrammar *grammar, const char *cache_path) {
+    SyntaxTable *table = NULL;
+    if (cache_path) {
+        table = syntax_load_lr1_table(grammar, cache_path);
+        if (table) return table;
+    }
+
+    table = syntax_build_lr1_table(grammar);
+    if (table && cache_path) {
+        syntax_save_lr1_table(table, cache_path);
+    }
+    return table;
+}
+
 static int check_tokens(SyntaxTable *table, const int *token_map, Token *tokens) {
     if (!tokens) {
         printf("{\"status\":\"error\",\"diagnostics\":[{\"line\":0,\"character\":0,\"endCharacter\":1,\"message\":\"Failed to read source file.\"}]}\n");
@@ -277,22 +292,25 @@ int main(int argc, char **argv) {
     bool stdio = false;
     const char *source_path = NULL;
     const char *grammar_path = default_grammar_path;
+    const char *cache_path = default_table_cache_path;
 
     if (argc >= 2 && strcmp(argv[1], "--stdio") == 0) {
         stdio = true;
         if (argc > 2) grammar_path = argv[2];
+        if (argc > 3) cache_path = argv[3];
     } else {
         if (argc < 2) {
-            fprintf(stderr, "usage: %s <source.mln> [grammar]\n       %s --stdio [grammar]\n", argv[0], argv[0]);
+            fprintf(stderr, "usage: %s <source.mln> [grammar] [cache]\n       %s --stdio [grammar] [cache]\n", argv[0], argv[0]);
             return 2;
         }
         source_path = argv[1];
         if (argc > 2) grammar_path = argv[2];
+        if (argc > 3) cache_path = argv[3];
     }
 
     SyntaxGrammar *grammar = syntax_load_grammar(grammar_path);
     if (!grammar) return 1;
-    SyntaxTable *table = syntax_build_lr1_table(grammar);
+    SyntaxTable *table = load_or_build_table(grammar, cache_path);
     if (!table) {
         syntax_free_grammar(grammar);
         return 1;
