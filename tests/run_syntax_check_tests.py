@@ -47,6 +47,11 @@ CASES = [
         source="i32 main() { if (x) if (y) return; else return; }\n",
         status="ok",
     ),
+    SyntaxCase(
+        name="primitive_cast_ok",
+        source="i32 main() { buffer[pos] = (char)('0' + (value % 10)); }\n",
+        status="ok",
+    ),
 ]
 
 
