@@ -24,6 +24,9 @@ test-semantic: mlc
 test-integration: mlc
 	python3 tests/run_integration_tests.py
 
+test-syntax-check: syntax-check
+	MYLANG_SKIP_SYNTAX_CHECK_BUILD=1 python3 tests/run_syntax_check_tests.py
+
 test: $(SRC_NO_MAIN) $(TESTS)
 	$(CC) $(CFLAGS) -g $(SRC_NO_MAIN) $(TESTS) -o $(OUT)
 	./$(OUT)
