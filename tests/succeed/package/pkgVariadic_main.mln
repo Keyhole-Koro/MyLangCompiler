@@ -1,0 +1,6 @@
+import vlib from "pkgVariadic_lib.mln";
+
+i32 main() {
+    // 100 + 10 + 20 + 3 = 133
+    return vlib.sum(100, 10, 20, 3);
+}
