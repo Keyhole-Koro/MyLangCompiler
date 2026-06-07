@@ -52,6 +52,26 @@ CASES = [
         source="i32 main() { buffer[pos] = (char)('0' + (value % 10)); }\n",
         status="ok",
     ),
+    SyntaxCase(
+        name="deref_assignment_ok",
+        source="void write_word(i32 addr, i32 value) { i32 *p = (i32 *)addr; *p = value; }\n",
+        status="ok",
+    ),
+    SyntaxCase(
+        name="export_function_ok",
+        source="export i32 add(i32 a, i32 b) { return a + b; }\n",
+        status="ok",
+    ),
+    SyntaxCase(
+        name="export_mut_global_ok",
+        source="export mut i32 global_counter = 0;\n",
+        status="ok",
+    ),
+    SyntaxCase(
+        name="export_typedef_struct_ok",
+        source="export typedef struct { i32 x; i32 y; } Point;\n",
+        status="ok",
+    ),
 ]
 
 
