@@ -135,19 +135,116 @@ static void append_text(char *buf, size_t cap, const char *text) {
     snprintf(buf + len, cap - len, "%s", text);
 }
 
-static void format_expected_message(const SyntaxResult *result, char *buf, size_t cap) {
+static bool expected_contains(const SyntaxResult *result, const char *token) {
+    for (size_t i = 0; i < result->expected_count; i++) {
+        if (strcmp(result->expected[i], token) == 0) return true;
+    }
+    return false;
+}
+
+static size_t count_expected_tokens(const SyntaxResult *result, const char **tokens, size_t token_count) {
+    size_t count = 0;
+    for (size_t i = 0; i < token_count; i++) {
+        if (expected_contains(result, tokens[i])) count++;
+    }
+    return count;
+}
+
+static void append_before_token(char *buf, size_t cap, const Token *unexpected) {
+    if (!unexpected || !unexpected->value || unexpected->value[0] == '\0') return;
+    append_text(buf, cap, " before ");
+    if (unexpected->kind == IDENTIFIER || unexpected->kind == NUMBER ||
+        unexpected->kind == STRING_LITERAL || unexpected->kind == CHAR_LITERAL) {
+        append_text(buf, cap, expected_label(tokenkind2str(unexpected->kind)));
+        append_text(buf, cap, " ");
+    }
+    append_text(buf, cap, "'");
+    append_text(buf, cap, unexpected->value);
+    append_text(buf, cap, "'");
+}
+
+static bool format_expected_category_message(const SyntaxResult *result, const Token *unexpected, char *buf, size_t cap) {
+    static const char *expr_start[] = {
+        "IDENTIFIER", "NUMBER", "STRING_LITERAL", "CHAR_LITERAL", "L_PARENTHESES",
+        "NOT", "BITNOT", "SUB", "ADD", "ASTARISK", "AMPERSAND", "INC", "DEC", "SIZEOF"
+    };
+    static const char *type_start[] = {
+        "IDENTIFIER", "BOOL", "I32", "U32", "CHAR", "FLOAT", "DOUBLE", "VOID",
+        "LONG", "SHORT", "CONST", "REF"
+    };
+    static const char *stmt_start[] = {
+        "L_BRACE", "IF", "WHILE", "DO", "FOR", "RETURN", "BREAK", "CONTINUE",
+        "YIELD", "UNCHECKED", "SEMICOLON"
+    };
+
+    if (count_expected_tokens(result, expr_start, sizeof(expr_start) / sizeof(expr_start[0])) >= 5) {
+        snprintf(buf, cap, "Expected expression");
+        append_before_token(buf, cap, unexpected);
+        append_text(buf, cap, ".");
+        return true;
+    }
+
+    if (count_expected_tokens(result, type_start, sizeof(type_start) / sizeof(type_start[0])) >= 4) {
+        snprintf(buf, cap, "Expected type");
+        append_before_token(buf, cap, unexpected);
+        append_text(buf, cap, ".");
+        return true;
+    }
+
+    if (count_expected_tokens(result, stmt_start, sizeof(stmt_start) / sizeof(stmt_start[0])) >= 4) {
+        snprintf(buf, cap, "Expected statement");
+        append_before_token(buf, cap, unexpected);
+        append_text(buf, cap, ".");
+        return true;
+    }
+
+    return false;
+}
+
+static void add_expected_label(char labels[][64], size_t *count, size_t cap, const char *token) {
+    const char *label = expected_label(token);
+    for (size_t i = 0; i < *count; i++) {
+        if (strcmp(labels[i], label) == 0) return;
+    }
+    if (*count >= cap) return;
+    snprintf(labels[*count], 64, "%s", label);
+    (*count)++;
+}
+
+static void collect_expected_labels(const SyntaxResult *result, char labels[][64], size_t *count, size_t cap) {
+    static const char *preferred[] = {
+        "SEMICOLON", "R_PARENTHESES", "R_BRACE", "R_BRACKET", "COMMA",
+        "IDENTIFIER", "NUMBER", "STRING_LITERAL", "CHAR_LITERAL",
+        "L_PARENTHESES", "L_BRACE", "ASSIGN"
+    };
+
+    *count = 0;
+    for (size_t i = 0; i < sizeof(preferred) / sizeof(preferred[0]); i++) {
+        if (expected_contains(result, preferred[i])) add_expected_label(labels, count, cap, preferred[i]);
+    }
+    for (size_t i = 0; i < result->expected_count; i++) {
+        add_expected_label(labels, count, cap, result->expected[i]);
+    }
+}
+
+static void format_expected_message(const SyntaxResult *result, const Token *unexpected, char *buf, size_t cap) {
+    if (format_expected_category_message(result, unexpected, buf, cap)) return;
+
     buf[0] = '\0';
     append_text(buf, cap, "Expected: ");
-    size_t shown = 0;
-    size_t limit = result->expected_count < 12 ? result->expected_count : 12;
-    for (size_t i = 0; i < result->expected_count && shown < limit; i++) {
-        if (shown > 0) append_text(buf, cap, ", ");
-        append_text(buf, cap, expected_label(result->expected[i]));
-        shown++;
+
+    char labels[64][64];
+    size_t label_count = 0;
+    collect_expected_labels(result, labels, &label_count, sizeof(labels) / sizeof(labels[0]));
+
+    size_t limit = label_count < 6 ? label_count : 6;
+    for (size_t i = 0; i < limit; i++) {
+        if (i > 0) append_text(buf, cap, ", ");
+        append_text(buf, cap, labels[i]);
     }
-    if (result->expected_count > shown) {
+    if (label_count > limit) {
         char suffix[64];
-        snprintf(suffix, sizeof(suffix), ", ... and %zu more", result->expected_count - shown);
+        snprintf(suffix, sizeof(suffix), ", ... and %zu more", label_count - limit);
         append_text(buf, cap, suffix);
     }
 }
@@ -207,8 +304,10 @@ static int check_tokens(SyntaxTable *table, const int *token_map, Token *tokens)
         int line = 1;
         int col = 1;
         int end_col = 2;
+        Token *unexpected = NULL;
         if (result.token_index < token_count) {
             Token *tok = token_refs[result.token_index];
+            unexpected = tok;
             line = tok->line;
             col = tok->col;
             end_col = col + (int)strlen(tok->value);
@@ -216,7 +315,7 @@ static int check_tokens(SyntaxTable *table, const int *token_map, Token *tokens)
         }
         printf("{\"line\":%d,\"character\":%d,\"endCharacter\":%d,\"message\":", line - 1, col - 1, end_col - 1);
         char message[2048];
-        if (result.expected_count > 0) format_expected_message(&result, message, sizeof(message));
+        if (result.expected_count > 0) format_expected_message(&result, unexpected, message, sizeof(message));
         else snprintf(message, sizeof(message), "%s", result.status == SYNTAX_INCOMPLETE ? "Incomplete syntax." : "Syntax error.");
         print_json_string(message);
         printf("}");

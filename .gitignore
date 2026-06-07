@@ -23,6 +23,7 @@
 
 # Ignore dependency files
 *.d
+__pycache__/
 
 # Ignore generated files
 *.map
