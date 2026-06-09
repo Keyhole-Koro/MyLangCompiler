@@ -1,0 +1,17 @@
+// Regression: a call argument that itself contains a nested call must not
+// clobber earlier arguments already placed in argument registers. Previously
+// `combine(a, twice(b))` evaluated `a` into r5, then `twice(b)`'s call
+// clobbered r5, so `combine` received the wrong first argument.
+
+i32 twice(i32 x) {
+    return x + x;
+}
+
+i32 combine(i32 a, i32 b) {
+    return a * 100 + b;
+}
+
+i32 main() {
+    // combine(7, twice(3)) = 7*100 + 6 = 706
+    return combine(7, twice(3));
+}

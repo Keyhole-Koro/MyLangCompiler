@@ -140,9 +140,19 @@ void gen_call(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char 
         }
     }
 
-    for (int i = 0; i < argc && i < 3; i++)
+    // Evaluate register arguments left-to-right, pushing each result, then pop
+    // them into the argument registers just before the call. Evaluating an
+    // argument may involve a nested call that clobbers the argument registers,
+    // so earlier results must not be left sitting in those registers.
+    int reg_argc = argc < 3 ? argc : 3;
+    for (int i = 0; i < reg_argc; i++)
     {
-        gen_expr(cc, node->call.args[i], sb, arg_regs[i], params, param_count, locals, local_count);
+        gen_expr(cc, node->call.args[i], sb, "r1", params, param_count, locals, local_count);
+        sb_append(sb, "  push r1\n");
+    }
+    for (int i = reg_argc - 1; i >= 0; i--)
+    {
+        sb_append(sb, "  pop %s\n", arg_regs[i]);
     }
 
     sb_append(sb, "  call %s\n", node->call.name);

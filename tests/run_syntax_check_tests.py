@@ -53,6 +53,16 @@ CASES = [
         status="ok",
     ),
     SyntaxCase(
+        name="hex_number_ok",
+        source="i32 main() { i32 mask = 0xff; return mask & 0x0f; }\n",
+        status="ok",
+    ),
+    SyntaxCase(
+        name="binary_number_ok",
+        source="i32 main() { i32 flags = 0b1010; return flags | 0b0101; }\n",
+        status="ok",
+    ),
+    SyntaxCase(
         name="deref_assignment_ok",
         source="void write_word(i32 addr, i32 value) { i32 *p = (i32 *)addr; *p = value; }\n",
         status="ok",
