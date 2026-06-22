@@ -41,6 +41,12 @@ jobs:
           repository: Keyhole-Koro/MyEmulator
           path: runtime/MyEmulator
 
+      - name: Checkout MyLangSyntaxEngine
+        uses: actions/checkout@v4
+        with:
+          repository: Keyhole-Koro/MyLangSyntaxEngine
+          path: toolchain/MyLangSyntaxEngine
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
