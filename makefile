@@ -1,7 +1,7 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -Iinc
-SYNTAX_ENGINE_DIR = ../MyLangSyntaxEngine
-SYNTAX_ENGINE_INC = -I$(SYNTAX_ENGINE_DIR)/include
+SYNTAX_ENGINE_DIR = ../MySyntaxEngine
+SYNTAX_ENGINE_INC = -I$(SYNTAX_ENGINE_DIR)/inc
 SYNTAX_ENGINE_SRC = $(shell find $(SYNTAX_ENGINE_DIR)/src/lr1 -name '*.c' | sort)
 SRC = $(shell find src -name '*.c' | sort)
 TESTS = $(wildcard tests/*.c)
