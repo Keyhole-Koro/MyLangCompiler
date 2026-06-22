@@ -319,7 +319,10 @@ Token *lexer(char *input) {
     Token head = {0};
     Token *cur = &head;
     char *ptr = input;
-    char buffer[256];
+    /* Sized to the whole input: no single token can exceed it, so the is*()
+       helpers that copy into it cannot overflow (even on pathological tokens). */
+    char *buffer = malloc(strlen(input) + 1);
+    if (!buffer) return NULL;
     size_t consumed_len = 0;
     TokenKind kind;
     int line = 1;
@@ -344,7 +347,10 @@ Token *lexer(char *input) {
         }
 
         if (isCommentBlock(ptr, buffer)) {
-            size_t consumed = strlen(buffer) + 4; // /* + content + */
+            // Consume up to and including '*/', or to end of input if unclosed
+            // (an unterminated comment must not advance past the buffer).
+            char *end = strstr(ptr, "*/");
+            size_t consumed = end ? (size_t)(end + 2 - ptr) : strlen(ptr);
             advance_pos(ptr, consumed, &line, &col);
             ptr += consumed;
             continue;
@@ -412,6 +418,7 @@ Token *lexer(char *input) {
     }
 
     createToken(cur, EOT, "", line, col, 0);
+    free(buffer);
     return head.next;
 }
 

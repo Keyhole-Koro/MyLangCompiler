@@ -4,12 +4,12 @@
 #include <stdbool.h>
 
 #include "mylang/frontend/lexer.h"
-#include "mylang_syntax_engine/syntax_engine.h"
+#include "syntax_engine/syntax_engine.h"
 
 #define TOKEN_KIND_COUNT ((int)EOT + 1)
 
 static const char *default_grammar_path =
-    "../MyLangSyntaxEngine/tests/fixtures/grammars/mylang_lsp.grammar";
+    "../MySyntaxEngine/tests/fixtures/grammars/mylang_lsp.grammar";
 static const char *default_table_cache_path = "mylang-syntax-check.table";
 
 static void free_tokens(Token *token) {
@@ -270,29 +270,6 @@ static SyntaxTable *load_or_build_table(SyntaxGrammar *grammar, const char *cach
     return table;
 }
 
-static const char *role_name(int role) {
-    switch (role) {
-        case SYNTAX_ROLE_FUNCTION:  return "function";
-        case SYNTAX_ROLE_TYPE:      return "type";
-        case SYNTAX_ROLE_STRUCT:    return "struct";
-        case SYNTAX_ROLE_NAMESPACE: return "namespace";
-        case SYNTAX_ROLE_PARAMETER: return "parameter";
-        case SYNTAX_ROLE_PROPERTY:  return "property";
-        default:                    return NULL;
-    }
-}
-
-static const char *symbol_kind_name(int kind) {
-    switch (kind) {
-        case SYNTAX_SYM_FUNCTION: return "function";
-        case SYNTAX_SYM_STRUCT:   return "struct";
-        case SYNTAX_SYM_ENUM:     return "enum";
-        case SYNTAX_SYM_TYPE:     return "type";
-        case SYNTAX_SYM_VARIABLE: return "variable";
-        default:                  return NULL;
-    }
-}
-
 static int check_tokens(SyntaxTable *table, const int *token_map, Token *tokens) {
     if (!tokens) {
         printf("{\"status\":\"error\",\"diagnostics\":[{\"line\":0,\"character\":0,\"endCharacter\":1,\"message\":\"Failed to read source file.\"}]}\n");
@@ -356,7 +333,7 @@ static int check_tokens(SyntaxTable *table, const int *token_map, Token *tokens)
         for (Token *t = tokens; t && t->kind != EOT; t = t->next, ti++) {
             if (!first) printf(",");
             first = 0;
-            const char *role = (ti < token_count) ? role_name(roles[ti]) : NULL;
+            const char *role = (ti < token_count) ? syntax_label_name(table, roles[ti]) : NULL;
             if (role)
                 printf("[%d,%d,%d,\"%s\",\"%s\"]",
                        t->line - 1, t->col - 1, t->length, tokenkind2str(t->kind), role);
@@ -370,7 +347,7 @@ static int check_tokens(SyntaxTable *table, const int *token_map, Token *tokens)
         int first = 1;
         for (size_t i = 0; i < symbol_count; i++) {
             int idx = symbols[i].token_index;
-            const char *kind = symbol_kind_name(symbols[i].kind);
+            const char *kind = syntax_label_name(table, symbols[i].kind);
             if (idx < 0 || (size_t)idx >= token_count || !kind) continue;
             Token *t = token_refs[idx];
             if (!first) printf(",");
