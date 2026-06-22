@@ -62,3 +62,9 @@ jobs:
 
       - name: Run integration tests
         run: make test-integration
+
+      - name: Run syntax-check tests
+        run: make test-syntax-check
+
+      - name: Run token/role tests
+        run: make test-tokens

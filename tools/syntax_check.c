@@ -270,6 +270,18 @@ static SyntaxTable *load_or_build_table(SyntaxGrammar *grammar, const char *cach
     return table;
 }
 
+static const char *role_name(int role) {
+    switch (role) {
+        case SYNTAX_ROLE_FUNCTION:  return "function";
+        case SYNTAX_ROLE_TYPE:      return "type";
+        case SYNTAX_ROLE_STRUCT:    return "struct";
+        case SYNTAX_ROLE_NAMESPACE: return "namespace";
+        case SYNTAX_ROLE_PARAMETER: return "parameter";
+        case SYNTAX_ROLE_PROPERTY:  return "property";
+        default:                    return NULL;
+    }
+}
+
 static int check_tokens(SyntaxTable *table, const int *token_map, Token *tokens) {
     if (!tokens) {
         printf("{\"status\":\"error\",\"diagnostics\":[{\"line\":0,\"character\":0,\"endCharacter\":1,\"message\":\"Failed to read source file.\"}]}\n");
@@ -281,9 +293,11 @@ static int check_tokens(SyntaxTable *table, const int *token_map, Token *tokens)
 
     int *token_ids = calloc(token_count ? token_count : 1, sizeof(int));
     Token **token_refs = calloc(token_count ? token_count : 1, sizeof(Token *));
-    if (!token_ids || !token_refs) {
+    int *roles = calloc(token_count ? token_count : 1, sizeof(int));
+    if (!token_ids || !token_refs || !roles) {
         free(token_ids);
         free(token_refs);
+        free(roles);
         free_tokens(tokens);
         return 1;
     }
@@ -295,7 +309,7 @@ static int check_tokens(SyntaxTable *table, const int *token_map, Token *tokens)
         index++;
     }
 
-    SyntaxResult result = syntax_parse_token_ids(table, token_ids, token_count);
+    SyntaxResult result = syntax_parse_token_ids_roles(table, token_ids, token_count, roles);
 
     printf("{\"status\":");
     print_json_string(result.status == SYNTAX_OK ? "ok" : result.status == SYNTAX_INCOMPLETE ? "incomplete" : "error");
@@ -323,11 +337,17 @@ static int check_tokens(SyntaxTable *table, const int *token_map, Token *tokens)
     printf("],\"tokens\":[");
     {
         int first = 1;
-        for (Token *t = tokens; t && t->kind != EOT; t = t->next) {
+        size_t ti = 0;
+        for (Token *t = tokens; t && t->kind != EOT; t = t->next, ti++) {
             if (!first) printf(",");
             first = 0;
-            printf("[%d,%d,%d,\"%s\"]",
-                   t->line - 1, t->col - 1, t->length, tokenkind2str(t->kind));
+            const char *role = (ti < token_count) ? role_name(roles[ti]) : NULL;
+            if (role)
+                printf("[%d,%d,%d,\"%s\",\"%s\"]",
+                       t->line - 1, t->col - 1, t->length, tokenkind2str(t->kind), role);
+            else
+                printf("[%d,%d,%d,\"%s\"]",
+                       t->line - 1, t->col - 1, t->length, tokenkind2str(t->kind));
         }
     }
     printf("]}\n");
@@ -335,6 +355,7 @@ static int check_tokens(SyntaxTable *table, const int *token_map, Token *tokens)
     syntax_result_free(&result);
     free(token_ids);
     free(token_refs);
+    free(roles);
     free_tokens(tokens);
     return 0;
 }
