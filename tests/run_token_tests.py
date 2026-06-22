@@ -33,6 +33,8 @@ class TokenCase:
     widths: list = field(default_factory=list)
     status: str | None = None       # required parse status, if set
     min_tokens: int = 0             # require at least this many tokens emitted
+    symbols: dict = field(default_factory=dict)   # text -> required outline kind
+    not_symbols: list = field(default_factory=list)  # texts that must NOT be symbols
 
 
 CASES = [
@@ -120,6 +122,19 @@ CASES = [
         status="error",
         min_tokens=5,
     ),
+    TokenCase(
+        # outline = top-level decls only; locals, struct fields and call sites
+        # must not appear.
+        name="symbols_top_level_only",
+        source=("i32 g = 0;\n"
+                "struct Point { i32 fx; };\n"
+                "enum Color { RED };\n"
+                "typedef i32 MyInt;\n"
+                "i32 add(i32 p) { i32 local = foo(p); return local; }\n"),
+        symbols={"g": "variable", "Point": "struct", "Color": "enum",
+                 "MyInt": "type", "add": "function"},
+        not_symbols=["fx", "local", "foo", "p", "RED"],
+    ),
 ]
 
 
@@ -200,6 +215,19 @@ def check_case(case: TokenCase, result: dict) -> tuple[bool, str]:
                 f"{case.name}: {literal!r} did not appear as a full token slice "
                 f"(width regression?); tokens={[t for (t, _) in tokens]!r}"
             )
+
+    if case.symbols or case.not_symbols:
+        lines = case.source.splitlines()
+        syms = {}
+        for s in result.get("symbols", []):
+            text = lines[s[0]][s[1]:s[1] + s[2]] if 0 <= s[0] < len(lines) else ""
+            syms.setdefault(text, set()).add(s[3])
+        for text, want in case.symbols.items():
+            if want not in syms.get(text, set()):
+                return False, f"{case.name}: symbol {text!r} -> {syms.get(text)!r}, expected {want!r}"
+        for text in case.not_symbols:
+            if text in syms:
+                return False, f"{case.name}: {text!r} must not be an outline symbol, got {syms[text]!r}"
 
     return True, f"{case.name}: ok"
 
