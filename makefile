@@ -27,6 +27,9 @@ test-integration: mlc
 test-syntax-check: syntax-check
 	MYLANG_SKIP_SYNTAX_CHECK_BUILD=1 python3 tests/run_syntax_check_tests.py
 
+test-tokens: syntax-check
+	MYLANG_SKIP_SYNTAX_CHECK_BUILD=1 python3 tests/run_token_tests.py
+
 test: $(SRC_NO_MAIN) $(TESTS)
 	$(CC) $(CFLAGS) -g $(SRC_NO_MAIN) $(TESTS) -o $(OUT)
 	./$(OUT)
