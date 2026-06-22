@@ -162,12 +162,13 @@ char *tokenkind2str(TokenKind kind) {
     return "UNKNOWN";
 }
 
-Token *createToken(Token *cur, int kind, char *value, int line, int col) {
+Token *createToken(Token *cur, int kind, char *value, int line, int col, int length) {
     Token *newTk = malloc(sizeof(Token));
     newTk->kind = kind;
     newTk->value = strdup(value);
     newTk->line = line;
     newTk->col = col;
+    newTk->length = length;
     newTk->next = NULL;
     cur->next = newTk;
     return newTk;
@@ -352,7 +353,7 @@ Token *lexer(char *input) {
         if (isOperator(ptr, &kind, buffer)) {
             int tok_line = line, tok_col = col;
             size_t consumed = strlen(buffer);
-            cur = createToken(cur, kind, buffer, tok_line, tok_col);
+            cur = createToken(cur, kind, buffer, tok_line, tok_col, (int)consumed);
             advance_pos(ptr, consumed, &line, &col);
             ptr += consumed;
             continue;
@@ -361,7 +362,7 @@ Token *lexer(char *input) {
         if (isReservedWord(ptr, &kind, buffer)) {
             int tok_line = line, tok_col = col;
             size_t consumed = strlen(buffer);
-            cur = createToken(cur, kind, buffer, tok_line, tok_col);
+            cur = createToken(cur, kind, buffer, tok_line, tok_col, (int)consumed);
             advance_pos(ptr, consumed, &line, &col);
             ptr += consumed;
             continue;
@@ -369,7 +370,7 @@ Token *lexer(char *input) {
 
         if (isNumber(ptr, buffer, &consumed_len)) {
             int tok_line = line, tok_col = col;
-            cur = createToken(cur, NUMBER, buffer, tok_line, tok_col);
+            cur = createToken(cur, NUMBER, buffer, tok_line, tok_col, (int)consumed_len);
             advance_pos(ptr, consumed_len, &line, &col);
             ptr += consumed_len;
             continue;
@@ -378,7 +379,7 @@ Token *lexer(char *input) {
         if (isIdentifier(ptr, buffer)) {
             int tok_line = line, tok_col = col;
             size_t consumed = strlen(buffer);
-            cur = createToken(cur, IDENTIFIER, buffer, tok_line, tok_col);
+            cur = createToken(cur, IDENTIFIER, buffer, tok_line, tok_col, (int)consumed);
             advance_pos(ptr, consumed, &line, &col);
             ptr += consumed;
             continue;
@@ -393,14 +394,14 @@ Token *lexer(char *input) {
             memmove(buffer, buffer + 1, strlen(buffer) - 2); // Remove quotes
             buffer[strlen(buffer) - 2] = '\0';
             unescape_string_literal_inplace(buffer);
-            cur = createToken(cur, STRING_LITERAL, buffer, tok_line, tok_col);
+            cur = createToken(cur, STRING_LITERAL, buffer, tok_line, tok_col, (int)consumed);
             continue;
         }
 
         int len;
         if ((len = isCharLiteral(ptr, buffer)) > 0) {
             int tok_line = line, tok_col = col;
-            cur = createToken(cur, CHAR_LITERAL, buffer, tok_line, tok_col);
+            cur = createToken(cur, CHAR_LITERAL, buffer, tok_line, tok_col, len);
             advance_pos(ptr, (size_t)len, &line, &col);
             ptr += len;
             continue;
@@ -410,7 +411,7 @@ Token *lexer(char *input) {
         ptr++;
     }
 
-    createToken(cur, EOT, "", line, col);
+    createToken(cur, EOT, "", line, col, 0);
     return head.next;
 }
 
