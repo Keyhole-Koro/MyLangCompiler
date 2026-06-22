@@ -320,6 +320,16 @@ static int check_tokens(SyntaxTable *table, const int *token_map, Token *tokens)
         print_json_string(message);
         printf("}");
     }
+    printf("],\"tokens\":[");
+    {
+        int first = 1;
+        for (Token *t = tokens; t && t->kind != EOT; t = t->next) {
+            if (!first) printf(",");
+            first = 0;
+            printf("[%d,%d,%d,\"%s\"]",
+                   t->line - 1, t->col - 1, t->length, tokenkind2str(t->kind));
+        }
+    }
     printf("]}\n");
 
     syntax_result_free(&result);

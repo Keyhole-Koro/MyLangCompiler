@@ -109,6 +109,7 @@ struct Token{
   char *value;
   int line;
   int col;
+  int length;   // source width in bytes (may differ from strlen(value): hex->dec, escapes, quotes)
   Token *next;
 };
 
