@@ -39,6 +39,8 @@ ASTNode *parse_postfix(Token **cur) {
             *cur = (*cur)->next;
             node = new_arrow_access(node, member_name);
         } else if ((*cur)->kind == L_PARENTHESES && node->type == AST_IDENTIFIER) {
+            int line = node->line;
+            int col = node->col;
             *cur = (*cur)->next;
             ASTNode **args = NULL;
             int arg_count = 0;
@@ -57,6 +59,8 @@ ASTNode *parse_postfix(Token **cur) {
             if (!expect(cur, R_PARENTHESES))
                 parse_error("expected ')' after args", token_head, *cur);
             node = new_call(node->identifier.name, args, arg_count);
+            node->line = line;
+            node->col = col;
         } else {
             break;
         }

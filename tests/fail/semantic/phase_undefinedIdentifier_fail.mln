@@ -1,0 +1,4 @@
+i32 main() {
+    i32 x = missing + 1;
+    return x;
+}

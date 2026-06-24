@@ -68,6 +68,10 @@ FAIL_CASES = {
         "enum member value must be a number literal",
         None,
     ),
+    "phase_undefinedIdentifier_fail": (
+        "fail/semantic/phase_undefinedIdentifier_fail.mln",
+        ":2:13: error: undefined identifier 'missing'",
+    ),
 }
 
 
