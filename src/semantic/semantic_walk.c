@@ -306,7 +306,11 @@ static void use_identifier(SemanticContext *ctx, ASTNode *node, ExprContext expr
         return;
     }
     binding = find_binding(ctx, ident->identifier.name);
-    if (!binding) return;
+    if (!binding) {
+        semantic_error_at(ctx, semantic_location_from_ast(node),
+                          "undefined identifier '%s'", ident->identifier.name);
+        return;
+    }
 
     if (expr_ctx == EXPRCTX_MOVE &&
         (binding->mutable_borrow_active || binding->shared_borrow_count > 0)) {
