@@ -51,13 +51,15 @@ static void append_type_alias(CompilerContext *cc, const char *alias, const char
 static void fill_member_info(CompilerContext *cc, ASTNode *mem, MemberInfo *out, int offset) {
     const char *mname = "";
     LocalInfo tmp = {0};
-    int member_slots = 1;
+    int total_size_bytes = SLOT_SIZE;
     if (mem->type == AST_VAR_DECL) {
         mname = mem->var_decl.name ? mem->var_decl.name : "";
         set_localinfo_from_type(cc, &tmp, mem->var_decl.var_type);
         if (mem->var_decl.var_type) {
-            member_slots = slots_for_type(cc, mem->var_decl.var_type);
-            if (member_slots < 1) member_slots = 1;
+            TypeInfo ti = {0};
+            if (typeinfo_from_type_ast(cc, mem->var_decl.var_type, &ti)) {
+                total_size_bytes = typeinfo_total_size_bytes(cc, &ti);
+            }
         }
     } else if (mem->type == AST_STRUCT_MEMBER) {
         mname = mem->struct_member.name ? mem->struct_member.name : "";
@@ -76,9 +78,15 @@ static void fill_member_info(CompilerContext *cc, ASTNode *mem, MemberInfo *out,
     out->pointer_level = tmp.pointer_level;
     out->is_array = tmp.is_array;
     out->array_length = tmp.array_length;
-    out->size_bytes = (tmp.pointer_level == 0 && !tmp.is_array && base_type_is_char(tmp.base_type)) ? 1 : SLOT_SIZE;
+    out->size_bytes = typeinfo_elem_size_bytes(cc, &(TypeInfo){
+        .base_type = tmp.base_type,
+        .pointer_level = tmp.pointer_level,
+        .type_modifiers = tmp.type_modifiers,
+        .is_array = 0,
+        .dims_count = 0,
+    });
     out->offset = offset;
-    out->total_size_bytes = member_slots * SLOT_SIZE;
+    out->total_size_bytes = total_size_bytes > 0 ? total_size_bytes : SLOT_SIZE;
 }
 
 static void append_struct_info(CompilerContext *cc, const char *type_name, ASTNode **members_ast, int count) {

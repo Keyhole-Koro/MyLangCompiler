@@ -48,7 +48,7 @@ MyLang uses a package-based module system.
 ## 4. Type System
 - `type` -> `const* ( ref mut? )? base_type ( * )*`
 - `base_type` -> `primitive_type` | `IDENTIFIER`
-- `primitive_type` -> `i32` | `u32` | `bool` | `char` | `float` | `double` | `void` | `long` | `short`
+- `primitive_type` -> `u8` | `u16` | `i32` | `u32` | `bool` | `char` | `float` | `double` | `void` | `long` | `short`
 
 ## 5. Statements
 - `stmt` ->

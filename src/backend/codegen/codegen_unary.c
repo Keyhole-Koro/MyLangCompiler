@@ -15,9 +15,9 @@ void emit_unary_inc_dec(CompilerContext *cc, ASTNode *node, StringBuilder *sb, c
 
     // Compute address of operand lvalue into r3
     gen_lvalue_addr(cc, node->unary.operand, sb, "r3", params, param_count, locals, local_count);
-    int is_byte = lvalue_is_byte(cc, node->unary.operand);
+    int width = lvalue_width_bytes(cc, node->unary.operand);
     // Load current value into r1
-    emit_load_from_addr(sb, "r1", "r3", is_byte);
+    emit_load_width_from_addr(sb, "r1", "r3", width);
 
     int delta = 1;
     TypeInfo operand_type = (TypeInfo){0};
@@ -31,23 +31,23 @@ void emit_unary_inc_dec(CompilerContext *cc, ASTNode *node, StringBuilder *sb, c
         if (strcmp(target_reg, "r1") != 0)
             sb_append(sb, "  mov %s, r1\n", target_reg);
         sb_append(sb, "  addis r1, %d\n", delta);
-        emit_store_to_addr(sb, "r3", "r1", is_byte);
+        emit_store_width_to_addr(sb, "r3", "r1", width);
         break; }
     case POST_DEC: {
         if (strcmp(target_reg, "r1") != 0)
             sb_append(sb, "  mov %s, r1\n", target_reg);
         sb_append(sb, "  addis r1, -%d\n", delta);
-        emit_store_to_addr(sb, "r3", "r1", is_byte);
+        emit_store_width_to_addr(sb, "r3", "r1", width);
         break; }
     case INC: {
         sb_append(sb, "  addis r1, %d\n", delta);
-        emit_store_to_addr(sb, "r3", "r1", is_byte);
+        emit_store_width_to_addr(sb, "r3", "r1", width);
         if (strcmp(target_reg, "r1") != 0)
             sb_append(sb, "  mov %s, r1\n", target_reg);
         break; }
     case DEC: {
         sb_append(sb, "  addis r1, -%d\n", delta);
-        emit_store_to_addr(sb, "r3", "r1", is_byte);
+        emit_store_width_to_addr(sb, "r3", "r1", width);
         if (strcmp(target_reg, "r1") != 0)
             sb_append(sb, "  mov %s, r1\n", target_reg);
         break; }

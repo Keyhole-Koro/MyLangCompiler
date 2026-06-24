@@ -29,6 +29,7 @@ TESTCASES = [
     ("simpleChar", ["succeed/expr/simpleChar.mln"], "R1", 72),
     ("stringEscape", ["succeed/expr/stringEscape.mln"], "R1", 10),
     ("intWidth32", ["succeed/expr/intWidth32.mln"], "R1", 20),
+    ("uintWidthSmall", ["succeed/expr/uintWidthSmall.mln"], "R1", 69),
     ("simpleStruct", ["succeed/struct/simpleStruct.mln"], "R1", 10),
     ("arrayInit", ["succeed/array/arrayInit.mln"], "R1", 106),
     ("multiArray", ["succeed/array/multiArray.mln"], "R1", 6),

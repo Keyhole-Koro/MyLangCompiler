@@ -36,6 +36,8 @@ typedef enum {
     ARROW,   // ->
 
     BOOL,     // bool
+    U8,       // u8
+    U16,      // u16
     I32,      // i32
     U32,      // u32
     CHAR,     // char

@@ -1,0 +1,14 @@
+struct Packet {
+    u8 tag;
+    u16 code;
+    u8 tail;
+};
+
+i32 main() {
+    u8 b = 1;
+    u16 w = 5;
+    u16 values[2] = { 52, 2 };
+    Packet p;
+
+    return b + w + values[0] + sizeof(b) + sizeof(w) + sizeof(p) + sizeof(values);
+}

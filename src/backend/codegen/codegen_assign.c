@@ -15,9 +15,9 @@ void gen_assign(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
     gen_expr(cc, node->assign.right, sb, "r1", params, param_count, locals, local_count);
     sb_append(sb, "  push r1\n");
     gen_lvalue_addr(cc, node->assign.left, sb, "r3", params, param_count, locals, local_count);
-    int is_byte = lvalue_is_byte(cc, node->assign.left);
+    int width = lvalue_width_bytes(cc, node->assign.left);
     sb_append(sb, "  pop r1\n");
-    emit_store_to_addr(sb, "r3", "r1", is_byte);
+    emit_store_width_to_addr(sb, "r3", "r1", width);
     if (target_reg && strcmp(target_reg, "r1") != 0) {
         sb_append(sb, "  mov %s, r1\n", target_reg);
     }
