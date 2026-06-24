@@ -31,7 +31,7 @@ void emit_load_var(CompilerContext *cc, StringBuilder *sb, const char *name, con
             sb_append(sb, "  \n; load param '%s' (arg%d, reg) into %s\n", name, idx + 1, target_reg);
             sb_append(sb, "  mov   r3, bp\n");
             sb_append(sb, "  addis r3, %d\n", offset);
-            emit_load_from_addr(sb, target_reg, "r3", is_char_scalar_var(cc, name));
+            emit_load_width_from_addr(sb, target_reg, "r3", scalar_var_width_bytes(cc, name));
         }
         else
         {
@@ -40,7 +40,7 @@ void emit_load_var(CompilerContext *cc, StringBuilder *sb, const char *name, con
             sb_append(sb, "  \n; load param '%s' (arg%d, stack) into %s\n", name, idx + 1, target_reg);
             sb_append(sb, "  mov   r3, bp\n");
             sb_append(sb, "  addis r3, %d\n", offset);
-            emit_load_from_addr(sb, target_reg, "r3", is_char_scalar_var(cc, name));
+            emit_load_width_from_addr(sb, target_reg, "r3", scalar_var_width_bytes(cc, name));
         }
     }
     else
@@ -52,7 +52,7 @@ void emit_load_var(CompilerContext *cc, StringBuilder *sb, const char *name, con
             sb_append(sb, "  \n; load local '%s' into %s\n", name, target_reg);
             sb_append(sb, "  mov   r3, bp\n");
             sb_append(sb, "  addis r3, %d\n", offset);
-            emit_load_from_addr(sb, target_reg, "r3", is_char_scalar_var(cc, name));
+            emit_load_width_from_addr(sb, target_reg, "r3", scalar_var_width_bytes(cc, name));
         }
         else
         {
@@ -60,8 +60,7 @@ void emit_load_var(CompilerContext *cc, StringBuilder *sb, const char *name, con
             // branch above does); r2 may hold a pending operand of an enclosing
             // binary expression and must not be clobbered here.
             sb_append(sb, "  movi  r3, %s\n", name);
-            int is_byte = is_char_scalar_var(cc, name);
-            emit_load_from_addr(sb, target_reg, "r3", is_byte);
+            emit_load_width_from_addr(sb, target_reg, "r3", scalar_var_width_bytes(cc, name));
         }
     }
 }
@@ -78,14 +77,13 @@ void emit_store_var(CompilerContext *cc, StringBuilder *sb, const char *name, co
         sb_append(sb, "  \n; store %s to var '%s'\n", src_reg, name);
         sb_append(sb, "  mov   r3, bp\n");
         sb_append(sb, "  addis r3, %d\n", offset);
-        emit_store_to_addr(sb, "r3", src_reg, is_char_scalar_var(cc, name));
+        emit_store_width_to_addr(sb, "r3", src_reg, scalar_var_width_bytes(cc, name));
     }
     else
     {
         // fallback global
         sb_append(sb, "  movi  r3, %s\n", name);
-        int is_byte = is_char_scalar_var(cc, name);
-        emit_store_to_addr(sb, "r3", src_reg, is_byte);
+        emit_store_width_to_addr(sb, "r3", src_reg, scalar_var_width_bytes(cc, name));
     }
 }
 

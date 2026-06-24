@@ -39,8 +39,11 @@ void emit_global_init(StringBuilder *sb, ASTNode *init_expr, int expected_bytes)
     long val = eval_const_expr(init_expr);
 
     if (expected_bytes == 1) {
-        // Byte init
         sb_append(sb, "  .byte 0x%02X\n", (unsigned)(val & 0xFF));
+    } else if (expected_bytes == 2) {
+        sb_append(sb, "  .byte 0x%02X, 0x%02X\n",
+                  (unsigned)((val >> 8) & 0xFF),
+                  (unsigned)(val & 0xFF));
     } else {
         // Word init (4 bytes) - Big Endian
         // If expected_bytes is 4, we write 4 bytes. 
@@ -105,7 +108,13 @@ int array_element_size_bytes(ASTNode *array_type) {
     array_type = cg_as_type_array(array_type);
     if (!array_type) return SLOT_SIZE;
     ASTNode *elem = array_type->type_array.element_type;
-    if (ast_type_is_char_scalar(elem)) return 1;
+    if (elem && elem->type == AST_TYPE) {
+        ASTNode *bt = elem->type_node.base_type;
+        if (elem->type_node.pointer_level == 0 && bt && bt->type == AST_IDENTIFIER) {
+            if (strcmp(bt->identifier.name, "char") == 0 || strcmp(bt->identifier.name, "u8") == 0) return 1;
+            if (strcmp(bt->identifier.name, "u16") == 0) return 2;
+        }
+    }
     return SLOT_SIZE;
 }
 
@@ -122,6 +131,12 @@ int lvalue_is_byte(CompilerContext *cc, ASTNode *node) {
     return typeinfo_is_byte(&info);
 }
 
+int lvalue_width_bytes(CompilerContext *cc, ASTNode *node) {
+    TypeInfo info = (TypeInfo){0};
+    if (!infer_expr_type(cc, node, &info)) return SLOT_SIZE;
+    return typeinfo_scalar_width_bytes(&info);
+}
+
 int lvalue_is_const(CompilerContext *cc, ASTNode *node) {
     TypeInfo info = (TypeInfo){0};
     if (!infer_expr_type(cc, node, &info)) return 0;
@@ -129,17 +144,45 @@ int lvalue_is_const(CompilerContext *cc, ASTNode *node) {
 }
 
 void emit_load_from_addr(StringBuilder *sb, const char *target_reg, const char *addr_reg, int is_byte) {
-    if (is_byte)
+    emit_load_width_from_addr(sb, target_reg, addr_reg, is_byte ? 1 : SLOT_SIZE);
+}
+
+void emit_load_width_from_addr(StringBuilder *sb, const char *target_reg, const char *addr_reg, int width_bytes) {
+    if (width_bytes == 1) {
         sb_append(sb, "  loadb %s, %s\n", target_reg, addr_reg);
-    else
+    } else if (width_bytes == 2) {
+        const char *scratch = (strcmp(target_reg, "r4") == 0) ? "r5" : "r4";
+        sb_append(sb, "  ; load u16 from %s into %s\n", addr_reg, target_reg);
+        sb_append(sb, "  loadb %s, %s\n", target_reg, addr_reg);
+        for (int i = 0; i < 8; i++) sb_append(sb, "  shl %s\n", target_reg);
+        sb_append(sb, "  addis %s, 1\n", addr_reg);
+        sb_append(sb, "  loadb %s, %s\n", scratch, addr_reg);
+        sb_append(sb, "  addis %s, -1\n", addr_reg);
+        sb_append(sb, "  or %s, %s\n", target_reg, scratch);
+    } else {
         sb_append(sb, "  load %s, %s\n", target_reg, addr_reg);
+    }
 }
 
 void emit_store_to_addr(StringBuilder *sb, const char *addr_reg, const char *value_reg, int is_byte) {
-    if (is_byte)
+    emit_store_width_to_addr(sb, addr_reg, value_reg, is_byte ? 1 : SLOT_SIZE);
+}
+
+void emit_store_width_to_addr(StringBuilder *sb, const char *addr_reg, const char *value_reg, int width_bytes) {
+    if (width_bytes == 1) {
         sb_append(sb, "  storeb %s, %s\n", addr_reg, value_reg);
-    else
+    } else if (width_bytes == 2) {
+        const char *scratch = (strcmp(value_reg, "r4") == 0) ? "r5" : "r4";
+        sb_append(sb, "  ; store u16 from %s to %s\n", value_reg, addr_reg);
+        sb_append(sb, "  mov %s, %s\n", scratch, value_reg);
+        for (int i = 0; i < 8; i++) sb_append(sb, "  shr %s\n", scratch);
+        sb_append(sb, "  storeb %s, %s\n", addr_reg, scratch);
+        sb_append(sb, "  addis %s, 1\n", addr_reg);
+        sb_append(sb, "  storeb %s, %s\n", addr_reg, value_reg);
+        sb_append(sb, "  addis %s, -1\n", addr_reg);
+    } else {
         sb_append(sb, "  store %s, %s\n", addr_reg, value_reg);
+    }
 }
 
 void emit_scale_reg_const(CompilerContext *cc, StringBuilder *sb, const char *reg, long factor) {

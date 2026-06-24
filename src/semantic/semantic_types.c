@@ -44,6 +44,8 @@ int semantic_typeinfo_from_type_ast(ASTNode *type_node, SemanticTypeInfo *out) {
 int semantic_is_builtin_type(const char *base_type) {
     if (!base_type) return 0;
     return strcmp(base_type, "bool") == 0 ||
+           strcmp(base_type, "u8") == 0 ||
+           strcmp(base_type, "u16") == 0 ||
            strcmp(base_type, "i32") == 0 ||
            strcmp(base_type, "u32") == 0 ||
            strcmp(base_type, "char") == 0 ||

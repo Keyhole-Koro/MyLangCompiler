@@ -222,8 +222,8 @@ void _gen_expr(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char
                     sb_append(sb, "  mov %s, r3\n", target_reg);
                 } else {
                     sb_append(sb, "  ; dereference *expr\n");
-                    int isb = have_type ? typeinfo_is_byte(&result_type) : 0;
-                    emit_load_from_addr(sb, target_reg, "r3", isb);
+                    int width = have_type ? typeinfo_scalar_width_bytes(&result_type) : SLOT_SIZE;
+                    emit_load_width_from_addr(sb, target_reg, "r3", width);
                 }
             } else {
                 sb_append(sb, "  mov %s, r3\n", target_reg);
@@ -256,15 +256,13 @@ void _gen_expr(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char
         }
         gen_lvalue_addr(cc, node, sb, "r3", params, param_count, locals, local_count);
         {
-            int isb = lvalue_is_byte(cc, node);
-            emit_load_from_addr(sb, target_reg, "r3", isb);
+            emit_load_width_from_addr(sb, target_reg, "r3", lvalue_width_bytes(cc, node));
         }
         break; }
     case AST_ARROW_ACCESS: {
         gen_lvalue_addr(cc, node, sb, "r3", params, param_count, locals, local_count);
         {
-            int isb = lvalue_is_byte(cc, node);
-            emit_load_from_addr(sb, target_reg, "r3", isb);
+            emit_load_width_from_addr(sb, target_reg, "r3", lvalue_width_bytes(cc, node));
         }
         break; }
     case AST_IMPORT:

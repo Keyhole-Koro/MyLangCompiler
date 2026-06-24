@@ -162,7 +162,9 @@ const MemberInfo *find_member_info(CompilerContext *cc, const char *type_name, c
 int base_type_is_char(const char *name);
 int ast_type_is_char_scalar(ASTNode *type_node);
 int is_char_scalar_var(CompilerContext *cc, const char *name);
+int scalar_var_width_bytes(CompilerContext *cc, const char *name);
 int typeinfo_is_byte(const TypeInfo *info);
+int typeinfo_scalar_width_bytes(const TypeInfo *info);
 int infer_expr_type(CompilerContext *cc, ASTNode *expr, TypeInfo *out);
 int typeinfo_elem_size_bytes(CompilerContext *cc, const TypeInfo *info);
 int typeinfo_total_size_bytes(CompilerContext *cc, const TypeInfo *info);
@@ -170,6 +172,7 @@ int pointer_step_bytes(CompilerContext *cc, const TypeInfo *info);
 int array_element_size_bytes(ASTNode *array_type);
 int array_total_elements(ASTNode *array_type);
 int lvalue_is_byte(CompilerContext *cc, ASTNode *node);
+int lvalue_width_bytes(CompilerContext *cc, ASTNode *node);
 int lvalue_is_const(CompilerContext *cc, ASTNode *node);
 const LocalInfo *find_local_info(CompilerContext *cc, const char *name);
 const LocalInfo *find_global_info(CompilerContext *cc, const char *name);
@@ -187,7 +190,9 @@ void emit_global_init(StringBuilder *sb, ASTNode *init_expr, int expected_bytes)
 void emit_global_decl(CompilerContext *cc, ASTNode *var_decl);
 
 void emit_load_from_addr(StringBuilder *sb, const char *target_reg, const char *addr_reg, int is_byte);
+void emit_load_width_from_addr(StringBuilder *sb, const char *target_reg, const char *addr_reg, int width_bytes);
 void emit_store_to_addr(StringBuilder *sb, const char *addr_reg, const char *value_reg, int is_byte);
+void emit_store_width_to_addr(StringBuilder *sb, const char *addr_reg, const char *value_reg, int width_bytes);
 void emit_scale_reg_const(CompilerContext *cc, StringBuilder *sb, const char *reg, long factor);
 void emit_unary_inc_dec(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char *target_reg, char **params, int param_count, char **locals, int local_count);
 void emit_load_var(CompilerContext *cc, StringBuilder *sb, const char *name, const char *target_reg, char **params, int param_count, char **locals, int local_count);

@@ -5,9 +5,8 @@ static void gen_loaded_operand(CompilerContext *cc, ASTNode *expr, StringBuilder
                                char **params, int param_count,
                                char **locals, int local_count) {
     if (expr->type == AST_UNARY && expr->unary.op == ASTARISK) {
-        gen_expr(cc, expr->unary.operand, sb, target_reg, params, param_count, locals, local_count);
-        int isb = lvalue_is_byte(cc, expr);
-        emit_load_from_addr(sb, target_reg, target_reg, isb);
+        gen_expr(cc, expr->unary.operand, sb, "r3", params, param_count, locals, local_count);
+        emit_load_width_from_addr(sb, target_reg, "r3", lvalue_width_bytes(cc, expr));
         return;
     }
     gen_expr(cc, expr, sb, target_reg, params, param_count, locals, local_count);

@@ -4,6 +4,8 @@ int is_type(TokenKind kind, Token *cur) {
     if (kind == CONST || kind == REF) return 1;
 
     if (kind == VOID ||
+        kind == U8 ||
+        kind == U16 ||
         kind == I32 ||
         kind == U32 ||
         kind == CHAR ||

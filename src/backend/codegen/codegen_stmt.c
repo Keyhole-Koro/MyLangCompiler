@@ -8,7 +8,6 @@ static void gen_array_init(CompilerContext *cc, ASTNode *node, StringBuilder *sb
     emit_addr_of_var(cc, sb, node->var_decl.name, "r3", params, param_count, locals, local_count);
 
     int elem_size = array_element_size_bytes(vtype);
-    int is_byte_elem = (elem_size == 1);
     int total_elems = array_total_elements(vtype);
 
     if (node->var_decl.init->type == AST_STRING_LITERAL &&
@@ -43,11 +42,11 @@ static void gen_array_init(CompilerContext *cc, ASTNode *node, StringBuilder *sb
             gen_expr(cc, node->var_decl.init->init_list.elements[i], sb, "r1", params, param_count, locals, local_count);
             int offset = elem_size * i;
             if (offset == 0) {
-                emit_store_to_addr(sb, "r3", "r1", is_byte_elem);
+                emit_store_width_to_addr(sb, "r3", "r1", elem_size);
             } else {
                 sb_append(sb, "  mov r2, r3\n");
                 sb_append(sb, "  addis r2, %d\n", offset);
-                emit_store_to_addr(sb, "r2", "r1", is_byte_elem);
+                emit_store_width_to_addr(sb, "r2", "r1", elem_size);
             }
         }
         if (total > limit) {
@@ -55,11 +54,11 @@ static void gen_array_init(CompilerContext *cc, ASTNode *node, StringBuilder *sb
             for (int i = limit; i < total; i++) {
                 int offset = elem_size * i;
                 if (offset == 0) {
-                    emit_store_to_addr(sb, "r3", "r1", is_byte_elem);
+                    emit_store_width_to_addr(sb, "r3", "r1", elem_size);
                 } else {
                     sb_append(sb, "  mov r2, r3\n");
                     sb_append(sb, "  addis r2, %d\n", offset);
-                    emit_store_to_addr(sb, "r2", "r1", is_byte_elem);
+                    emit_store_width_to_addr(sb, "r2", "r1", elem_size);
                 }
             }
         }
