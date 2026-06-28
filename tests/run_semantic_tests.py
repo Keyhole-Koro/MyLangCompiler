@@ -90,7 +90,23 @@ FAIL_CASES = {
     ),
     "phase_returnTypeMismatch_fail": (
         "fail/semantic/phase_returnTypeMismatch_fail.mln",
-        ":2:12: error: function 'value' returns 'i32' but return expression is 'char'",
+        ":2:12: error: return type mismatch: expected i32, got char[]",
+    ),
+    "phase_typeInitMismatch_fail": (
+        "fail/semantic/phase_typeInitMismatch_fail.mln",
+        ":2:13: error: initializer type mismatch: expected i32, got char[]",
+    ),
+    "phase_typeAssignMismatch_fail": (
+        "fail/semantic/phase_typeAssignMismatch_fail.mln",
+        ":3:9: error: assignment type mismatch: expected i32, got char[]",
+    ),
+    "phase_typeBinaryMismatch_fail": (
+        "fail/semantic/phase_typeBinaryMismatch_fail.mln",
+        ":3:12: error: invalid operands to '+': char* and char*",
+    ),
+    "phase_typeConditionMismatch_fail": (
+        "fail/semantic/phase_typeConditionMismatch_fail.mln",
+        ":3:9: error: condition must be integer-like, pointer, or reference, got char[3]",
     ),
     "phase_multipleDiagnostics_fail": (
         "fail/semantic/phase_multipleDiagnostics_fail.mln",

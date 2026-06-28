@@ -7,6 +7,8 @@ typedef enum {
     EXPRCTX_WRITE,
 } ExprContext;
 
+static int semantic_infer_expr_type(SemanticContext *ctx, ASTNode *expr, SemanticTypeInfo *out);
+
 static ASTNode *semantic_as_identifier(ASTNode *node) {
     return (node && node->type == AST_IDENTIFIER) ? node : NULL;
 }
@@ -172,41 +174,123 @@ static int semantic_type_is_void(ASTNode *type_node) {
     return strcmp(base, "void") == 0;
 }
 
+static int semantic_typeinfo_is_integer_like(const SemanticTypeInfo *info) {
+    if (!info || info->pointer_level > 0 || info->ref_kind != REFKIND_NONE || info->is_array) return 0;
+    return strcmp(info->base_type, "bool") == 0 ||
+           strcmp(info->base_type, "u8") == 0 ||
+           strcmp(info->base_type, "u16") == 0 ||
+           strcmp(info->base_type, "i32") == 0 ||
+           strcmp(info->base_type, "u32") == 0 ||
+           strcmp(info->base_type, "char") == 0 ||
+           strcmp(info->base_type, "long") == 0 ||
+           strcmp(info->base_type, "short") == 0;
+}
+
+static int semantic_typeinfo_is_integer_like_or_enum(SemanticContext *ctx, const SemanticTypeInfo *info) {
+    if (semantic_typeinfo_is_integer_like(info)) return 1;
+    if (!ctx || !info || info->pointer_level > 0 || info->ref_kind != REFKIND_NONE || info->is_array) return 0;
+    return semantic_enum_type_exists(ctx, info->base_type);
+}
+
+static void semantic_typeinfo_format(const SemanticTypeInfo *info, char *buf, size_t buf_size) {
+    size_t used;
+
+    if (!buf || buf_size == 0) return;
+    if (!info || !info->base_type || info->base_type[0] == '\0') {
+        snprintf(buf, buf_size, "<unknown>");
+        return;
+    }
+
+    used = 0;
+    if (info->ref_kind == REFKIND_SHARED) {
+        used += (size_t)snprintf(buf + used, buf_size - used, "ref ");
+    } else if (info->ref_kind == REFKIND_MUT) {
+        used += (size_t)snprintf(buf + used, buf_size - used, "ref mut ");
+    }
+    if (used >= buf_size) return;
+    used += (size_t)snprintf(buf + used, buf_size - used, "%s", info->base_type);
+    for (int i = 0; i < info->pointer_level && used < buf_size; i++) {
+        used += (size_t)snprintf(buf + used, buf_size - used, "*");
+    }
+    for (int i = 0; i < info->dims_count && used < buf_size; i++) {
+        if (info->dims[i] > 0) {
+            used += (size_t)snprintf(buf + used, buf_size - used, "[%d]", info->dims[i]);
+        } else {
+            used += (size_t)snprintf(buf + used, buf_size - used, "[]");
+        }
+    }
+}
+
+static int semantic_typeinfo_same_base(const SemanticTypeInfo *a, const SemanticTypeInfo *b) {
+    return a && b && a->base_type && b->base_type && strcmp(a->base_type, b->base_type) == 0;
+}
+
+static int semantic_typeinfo_compatible(SemanticContext *ctx, const SemanticTypeInfo *expected, const SemanticTypeInfo *actual) {
+    if (!expected || !actual) return 0;
+    if (semantic_typeinfo_is_integer_like_or_enum(ctx, expected) &&
+        semantic_typeinfo_is_integer_like_or_enum(ctx, actual)) return 1;
+
+    if (semantic_typeinfo_same_base(expected, actual) &&
+        expected->ref_kind == actual->ref_kind &&
+        expected->pointer_level == actual->pointer_level &&
+        expected->is_array == actual->is_array &&
+        expected->dims_count == actual->dims_count) {
+        for (int i = 0; i < expected->dims_count; i++) {
+            if (expected->dims[i] > 0 && actual->dims[i] > 0 && expected->dims[i] != actual->dims[i]) return 0;
+        }
+        return 1;
+    }
+
+    if (semantic_typeinfo_same_base(expected, actual) &&
+        expected->ref_kind == REFKIND_NONE &&
+        actual->ref_kind == REFKIND_NONE) {
+        if (expected->pointer_level == actual->pointer_level + 1 && actual->is_array) return 1;
+        if (expected->is_array && expected->pointer_level == 0 && actual->pointer_level == 1) return 1;
+    }
+
+    if (semantic_typeinfo_same_base(expected, actual) &&
+        expected->pointer_level > 0 && actual->ref_kind != REFKIND_NONE &&
+        expected->pointer_level == actual->pointer_level + 1) {
+        return 1;
+    }
+
+    if (semantic_typeinfo_is_integer_like_or_enum(ctx, expected) &&
+        (actual->pointer_level > 0 || actual->ref_kind != REFKIND_NONE) &&
+        !actual->is_array) {
+        return 1;
+    }
+
+    return 0;
+}
+
+static void semantic_report_type_mismatch(SemanticContext *ctx, SemanticLocation loc,
+                                          const char *what,
+                                          const SemanticTypeInfo *expected,
+                                          const SemanticTypeInfo *actual) {
+    char expected_buf[96];
+    char actual_buf[96];
+
+    semantic_typeinfo_format(expected, expected_buf, sizeof(expected_buf));
+    semantic_typeinfo_format(actual, actual_buf, sizeof(actual_buf));
+    semantic_error_at(ctx, loc, "%s type mismatch: expected %s, got %s",
+                      what ? what : "expression", expected_buf, actual_buf);
+}
+
 static int expr_is_obviously_value(ASTNode *expr) {
     return expr != NULL;
 }
 
-static int expr_obvious_base_type(ASTNode *expr, const char **out_base) {
-    if (!out_base) return 0;
-    *out_base = NULL;
-    if (!expr) return 0;
-
-    switch (expr->type) {
-    case AST_STRING_LITERAL:
-        *out_base = "char";
-        return 1;
-    case AST_CHAR_LITERAL:
-        *out_base = "char";
-        return 1;
-    case AST_NUMBER:
-        *out_base = "i32";
-        return 1;
-    default:
-        return 0;
-    }
-}
-
 static void check_return_type(SemanticContext *ctx, ASTNode *return_node) {
     ASTNode *fn;
-    const char *ret_base;
-    const char *expr_base = NULL;
+    SemanticTypeInfo expected;
+    SemanticTypeInfo actual;
 
     if (!ctx || !return_node || return_node->type != AST_RETURN) return;
     fn = ctx->current_function;
     if (!fn || fn->type != AST_FUNDEF) return;
 
-    ret_base = semantic_type_base_name(fn->fundef.ret_type);
-    if (!ret_base || ret_base[0] == '\0') return;
+    if (!semantic_typeinfo_from_type_ast(fn->fundef.ret_type, &expected)) return;
+    if (!expected.base_type || expected.base_type[0] == '\0') return;
 
     if (semantic_type_is_void(fn->fundef.ret_type)) {
         if (expr_is_obviously_value(return_node->ret.expr)) {
@@ -222,11 +306,10 @@ static void check_return_type(SemanticContext *ctx, ASTNode *return_node) {
         return;
     }
 
-    if (expr_obvious_base_type(return_node->ret.expr, &expr_base) &&
-        expr_base && strcmp(ret_base, expr_base) != 0) {
-        semantic_error_at(ctx, semantic_location_from_ast(return_node->ret.expr),
-                          "function '%s' returns '%s' but return expression is '%s'",
-                          fn->fundef.name, ret_base, expr_base);
+    if (semantic_infer_expr_type(ctx, return_node->ret.expr, &actual) &&
+        !semantic_typeinfo_compatible(ctx, &expected, &actual)) {
+        semantic_report_type_mismatch(ctx, semantic_location_from_ast(return_node->ret.expr),
+                                      "return", &expected, &actual);
     }
 }
 
@@ -294,15 +377,19 @@ static void leave_scope(SemanticContext *ctx) {
     if (ctx->scope_depth > 0) ctx->scope_depth--;
 }
 
-static void declare_binding(SemanticContext *ctx, const char *name, int is_copy, int is_param,
-                            SemanticLocation decl_loc) {
+static void declare_binding(SemanticContext *ctx, const char *name, ASTNode *type_node,
+                            int is_copy, int is_param, SemanticLocation decl_loc) {
     SemanticBinding *binding;
+    SemanticTypeInfo type_info;
+    int has_type = semantic_typeinfo_from_type_ast(type_node, &type_info);
 
     if (!ctx || !name) return;
     binding = find_binding(ctx, name);
     if (binding && binding->scope_depth == ctx->scope_depth) {
         binding->is_copy = is_copy;
         binding->moved = 0;
+        binding->has_type = has_type;
+        if (has_type) binding->type_info = type_info;
         binding->decl_loc = decl_loc;
         binding->move_loc = semantic_location_unknown();
         binding->is_param = is_param;
@@ -323,6 +410,8 @@ static void declare_binding(SemanticContext *ctx, const char *name, int is_copy,
     binding->scope_depth = ctx->scope_depth;
     binding->is_param = is_param;
     binding->is_global = (!is_param && ctx->function_depth == 0);
+    binding->has_type = has_type;
+    if (has_type) binding->type_info = type_info;
     binding->decl_loc = decl_loc;
     binding->move_loc = semantic_location_unknown();
     binding->borrowed_from = NULL;
@@ -500,6 +589,263 @@ static void use_identifier(SemanticContext *ctx, ASTNode *node, ExprContext expr
     }
 }
 
+static const char *semantic_binary_op_name(TokenKind op) {
+    switch (op) {
+    case ADD: return "+";
+    case SUB: return "-";
+    case ASTARISK: return "*";
+    case DIV: return "/";
+    case MOD: return "%";
+    case LSH: return "<<";
+    case RSH: return ">>";
+    case LT: return "<";
+    case GT: return ">";
+    case LTE: return "<=";
+    case GTE: return ">=";
+    case EQ: return "==";
+    case NEQ: return "!=";
+    case AMPERSAND: return "&";
+    case BITXOR: return "^";
+    case BITOR: return "|";
+    case LAND: return "&&";
+    case LOR: return "||";
+    default: return tokenkind2str(op);
+    }
+}
+
+static void semantic_typeinfo_make_scalar(SemanticTypeInfo *out, const char *base_type) {
+    semantic_typeinfo_clear(out);
+    out->base_type = base_type;
+}
+
+static int semantic_infer_identifier_type(SemanticContext *ctx, ASTNode *expr, SemanticTypeInfo *out) {
+    SemanticBinding *binding;
+    long enum_value;
+
+    if (!ctx || !expr || expr->type != AST_IDENTIFIER || !out) return 0;
+    if (semantic_find_enum_value(ctx, expr->identifier.name, &enum_value)) {
+        (void)enum_value;
+        semantic_typeinfo_make_scalar(out, "i32");
+        return 1;
+    }
+    binding = find_binding(ctx, expr->identifier.name);
+    if (!binding || !binding->has_type) return 0;
+    *out = binding->type_info;
+    return 1;
+}
+
+static int semantic_infer_unary_type(SemanticContext *ctx, ASTNode *expr, SemanticTypeInfo *out) {
+    SemanticTypeInfo operand;
+
+    if (!ctx || !expr || expr->type != AST_UNARY || !out) return 0;
+    if (!semantic_infer_expr_type(ctx, expr->unary.operand, &operand)) return 0;
+
+    if (expr->unary.op == AMPERSAND) {
+        *out = operand;
+        out->pointer_level++;
+        out->is_array = 0;
+        out->dims_count = 0;
+        return 1;
+    }
+    if (expr->unary.op == ASTARISK) {
+        if (operand.ref_kind != REFKIND_NONE) {
+            *out = operand;
+            out->ref_kind = REFKIND_NONE;
+            return 1;
+        }
+        if (operand.pointer_level <= 0) return 0;
+        *out = operand;
+        out->pointer_level--;
+        return 1;
+    }
+
+    if (!semantic_typeinfo_is_integer_like_or_enum(ctx, &operand)) return 0;
+    *out = operand;
+    return 1;
+}
+
+static int semantic_binary_is_comparison(TokenKind op) {
+    return op == LT || op == GT || op == LTE || op == GTE || op == EQ || op == NEQ;
+}
+
+static int semantic_binary_is_logical(TokenKind op) {
+    return op == LAND || op == LOR;
+}
+
+static int semantic_binary_is_arithmetic(TokenKind op) {
+    return op == ADD || op == SUB || op == ASTARISK || op == DIV || op == MOD ||
+           op == LSH || op == RSH || op == AMPERSAND || op == BITXOR || op == BITOR;
+}
+
+static int semantic_infer_binary_type(SemanticContext *ctx, ASTNode *expr, SemanticTypeInfo *out) {
+    SemanticTypeInfo left;
+    SemanticTypeInfo right;
+
+    if (!ctx || !expr || expr->type != AST_BINARY || !out) return 0;
+    if (!semantic_infer_expr_type(ctx, expr->binary.left, &left)) return 0;
+    if (!semantic_infer_expr_type(ctx, expr->binary.right, &right)) return 0;
+
+    if (semantic_binary_is_comparison(expr->binary.op) || semantic_binary_is_logical(expr->binary.op)) {
+        semantic_typeinfo_make_scalar(out, "i32");
+        return 1;
+    }
+
+    if ((expr->binary.op == ADD || expr->binary.op == SUB) &&
+        left.pointer_level > 0 && semantic_typeinfo_is_integer_like_or_enum(ctx, &right)) {
+        *out = left;
+        return 1;
+    }
+    if ((expr->binary.op == ADD || expr->binary.op == SUB) &&
+        left.is_array && semantic_typeinfo_is_integer_like_or_enum(ctx, &right)) {
+        *out = left;
+        out->is_array = 0;
+        out->dims_count = 0;
+        out->pointer_level++;
+        return 1;
+    }
+    if (expr->binary.op == ADD &&
+        right.pointer_level > 0 && semantic_typeinfo_is_integer_like_or_enum(ctx, &left)) {
+        *out = right;
+        return 1;
+    }
+    if (expr->binary.op == ADD &&
+        right.is_array && semantic_typeinfo_is_integer_like_or_enum(ctx, &left)) {
+        *out = right;
+        out->is_array = 0;
+        out->dims_count = 0;
+        out->pointer_level++;
+        return 1;
+    }
+
+    if (semantic_binary_is_arithmetic(expr->binary.op) &&
+        semantic_typeinfo_is_integer_like_or_enum(ctx, &left) &&
+        semantic_typeinfo_is_integer_like_or_enum(ctx, &right)) {
+        if (strcmp(left.base_type, "char") == 0 || strcmp(left.base_type, "bool") == 0) {
+            semantic_typeinfo_make_scalar(out, "i32");
+        } else {
+            *out = left;
+        }
+        return 1;
+    }
+
+    return 0;
+}
+
+static int semantic_infer_expr_type(SemanticContext *ctx, ASTNode *expr, SemanticTypeInfo *out) {
+    SemanticTypeInfo target;
+
+    if (!ctx || !expr || !out) return 0;
+    switch (expr->type) {
+    case AST_NUMBER:
+        semantic_typeinfo_make_scalar(out, "i32");
+        return 1;
+    case AST_CHAR_LITERAL:
+        semantic_typeinfo_make_scalar(out, "char");
+        return 1;
+    case AST_STRING_LITERAL:
+        semantic_typeinfo_make_scalar(out, "char");
+        out->is_array = 1;
+        out->dims_count = 1;
+        return 1;
+    case AST_IDENTIFIER:
+        return semantic_infer_identifier_type(ctx, expr, out);
+    case AST_BORROW:
+        if (!semantic_infer_expr_type(ctx, expr->borrow.expr, out)) return 0;
+        out->ref_kind = REFKIND_SHARED;
+        return 1;
+    case AST_BORROW_MUT:
+        if (!semantic_infer_expr_type(ctx, expr->borrow_mut.expr, out)) return 0;
+        out->ref_kind = REFKIND_MUT;
+        return 1;
+    case AST_UNARY:
+        return semantic_infer_unary_type(ctx, expr, out);
+    case AST_CAST:
+        return semantic_typeinfo_from_type_ast(expr->cast.type, out);
+    case AST_BINARY:
+        return semantic_infer_binary_type(ctx, expr, out);
+    case AST_ASSIGN:
+        return semantic_infer_expr_type(ctx, expr->assign.left, out);
+    case AST_TERNARY:
+        if (!semantic_infer_expr_type(ctx, expr->ternary.then_expr, out)) return 0;
+        if (!semantic_infer_expr_type(ctx, expr->ternary.else_expr, &target)) return 1;
+        if (!semantic_typeinfo_compatible(ctx, out, &target)) return 0;
+        return 1;
+    default:
+        return 0;
+    }
+}
+
+static void check_binary_type(SemanticContext *ctx, ASTNode *node) {
+    SemanticTypeInfo left;
+    SemanticTypeInfo right;
+    char left_buf[96];
+    char right_buf[96];
+
+    if (!ctx || !node || node->type != AST_BINARY) return;
+    if (!semantic_infer_expr_type(ctx, node->binary.left, &left)) return;
+    if (!semantic_infer_expr_type(ctx, node->binary.right, &right)) return;
+
+    if (semantic_binary_is_comparison(node->binary.op) || semantic_binary_is_logical(node->binary.op)) {
+        if ((semantic_typeinfo_is_integer_like_or_enum(ctx, &left) || left.pointer_level > 0 || left.ref_kind != REFKIND_NONE) &&
+            (semantic_typeinfo_is_integer_like_or_enum(ctx, &right) || right.pointer_level > 0 || right.ref_kind != REFKIND_NONE)) {
+            return;
+        }
+    } else if (semantic_binary_is_arithmetic(node->binary.op)) {
+        if (semantic_typeinfo_is_integer_like_or_enum(ctx, &left) && semantic_typeinfo_is_integer_like_or_enum(ctx, &right)) return;
+        if ((node->binary.op == ADD || node->binary.op == SUB) &&
+            left.pointer_level > 0 && semantic_typeinfo_is_integer_like_or_enum(ctx, &right)) return;
+        if ((node->binary.op == ADD || node->binary.op == SUB) &&
+            left.is_array && semantic_typeinfo_is_integer_like_or_enum(ctx, &right)) return;
+        if (node->binary.op == ADD &&
+            right.pointer_level > 0 && semantic_typeinfo_is_integer_like_or_enum(ctx, &left)) return;
+        if (node->binary.op == ADD &&
+            right.is_array && semantic_typeinfo_is_integer_like_or_enum(ctx, &left)) return;
+    }
+
+    semantic_typeinfo_format(&left, left_buf, sizeof(left_buf));
+    semantic_typeinfo_format(&right, right_buf, sizeof(right_buf));
+    semantic_error_at(ctx, semantic_location_from_ast(node),
+                      "invalid operands to '%s': %s and %s",
+                      semantic_binary_op_name(node->binary.op), left_buf, right_buf);
+}
+
+static void check_assignment_type(SemanticContext *ctx, ASTNode *node) {
+    SemanticTypeInfo left;
+    SemanticTypeInfo right;
+
+    if (!ctx || !node || node->type != AST_ASSIGN) return;
+    if (!semantic_infer_expr_type(ctx, node->assign.left, &left)) return;
+    if (!semantic_infer_expr_type(ctx, node->assign.right, &right)) return;
+    if (semantic_typeinfo_compatible(ctx, &left, &right)) return;
+    semantic_report_type_mismatch(ctx, semantic_location_from_ast(node->assign.right),
+                                  "assignment", &left, &right);
+}
+
+static void check_initializer_type(SemanticContext *ctx, ASTNode *node) {
+    SemanticTypeInfo expected;
+    SemanticTypeInfo actual;
+
+    if (!ctx || !node || node->type != AST_VAR_DECL || !node->var_decl.init) return;
+    if (!semantic_typeinfo_from_type_ast(node->var_decl.var_type, &expected)) return;
+    if (!semantic_infer_expr_type(ctx, node->var_decl.init, &actual)) return;
+    if (semantic_typeinfo_compatible(ctx, &expected, &actual)) return;
+    semantic_report_type_mismatch(ctx, semantic_location_from_ast(node->var_decl.init),
+                                  "initializer", &expected, &actual);
+}
+
+static void check_condition_type(SemanticContext *ctx, ASTNode *cond) {
+    SemanticTypeInfo info;
+    char type_buf[96];
+
+    if (!ctx || !cond) return;
+    if (!semantic_infer_expr_type(ctx, cond, &info)) return;
+    if (semantic_typeinfo_is_integer_like_or_enum(ctx, &info) || info.pointer_level > 0 || info.ref_kind != REFKIND_NONE) return;
+
+    semantic_typeinfo_format(&info, type_buf, sizeof(type_buf));
+    semantic_error_at(ctx, semantic_location_from_ast(cond),
+                      "condition must be integer-like, pointer, or reference, got %s", type_buf);
+}
+
 static void semantic_walk_expr(SemanticContext *ctx, ASTNode *node, ExprContext expr_ctx);
 static void semantic_walk_stmt(SemanticContext *ctx, ASTNode *node);
 static void semantic_check_type_exists(SemanticContext *ctx, ASTNode *type_node);
@@ -558,6 +904,7 @@ static void walk_params(SemanticContext *ctx, ASTNode **params, int param_count)
         semantic_walk_stmt(ctx, param);
         if (param) {
             declare_binding(ctx, param->param.name,
+                            param->param.type,
                             param->param.is_rest ? 1 : semantic_type_is_copy(ctx, param->param.type), 1,
                             semantic_location_from_ast(param));
         }
@@ -584,10 +931,12 @@ static void semantic_walk_expr(SemanticContext *ctx, ASTNode *node, ExprContext 
     case AST_BINARY:
         semantic_walk_expr(ctx, node->binary.left, EXPRCTX_READ);
         semantic_walk_expr(ctx, node->binary.right, EXPRCTX_READ);
+        check_binary_type(ctx, node);
         break;
     case AST_ASSIGN:
         semantic_walk_expr(ctx, node->assign.right, EXPRCTX_READ);
         semantic_walk_expr(ctx, node->assign.left, EXPRCTX_WRITE);
+        check_assignment_type(ctx, node);
         revive_binding_if_identifier(ctx, node->assign.left);
         break;
     case AST_BORROW:
@@ -631,6 +980,7 @@ static void semantic_walk_expr(SemanticContext *ctx, ASTNode *node, ExprContext 
         break;
     case AST_TERNARY:
         semantic_walk_expr(ctx, node->ternary.cond, EXPRCTX_READ);
+        check_condition_type(ctx, node->ternary.cond);
         semantic_walk_expr(ctx, node->ternary.then_expr, EXPRCTX_READ);
         semantic_walk_expr(ctx, node->ternary.else_expr, EXPRCTX_READ);
         break;
@@ -705,9 +1055,10 @@ static void semantic_walk_stmt(SemanticContext *ctx, ASTNode *node) {
         semantic_walk_stmt(ctx, node->var_decl.var_type);
         if (node->var_decl.init) {
             semantic_walk_expr(ctx, node->var_decl.init, EXPRCTX_MOVE);
+            check_initializer_type(ctx, node);
         }
         is_copy = semantic_type_is_copy(ctx, node->var_decl.var_type);
-        declare_binding(ctx, node->var_decl.name, is_copy, 0, semantic_location_from_ast(node));
+        declare_binding(ctx, node->var_decl.name, node->var_decl.var_type, is_copy, 0, semantic_location_from_ast(node));
         register_borrow_binding(ctx, node);
         break;
     case AST_EXPR_STMT:
@@ -715,6 +1066,7 @@ static void semantic_walk_stmt(SemanticContext *ctx, ASTNode *node) {
         break;
     case AST_IF:
         semantic_walk_expr(ctx, node->if_stmt.cond, EXPRCTX_READ);
+        check_condition_type(ctx, node->if_stmt.cond);
         semantic_walk_stmt(ctx, node->if_stmt.then_stmt);
         semantic_walk_stmt(ctx, node->if_stmt.else_stmt);
         break;
@@ -765,12 +1117,14 @@ static void semantic_walk_stmt(SemanticContext *ctx, ASTNode *node) {
         break;
     case AST_WHILE:
         semantic_walk_expr(ctx, node->while_stmt.cond, EXPRCTX_READ);
+        check_condition_type(ctx, node->while_stmt.cond);
         semantic_walk_stmt(ctx, node->while_stmt.body);
         break;
     case AST_FOR:
         enter_scope(ctx);
         semantic_walk_stmt(ctx, node->for_stmt.init);
         semantic_walk_expr(ctx, node->for_stmt.cond, EXPRCTX_READ);
+        check_condition_type(ctx, node->for_stmt.cond);
         semantic_walk_stmt(ctx, node->for_stmt.inc);
         semantic_walk_stmt(ctx, node->for_stmt.body);
         leave_scope(ctx);
@@ -803,6 +1157,7 @@ static void semantic_walk_stmt(SemanticContext *ctx, ASTNode *node) {
     case AST_DO_WHILE:
         semantic_walk_stmt(ctx, node->do_while_stmt.body);
         semantic_walk_expr(ctx, node->do_while_stmt.cond, EXPRCTX_READ);
+        check_condition_type(ctx, node->do_while_stmt.cond);
         break;
     default:
         semantic_error_at(ctx, semantic_location_from_ast(node),
