@@ -1,0 +1,7 @@
+i32 value() {
+    return "hello";
+}
+
+i32 main() {
+    return value();
+}

@@ -50,6 +50,7 @@ typedef struct {
     int error_count;
     int scope_depth;
     int function_depth;
+    ASTNode *current_function;
     int binding_count;
     SemanticBinding bindings[256];
     int enum_type_count;

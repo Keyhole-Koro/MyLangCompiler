@@ -161,6 +161,75 @@ static int semantic_type_is_copy(SemanticContext *ctx, ASTNode *type_node) {
     return semantic_is_builtin_type(base_type);
 }
 
+static const char *semantic_type_base_name(ASTNode *type_node) {
+    SemanticTypeInfo info;
+    if (!semantic_typeinfo_from_type_ast(type_node, &info)) return "";
+    return info.base_type ? info.base_type : "";
+}
+
+static int semantic_type_is_void(ASTNode *type_node) {
+    const char *base = semantic_type_base_name(type_node);
+    return strcmp(base, "void") == 0;
+}
+
+static int expr_is_obviously_value(ASTNode *expr) {
+    return expr != NULL;
+}
+
+static int expr_obvious_base_type(ASTNode *expr, const char **out_base) {
+    if (!out_base) return 0;
+    *out_base = NULL;
+    if (!expr) return 0;
+
+    switch (expr->type) {
+    case AST_STRING_LITERAL:
+        *out_base = "char";
+        return 1;
+    case AST_CHAR_LITERAL:
+        *out_base = "char";
+        return 1;
+    case AST_NUMBER:
+        *out_base = "i32";
+        return 1;
+    default:
+        return 0;
+    }
+}
+
+static void check_return_type(SemanticContext *ctx, ASTNode *return_node) {
+    ASTNode *fn;
+    const char *ret_base;
+    const char *expr_base = NULL;
+
+    if (!ctx || !return_node || return_node->type != AST_RETURN) return;
+    fn = ctx->current_function;
+    if (!fn || fn->type != AST_FUNDEF) return;
+
+    ret_base = semantic_type_base_name(fn->fundef.ret_type);
+    if (!ret_base || ret_base[0] == '\0') return;
+
+    if (semantic_type_is_void(fn->fundef.ret_type)) {
+        if (expr_is_obviously_value(return_node->ret.expr)) {
+            semantic_error_at(ctx, semantic_location_from_ast(return_node),
+                              "void function '%s' should not return a value", fn->fundef.name);
+        }
+        return;
+    }
+
+    if (!return_node->ret.expr) {
+        semantic_error_at(ctx, semantic_location_from_ast(return_node),
+                          "function '%s' must return a value", fn->fundef.name);
+        return;
+    }
+
+    if (expr_obvious_base_type(return_node->ret.expr, &expr_base) &&
+        expr_base && strcmp(ret_base, expr_base) != 0) {
+        semantic_error_at(ctx, semantic_location_from_ast(return_node->ret.expr),
+                          "function '%s' returns '%s' but return expression is '%s'",
+                          fn->fundef.name, ret_base, expr_base);
+    }
+}
+
 static int semantic_location_is_known(SemanticLocation loc) {
     return loc.line > 0 || loc.col > 0;
 }
@@ -650,6 +719,7 @@ static void semantic_walk_stmt(SemanticContext *ctx, ASTNode *node) {
         semantic_walk_stmt(ctx, node->if_stmt.else_stmt);
         break;
     case AST_RETURN:
+        check_return_type(ctx, node);
         check_return_reference_escape(ctx, node->ret.expr);
         semantic_walk_expr(ctx, node->ret.expr, EXPRCTX_MOVE);
         break;
@@ -677,6 +747,9 @@ static void semantic_walk_stmt(SemanticContext *ctx, ASTNode *node) {
         ctx->function_depth--;
         break;
     case AST_FUNDEF:
+    {
+        ASTNode *prev_function = ctx->current_function;
+        ctx->current_function = node;
         ctx->function_depth++;
         enter_scope(ctx);
         semantic_walk_stmt(ctx, node->fundef.ret_type);
@@ -684,7 +757,9 @@ static void semantic_walk_stmt(SemanticContext *ctx, ASTNode *node) {
         semantic_walk_stmt(ctx, node->fundef.body);
         leave_scope(ctx);
         ctx->function_depth--;
+        ctx->current_function = prev_function;
         break;
+    }
     case AST_PARAM:
         semantic_walk_stmt(ctx, node->param.type);
         break;

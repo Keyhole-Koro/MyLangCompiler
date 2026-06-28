@@ -80,6 +80,18 @@ FAIL_CASES = {
         "fail/semantic/phase_callArgCount_fail.mln",
         ":6:12: error: function 'add' expects 2 arguments but got 1",
     ),
+    "phase_returnMissingValue_fail": (
+        "fail/semantic/phase_returnMissingValue_fail.mln",
+        ":2:5: error: function 'value' must return a value",
+    ),
+    "phase_voidReturnValue_fail": (
+        "fail/semantic/phase_voidReturnValue_fail.mln",
+        ":2:5: error: void function 'log' should not return a value",
+    ),
+    "phase_returnTypeMismatch_fail": (
+        "fail/semantic/phase_returnTypeMismatch_fail.mln",
+        ":2:12: error: function 'value' returns 'i32' but return expression is 'char'",
+    ),
 }
 
 
