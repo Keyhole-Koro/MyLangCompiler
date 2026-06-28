@@ -13,6 +13,7 @@ int semantic_check(ASTNode *root) {
     SemanticContext ctx;
     ctx.filename = g_semantic_filename;
     ctx.error_count = 0;
+    ctx.diagnostic_count = 0;
     ctx.scope_depth = 0;
     ctx.function_depth = 0;
     ctx.current_function = NULL;
@@ -23,5 +24,6 @@ int semantic_check(ASTNode *root) {
     ctx.user_type_count = 0;
 
     semantic_walk_ast(&ctx, root);
+    semantic_emit_diagnostics(&ctx);
     return ctx.error_count == 0;
 }
