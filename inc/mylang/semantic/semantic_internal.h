@@ -32,6 +32,8 @@ typedef struct {
     int scope_depth;
     int is_param;
     int is_global;
+    int has_type;
+    SemanticTypeInfo type_info;
     SemanticLocation decl_loc;
     SemanticLocation move_loc;
     const char *borrowed_from;
