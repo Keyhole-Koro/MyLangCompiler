@@ -39,27 +39,62 @@ SemanticLocation semantic_location_from_ast(ASTNode *node) {
     }
 }
 
+static const char *severity_name(SemanticDiagnosticSeverity severity) {
+    switch (severity) {
+    case SEMANTIC_DIAG_ERROR: return "error";
+    case SEMANTIC_DIAG_NOTE: return "note";
+    default: return "diagnostic";
+    }
+}
+
+static void semantic_diagnostic_at(SemanticContext *ctx, SemanticDiagnosticSeverity severity,
+                                   SemanticLocation loc, const char *fmt, va_list ap) {
+    if (!ctx) {
+        fprintf(stderr, "<input>:%d:%d: %s: ", loc.line, loc.col, severity_name(severity));
+        vfprintf(stderr, fmt, ap);
+        fputc('\n', stderr);
+        return;
+    }
+
+    if (ctx->diagnostic_count >= (int)(sizeof(ctx->diagnostics) / sizeof(ctx->diagnostics[0]))) {
+        fprintf(stderr, "%s:%d:%d: error: semantic diagnostic buffer exhausted\n",
+                ctx->filename ? ctx->filename : "<input>", loc.line, loc.col);
+        ctx->error_count++;
+        return;
+    }
+
+    SemanticDiagnostic *diag = &ctx->diagnostics[ctx->diagnostic_count++];
+    diag->severity = severity;
+    diag->loc = loc;
+    vsnprintf(diag->message, sizeof(diag->message), fmt, ap);
+    diag->message[sizeof(diag->message) - 1] = '\0';
+    if (severity == SEMANTIC_DIAG_ERROR) ctx->error_count++;
+}
+
 void semantic_error_at(SemanticContext *ctx, SemanticLocation loc, const char *fmt, ...) {
     va_list ap;
-    fprintf(stderr, "%s:%d:%d: error: ",
-            (ctx && ctx->filename) ? ctx->filename : "<input>",
-            loc.line,
-            loc.col);
     va_start(ap, fmt);
-    vfprintf(stderr, fmt, ap);
+    semantic_diagnostic_at(ctx, SEMANTIC_DIAG_ERROR, loc, fmt, ap);
     va_end(ap);
-    fputc('\n', stderr);
-    if (ctx) ctx->error_count++;
 }
 
 void semantic_note_at(SemanticContext *ctx, SemanticLocation loc, const char *fmt, ...) {
     va_list ap;
-    fprintf(stderr, "%s:%d:%d: note: ",
-            (ctx && ctx->filename) ? ctx->filename : "<input>",
-            loc.line,
-            loc.col);
     va_start(ap, fmt);
-    vfprintf(stderr, fmt, ap);
+    semantic_diagnostic_at(ctx, SEMANTIC_DIAG_NOTE, loc, fmt, ap);
     va_end(ap);
-    fputc('\n', stderr);
+}
+
+void semantic_emit_diagnostics(SemanticContext *ctx) {
+    if (!ctx) return;
+    const char *filename = ctx->filename ? ctx->filename : "<input>";
+    for (int i = 0; i < ctx->diagnostic_count; i++) {
+        SemanticDiagnostic *diag = &ctx->diagnostics[i];
+        fprintf(stderr, "%s:%d:%d: %s: %s\n",
+                filename,
+                diag->loc.line,
+                diag->loc.col,
+                severity_name(diag->severity),
+                diag->message);
+    }
 }

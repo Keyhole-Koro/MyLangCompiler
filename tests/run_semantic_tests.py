@@ -92,6 +92,13 @@ FAIL_CASES = {
         "fail/semantic/phase_returnTypeMismatch_fail.mln",
         ":2:12: error: function 'value' returns 'i32' but return expression is 'char'",
     ),
+    "phase_multipleDiagnostics_fail": (
+        "fail/semantic/phase_multipleDiagnostics_fail.mln",
+        [
+            ":2:13: error: undefined identifier 'first_missing'",
+            ":2:29: error: undefined identifier 'second_missing'",
+        ],
+    ),
 }
 
 
@@ -162,9 +169,11 @@ def check_fail_case(case_name: str, rel_path: str, expected: str, failure_marker
             f"STDERR:\n{result.stderr}"
         )
 
-    if expected not in result.stderr:
+    expected_items = expected if isinstance(expected, list) else [expected]
+    missing_expected = [item for item in expected_items if item not in result.stderr]
+    if missing_expected:
         return False, (
-            f"{case_name}: missing expected semantic error '{expected}'\n"
+            f"{case_name}: missing expected semantic error(s) {missing_expected!r}\n"
             f"STDOUT:\n{result.stdout}\n"
             f"STDERR:\n{result.stderr}"
         )

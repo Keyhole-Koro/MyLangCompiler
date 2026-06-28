@@ -14,6 +14,17 @@ typedef struct {
     int col;
 } SemanticLocation;
 
+typedef enum {
+    SEMANTIC_DIAG_ERROR = 1,
+    SEMANTIC_DIAG_NOTE = 2,
+} SemanticDiagnosticSeverity;
+
+typedef struct {
+    SemanticDiagnosticSeverity severity;
+    SemanticLocation loc;
+    char message[256];
+} SemanticDiagnostic;
+
 typedef struct {
     const char *name;
     int is_copy;
@@ -48,6 +59,8 @@ typedef struct {
 typedef struct {
     const char *filename;
     int error_count;
+    int diagnostic_count;
+    SemanticDiagnostic diagnostics[512];
     int scope_depth;
     int function_depth;
     ASTNode *current_function;
@@ -67,6 +80,7 @@ SemanticLocation semantic_location_unknown(void);
 SemanticLocation semantic_location_from_ast(ASTNode *node);
 void semantic_error_at(SemanticContext *ctx, SemanticLocation loc, const char *fmt, ...);
 void semantic_note_at(SemanticContext *ctx, SemanticLocation loc, const char *fmt, ...);
+void semantic_emit_diagnostics(SemanticContext *ctx);
 void semantic_walk_ast(SemanticContext *ctx, ASTNode *node);
 
 #endif
