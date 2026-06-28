@@ -172,7 +172,7 @@ def run_test(basename, sources, reg, expected, temp_root):
     if run_step([str(LINKER_PATH), str(bin_path)] + obj_paths, f"Link MOBJ to MBIN: {basename}", basename, out_dir=test_dir, outcomes=outcomes, cwd=test_dir) is None:
         return basename, outcomes
 
-    output = run_step([str(EMU_PATH), "-i", str(bin_path), "--reg", reg], f"Run Emulator: {basename}.mbin", basename, timeout=EMU_TIMEOUT_SEC, out_dir=test_dir, outcomes=outcomes, cwd=test_dir)
+    output = run_step([str(EMU_PATH), "-i", str(bin_path), "--headless", "--reg", reg], f"Run Emulator: {basename}.mbin", basename, timeout=EMU_TIMEOUT_SEC, out_dir=test_dir, outcomes=outcomes, cwd=test_dir)
     if output is None:
         outcomes.append("FAIL: Emulator execution failed")
         return basename, outcomes
