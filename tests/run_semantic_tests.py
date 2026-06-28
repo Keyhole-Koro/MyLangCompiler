@@ -72,6 +72,14 @@ FAIL_CASES = {
         "fail/semantic/phase_undefinedIdentifier_fail.mln",
         ":2:13: error: undefined identifier 'missing'",
     ),
+    "phase_undefinedFunction_fail": (
+        "fail/semantic/phase_undefinedFunction_fail.mln",
+        ":2:12: error: undefined function 'missing_func'",
+    ),
+    "phase_callArgCount_fail": (
+        "fail/semantic/phase_callArgCount_fail.mln",
+        ":6:12: error: function 'add' expects 2 arguments but got 1",
+    ),
 }
 
 

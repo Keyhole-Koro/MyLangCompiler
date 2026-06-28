@@ -1,0 +1,3 @@
+i32 main() {
+    return missing_func(1);
+}

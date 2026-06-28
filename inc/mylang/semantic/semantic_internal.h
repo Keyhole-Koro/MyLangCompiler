@@ -37,6 +37,15 @@ typedef struct {
 } SemanticEnumValue;
 
 typedef struct {
+    const char *name;
+    int param_count;
+    int fixed_param_count;
+    int is_variadic;
+    int is_imported;
+    SemanticLocation decl_loc;
+} SemanticFunctionSig;
+
+typedef struct {
     const char *filename;
     int error_count;
     int scope_depth;
@@ -47,6 +56,8 @@ typedef struct {
     const char *enum_types[128];
     int enum_value_count;
     SemanticEnumValue enum_values[512];
+    int function_sig_count;
+    SemanticFunctionSig function_sigs[256];
     int user_type_count;
     const char *user_types[256];
 } SemanticContext;

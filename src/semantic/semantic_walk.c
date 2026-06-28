@@ -1,4 +1,5 @@
 #include "mylang/semantic/semantic_internal.h"
+#include "mylang/frontend/parser_state_internal.h"
 
 typedef enum {
     EXPRCTX_READ = 0,
@@ -37,6 +38,62 @@ static int semantic_find_enum_value(SemanticContext *ctx, const char *name, long
     return 0;
 }
 
+static int semantic_is_builtin_call(const char *name) {
+    return name &&
+           (strcmp(name, "__rest_len") == 0 ||
+            strcmp(name, "__rest_get") == 0);
+}
+
+static SemanticFunctionSig *find_function_sig(SemanticContext *ctx, const char *name) {
+    if (!ctx || !name) return NULL;
+    for (int i = ctx->function_sig_count - 1; i >= 0; i--) {
+        if (ctx->function_sigs[i].name && strcmp(ctx->function_sigs[i].name, name) == 0) {
+            return &ctx->function_sigs[i];
+        }
+    }
+    return NULL;
+}
+
+static void register_function_sig(SemanticContext *ctx, const char *name, int param_count,
+                                  int is_variadic, int is_imported, SemanticLocation loc) {
+    SemanticFunctionSig *sig;
+
+    if (!ctx || !name) return;
+    sig = find_function_sig(ctx, name);
+    if (sig && !sig->is_imported) return;
+    if (sig && sig->is_imported && !is_imported) {
+        sig->param_count = param_count;
+        sig->fixed_param_count = is_variadic ? param_count - 1 : param_count;
+        sig->is_variadic = is_variadic;
+        sig->is_imported = 0;
+        sig->decl_loc = loc;
+        return;
+    }
+
+    if (ctx->function_sig_count >= (int)(sizeof(ctx->function_sigs) / sizeof(ctx->function_sigs[0]))) {
+        semantic_error_at(ctx, loc, "semantic function table exhausted while tracking '%s'", name);
+        return;
+    }
+
+    sig = &ctx->function_sigs[ctx->function_sig_count++];
+    sig->name = name;
+    sig->param_count = param_count;
+    sig->fixed_param_count = is_variadic ? param_count - 1 : param_count;
+    sig->is_variadic = is_variadic;
+    sig->is_imported = is_imported;
+    sig->decl_loc = loc;
+}
+
+static int call_may_be_package_import(const char *name) {
+    if (!name) return 0;
+    for (int i = 0; i < g_imported_pkg_count; i++) {
+        const char *pkg = g_imported_packages[i];
+        size_t len = pkg ? strlen(pkg) : 0;
+        if (len > 0 && strncmp(name, pkg, len) == 0 && name[len] == '_') return 1;
+    }
+    return 0;
+}
+
 static void semantic_register_enum(SemanticContext *ctx, ASTNode *node) {
     if (!ctx || !node || node->type != AST_ENUM) return;
     if (node->enum_stmt.name && ctx->enum_type_count < (int)(sizeof(ctx->enum_types) / sizeof(ctx->enum_types[0]))) {
@@ -53,6 +110,38 @@ static void semantic_register_enum(SemanticContext *ctx, ASTNode *node) {
         ctx->enum_values[ctx->enum_value_count].name = member->enum_member.name;
         ctx->enum_values[ctx->enum_value_count].value = member->enum_member.resolved_value;
         ctx->enum_value_count++;
+    }
+}
+
+static void semantic_collect_function_sigs(SemanticContext *ctx, ASTNode *node) {
+    if (!ctx || !node) return;
+
+    switch (node->type) {
+    case AST_BLOCK:
+        for (int i = 0; i < node->block.count; i++) {
+            semantic_collect_function_sigs(ctx, node->block.stmts[i]);
+        }
+        break;
+    case AST_FUNDEF:
+        register_function_sig(ctx,
+                              node->fundef.name,
+                              node->fundef.param_count,
+                              node->fundef.is_variadic ? 1 : 0,
+                              0,
+                              semantic_location_from_ast(node));
+        break;
+    case AST_IMPORT:
+        for (int i = 0; i < node->import_stmt.symbol_count; i++) {
+            register_function_sig(ctx,
+                                  node->import_stmt.symbols[i],
+                                  -1,
+                                  0,
+                                  1,
+                                  semantic_location_from_ast(node));
+        }
+        break;
+    default:
+        break;
     }
 }
 
@@ -346,6 +435,46 @@ static void semantic_walk_expr(SemanticContext *ctx, ASTNode *node, ExprContext 
 static void semantic_walk_stmt(SemanticContext *ctx, ASTNode *node);
 static void semantic_check_type_exists(SemanticContext *ctx, ASTNode *type_node);
 
+static void check_call_signature(SemanticContext *ctx, ASTNode *node) {
+    SemanticFunctionSig *sig;
+    int argc;
+
+    if (!ctx || !node || node->type != AST_CALL || !node->call.name) return;
+    if (semantic_is_builtin_call(node->call.name)) return;
+
+    sig = find_function_sig(ctx, node->call.name);
+    if (!sig) {
+        if (call_may_be_package_import(node->call.name)) return;
+        semantic_error_at(ctx, semantic_location_from_ast(node),
+                          "undefined function '%s'", node->call.name);
+        return;
+    }
+
+    if (sig->is_imported || sig->param_count < 0) return;
+
+    argc = node->call.arg_count;
+    if (sig->is_variadic) {
+        if (argc < sig->fixed_param_count) {
+            semantic_error_at(ctx, semantic_location_from_ast(node),
+                              "function '%s' expects at least %d arguments but got %d",
+                              node->call.name, sig->fixed_param_count, argc);
+            if (semantic_location_is_known(sig->decl_loc)) {
+                semantic_note_at(ctx, sig->decl_loc, "'%s' declared here", sig->name);
+            }
+        }
+        return;
+    }
+
+    if (argc != sig->param_count) {
+        semantic_error_at(ctx, semantic_location_from_ast(node),
+                          "function '%s' expects %d arguments but got %d",
+                          node->call.name, sig->param_count, argc);
+        if (semantic_location_is_known(sig->decl_loc)) {
+            semantic_note_at(ctx, sig->decl_loc, "'%s' declared here", sig->name);
+        }
+    }
+}
+
 static void walk_case_items(SemanticContext *ctx, ASTNode *node) {
     for (int i = 0; i < node->case_expr.case_count; i++) {
         semantic_walk_expr(ctx, node->case_expr.cases[i].key, EXPRCTX_READ);
@@ -415,6 +544,7 @@ static void semantic_walk_expr(SemanticContext *ctx, ASTNode *node, ExprContext 
         for (int i = 0; i < node->call.arg_count; i++) {
             semantic_walk_expr(ctx, node->call.args[i], EXPRCTX_MOVE);
         }
+        check_call_signature(ctx, node);
         break;
     case AST_MEMBER_ACCESS:
         semantic_walk_expr(ctx, node->member_access.lhs, expr_ctx == EXPRCTX_MOVE ? EXPRCTX_MOVE : EXPRCTX_READ);
@@ -653,5 +783,6 @@ static void semantic_check_type_exists(SemanticContext *ctx, ASTNode *type_node)
 
 void semantic_walk_ast(SemanticContext *ctx, ASTNode *node) {
     semantic_collect_user_types(ctx, node);
+    semantic_collect_function_sigs(ctx, node);
     semantic_walk_stmt(ctx, node);
 }
