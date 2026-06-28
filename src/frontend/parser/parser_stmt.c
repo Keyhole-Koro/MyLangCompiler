@@ -86,7 +86,10 @@ ASTNode *parse_if_stmt(Token **cur) {
 ASTNode *parse_return_stmt(Token **cur) {
     Token *start = *cur;
     if (!expect(cur, RETURN)) parse_error("expected 'return'", token_head, *cur);
-    ASTNode *expr = parse_expr(cur);
+    ASTNode *expr = NULL;
+    if ((*cur)->kind != SEMICOLON) {
+        expr = parse_expr(cur);
+    }
     if (!expect(cur, SEMICOLON)) parse_error("expected ';' after return", token_head, *cur);
     ASTNode *node = new_return(expr);
     set_node_loc_from_tokens(node, start, NULL);

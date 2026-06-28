@@ -15,6 +15,7 @@ int semantic_check(ASTNode *root) {
     ctx.error_count = 0;
     ctx.scope_depth = 0;
     ctx.function_depth = 0;
+    ctx.current_function = NULL;
     ctx.binding_count = 0;
     ctx.enum_type_count = 0;
     ctx.enum_value_count = 0;

@@ -1,0 +1,8 @@
+void log() {
+    return 1;
+}
+
+i32 main() {
+    log();
+    return 0;
+}
