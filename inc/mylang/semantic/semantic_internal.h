@@ -22,6 +22,7 @@ typedef enum {
 typedef struct {
     SemanticDiagnosticSeverity severity;
     SemanticLocation loc;
+    const char *code;
     char message[256];
 } SemanticDiagnostic;
 
@@ -81,6 +82,7 @@ typedef struct {
 SemanticLocation semantic_location_unknown(void);
 SemanticLocation semantic_location_from_ast(ASTNode *node);
 void semantic_error_at(SemanticContext *ctx, SemanticLocation loc, const char *fmt, ...);
+void semantic_error_code_at(SemanticContext *ctx, SemanticLocation loc, const char *code, const char *fmt, ...);
 void semantic_note_at(SemanticContext *ctx, SemanticLocation loc, const char *fmt, ...);
 void semantic_emit_diagnostics(SemanticContext *ctx);
 void semantic_walk_ast(SemanticContext *ctx, ASTNode *node);

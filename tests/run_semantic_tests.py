@@ -70,49 +70,49 @@ FAIL_CASES = {
     ),
     "phase_undefinedIdentifier_fail": (
         "fail/semantic/phase_undefinedIdentifier_fail.mln",
-        ":2:13: error: undefined identifier 'missing'",
+        ":2:13: error[E0001]: undefined identifier 'missing'",
     ),
     "phase_undefinedFunction_fail": (
         "fail/semantic/phase_undefinedFunction_fail.mln",
-        ":2:12: error: undefined function 'missing_func'",
+        ":2:12: error[E0002]: undefined function 'missing_func'",
     ),
     "phase_callArgCount_fail": (
         "fail/semantic/phase_callArgCount_fail.mln",
-        ":6:12: error: function 'add' expects 2 arguments but got 1",
+        ":6:12: error[E0101]: function 'add' expects 2 arguments but got 1",
     ),
     "phase_returnMissingValue_fail": (
         "fail/semantic/phase_returnMissingValue_fail.mln",
-        ":2:5: error: function 'value' must return a value",
+        ":2:5: error[E0201]: function 'value' must return a value",
     ),
     "phase_voidReturnValue_fail": (
         "fail/semantic/phase_voidReturnValue_fail.mln",
-        ":2:5: error: void function 'log' should not return a value",
+        ":2:5: error[E0201]: void function 'log' should not return a value",
     ),
     "phase_returnTypeMismatch_fail": (
         "fail/semantic/phase_returnTypeMismatch_fail.mln",
-        ":2:12: error: return type mismatch: expected i32, got char[]",
+        ":2:12: error[E0201]: return type mismatch: expected i32, got char[]",
     ),
     "phase_typeInitMismatch_fail": (
         "fail/semantic/phase_typeInitMismatch_fail.mln",
-        ":2:13: error: initializer type mismatch: expected i32, got char[]",
+        ":2:13: error[E0301]: initializer type mismatch: expected i32, got char[]",
     ),
     "phase_typeAssignMismatch_fail": (
         "fail/semantic/phase_typeAssignMismatch_fail.mln",
-        ":3:9: error: assignment type mismatch: expected i32, got char[]",
+        ":3:9: error[E0301]: assignment type mismatch: expected i32, got char[]",
     ),
     "phase_typeBinaryMismatch_fail": (
         "fail/semantic/phase_typeBinaryMismatch_fail.mln",
-        ":3:12: error: invalid operands to '+': char* and char*",
+        ":3:12: error[E0302]: invalid operands to '+': char* and char*",
     ),
     "phase_typeConditionMismatch_fail": (
         "fail/semantic/phase_typeConditionMismatch_fail.mln",
-        ":3:9: error: condition must be integer-like, pointer, or reference, got char[3]",
+        ":3:9: error[E0303]: condition must be integer-like, pointer, or reference, got char[3]",
     ),
     "phase_multipleDiagnostics_fail": (
         "fail/semantic/phase_multipleDiagnostics_fail.mln",
         [
-            ":2:13: error: undefined identifier 'first_missing'",
-            ":2:29: error: undefined identifier 'second_missing'",
+            ":2:13: error[E0001]: undefined identifier 'first_missing'",
+            ":2:29: error[E0001]: undefined identifier 'second_missing'",
         ],
     ),
 }
