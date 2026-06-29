@@ -7,6 +7,14 @@ typedef enum {
     EXPRCTX_WRITE,
 } ExprContext;
 
+#define SEMCODE_UNDEFINED_IDENTIFIER "E0001"
+#define SEMCODE_UNDEFINED_FUNCTION "E0002"
+#define SEMCODE_ARG_COUNT_MISMATCH "E0101"
+#define SEMCODE_RETURN_TYPE_MISMATCH "E0201"
+#define SEMCODE_ASSIGNMENT_TYPE_MISMATCH "E0301"
+#define SEMCODE_INVALID_BINARY_OPERANDS "E0302"
+#define SEMCODE_INVALID_CONDITION_TYPE "E0303"
+
 static int semantic_infer_expr_type(SemanticContext *ctx, ASTNode *expr, SemanticTypeInfo *out);
 
 static ASTNode *semantic_as_identifier(ASTNode *node) {
@@ -264,6 +272,7 @@ static int semantic_typeinfo_compatible(SemanticContext *ctx, const SemanticType
 }
 
 static void semantic_report_type_mismatch(SemanticContext *ctx, SemanticLocation loc,
+                                          const char *code,
                                           const char *what,
                                           const SemanticTypeInfo *expected,
                                           const SemanticTypeInfo *actual) {
@@ -272,8 +281,8 @@ static void semantic_report_type_mismatch(SemanticContext *ctx, SemanticLocation
 
     semantic_typeinfo_format(expected, expected_buf, sizeof(expected_buf));
     semantic_typeinfo_format(actual, actual_buf, sizeof(actual_buf));
-    semantic_error_at(ctx, loc, "%s type mismatch: expected %s, got %s",
-                      what ? what : "expression", expected_buf, actual_buf);
+    semantic_error_code_at(ctx, loc, code, "%s type mismatch: expected %s, got %s",
+                           what ? what : "expression", expected_buf, actual_buf);
 }
 
 static int expr_is_obviously_value(ASTNode *expr) {
@@ -294,21 +303,24 @@ static void check_return_type(SemanticContext *ctx, ASTNode *return_node) {
 
     if (semantic_type_is_void(fn->fundef.ret_type)) {
         if (expr_is_obviously_value(return_node->ret.expr)) {
-            semantic_error_at(ctx, semantic_location_from_ast(return_node),
-                              "void function '%s' should not return a value", fn->fundef.name);
+            semantic_error_code_at(ctx, semantic_location_from_ast(return_node),
+                                   SEMCODE_RETURN_TYPE_MISMATCH,
+                                   "void function '%s' should not return a value", fn->fundef.name);
         }
         return;
     }
 
     if (!return_node->ret.expr) {
-        semantic_error_at(ctx, semantic_location_from_ast(return_node),
-                          "function '%s' must return a value", fn->fundef.name);
+        semantic_error_code_at(ctx, semantic_location_from_ast(return_node),
+                               SEMCODE_RETURN_TYPE_MISMATCH,
+                               "function '%s' must return a value", fn->fundef.name);
         return;
     }
 
     if (semantic_infer_expr_type(ctx, return_node->ret.expr, &actual) &&
         !semantic_typeinfo_compatible(ctx, &expected, &actual)) {
         semantic_report_type_mismatch(ctx, semantic_location_from_ast(return_node->ret.expr),
+                                      SEMCODE_RETURN_TYPE_MISMATCH,
                                       "return", &expected, &actual);
     }
 }
@@ -554,8 +566,9 @@ static void use_identifier(SemanticContext *ctx, ASTNode *node, ExprContext expr
     }
     binding = find_binding(ctx, ident->identifier.name);
     if (!binding) {
-        semantic_error_at(ctx, semantic_location_from_ast(node),
-                          "undefined identifier '%s'", ident->identifier.name);
+        semantic_error_code_at(ctx, semantic_location_from_ast(node),
+                               SEMCODE_UNDEFINED_IDENTIFIER,
+                               "undefined identifier '%s'", ident->identifier.name);
         return;
     }
 
@@ -804,9 +817,10 @@ static void check_binary_type(SemanticContext *ctx, ASTNode *node) {
 
     semantic_typeinfo_format(&left, left_buf, sizeof(left_buf));
     semantic_typeinfo_format(&right, right_buf, sizeof(right_buf));
-    semantic_error_at(ctx, semantic_location_from_ast(node),
-                      "invalid operands to '%s': %s and %s",
-                      semantic_binary_op_name(node->binary.op), left_buf, right_buf);
+    semantic_error_code_at(ctx, semantic_location_from_ast(node),
+                           SEMCODE_INVALID_BINARY_OPERANDS,
+                           "invalid operands to '%s': %s and %s",
+                           semantic_binary_op_name(node->binary.op), left_buf, right_buf);
 }
 
 static void check_assignment_type(SemanticContext *ctx, ASTNode *node) {
@@ -818,6 +832,7 @@ static void check_assignment_type(SemanticContext *ctx, ASTNode *node) {
     if (!semantic_infer_expr_type(ctx, node->assign.right, &right)) return;
     if (semantic_typeinfo_compatible(ctx, &left, &right)) return;
     semantic_report_type_mismatch(ctx, semantic_location_from_ast(node->assign.right),
+                                  SEMCODE_ASSIGNMENT_TYPE_MISMATCH,
                                   "assignment", &left, &right);
 }
 
@@ -830,6 +845,7 @@ static void check_initializer_type(SemanticContext *ctx, ASTNode *node) {
     if (!semantic_infer_expr_type(ctx, node->var_decl.init, &actual)) return;
     if (semantic_typeinfo_compatible(ctx, &expected, &actual)) return;
     semantic_report_type_mismatch(ctx, semantic_location_from_ast(node->var_decl.init),
+                                  SEMCODE_ASSIGNMENT_TYPE_MISMATCH,
                                   "initializer", &expected, &actual);
 }
 
@@ -842,8 +858,9 @@ static void check_condition_type(SemanticContext *ctx, ASTNode *cond) {
     if (semantic_typeinfo_is_integer_like_or_enum(ctx, &info) || info.pointer_level > 0 || info.ref_kind != REFKIND_NONE) return;
 
     semantic_typeinfo_format(&info, type_buf, sizeof(type_buf));
-    semantic_error_at(ctx, semantic_location_from_ast(cond),
-                      "condition must be integer-like, pointer, or reference, got %s", type_buf);
+    semantic_error_code_at(ctx, semantic_location_from_ast(cond),
+                           SEMCODE_INVALID_CONDITION_TYPE,
+                           "condition must be integer-like, pointer, or reference, got %s", type_buf);
 }
 
 static void semantic_walk_expr(SemanticContext *ctx, ASTNode *node, ExprContext expr_ctx);
@@ -860,8 +877,9 @@ static void check_call_signature(SemanticContext *ctx, ASTNode *node) {
     sig = find_function_sig(ctx, node->call.name);
     if (!sig) {
         if (call_may_be_package_import(node->call.name)) return;
-        semantic_error_at(ctx, semantic_location_from_ast(node),
-                          "undefined function '%s'", node->call.name);
+        semantic_error_code_at(ctx, semantic_location_from_ast(node),
+                               SEMCODE_UNDEFINED_FUNCTION,
+                               "undefined function '%s'", node->call.name);
         return;
     }
 
@@ -870,9 +888,10 @@ static void check_call_signature(SemanticContext *ctx, ASTNode *node) {
     argc = node->call.arg_count;
     if (sig->is_variadic) {
         if (argc < sig->fixed_param_count) {
-            semantic_error_at(ctx, semantic_location_from_ast(node),
-                              "function '%s' expects at least %d arguments but got %d",
-                              node->call.name, sig->fixed_param_count, argc);
+            semantic_error_code_at(ctx, semantic_location_from_ast(node),
+                                   SEMCODE_ARG_COUNT_MISMATCH,
+                                   "function '%s' expects at least %d arguments but got %d",
+                                   node->call.name, sig->fixed_param_count, argc);
             if (semantic_location_is_known(sig->decl_loc)) {
                 semantic_note_at(ctx, sig->decl_loc, "'%s' declared here", sig->name);
             }
@@ -881,9 +900,10 @@ static void check_call_signature(SemanticContext *ctx, ASTNode *node) {
     }
 
     if (argc != sig->param_count) {
-        semantic_error_at(ctx, semantic_location_from_ast(node),
-                          "function '%s' expects %d arguments but got %d",
-                          node->call.name, sig->param_count, argc);
+        semantic_error_code_at(ctx, semantic_location_from_ast(node),
+                               SEMCODE_ARG_COUNT_MISMATCH,
+                               "function '%s' expects %d arguments but got %d",
+                               node->call.name, sig->param_count, argc);
         if (semantic_location_is_known(sig->decl_loc)) {
             semantic_note_at(ctx, sig->decl_loc, "'%s' declared here", sig->name);
         }
