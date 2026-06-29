@@ -131,7 +131,9 @@ void gen_stmt_internal(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
                      break_label, continue_label);
         break;
     case AST_RETURN:
-        gen_expr(cc, node->ret.expr, sb, "r1", params, param_count, locals, local_count);
+        // A bare `return;` has no expression; only evaluate one when present.
+        if (node->ret.expr)
+            gen_expr(cc, node->ret.expr, sb, "r1", params, param_count, locals, local_count);
         sb_append(sb, "  \n; return\n");
         if (cc->return_label)
             sb_append(sb, "  jmp %s\n", cc->return_label);
