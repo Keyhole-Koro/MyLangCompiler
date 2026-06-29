@@ -804,15 +804,16 @@ static void check_binary_type(SemanticContext *ctx, ASTNode *node) {
             return;
         }
     } else if (semantic_binary_is_arithmetic(node->binary.op)) {
+        /* A pointer-like operand is a raw pointer (`*`), an array (decays to a
+         * pointer), or a reference (`ref`/`ref mut`): all support pointer +/-
+         * integer arithmetic. */
+        int left_ptrish = left.pointer_level > 0 || left.is_array || left.ref_kind != REFKIND_NONE;
+        int right_ptrish = right.pointer_level > 0 || right.is_array || right.ref_kind != REFKIND_NONE;
         if (semantic_typeinfo_is_integer_like_or_enum(ctx, &left) && semantic_typeinfo_is_integer_like_or_enum(ctx, &right)) return;
         if ((node->binary.op == ADD || node->binary.op == SUB) &&
-            left.pointer_level > 0 && semantic_typeinfo_is_integer_like_or_enum(ctx, &right)) return;
-        if ((node->binary.op == ADD || node->binary.op == SUB) &&
-            left.is_array && semantic_typeinfo_is_integer_like_or_enum(ctx, &right)) return;
+            left_ptrish && semantic_typeinfo_is_integer_like_or_enum(ctx, &right)) return;
         if (node->binary.op == ADD &&
-            right.pointer_level > 0 && semantic_typeinfo_is_integer_like_or_enum(ctx, &left)) return;
-        if (node->binary.op == ADD &&
-            right.is_array && semantic_typeinfo_is_integer_like_or_enum(ctx, &left)) return;
+            right_ptrish && semantic_typeinfo_is_integer_like_or_enum(ctx, &left)) return;
     }
 
     semantic_typeinfo_format(&left, left_buf, sizeof(left_buf));
