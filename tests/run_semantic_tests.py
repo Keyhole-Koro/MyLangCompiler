@@ -29,6 +29,16 @@ PASS_CASES = {
     "phase_enumMultipleTypes": "succeed/semantic/phase_enumMultipleTypes.mln",
 }
 
+WARN_CASES = {
+    "phase_unreachableAfterReturn_warn": (
+        "warn/semantic/phase_unreachableAfterReturn_warn.mln",
+        [
+            ":3:5: warning[W0001]: unreachable statement",
+            "[range 3:5-3:14]",
+        ],
+    ),
+}
+
 FAIL_CASES = {
     "phase3_useAfterMove_fail": (
         "fail/semantic/phase3_useAfterMove_fail.mln",
@@ -207,10 +217,53 @@ def check_fail_case(case_name: str, rel_path: str, expected: str, failure_marker
     return True, f"{case_name}: semantic failure test passed"
 
 
+def check_warn_case(case_name: str, rel_path: str, expected: str, out_root: Path) -> tuple[bool, str]:
+    src = case_source(rel_path)
+    case_dir = out_root / case_name
+    case_dir.mkdir(parents=True, exist_ok=True)
+    asm = case_dir / f"{case_name}.masm"
+    result = run([str(MLC_PATH), str(src), str(asm)], cwd=case_dir)
+
+    if result.returncode != 0:
+        return False, (
+            f"{case_name}: compiler failed without --Werror\n"
+            f"STDOUT:\n{result.stdout}\n"
+            f"STDERR:\n{result.stderr}"
+        )
+
+    expected_items = expected if isinstance(expected, list) else [expected]
+    missing_expected = [item for item in expected_items if item not in result.stderr]
+    if missing_expected:
+        return False, (
+            f"{case_name}: missing expected warning(s) {missing_expected!r}\n"
+            f"STDOUT:\n{result.stdout}\n"
+            f"STDERR:\n{result.stderr}"
+        )
+
+    werror_asm = case_dir / f"{case_name}.werror.masm"
+    werror = run([str(MLC_PATH), "--Werror", str(src), str(werror_asm)], cwd=case_dir)
+    if werror.returncode == 0:
+        return False, (
+            f"{case_name}: compiler unexpectedly succeeded with --Werror\n"
+            f"STDOUT:\n{werror.stdout}\n"
+            f"STDERR:\n{werror.stderr}"
+        )
+
+    missing_werror = [item for item in expected_items if item not in werror.stderr]
+    if missing_werror:
+        return False, (
+            f"{case_name}: missing expected --Werror warning(s) {missing_werror!r}\n"
+            f"STDOUT:\n{werror.stdout}\n"
+            f"STDERR:\n{werror.stderr}"
+        )
+
+    return True, f"{case_name}: semantic warning test passed"
+
+
 if __name__ == "__main__":
     ensure_built()
 
-    all_cases = list(PASS_CASES.keys()) + list(FAIL_CASES.keys())
+    all_cases = list(PASS_CASES.keys()) + list(WARN_CASES.keys()) + list(FAIL_CASES.keys())
     requested = sys.argv[1:]
     cases = requested if requested else all_cases
     unknown = [case for case in cases if case not in all_cases]
@@ -222,7 +275,10 @@ if __name__ == "__main__":
     failed = []
     try:
         for case_name in cases:
-            if case_name in FAIL_CASES:
+            if case_name in WARN_CASES:
+                rel_path, expected = WARN_CASES[case_name]
+                ok, message = check_warn_case(case_name, rel_path, expected, temp_root)
+            elif case_name in FAIL_CASES:
                 data = FAIL_CASES[case_name]
                 if len(data) == 2:
                     rel_path, expected = data
