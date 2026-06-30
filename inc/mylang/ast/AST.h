@@ -73,6 +73,8 @@ struct ASTNode {
     ASTNodeType type;
     int line;
     int col;
+    int end_line;
+    int end_col;
     union {
         struct { char *value; } number;
         struct { char *name; } identifier;

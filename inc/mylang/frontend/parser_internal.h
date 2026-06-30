@@ -17,6 +17,26 @@ static inline void set_node_loc_from_tokens(ASTNode *node, Token *primary, Token
     if (!node) return;
     node->line = tok ? tok->line : 0;
     node->col = tok ? tok->col : 0;
+    node->end_line = tok ? tok->line : 0;
+    node->end_col = tok ? tok->col + tok->length : 0;
+}
+
+static inline void set_node_end_from_token(ASTNode *node, Token *tok) {
+    if (!node || !tok) return;
+    node->end_line = tok->line;
+    node->end_col = tok->col + tok->length;
+}
+
+static inline void set_node_range_from_children(ASTNode *node, ASTNode *start, ASTNode *end) {
+    if (!node) return;
+    if (start) {
+        node->line = start->line;
+        node->col = start->col;
+    }
+    if (end) {
+        node->end_line = end->end_line ? end->end_line : end->line;
+        node->end_col = end->end_col ? end->end_col : end->col;
+    }
 }
 
 void parse_error(const char *msg, Token *head, Token *cur);

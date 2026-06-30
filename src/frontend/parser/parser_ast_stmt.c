@@ -4,6 +4,7 @@ ASTNode *new_expr_stmt(ASTNode *expr) {
     ASTNode *node = calloc(1, sizeof(ASTNode));
     node->type = AST_EXPR_STMT;
     node->expr_stmt.expr = expr;
+    set_node_range_from_children(node, expr, expr);
     return node;
 }
 
@@ -12,6 +13,7 @@ ASTNode *new_while(ASTNode *cond, ASTNode *body) {
     node->type = AST_WHILE;
     node->while_stmt.cond = cond;
     node->while_stmt.body = body;
+    set_node_range_from_children(node, cond, body ? body : cond);
     return node;
 }
 
@@ -20,6 +22,7 @@ ASTNode *new_do_while(ASTNode *cond, ASTNode *body) {
     node->type = AST_DO_WHILE;
     node->do_while_stmt.cond = cond;
     node->do_while_stmt.body = body;
+    set_node_range_from_children(node, body ? body : cond, cond);
     return node;
 }
 
@@ -30,6 +33,7 @@ ASTNode *new_for(ASTNode *init, ASTNode *cond, ASTNode *inc, ASTNode *body) {
     node->for_stmt.cond = cond;
     node->for_stmt.inc = inc;
     node->for_stmt.body = body;
+    set_node_range_from_children(node, init ? init : cond, body ? body : inc);
     return node;
 }
 
@@ -51,6 +55,7 @@ ASTNode *new_if(ASTNode *cond, ASTNode *then_stmt, ASTNode *else_stmt) {
     node->if_stmt.cond = cond;
     node->if_stmt.then_stmt = then_stmt;
     node->if_stmt.else_stmt = else_stmt;
+    set_node_range_from_children(node, cond, else_stmt ? else_stmt : then_stmt);
     return node;
 }
 
@@ -58,6 +63,7 @@ ASTNode *new_return(ASTNode *expr) {
     ASTNode *node = calloc(1, sizeof(ASTNode));
     node->type = AST_RETURN;
     node->ret.expr = expr;
+    set_node_range_from_children(node, expr, expr);
     return node;
 }
 
@@ -65,6 +71,7 @@ ASTNode *new_yield(ASTNode *expr) {
     ASTNode *node = calloc(1, sizeof(ASTNode));
     node->type = AST_YIELD;
     node->yield_stmt.expr = expr;
+    set_node_range_from_children(node, expr, expr);
     return node;
 }
 

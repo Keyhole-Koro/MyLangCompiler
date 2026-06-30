@@ -32,5 +32,6 @@ ASTNode *new_sizeof(ASTNode *expr) {
     ASTNode *node = calloc(1, sizeof(ASTNode));
     node->type = AST_SIZEOF;
     node->sizeof_expr.expr = expr;
+    set_node_range_from_children(node, expr, expr);
     return node;
 }

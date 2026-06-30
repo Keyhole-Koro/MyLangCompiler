@@ -90,9 +90,15 @@ ASTNode *parse_return_stmt(Token **cur) {
     if ((*cur)->kind != SEMICOLON) {
         expr = parse_expr(cur);
     }
+    Token *end_tok = *cur;
     if (!expect(cur, SEMICOLON)) parse_error("expected ';' after return", token_head, *cur);
     ASTNode *node = new_return(expr);
     set_node_loc_from_tokens(node, start, NULL);
+    if (expr) {
+        set_node_range_from_children(node, node, expr);
+    } else {
+        set_node_end_from_token(node, end_tok);
+    }
     return node;
 }
 ASTNode *parse_expr_stmt(Token **cur) {
@@ -163,12 +169,20 @@ ASTNode *parse_variable_declaration(Token **cur, int need_semicolon) {
             }
         }
     }
+    Token *end_tok = *cur;
     if (need_semicolon) {
         if (!expect(cur, SEMICOLON))
             parse_error("expected ';' after variable declaration", token_head, *cur);
     }
     ASTNode *decl = new_var_decl_mut(final_type, name, init, is_mut);
     set_node_loc_from_tokens(decl, start, name_tok);
+    if (init) {
+        set_node_range_from_children(decl, decl, init);
+    } else if (need_semicolon) {
+        set_node_end_from_token(decl, end_tok);
+    } else {
+        set_node_end_from_token(decl, name_tok);
+    }
     return decl;
 }
 
@@ -180,13 +194,17 @@ ASTNode *parse_variable_assignment(Token **cur) {
     *cur = (*cur)->next;
     if (!expect(cur, ASSIGN)) parse_error("expected '=' for assignment", token_head, *cur);
     ASTNode *expr = parse_expr(cur);
+    Token *end_tok = *cur;
     if (!expect(cur, SEMICOLON)) parse_error("expected ';' after assignment", token_head, *cur);
     ASTNode *lhs = new_identifier(name);
-    lhs->line = name_tok->line;
-    lhs->col = name_tok->col;
+    set_node_loc_from_tokens(lhs, name_tok, NULL);
     ASTNode *assign = new_assign(lhs, expr);
-    assign->line = name_tok->line;
-    assign->col = name_tok->col;
+    set_node_loc_from_tokens(assign, name_tok, NULL);
+    if (expr) {
+        set_node_range_from_children(assign, assign, expr);
+    } else {
+        set_node_end_from_token(assign, end_tok);
+    }
     return assign;
 }
 

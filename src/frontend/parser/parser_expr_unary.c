@@ -58,16 +58,14 @@ ASTNode *parse_unary(Token **cur) {
     if ((*cur)->kind == STRING_LITERAL) {
         Token *tok = *cur;
         ASTNode *node = new_string_literal((*cur)->value);
-        node->line = tok->line;
-        node->col = tok->col;
+        set_node_loc_from_tokens(node, tok, NULL);
         *cur = (*cur)->next;
         return node;
     }
     if ((*cur)->kind == CHAR_LITERAL) {
         Token *tok = *cur;
         ASTNode *node = new_char_literal((*cur)->value);
-        node->line = tok->line;
-        node->col = tok->col;
+        set_node_loc_from_tokens(node, tok, NULL);
         *cur = (*cur)->next;
         return node;
     }

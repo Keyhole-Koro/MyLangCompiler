@@ -54,26 +54,28 @@ static ASTNode *parse_identifier_primary(Token **cur) {
             }
         }
 
+        Token *end_tok = *cur;
         if (!expect(cur, R_PARENTHESES))
             parse_error("expected ')' after args", token_head, *cur);
         ASTNode *call = new_call(name, args, arg_count);
-        call->line = tok->line;
-        call->col = tok->col;
+        set_node_loc_from_tokens(call, tok, NULL);
+        set_node_end_from_token(call, end_tok);
         return call;
     }
 
     ASTNode *node = new_identifier(name);
-    node->line = tok->line;
-    node->col = tok->col;
+    set_node_loc_from_tokens(node, tok, NULL);
     while ((*cur)->kind == L_BRACKET) {
         *cur = (*cur)->next;
         ASTNode *index = parse_expr(cur);
 
+        Token *end_tok = *cur;
         if (!expect(cur, R_BRACKET))
             parse_error("expected ']' after array index", token_head, *cur);
 
         ASTNode *add = new_binary(ADD, node, index);
         node = new_unary(ASTARISK, add);
+        set_node_end_from_token(node, end_tok);
     }
 
     return node;
@@ -83,16 +85,14 @@ ASTNode *parse_primary(Token **cur) {
     if ((*cur)->kind == NUMBER) {
         Token *tok = *cur;
         ASTNode *node = new_number((*cur)->value);
-        node->line = tok->line;
-        node->col = tok->col;
+        set_node_loc_from_tokens(node, tok, NULL);
         *cur = (*cur)->next;
         return node;
     }
     if ((*cur)->kind == STRING_LITERAL) {
         Token *tok = *cur;
         ASTNode *node = new_string_literal((*cur)->value);
-        node->line = tok->line;
-        node->col = tok->col;
+        set_node_loc_from_tokens(node, tok, NULL);
         *cur = (*cur)->next;
         return node;
     }
