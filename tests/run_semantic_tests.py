@@ -70,7 +70,10 @@ FAIL_CASES = {
     ),
     "phase_undefinedIdentifier_fail": (
         "fail/semantic/phase_undefinedIdentifier_fail.mln",
-        ":2:13: error[E0001]: undefined identifier 'missing'",
+        [
+            ":2:13: error[E0001]: undefined identifier 'missing'",
+            "[range 2:13-2:20]",
+        ],
     ),
     "phase_undefinedFunction_fail": (
         "fail/semantic/phase_undefinedFunction_fail.mln",

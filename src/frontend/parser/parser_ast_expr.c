@@ -6,10 +6,7 @@ ASTNode *new_binary(TokenKind op, ASTNode *left, ASTNode *right) {
     node->binary.op = op;
     node->binary.left = left;
     node->binary.right = right;
-    if (left) {
-        node->line = left->line;
-        node->col = left->col;
-    }
+    set_node_range_from_children(node, left, right ? right : left);
     return node;
 }
 
@@ -18,10 +15,7 @@ ASTNode *new_unary(TokenKind op, ASTNode *operand) {
     node->type = AST_UNARY;
     node->unary.op = op;
     node->unary.operand = operand;
-    if (operand) {
-        node->line = operand->line;
-        node->col = operand->col;
-    }
+    set_node_range_from_children(node, operand, operand);
     return node;
 }
 
@@ -29,10 +23,7 @@ ASTNode *new_borrow(ASTNode *expr) {
     ASTNode *node = calloc(1, sizeof(ASTNode));
     node->type = AST_BORROW;
     node->borrow.expr = expr;
-    if (expr) {
-        node->line = expr->line;
-        node->col = expr->col;
-    }
+    set_node_range_from_children(node, expr, expr);
     return node;
 }
 
@@ -40,10 +31,7 @@ ASTNode *new_borrow_mut(ASTNode *expr) {
     ASTNode *node = calloc(1, sizeof(ASTNode));
     node->type = AST_BORROW_MUT;
     node->borrow_mut.expr = expr;
-    if (expr) {
-        node->line = expr->line;
-        node->col = expr->col;
-    }
+    set_node_range_from_children(node, expr, expr);
     return node;
 }
 
@@ -52,10 +40,7 @@ ASTNode *new_cast(ASTNode *type, ASTNode *expr) {
     node->type = AST_CAST;
     node->cast.type = type;
     node->cast.expr = expr;
-    if (expr) {
-        node->line = expr->line;
-        node->col = expr->col;
-    }
+    set_node_range_from_children(node, type ? type : expr, expr);
     return node;
 }
 
@@ -64,10 +49,7 @@ ASTNode *new_assign(ASTNode *left, ASTNode *right) {
     node->type = AST_ASSIGN;
     node->assign.left = left;
     node->assign.right = right;
-    if (left) {
-        node->line = left->line;
-        node->col = left->col;
-    }
+    set_node_range_from_children(node, left, right ? right : left);
     return node;
 }
 
@@ -77,10 +59,7 @@ ASTNode *new_ternary(ASTNode *cond, ASTNode *then_expr, ASTNode *else_expr) {
     node->ternary.cond = cond;
     node->ternary.then_expr = then_expr;
     node->ternary.else_expr = else_expr;
-    if (cond) {
-        node->line = cond->line;
-        node->col = cond->col;
-    }
+    set_node_range_from_children(node, cond, else_expr ? else_expr : then_expr);
     return node;
 }
 
@@ -89,10 +68,7 @@ ASTNode *new_member_access(ASTNode *lhs, char *member_name) {
     node->type = AST_MEMBER_ACCESS;
     node->member_access.lhs = lhs;
     node->member_access.member = strdup(member_name);
-    if (lhs) {
-        node->line = lhs->line;
-        node->col = lhs->col;
-    }
+    set_node_range_from_children(node, lhs, lhs);
     return node;
 }
 
@@ -101,10 +77,7 @@ ASTNode *new_arrow_access(ASTNode *lhs, char *member_name) {
     node->type = AST_ARROW_ACCESS;
     node->arrow_access.lhs = lhs;
     node->arrow_access.member = strdup(member_name);
-    if (lhs) {
-        node->line = lhs->line;
-        node->col = lhs->col;
-    }
+    set_node_range_from_children(node, lhs, lhs);
     return node;
 }
 
@@ -120,10 +93,7 @@ ASTNode *new_stmt_expr(ASTNode *block) {
     ASTNode *node = calloc(1, sizeof(ASTNode));
     node->type = AST_STMT_EXPR;
     node->stmt_expr.block = block;
-    if (block) {
-        node->line = block->line;
-        node->col = block->col;
-    }
+    set_node_range_from_children(node, block, block);
     return node;
 }
 
@@ -134,10 +104,7 @@ ASTNode *new_case_expr(ASTNode *target, CaseItem *cases, int case_count, ASTNode
     node->case_expr.cases = cases;
     node->case_expr.case_count = case_count;
     node->case_expr.default_expr = default_expr;
-    if (target) {
-        node->line = target->line;
-        node->col = target->col;
-    }
+    set_node_range_from_children(node, target, default_expr ? default_expr : target);
     return node;
 }
 

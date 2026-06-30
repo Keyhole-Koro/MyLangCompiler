@@ -12,6 +12,8 @@
 typedef struct {
     int line;
     int col;
+    int end_line;
+    int end_col;
 } SemanticLocation;
 
 typedef enum {

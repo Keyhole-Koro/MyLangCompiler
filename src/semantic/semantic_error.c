@@ -4,6 +4,8 @@ SemanticLocation semantic_location_unknown(void) {
     SemanticLocation loc;
     loc.line = 0;
     loc.col = 0;
+    loc.end_line = 0;
+    loc.end_col = 0;
     return loc;
 }
 
@@ -14,6 +16,8 @@ SemanticLocation semantic_location_from_ast(ASTNode *node) {
     if (node->line > 0 || node->col > 0) {
         loc.line = node->line;
         loc.col = node->col;
+        loc.end_line = node->end_line > 0 ? node->end_line : node->line;
+        loc.end_col = node->end_col > 0 ? node->end_col : node->col;
         return loc;
     }
 
@@ -39,6 +43,11 @@ SemanticLocation semantic_location_from_ast(ASTNode *node) {
     }
 }
 
+static int semantic_location_has_range(SemanticLocation loc) {
+    if (loc.line <= 0 || loc.col <= 0 || loc.end_line <= 0 || loc.end_col <= 0) return 0;
+    return loc.end_line != loc.line || loc.end_col != loc.col;
+}
+
 static const char *severity_name(SemanticDiagnosticSeverity severity) {
     switch (severity) {
     case SEMANTIC_DIAG_ERROR: return "error";
@@ -62,6 +71,10 @@ static void semantic_diagnostic_at(SemanticContext *ctx, SemanticDiagnosticSever
         print_severity(stderr, severity, code);
         fprintf(stderr, ": ");
         vfprintf(stderr, fmt, ap);
+        if (semantic_location_has_range(loc)) {
+            fprintf(stderr, " [range %d:%d-%d:%d]",
+                    loc.line, loc.col, loc.end_line, loc.end_col);
+        }
         fputc('\n', stderr);
         return;
     }
@@ -113,6 +126,11 @@ void semantic_emit_diagnostics(SemanticContext *ctx) {
                 diag->loc.line,
                 diag->loc.col);
         print_severity(stderr, diag->severity, diag->code);
-        fprintf(stderr, ": %s\n", diag->message);
+        fprintf(stderr, ": %s", diag->message);
+        if (semantic_location_has_range(diag->loc)) {
+            fprintf(stderr, " [range %d:%d-%d:%d]",
+                    diag->loc.line, diag->loc.col, diag->loc.end_line, diag->loc.end_col);
+        }
+        fputc('\n', stderr);
     }
 }
