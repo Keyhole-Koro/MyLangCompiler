@@ -9,7 +9,8 @@ void driver_print_usage(const char *prog) {
             "Options:\n"
             "  -exclude <path>   Exclude relative path or directory name (repeatable)\n"
             "  -entry <name>     Entry function name mapped to __START__ (default: main)\n"
-            "  -masm             When compiling a directory, also copy .masm files\n",
+            "  -masm             When compiling a directory, also copy .masm files\n"
+            "  --Werror          Treat semantic warnings as errors\n",
             prog, prog);
 }
 
@@ -30,6 +31,8 @@ int driver_parse_args(int argc, char *argv[], DriverOptions *opts) {
             opts->entry_name = argv[++i];
         } else if (strcmp(argv[i], "-masm") == 0 || strcmp(argv[i], "--masm") == 0) {
             opts->include_masm = 1;
+        } else if (strcmp(argv[i], "--Werror") == 0 || strcmp(argv[i], "--warnings-as-errors") == 0) {
+            opts->warnings_as_errors = 1;
         } else if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
             driver_print_usage(argv[0]);
             return 1;

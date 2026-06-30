@@ -23,6 +23,7 @@ typedef struct {
     const char **excludes;
     int exclude_count;
     int include_masm;
+    int warnings_as_errors;
 } DriverOptions;
 
 typedef struct {

@@ -14,6 +14,7 @@ typedef enum {
 #define SEMCODE_ASSIGNMENT_TYPE_MISMATCH "E0301"
 #define SEMCODE_INVALID_BINARY_OPERANDS "E0302"
 #define SEMCODE_INVALID_CONDITION_TYPE "E0303"
+#define SEMCODE_UNREACHABLE_STATEMENT "W0001"
 
 static int semantic_infer_expr_type(SemanticContext *ctx, ASTNode *expr, SemanticTypeInfo *out);
 
@@ -933,8 +934,20 @@ static void walk_params(SemanticContext *ctx, ASTNode **params, int param_count)
 }
 
 static void walk_block_items(SemanticContext *ctx, ASTNode **items, int count) {
+    int unreachable = 0;
     for (int i = 0; i < count; i++) {
+        if (unreachable && items[i]) {
+            semantic_warning_code_at(ctx, semantic_location_from_ast(items[i]),
+                                     SEMCODE_UNREACHABLE_STATEMENT,
+                                     "unreachable statement");
+        }
         semantic_walk_stmt(ctx, items[i]);
+        if (items[i] &&
+            (items[i]->type == AST_RETURN ||
+             items[i]->type == AST_BREAK ||
+             items[i]->type == AST_CONTINUE)) {
+            unreachable = 1;
+        }
     }
 }
 

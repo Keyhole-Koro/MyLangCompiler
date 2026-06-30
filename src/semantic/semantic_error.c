@@ -51,6 +51,7 @@ static int semantic_location_has_range(SemanticLocation loc) {
 static const char *severity_name(SemanticDiagnosticSeverity severity) {
     switch (severity) {
     case SEMANTIC_DIAG_ERROR: return "error";
+    case SEMANTIC_DIAG_WARNING: return "warning";
     case SEMANTIC_DIAG_NOTE: return "note";
     default: return "diagnostic";
     }
@@ -58,7 +59,8 @@ static const char *severity_name(SemanticDiagnosticSeverity severity) {
 
 static void print_severity(FILE *out, SemanticDiagnosticSeverity severity, const char *code) {
     fprintf(out, "%s", severity_name(severity));
-    if (severity == SEMANTIC_DIAG_ERROR && code && code[0] != '\0') {
+    if ((severity == SEMANTIC_DIAG_ERROR || severity == SEMANTIC_DIAG_WARNING) &&
+        code && code[0] != '\0') {
         fprintf(out, "[%s]", code);
     }
 }
@@ -93,6 +95,7 @@ static void semantic_diagnostic_at(SemanticContext *ctx, SemanticDiagnosticSever
     vsnprintf(diag->message, sizeof(diag->message), fmt, ap);
     diag->message[sizeof(diag->message) - 1] = '\0';
     if (severity == SEMANTIC_DIAG_ERROR) ctx->error_count++;
+    if (severity == SEMANTIC_DIAG_WARNING) ctx->warning_count++;
 }
 
 void semantic_error_at(SemanticContext *ctx, SemanticLocation loc, const char *fmt, ...) {
@@ -106,6 +109,13 @@ void semantic_error_code_at(SemanticContext *ctx, SemanticLocation loc, const ch
     va_list ap;
     va_start(ap, fmt);
     semantic_diagnostic_at(ctx, SEMANTIC_DIAG_ERROR, loc, code, fmt, ap);
+    va_end(ap);
+}
+
+void semantic_warning_code_at(SemanticContext *ctx, SemanticLocation loc, const char *code, const char *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    semantic_diagnostic_at(ctx, SEMANTIC_DIAG_WARNING, loc, code, fmt, ap);
     va_end(ap);
 }
 

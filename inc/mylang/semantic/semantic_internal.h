@@ -19,6 +19,7 @@ typedef struct {
 typedef enum {
     SEMANTIC_DIAG_ERROR = 1,
     SEMANTIC_DIAG_NOTE = 2,
+    SEMANTIC_DIAG_WARNING = 3,
 } SemanticDiagnosticSeverity;
 
 typedef struct {
@@ -64,6 +65,8 @@ typedef struct {
 typedef struct {
     const char *filename;
     int error_count;
+    int warning_count;
+    int warnings_as_errors;
     int diagnostic_count;
     SemanticDiagnostic diagnostics[512];
     int scope_depth;
@@ -85,6 +88,7 @@ SemanticLocation semantic_location_unknown(void);
 SemanticLocation semantic_location_from_ast(ASTNode *node);
 void semantic_error_at(SemanticContext *ctx, SemanticLocation loc, const char *fmt, ...);
 void semantic_error_code_at(SemanticContext *ctx, SemanticLocation loc, const char *code, const char *fmt, ...);
+void semantic_warning_code_at(SemanticContext *ctx, SemanticLocation loc, const char *code, const char *fmt, ...);
 void semantic_note_at(SemanticContext *ctx, SemanticLocation loc, const char *fmt, ...);
 void semantic_emit_diagnostics(SemanticContext *ctx);
 void semantic_walk_ast(SemanticContext *ctx, ASTNode *node);

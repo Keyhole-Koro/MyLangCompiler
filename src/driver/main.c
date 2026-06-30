@@ -47,6 +47,7 @@ int main(int argc, char *argv[]) {
     if (opts.entry_name) {
         codegen_set_entry(opts.entry_name);
     }
+    semantic_set_warnings_as_errors(opts.warnings_as_errors);
 
     int rc = path_is_dir(opts.input_path)
         ? run_directory_mode(&opts)
