@@ -18,6 +18,7 @@ class SyntaxCase:
     message: str | None = None
     line: int | None = None
     character: int | None = None
+    token_roles: dict[int, str] | None = None
 
 
 CASES = [
@@ -66,6 +67,18 @@ CASES = [
         name="deref_assignment_ok",
         source="void write_word(i32 addr, i32 value) { i32 *p = (i32 *)addr; *p = value; }\n",
         status="ok",
+    ),
+    SyntaxCase(
+        name="postfix_increment_identifier_role",
+        source="void main() { mut i32 i = 0; i++; }\n",
+        status="ok",
+        token_roles={1: "function", 7: "variable", 11: "variable"},
+    ),
+    SyntaxCase(
+        name="function_call_identifier_role",
+        source="void main() { foo(); }\n",
+        status="ok",
+        token_roles={1: "function", 5: "function"},
     ),
     SyntaxCase(
         name="export_function_ok",
@@ -139,6 +152,18 @@ def check_case(case: SyntaxCase, result: dict) -> tuple[bool, str]:
     if case.status == "ok":
         if diagnostics:
             return False, f"{case.name}: expected no diagnostics, got {diagnostics!r}"
+        if case.token_roles is not None:
+            tokens = result.get("tokens", [])
+            for index, role in case.token_roles.items():
+                if index >= len(tokens):
+                    return False, f"{case.name}: missing token at index {index}"
+                token = tokens[index]
+                actual = token[4] if len(token) > 4 else None
+                if actual != role:
+                    return False, (
+                        f"{case.name}: token {index} role {actual!r}, "
+                        f"expected {role!r}"
+                    )
         return True, f"{case.name}: ok"
 
     if not diagnostics:
