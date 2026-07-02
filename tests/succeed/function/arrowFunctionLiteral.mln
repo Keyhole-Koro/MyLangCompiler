@@ -1,0 +1,11 @@
+i32 main() {
+    i32 adder = (i32 x) => {
+        return x + x;
+    };
+
+    i32 getter = () => {
+        return 3;
+    };
+
+    return adder(5) + getter();
+}

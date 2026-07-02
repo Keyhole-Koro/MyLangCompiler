@@ -34,6 +34,7 @@ typedef enum {
     ASTARISK,  // *
     ADDRESS,  // &
     ARROW,   // ->
+    FAT_ARROW, // =>
 
     BOOL,     // bool
     U8,       // u8

@@ -39,14 +39,21 @@ int looks_like_function(Token *cur) {
     return t && t->kind == IDENTIFIER && t->next && t->next->kind == L_PARENTHESES;
 }
 
-// Detect (param list) { ... } function literals without consuming tokens.
+static int token_starts_fun_literal_body(Token *t) {
+    if (!t) return 0;
+    if (t->kind == L_BRACE) return 1;
+    return t->kind == FAT_ARROW && t->next && t->next->kind == L_BRACE;
+}
+
+// Detect (param list) { ... } and (param list) => { ... } function literals
+// without consuming tokens.
 int looks_like_fun_literal(Token *cur) {
     if (!cur || cur->kind != L_PARENTHESES) return 0;
     Token *t = cur->next;
     if (!t) return 0;
     // Empty parameter list
     if (t->kind == R_PARENTHESES) {
-        return t->next && t->next->kind == L_BRACE;
+        return token_starts_fun_literal_body(t->next);
     }
     while (1) {
         if (t && t->kind == REST) {
@@ -54,7 +61,7 @@ int looks_like_fun_literal(Token *cur) {
             if (t && t->kind == IDENTIFIER) t = t->next;
             if (t && t->kind == R_PARENTHESES) {
                 t = t->next;
-                return t && t->kind == L_BRACE;
+                return token_starts_fun_literal_body(t);
             }
             return 0;
         }
@@ -82,7 +89,7 @@ int looks_like_fun_literal(Token *cur) {
         }
         if (t && t->kind == R_PARENTHESES) {
             t = t->next;
-            return t && t->kind == L_BRACE;
+            return token_starts_fun_literal_body(t);
         }
         return 0;
     }
