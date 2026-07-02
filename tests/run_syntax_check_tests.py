@@ -81,6 +81,16 @@ CASES = [
         token_roles={1: "function", 5: "function"},
     ),
     SyntaxCase(
+        name="arrow_function_literal_ok",
+        source="i32 main() { i32 f = (i32 x) => { return x + 1; }; return f(1); }\n",
+        status="ok",
+    ),
+    SyntaxCase(
+        name="empty_arrow_function_literal_ok",
+        source="i32 main() { i32 f = () => { return 1; }; return f(); }\n",
+        status="ok",
+    ),
+    SyntaxCase(
         name="export_function_ok",
         source="export i32 add(i32 a, i32 b) { return a + b; }\n",
         status="ok",

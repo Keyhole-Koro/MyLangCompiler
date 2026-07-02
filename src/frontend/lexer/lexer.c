@@ -49,7 +49,7 @@ static void unescape_string_literal_inplace(char *s) {
 
 StringTokenKindMap operators[] = {
     {"==", EQ}, {"!=", NEQ}, {"<=", LTE}, {">=", GTE}, {"&&", LAND}, {"||", LOR},
-    {"<<", LSH}, {">>", RSH}, {"++", INC}, {"--", DEC}, {"*", ASTARISK}, {"->", ARROW},
+    {"<<", LSH}, {">>", RSH}, {"++", INC}, {"--", DEC}, {"=>", FAT_ARROW}, {"*", ASTARISK}, {"->", ARROW},
     {"+", ADD}, {"-", SUB}, {"/", DIV}, {"%", MOD}, {"=", ASSIGN},
     {"(", L_PARENTHESES}, {")", R_PARENTHESES}, {";", SEMICOLON}, {",", COMMA},
     {"{", L_BRACE}, {"}", R_BRACE}, {"[", L_BRACKET}, {"]", R_BRACKET},
@@ -85,6 +85,7 @@ char *tokenkind2str(TokenKind kind) {
         case DEC: return "DEC";
         case ASTARISK: return "ASTARISK";
         case ARROW: return "MEMBER";
+        case FAT_ARROW: return "FAT_ARROW";
         case ADD: return "ADD";
         case SUB: return "SUB";
         case DIV: return "DIV";

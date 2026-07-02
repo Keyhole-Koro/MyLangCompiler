@@ -88,5 +88,5 @@ Expressions are listed in order of decreasing precedence.
 
 ### Special Expressions
 - **Case Expression**: `case expr of { ( (key | _) -> expr ; )* }`
-- **Function Literal (Lambda)**: `( param_list ) block`
+- **Function Literal (Lambda)**: `( param_list ) block` or `( param_list ) => block`
 - **Statement Expression**: `( block )`

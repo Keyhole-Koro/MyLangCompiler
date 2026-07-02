@@ -96,6 +96,7 @@ static const char *expected_label(const char *token) {
         {"RSH", ">>"},
         {"INC", "++"},
         {"DEC", "--"},
+        {"FAT_ARROW", "=>"},
         {"ASTARISK", "*"},
         {"MEMBER", "->"},
         {"ADD", "+"},

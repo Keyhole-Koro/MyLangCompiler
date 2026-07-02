@@ -56,6 +56,7 @@ TESTCASES = [
     ("packageSample", ["succeed/package/pkg_main.mln", "succeed/package/pkg_math.mln"], "R1", 20),
     ("pkgVariadic", ["succeed/package/pkgVariadic_main.mln", "succeed/package/pkgVariadic_lib.mln"], "R1", 133),
     ("functionLiteral", ["succeed/function/functionLiteral.mln"], "R1", 10),
+    ("arrowFunctionLiteral", ["succeed/function/arrowFunctionLiteral.mln"], "R1", 13),
     ("localFunctionLiteral", ["succeed/function/localFunctionLiteral.mln"], "R1", 10),
     ("nestedFunctionLiteral", ["succeed/function/nestedFunctionLiteral.mln"], "R1", 6),
     ("globalInit", ["succeed/global/globalInit.mln"], "R1", 42),
