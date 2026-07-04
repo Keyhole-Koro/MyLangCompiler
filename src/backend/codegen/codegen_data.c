@@ -1,6 +1,7 @@
 #include "mylang/backend/codegen_internal.h"
 
 static long eval_const_expr(ASTNode *node);
+int array_element_size_bytes(ASTNode *array_type);
 
 void ensure_data_section(CompilerContext *cc) {
     if (!cg_data_sb_inited) { sb_init(&cg_data_sb); cg_data_sb_inited = 1; }
@@ -29,9 +30,42 @@ static long eval_const_expr(ASTNode *node) {
     return 0; 
 }
 
-void emit_global_init(StringBuilder *sb, ASTNode *init_expr, int expected_bytes) {
+// Emit a single scalar constant as `width` big-endian bytes.
+static void emit_scalar_bytes(StringBuilder *sb, long val, int width) {
+    if (width == 1) {
+        sb_append(sb, "  .byte 0x%02X\n", (unsigned)(val & 0xFF));
+    } else if (width == 2) {
+        sb_append(sb, "  .byte 0x%02X, 0x%02X\n",
+                  (unsigned)((val >> 8) & 0xFF),
+                  (unsigned)(val & 0xFF));
+    } else {
+        sb_append(sb, "  .byte 0x%02X, 0x%02X, 0x%02X, 0x%02X\n",
+                  (unsigned)((val >> 24) & 0xFF),
+                  (unsigned)((val >> 16) & 0xFF),
+                  (unsigned)((val >> 8) & 0xFF),
+                  (unsigned)(val & 0xFF));
+    }
+}
+
+void emit_global_init(StringBuilder *sb, ASTNode *init_expr, int expected_bytes, int elem_bytes) {
     if (!init_expr) {
         emit_zero_bytes(sb, expected_bytes);
+        return;
+    }
+
+    // Aggregate initializer: emit each element at the array's element width,
+    // then zero-pad any remaining bytes (e.g. `i32 a[8] = {1, 2};`).
+    if (init_expr->type == AST_INIT_LIST) {
+        int width = elem_bytes > 0 ? elem_bytes : SLOT_SIZE;
+        int written = 0;
+        for (int i = 0; i < init_expr->init_list.count; i++) {
+            long ev = eval_const_expr(init_expr->init_list.elements[i]);
+            emit_scalar_bytes(sb, ev, width);
+            written += width;
+        }
+        if (written < expected_bytes) {
+            emit_zero_bytes(sb, expected_bytes - written);
+        }
         return;
     }
 
@@ -74,9 +108,17 @@ void emit_global_decl(CompilerContext *cc, ASTNode *var_decl) {
     }
     if (bytes < 1) bytes = SLOT_SIZE;
 
+    // Element width for aggregate initializers (char/u8 -> 1, u16 -> 2,
+    // otherwise a full slot). Scalar inits ignore this.
+    int elem_bytes = SLOT_SIZE;
+    if (var_decl->var_decl.var_type &&
+        var_decl->var_decl.var_type->type == AST_TYPE_ARRAY) {
+        elem_bytes = array_element_size_bytes(var_decl->var_decl.var_type);
+    }
+
     sb_append(&cg_data_sb, "%s:\n", var_decl->var_decl.name ? var_decl->var_decl.name : "");
     if (var_decl->var_decl.init) {
-        emit_global_init(&cg_data_sb, var_decl->var_decl.init, bytes);
+        emit_global_init(&cg_data_sb, var_decl->var_decl.init, bytes, elem_bytes);
     } else {
         emit_zero_bytes(&cg_data_sb, bytes);
     }
@@ -185,12 +227,37 @@ void emit_store_width_to_addr(StringBuilder *sb, const char *addr_reg, const cha
     }
 }
 
+// If `n` is a power of two (> 0), return its exponent (log2), else -1.
+static int power_of_two_shift(long n) {
+    if (n <= 0) return -1;
+    int shift = 0;
+    while ((n & 1) == 0) {
+        n >>= 1;
+        shift++;
+    }
+    return (n == 1) ? shift : -1;
+}
+
 void emit_scale_reg_const(CompilerContext *cc, StringBuilder *sb, const char *reg, long factor) {
     if (factor == 1) return;
     if (factor <= 0) {
         sb_append(sb, "  ; unsupported scale factor %ld\n", factor);
         return;
     }
+
+    // Fast path: multiplying by a power of two is a left shift. The target has
+    // no multiply instruction, so the generic path below is a repeated-add
+    // loop that runs `factor` times per scale — catastrophic for large factors
+    // like a display row stride. `shl` shifts by one, so emit `shift` of them.
+    int shift = power_of_two_shift(factor);
+    if (shift >= 0) {
+        sb_append(sb, "  ; scale %s by %ld (<< %d)\n", reg, factor, shift);
+        for (int i = 0; i < shift; i++) {
+            sb_append(sb, "  shl %s\n", reg);
+        }
+        return;
+    }
+
     sb_append(sb, "  ; scale %s by %ld\n", reg, factor);
     sb_append(sb, "  mov r4, %s\n", reg);
     sb_append(sb, "  movi %s, 0\n", reg);
