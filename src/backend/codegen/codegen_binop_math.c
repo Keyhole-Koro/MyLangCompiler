@@ -1,5 +1,22 @@
 #include "mylang/backend/codegen_internal.h"
 
+// If `n` is a power of two (> 0), return its log2 exponent, else -1.
+static int pow2_shift(long n) {
+    if (n <= 0) return -1;
+    int s = 0;
+    while ((n & 1) == 0) { n >>= 1; s++; }
+    return (n == 1) ? s : -1;
+}
+
+// If `node` is an integer literal, store its value in *out and return 1.
+static int literal_value(ASTNode *node, long *out) {
+    if (node && node->type == AST_NUMBER) {
+        *out = strtol(node->number.value, NULL, 10);
+        return 1;
+    }
+    return 0;
+}
+
 int gen_math_binop(CompilerContext *cc, ASTNode *node, StringBuilder *sb) {
     switch (node->binary.op)
     {
@@ -11,6 +28,24 @@ int gen_math_binop(CompilerContext *cc, ASTNode *node, StringBuilder *sb) {
         sb_append(sb, "  mov r1, r2\n");
         return 1;
     case ASTARISK: {
+        // Fast path: multiplying by a power-of-two literal is a left shift.
+        // The target has no multiply instruction, so the generic loop below
+        // runs `min(operands)` times — e.g. `row * 1024` would loop 1024x per
+        // pixel row. Operands are pre-loaded left->r2, right->r1; if one side
+        // is a constant 2^k, shift the other operand's register instead.
+        long lit;
+        int shift;
+        if (literal_value(node->binary.right, &lit) && (shift = pow2_shift(lit)) >= 0) {
+            sb_append(sb, "\n; multiply r2 * %ld (<< %d)\n", lit, shift);
+            for (int i = 0; i < shift; i++) sb_append(sb, "  shl r2\n");
+            sb_append(sb, "  mov r1, r2\n");
+            return 1;
+        }
+        if (literal_value(node->binary.left, &lit) && (shift = pow2_shift(lit)) >= 0) {
+            sb_append(sb, "\n; multiply %ld * r1 (<< %d)\n", lit, shift);
+            for (int i = 0; i < shift; i++) sb_append(sb, "  shl r1\n");
+            return 1;
+        }
         sb_append(sb, "\n; multiply r2 * r1\n");
         sb_append(sb, "  movi r4, 0      ; r4 = result\n");
         sb_append(sb, "  mov r5, r1     ; r5 = count\n");

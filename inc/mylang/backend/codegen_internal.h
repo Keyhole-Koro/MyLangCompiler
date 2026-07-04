@@ -186,7 +186,7 @@ int is_comparison_op(TokenKind op);
 
 void ensure_data_section(CompilerContext *cc);
 void emit_zero_bytes(StringBuilder *sb, int count);
-void emit_global_init(StringBuilder *sb, ASTNode *init_expr, int expected_bytes);
+void emit_global_init(StringBuilder *sb, ASTNode *init_expr, int expected_bytes, int elem_bytes);
 void emit_global_decl(CompilerContext *cc, ASTNode *var_decl);
 
 void emit_load_from_addr(StringBuilder *sb, const char *target_reg, const char *addr_reg, int is_byte);
