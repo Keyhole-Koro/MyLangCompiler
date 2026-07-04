@@ -46,10 +46,25 @@ int gen_math_binop(CompilerContext *cc, ASTNode *node, StringBuilder *sb) {
             for (int i = 0; i < shift; i++) sb_append(sb, "  shl r1\n");
             return 1;
         }
+        // Repeated-add multiply: r4 += r2, `count` (r5) times. The count must
+        // be non-negative or the decrement loop never reaches 0, so if r1 is
+        // negative we negate both the count and the addend: (-a)*b == a*(-b).
         sb_append(sb, "\n; multiply r2 * r1\n");
         sb_append(sb, "  movi r4, 0      ; r4 = result\n");
         sb_append(sb, "  mov r5, r1     ; r5 = count\n");
         int lbl_mul = next_label(cc);
+        // If the count (r5) is negative the decrement loop would never reach 0,
+        // so negate both count and addend first: (-a)*b == a*(-b).
+        sb_append(sb, "  cmp r5, 0\n");
+        sb_append(sb, "  jl b_mul_neg_%d\n", lbl_mul);
+        sb_append(sb, "  jmp b_mul_loop_%d\n", lbl_mul);
+        sb_append(sb, "b_mul_neg_%d:\n", lbl_mul);
+        sb_append(sb, "  movi r6, 0\n");
+        sb_append(sb, "  sub r6, r5     ; r6 = -count\n");
+        sb_append(sb, "  mov r5, r6\n");
+        sb_append(sb, "  movi r6, 0\n");
+        sb_append(sb, "  sub r6, r2     ; r6 = -addend\n");
+        sb_append(sb, "  mov r2, r6\n");
         sb_append(sb, "b_mul_loop_%d:\n", lbl_mul);
         sb_append(sb, "  cmp r5, 0\n");
         sb_append(sb, "  jz b_mul_end_%d\n", lbl_mul);
