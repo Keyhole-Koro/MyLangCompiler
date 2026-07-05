@@ -1,0 +1,10 @@
+enum TaskState {
+    RUNNABLE = 10,
+    SLEEPING = 20,
+    EMPTY = 30
+}
+
+i32 main() {
+    i32 sum = RUNNABLE + SLEEPING + EMPTY;
+    return sum;
+}

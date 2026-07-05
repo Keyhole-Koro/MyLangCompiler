@@ -40,6 +40,7 @@ TESTCASES = [
     ("testTernary", ["succeed/expr/testTernary.mln"], "R1", 8),
     ("testTypedef", ["succeed/expr/testTypedef.mln"], "R1", 1),
     ("longProgram", ["succeed/struct/longProgram.mln"], "R1", 77),
+    ("enum_basic", ["succeed/expr/enum_basic.mln"], "R1", 60),
     ("complex_ops", ["succeed/expr/complex_ops.mln"], "R1", 188),
     ("condGlobalSum", ["succeed/expr/condGlobalSum.mln"], "R1", 88),
     ("hexBinLiteral", ["succeed/expr/hexBinLiteral.mln"], "R1", 541),

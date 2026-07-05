@@ -63,6 +63,15 @@ static ASTNode *parse_identifier_primary(Token **cur) {
         return call;
     }
 
+    long enum_val;
+    if (find_enum_constant(name, &enum_val)) {
+        char buf[32];
+        snprintf(buf, sizeof(buf), "%ld", enum_val);
+        ASTNode *node = new_number(buf);
+        set_node_loc_from_tokens(node, tok, NULL);
+        return node;
+    }
+
     ASTNode *node = new_identifier(name);
     set_node_loc_from_tokens(node, tok, NULL);
     while ((*cur)->kind == L_BRACKET) {
