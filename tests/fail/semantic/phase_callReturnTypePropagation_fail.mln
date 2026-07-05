@@ -1,0 +1,12 @@
+char* get_message() {
+    return "hello";
+}
+
+i32 get_number() {
+    return 42;
+}
+
+i32 main() {
+    char* value = get_number();
+    return 0;
+}

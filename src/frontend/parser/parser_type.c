@@ -110,6 +110,8 @@ ASTNode *parse_enum(Token **cur) {
 
     if (!expect(cur, R_BRACE))
         parse_error("expected '}' after enum body", token_head, *cur);
+    if ((*cur)->kind == SEMICOLON)
+        *cur = (*cur)->next;
 
     add_typename(name);
     ASTNode *node = new_enum(name, members, member_count);

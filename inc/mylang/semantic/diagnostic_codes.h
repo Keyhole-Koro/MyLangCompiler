@@ -26,6 +26,7 @@
 
 /* E01xx: function call */
 #define SEMCODE_ARG_COUNT_MISMATCH "E0101"
+#define SEMCODE_ARG_TYPE_MISMATCH "E0102"
 
 /* E02xx: return */
 #define SEMCODE_RETURN_TYPE_MISMATCH "E0201"

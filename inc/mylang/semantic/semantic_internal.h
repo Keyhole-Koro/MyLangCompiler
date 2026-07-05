@@ -9,6 +9,8 @@
 #include "mylang/semantic/semantic.h"
 #include "mylang/semantic/semantic_types.h"
 
+#define SEMANTIC_MAX_FUNCTION_PARAMS 32
+
 typedef struct {
     int line;
     int col;
@@ -59,6 +61,12 @@ typedef struct {
     int fixed_param_count;
     int is_variadic;
     int is_imported;
+    int has_return_type;
+    int has_param_types;
+    SemanticTypeInfo return_type;
+    SemanticTypeInfo param_types[SEMANTIC_MAX_FUNCTION_PARAMS];
+    const char *param_names[SEMANTIC_MAX_FUNCTION_PARAMS];
+    int param_borrow_kinds[SEMANTIC_MAX_FUNCTION_PARAMS];
     SemanticLocation decl_loc;
 } SemanticFunctionSig;
 

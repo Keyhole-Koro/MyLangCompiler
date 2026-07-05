@@ -34,6 +34,7 @@ Bands `E05xx` and above are unused and reserved for future categories.
 | `E0001` | Name resolution | Undefined identifier | `undefined identifier 'foo'` |
 | `E0002` | Name resolution | Undefined function | `undefined function 'foo'` |
 | `E0101` | Function call | Argument count mismatch | `function 'add' expects 2 arguments but got 1` |
+| `E0102` | Function call | Argument type mismatch | `function argument type mismatch: parameter 1 of 'add' expected i32, got char*` |
 | `E0201` | Return | Return type mismatch | `function 'f' must return a value` / return type mismatch (expected / actual) |
 | `E0301` | Expression type | Assignment / initializer type mismatch | assignment or initializer expected / actual mismatch |
 | `E0302` | Expression type | Invalid binary operands | `invalid operands to '+': i32 and char*` |
@@ -54,7 +55,6 @@ them. They are not emitted by the compiler yet.
 
 | Code | Category | Meaning | Ticket |
 | --- | --- | --- | --- |
-| `E0102` | Function call | Argument type mismatch | ISSUE-016 (function signature type checking) |
 | `E0401` | Package / import | Package does not export symbol | ISSUE-019 (package symbol resolution) |
 | `E0402` | Package / import | Ambiguous imported symbol | ISSUE-019 |
 | `E0403` | Package / import | Cyclic import detected | ISSUE-019 |

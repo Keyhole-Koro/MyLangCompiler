@@ -93,6 +93,14 @@ FAIL_CASES = {
         "fail/semantic/phase_callArgCount_fail.mln",
         ":6:12: error[E0101]: function 'add' expects 2 arguments but got 1",
     ),
+    "phase_callArgTypeMismatch_fail": (
+        "fail/semantic/phase_callArgTypeMismatch_fail.mln",
+        ":7:16: error[E0102]: function argument type mismatch: parameter 1 of 'add' expected i32, got char*",
+    ),
+    "phase_callReturnTypePropagation_fail": (
+        "fail/semantic/phase_callReturnTypePropagation_fail.mln",
+        ":10:19: error[E0301]: initializer type mismatch: expected char*, got i32",
+    ),
     "phase_returnMissingValue_fail": (
         "fail/semantic/phase_returnMissingValue_fail.mln",
         ":2:5: error[E0201]: function 'value' must return a value",

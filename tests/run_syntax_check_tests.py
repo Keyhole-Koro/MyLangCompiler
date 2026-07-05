@@ -44,6 +44,11 @@ CASES = [
         status="ok",
     ),
     SyntaxCase(
+        name="parenthesized_binary_after_identifier_star_ok",
+        source="i32 main() { i32 addr = base + (y * width + x) * 4; }\n",
+        status="ok",
+    ),
+    SyntaxCase(
         name="nested_if_else_ok",
         source="i32 main() { if (x) if (y) return; else return; }\n",
         status="ok",
