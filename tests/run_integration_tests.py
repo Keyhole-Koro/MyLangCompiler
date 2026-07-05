@@ -15,7 +15,7 @@ TESTS_DIR = REPO_ROOT / "tests"
 CC_PATH = REPO_ROOT / "mlc"
 ASM_PATH = PROJECT_ROOT / "toolchain" / "MyAssembler" / "build" / "myas"
 LINKER_PATH = PROJECT_ROOT / "toolchain" / "MyLinker" / "mllinker"
-EMU_PATH = PROJECT_ROOT / "runtime" / "MyEmulator" / "build" / "myemu"
+EMU_PATH = PROJECT_ROOT / "runtime" / "MyEmulator" / "target" / "release" / "myemu"
 EMU_TIMEOUT_SEC = float(os.environ.get("EMU_TIMEOUT_SEC", "8"))
 
 TESTCASES = [
