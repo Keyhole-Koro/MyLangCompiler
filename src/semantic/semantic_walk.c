@@ -1,4 +1,5 @@
 #include "mylang/semantic/semantic_internal.h"
+#include "mylang/semantic/diagnostic_codes.h"
 #include "mylang/frontend/parser_state_internal.h"
 
 typedef enum {
@@ -6,15 +7,6 @@ typedef enum {
     EXPRCTX_MOVE,
     EXPRCTX_WRITE,
 } ExprContext;
-
-#define SEMCODE_UNDEFINED_IDENTIFIER "E0001"
-#define SEMCODE_UNDEFINED_FUNCTION "E0002"
-#define SEMCODE_ARG_COUNT_MISMATCH "E0101"
-#define SEMCODE_RETURN_TYPE_MISMATCH "E0201"
-#define SEMCODE_ASSIGNMENT_TYPE_MISMATCH "E0301"
-#define SEMCODE_INVALID_BINARY_OPERANDS "E0302"
-#define SEMCODE_INVALID_CONDITION_TYPE "E0303"
-#define SEMCODE_UNREACHABLE_STATEMENT "W0001"
 
 static int semantic_infer_expr_type(SemanticContext *ctx, ASTNode *expr, SemanticTypeInfo *out);
 
