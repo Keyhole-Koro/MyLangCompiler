@@ -636,6 +636,20 @@ static void use_identifier(SemanticContext *ctx, ASTNode *node, ExprContext expr
         }
         return;
     }
+    if (find_function_sig(ctx, ident->identifier.name)) {
+        if (expr_ctx == EXPRCTX_WRITE) {
+            semantic_error_at(ctx, semantic_location_from_ast(node),
+                              "cannot assign to function '%s'", ident->identifier.name);
+        }
+        return;
+    }
+    if (call_may_be_package_import(ident->identifier.name)) {
+        if (expr_ctx == EXPRCTX_WRITE) {
+            semantic_error_at(ctx, semantic_location_from_ast(node),
+                              "cannot assign to function '%s'", ident->identifier.name);
+        }
+        return;
+    }
     binding = find_binding(ctx, ident->identifier.name);
     if (!binding) {
         semantic_error_code_at(ctx, semantic_location_from_ast(node),
@@ -710,6 +724,14 @@ static int semantic_infer_identifier_type(SemanticContext *ctx, ASTNode *expr, S
     if (!ctx || !expr || expr->type != AST_IDENTIFIER || !out) return 0;
     if (semantic_find_enum_value(ctx, expr->identifier.name, &enum_value)) {
         (void)enum_value;
+        semantic_typeinfo_make_scalar(out, "i32");
+        return 1;
+    }
+    if (find_function_sig(ctx, expr->identifier.name)) {
+        semantic_typeinfo_make_scalar(out, "i32");
+        return 1;
+    }
+    if (call_may_be_package_import(expr->identifier.name)) {
         semantic_typeinfo_make_scalar(out, "i32");
         return 1;
     }

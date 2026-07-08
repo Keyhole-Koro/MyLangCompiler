@@ -110,6 +110,11 @@ CASES = [
         source="export typedef struct { i32 x; i32 y; } Point;\n",
         status="ok",
     ),
+    SyntaxCase(
+        name="enum_without_semicolon_ok",
+        source="enum TaskState { TASK_RUNNABLE = 0, TASK_SLEEPING = 1, TASK_EMPTY = 2 }\ni32 task_state[256];\n",
+        status="ok",
+    ),
 ]
 
 
