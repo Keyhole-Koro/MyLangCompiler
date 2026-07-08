@@ -240,6 +240,10 @@ void _gen_expr(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char
     case AST_IDENTIFIER:
         if (find_enum_value(cc, node->identifier.name)) {
             sb_append(sb, "  movi %s, %ld\n", target_reg, find_enum_value(cc, node->identifier.name)->value);
+        } else if (find_func_sig(cc, node->identifier.name)) {
+            note_import_func(cc, node->identifier.name);
+            sb_append(sb, "  \n; load function pointer '%s'\n", node->identifier.name);
+            sb_append(sb, "  movi %s, %s\n", target_reg, node->identifier.name);
         } else {
             emit_load_var(cc, sb, node->identifier.name, target_reg, params, param_count, locals, local_count);
         }
