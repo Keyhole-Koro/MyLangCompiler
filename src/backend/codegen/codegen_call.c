@@ -63,11 +63,85 @@ static void gen_builtin_call(CompilerContext *cc, ASTNode *node, StringBuilder *
     exit(1);
 }
 
+// True when `name` is a value in scope (param/local/global) rather than a known
+// function. Such a call is an indirect call through a function-pointer value.
+static int is_indirect_callee(CompilerContext *cc, const char *name,
+                              char **params, int param_count,
+                              char **locals, int local_count)
+{
+    if (find_func_sig(cc, name)) return 0;      // a known function -> direct call
+    if (is_codegen_builtin(name)) return 0;
+    if (param_index(name, params, param_count) >= 0) return 1;
+    if (local_index_last(name, locals, local_count) >= 0) return 1;
+    if (find_global_info(cc, name)) return 1;
+    return 0;
+}
+
+// Emit an indirect call: `callee(args)` where `callee` is a variable holding a
+// function pointer (an i32, as taken by naming a function bare). Args are passed
+// exactly like a direct call. Instead of `call <label>`, the pointer is loaded
+// and jumped to via `mov pc, reg` with LR set to the return label, mirroring the
+// `mov pc, lr` return convention. Rest/variadic indirect calls are not supported.
+static void gen_indirect_call(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char *target_reg,
+                              char **params, int param_count, char **locals, int local_count)
+{
+    int argc = node->call.arg_count;
+    int stack_args = argc > 3 ? (argc - 3) : 0;
+
+    if (stack_args > 0) {
+        sb_append(sb, "  ; push stack arguments (indirect call)\n");
+        sb_append(sb, "  addis sp, -%d\n", stack_args * SLOT_SIZE);
+        for (int i = 3; i < argc; i++) {
+            gen_expr(cc, node->call.args[i], sb, "r1", params, param_count, locals, local_count);
+            sb_append(sb, "  mov r2, sp\n");
+            sb_append(sb, "  addis r2, %d\n", (i - 3) * SLOT_SIZE);
+            sb_append(sb, "  store r2, r1\n");
+        }
+    }
+
+    // Evaluate the callee and register args, pushing each so a nested call in a
+    // later arg cannot clobber an earlier result. Then pop them into place. The
+    // callee address goes to r2: args are already in r5-r7 by then, r1 is the
+    // return slot, and r0 must stay 0 (codegen emits `cmp reg, 0` as `cmp reg, r0`,
+    // relying on r0 being zero). r2 is arg-eval scratch, free once args are placed.
+    sb_append(sb, "  ; evaluate indirect callee '%s'\n", node->call.name);
+    emit_load_var(cc, sb, node->call.name, "r1", params, param_count, locals, local_count);
+    sb_append(sb, "  push r1\n");
+
+    int reg_argc = argc < 3 ? argc : 3;
+    for (int i = 0; i < reg_argc; i++) {
+        gen_expr(cc, node->call.args[i], sb, "r1", params, param_count, locals, local_count);
+        sb_append(sb, "  push r1\n");
+    }
+    for (int i = reg_argc - 1; i >= 0; i--) {
+        sb_append(sb, "  pop %s\n", arg_regs[i]);
+    }
+    sb_append(sb, "  pop r2\n"); // callee address (r2 is free once args are placed)
+
+    int ret = next_label(cc);
+    sb_append(sb, "  movi lr, icall_ret_%d\n", ret);
+    sb_append(sb, "  mov pc, r2\n");
+    sb_append(sb, "icall_ret_%d:\n", ret);
+
+    if (stack_args > 0) {
+        sb_append(sb, "  ; restore sp after indirect call\n");
+        sb_append(sb, "  addis sp, %d\n", stack_args * SLOT_SIZE);
+    }
+
+    if (strcmp(target_reg, "r1") != 0)
+        sb_append(sb, "  mov %s, r1\n", target_reg);
+}
+
 void gen_call(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char *target_reg,
               char **params, int param_count, char **locals, int local_count)
 {
     if (is_codegen_builtin(node->call.name)) {
         gen_builtin_call(cc, node, sb, target_reg, params, param_count, locals, local_count);
+        return;
+    }
+
+    if (is_indirect_callee(cc, node->call.name, params, param_count, locals, local_count)) {
+        gen_indirect_call(cc, node, sb, target_reg, params, param_count, locals, local_count);
         return;
     }
 
