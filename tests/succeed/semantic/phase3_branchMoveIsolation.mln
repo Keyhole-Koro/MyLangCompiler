@@ -1,0 +1,22 @@
+typedef struct {
+    i32 x;
+} Box;
+
+void consume(Box b) {
+    b.x = b.x;
+}
+
+i32 main() {
+    Box a;
+    a.x = 7;
+    i32 cond = 0;
+    i32 result = 0;
+
+    if (cond) {
+        consume(a);
+    } else {
+        result = a.x;
+    }
+
+    return result;
+}

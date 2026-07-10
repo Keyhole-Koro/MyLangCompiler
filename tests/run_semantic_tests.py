@@ -21,6 +21,7 @@ PASS_CASES = {
     "phase2_refMutParam": "succeed/semantic/phase2_refMutParam.mln",
     "phase2_uncheckedNested": "succeed/semantic/phase2_uncheckedNested.mln",
     "phase2_doWhileControl": "succeed/semantic/phase2_doWhileControl.mln",
+    "phase3_branchMoveIsolation": "succeed/semantic/phase3_branchMoveIsolation.mln",
     "phase_restParam": "succeed/semantic/phase_restParam.mln",
     "phase_printfRestBuiltin": "succeed/semantic/phase_printfRestBuiltin.mln",
     "phase_enumBasic": "succeed/semantic/phase_enumBasic.mln",
@@ -46,6 +47,14 @@ FAIL_CASES = {
     ),
     "phase3_useAfterCallMove_fail": (
         "fail/semantic/phase3_useAfterCallMove_fail.mln",
+        "use of moved value 'a'",
+    ),
+    "phase3_branchMoveMerge_fail": (
+        "fail/semantic/phase3_branchMoveMerge_fail.mln",
+        "use of moved value 'a'",
+    ),
+    "phase3_branchElseMoveMerge_fail": (
+        "fail/semantic/phase3_branchElseMoveMerge_fail.mln",
         "use of moved value 'a'",
     ),
     "phase3_moveWhileBorrowed_fail": (

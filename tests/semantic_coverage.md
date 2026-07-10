@@ -18,6 +18,8 @@ Covered by semantic smoke tests:
 Covered by semantic failure tests:
 - use-after-move on local move assignment
 - use-after-move after call argument move
+- use-after-move after branch-sensitive move merge from then / else branches
+- independent branch move state before merge
 - move while borrowed
 - shared borrow then mutable borrow
 - mutable borrow then shared borrow
@@ -25,7 +27,6 @@ Covered by semantic failure tests:
 - return local reference binding
 
 Still thin / future work:
-- branch-sensitive move state merge
 - field-sensitive move tracking
 - borrow conflicts through function calls
 - raw-pointer restrictions inside and outside `unchecked`
