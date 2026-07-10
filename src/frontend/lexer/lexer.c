@@ -160,12 +160,17 @@ char *tokenkind2str(TokenKind kind) {
         case CHAR_LITERAL: return "CHAR_LITERAL";
         case IDENTIFIER: return "IDENTIFIER";
         case EOT: return "EOT";
+        case MLX_TAG_OPEN: return "MLX_TAG_OPEN";
+        case MLX_CLOSE_TAG_OPEN: return "MLX_CLOSE_TAG_OPEN";
+        case MLX_TAG_CLOSE: return "MLX_TAG_CLOSE";
+        case MLX_TAG_SELF_CLOSE: return "MLX_TAG_SELF_CLOSE";
+        case MLX_TEXT: return "MLX_TEXT";
         default: break;
     }
     return "UNKNOWN";
 }
 
-Token *createToken(Token *cur, int kind, char *value, int line, int col, int length) {
+Token *createTokenSingle(int kind, char *value, int line, int col, int length) {
     Token *newTk = malloc(sizeof(Token));
     newTk->kind = kind;
     newTk->value = strdup(value);
@@ -173,7 +178,6 @@ Token *createToken(Token *cur, int kind, char *value, int line, int col, int len
     newTk->col = col;
     newTk->length = length;
     newTk->next = NULL;
-    cur->next = newTk;
     return newTk;
 }
 
@@ -318,110 +322,251 @@ int isCharLiteral(char *ptr, char *buffer) {
     return consumed;
 }
 
-Token *lexer(char *input) {
-    Token head = {0};
-    Token *cur = &head;
-    char *ptr = input;
-    /* Sized to the whole input: no single token can exceed it, so the is*()
-       helpers that copy into it cannot overflow (even on pathological tokens). */
-    char *buffer = malloc(strlen(input) + 1);
+LexerContext *lexer_context_create(char *input) {
+    LexerContext *ctx = malloc(sizeof(LexerContext));
+    ctx->input = input;
+    ctx->ptr = input;
+    ctx->line = 1;
+    ctx->col = 1;
+    ctx->mode_stack[0] = MODE_DEFAULT;
+    ctx->depth = 1;
+    ctx->eot_returned = false;
+    return ctx;
+}
+
+void lexer_context_destroy(LexerContext *ctx) {
+    free(ctx);
+}
+
+Token *lexer_next_token(LexerContext *ctx) {
+    if (ctx->eot_returned) return NULL;
+    char *buffer = malloc(strlen(ctx->ptr) + 1);
     if (!buffer) return NULL;
     size_t consumed_len = 0;
     TokenKind kind;
-    int line = 1;
-    int col = 1;
 
-    while (*ptr) {
+    while (*ctx->ptr) {
+        LexerMode current_mode = ctx->mode_stack[ctx->depth - 1];
+
+        if (current_mode == MODE_MLX_TEXT) {
+            // Read until '<' or '{'
+            char *start = ctx->ptr;
+            while (*ctx->ptr && *ctx->ptr != '<' && *ctx->ptr != '{') {
+                ctx->ptr++;
+            }
+            if (ctx->ptr > start) {
+                int len = ctx->ptr - start;
+                strncpy(buffer, start, len);
+                buffer[len] = '\0';
+                Token *t = createTokenSingle(MLX_TEXT, buffer, ctx->line, ctx->col, len);
+                advance_pos(start, len, &ctx->line, &ctx->col);
+                ctx->last_token_kind = MLX_TEXT;
+                free(buffer);
+                return t;
+            }
+            if (*ctx->ptr == '<') {
+                if (ctx->ptr[1] == '/') {
+                    Token *t = createTokenSingle(MLX_CLOSE_TAG_OPEN, "</", ctx->line, ctx->col, 2);
+                    advance_pos(ctx->ptr, 2, &ctx->line, &ctx->col);
+                    ctx->ptr += 2;
+                    ctx->depth--;
+                    ctx->mode_stack[ctx->depth++] = MODE_MLX_TAG;
+                    ctx->mlx_tag_depth--;
+                    ctx->last_token_kind = MLX_CLOSE_TAG_OPEN;
+                    free(buffer);
+                    return t;
+                } else {
+                    Token *t = createTokenSingle(MLX_TAG_OPEN, "<", ctx->line, ctx->col, 1);
+                    advance_pos(ctx->ptr, 1, &ctx->line, &ctx->col);
+                    ctx->ptr += 1;
+                    ctx->mode_stack[ctx->depth++] = MODE_MLX_TAG;
+                    ctx->mlx_tag_depth++; // push MODE_MLX_TAG
+                    ctx->last_token_kind = MLX_TAG_OPEN;
+                    free(buffer);
+                    return t;
+                }
+            } else if (*ctx->ptr == '{') {
+                Token *t = createTokenSingle(L_BRACE, "{", ctx->line, ctx->col, 1);
+                advance_pos(ctx->ptr, 1, &ctx->line, &ctx->col);
+                ctx->ptr += 1;
+                ctx->mode_stack[ctx->depth++] = MODE_DEFAULT;
+                ctx->last_token_kind = L_BRACE;
+                free(buffer);
+                return t;
+            }
+        }
+
         buffer[0] = '\0';
 
-        if (isspace(*ptr)) {
-            advance_pos(ptr, 1, &line, &col);
-            ptr++;
+        if (isspace(*ctx->ptr)) {
+            advance_pos(ctx->ptr, 1, &ctx->line, &ctx->col);
+            ctx->ptr++;
             continue;
         }
 
-        if (isComment(ptr, buffer)) {
+        if (current_mode == MODE_MLX_TAG) {
+            if (*ctx->ptr == '/' && ctx->ptr[1] == '>') {
+                Token *t = createTokenSingle(MLX_TAG_SELF_CLOSE, "/>", ctx->line, ctx->col, 2);
+                advance_pos(ctx->ptr, 2, &ctx->line, &ctx->col);
+                ctx->ptr += 2;
+                ctx->depth--;
+                ctx->mlx_tag_depth--;
+                if (ctx->mlx_tag_depth > 0) ctx->mode_stack[ctx->depth++] = MODE_MLX_TEXT;
+                else ctx->mode_stack[ctx->depth - 1] = MODE_DEFAULT;
+                ctx->last_token_kind = MLX_TAG_SELF_CLOSE;
+                free(buffer);
+                return t;
+            }
+            if (*ctx->ptr == '>') {
+                Token *t = createTokenSingle(MLX_TAG_CLOSE, ">", ctx->line, ctx->col, 1);
+                advance_pos(ctx->ptr, 1, &ctx->line, &ctx->col);
+                ctx->ptr += 1;
+                ctx->depth--;
+                if (ctx->mlx_tag_depth > 0) ctx->mode_stack[ctx->depth++] = MODE_MLX_TEXT;
+                else ctx->mode_stack[ctx->depth - 1] = MODE_DEFAULT;
+                ctx->last_token_kind = MLX_TAG_CLOSE;
+                free(buffer);
+                return t;
+            }
+            if (*ctx->ptr == '{') {
+                Token *t = createTokenSingle(L_BRACE, "{", ctx->line, ctx->col, 1);
+                advance_pos(ctx->ptr, 1, &ctx->line, &ctx->col);
+                ctx->ptr += 1;
+                ctx->mode_stack[ctx->depth++] = MODE_DEFAULT;
+                ctx->last_token_kind = L_BRACE;
+                free(buffer);
+                return t;
+            }
+        }
+        
+        // Handle closing brace transitioning back from DEFAULT
+        if (*ctx->ptr == '}') {
+            Token *t = createTokenSingle(R_BRACE, "}", ctx->line, ctx->col, 1);
+            advance_pos(ctx->ptr, 1, &ctx->line, &ctx->col);
+            ctx->ptr += 1;
+            // If we are in DEFAULT and parent is MLX, pop DEFAULT
+            if (ctx->depth > 1 && (ctx->mode_stack[ctx->depth - 2] == MODE_MLX_TAG || ctx->mode_stack[ctx->depth - 2] == MODE_MLX_TEXT)) {
+                ctx->depth--;
+            }
+            ctx->last_token_kind = R_BRACE;
+            free(buffer);
+            return t;
+        }
+
+        if (isComment(ctx->ptr, buffer)) {
             size_t consumed = strlen(buffer);
-            advance_pos(ptr, consumed, &line, &col);
-            ptr += consumed;
-            while (*ptr && *ptr != '\n') { advance_pos(ptr,1,&line,&col); ptr++; }
-            if (*ptr == '\n') { advance_pos(ptr,1,&line,&col); ptr++; }
+            advance_pos(ctx->ptr, consumed, &ctx->line, &ctx->col);
+            ctx->ptr += consumed;
+            while (*ctx->ptr && *ctx->ptr != '\n') { advance_pos(ctx->ptr,1,&ctx->line,&ctx->col); ctx->ptr++; }
+            if (*ctx->ptr == '\n') { advance_pos(ctx->ptr,1,&ctx->line,&ctx->col); ctx->ptr++; }
             continue;
         }
 
-        if (isCommentBlock(ptr, buffer)) {
-            // Consume up to and including '*/', or to end of input if unclosed
-            // (an unterminated comment must not advance past the buffer).
-            char *end = strstr(ptr, "*/");
-            size_t consumed = end ? (size_t)(end + 2 - ptr) : strlen(ptr);
-            advance_pos(ptr, consumed, &line, &col);
-            ptr += consumed;
+        if (isCommentBlock(ctx->ptr, buffer)) {
+            char *end = strstr(ctx->ptr, "*/");
+            size_t consumed = end ? (size_t)(end + 2 - ctx->ptr) : strlen(ctx->ptr);
+            advance_pos(ctx->ptr, consumed, &ctx->line, &ctx->col);
+            ctx->ptr += consumed;
             continue;
         }
 
-        if (isOperator(ptr, &kind, buffer)) {
-            int tok_line = line, tok_col = col;
+        if (isOperator(ctx->ptr, &kind, buffer)) {
+            if (kind == LT && (ctx->last_token_kind == RETURN || ctx->last_token_kind == ASSIGN || ctx->last_token_kind == L_PARENTHESES || ctx->last_token_kind == FAT_ARROW || ctx->last_token_kind == COLON)) {
+                kind = MLX_TAG_OPEN;
+                ctx->mode_stack[ctx->depth++] = MODE_MLX_TAG;
+                    ctx->mlx_tag_depth++;
+            }
+            int tok_line = ctx->line, tok_col = ctx->col;
             size_t consumed = strlen(buffer);
-            cur = createToken(cur, kind, buffer, tok_line, tok_col, (int)consumed);
-            advance_pos(ptr, consumed, &line, &col);
-            ptr += consumed;
-            continue;
+            Token *t = createTokenSingle(kind, buffer, tok_line, tok_col, (int)consumed);
+            advance_pos(ctx->ptr, consumed, &ctx->line, &ctx->col);
+            ctx->ptr += consumed;
+            free(buffer);
+            ctx->last_token_kind = kind;
+            return t;
         }
 
-        if (isReservedWord(ptr, &kind, buffer)) {
-            int tok_line = line, tok_col = col;
+        if (isReservedWord(ctx->ptr, &kind, buffer)) {
+            int tok_line = ctx->line, tok_col = ctx->col;
             size_t consumed = strlen(buffer);
-            cur = createToken(cur, kind, buffer, tok_line, tok_col, (int)consumed);
-            advance_pos(ptr, consumed, &line, &col);
-            ptr += consumed;
-            continue;
+            Token *t = createTokenSingle(kind, buffer, tok_line, tok_col, (int)consumed);
+            advance_pos(ctx->ptr, consumed, &ctx->line, &ctx->col);
+            ctx->ptr += consumed;
+            free(buffer);
+            ctx->last_token_kind = kind;
+            return t;
         }
 
-        if (isNumber(ptr, buffer, &consumed_len)) {
-            int tok_line = line, tok_col = col;
-            cur = createToken(cur, NUMBER, buffer, tok_line, tok_col, (int)consumed_len);
-            advance_pos(ptr, consumed_len, &line, &col);
-            ptr += consumed_len;
-            continue;
+        if (isNumber(ctx->ptr, buffer, &consumed_len)) {
+            int tok_line = ctx->line, tok_col = ctx->col;
+            Token *t = createTokenSingle(NUMBER, buffer, tok_line, tok_col, (int)consumed_len);
+            advance_pos(ctx->ptr, consumed_len, &ctx->line, &ctx->col);
+            ctx->ptr += consumed_len;
+            free(buffer);
+            ctx->last_token_kind = NUMBER;
+            return t;
         }
 
-        if (isIdentifier(ptr, buffer)) {
-            int tok_line = line, tok_col = col;
+        if (isIdentifier(ctx->ptr, buffer)) {
+            int tok_line = ctx->line, tok_col = ctx->col;
             size_t consumed = strlen(buffer);
-            cur = createToken(cur, IDENTIFIER, buffer, tok_line, tok_col, (int)consumed);
-            advance_pos(ptr, consumed, &line, &col);
-            ptr += consumed;
-            continue;
+            Token *t = createTokenSingle(IDENTIFIER, buffer, tok_line, tok_col, (int)consumed);
+            advance_pos(ctx->ptr, consumed, &ctx->line, &ctx->col);
+            ctx->ptr += consumed;
+            free(buffer);
+            ctx->last_token_kind = IDENTIFIER;
+            return t;
         }
 
-        if (isStringLiteral(ptr, buffer)) {
-            int tok_line = line, tok_col = col;
+        if (isStringLiteral(ctx->ptr, buffer)) {
+            int tok_line = ctx->line, tok_col = ctx->col;
             size_t consumed = strlen(buffer);
-            ptr += consumed;
-            advance_pos(ptr - consumed, consumed, &line, &col);
+            ctx->ptr += consumed;
+            advance_pos(ctx->ptr - consumed, consumed, &ctx->line, &ctx->col);
 
-            memmove(buffer, buffer + 1, strlen(buffer) - 2); // Remove quotes
+            memmove(buffer, buffer + 1, strlen(buffer) - 2);
             buffer[strlen(buffer) - 2] = '\0';
             unescape_string_literal_inplace(buffer);
-            cur = createToken(cur, STRING_LITERAL, buffer, tok_line, tok_col, (int)consumed);
-            continue;
+            Token *t = createTokenSingle(STRING_LITERAL, buffer, tok_line, tok_col, (int)consumed);
+            free(buffer);
+            ctx->last_token_kind = STRING_LITERAL;
+            return t;
         }
 
         int len;
-        if ((len = isCharLiteral(ptr, buffer)) > 0) {
-            int tok_line = line, tok_col = col;
-            cur = createToken(cur, CHAR_LITERAL, buffer, tok_line, tok_col, len);
-            advance_pos(ptr, (size_t)len, &line, &col);
-            ptr += len;
-            continue;
+        if ((len = isCharLiteral(ctx->ptr, buffer)) > 0) {
+            int tok_line = ctx->line, tok_col = ctx->col;
+            Token *t = createTokenSingle(CHAR_LITERAL, buffer, tok_line, tok_col, len);
+            advance_pos(ctx->ptr, (size_t)len, &ctx->line, &ctx->col);
+            ctx->ptr += len;
+            free(buffer);
+            ctx->last_token_kind = CHAR_LITERAL;
+            return t;
         }
 
-        advance_pos(ptr, 1, &line, &col);
-        ptr++;
+        advance_pos(ctx->ptr, 1, &ctx->line, &ctx->col);
+        ctx->ptr++;
     }
 
-    createToken(cur, EOT, "", line, col, 0);
+    ctx->eot_returned = true;
+    Token *t = createTokenSingle(EOT, "", ctx->line, ctx->col, 0);
+    ctx->last_token_kind = EOT;
     free(buffer);
+    return t;
+}
+
+Token *lexer(char *input) {
+    LexerContext *ctx = lexer_context_create(input);
+    Token head = {0};
+    Token *cur = &head;
+    while (true) {
+        Token *t = lexer_next_token(ctx);
+        if (!t) break;
+        cur->next = t;
+        cur = t;
+        if (t->kind == EOT) break;
+    }
+    lexer_context_destroy(ctx);
     return head.next;
 }
 

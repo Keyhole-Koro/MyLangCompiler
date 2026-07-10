@@ -1,0 +1,21 @@
+typedef struct {
+    i32 x;
+} Box;
+
+void consume(Box b) {
+    b.x = b.x;
+}
+
+i32 main() {
+    Box a;
+    a.x = 7;
+    i32 cond = 0;
+
+    if (cond) {
+        cond = 1;
+    } else {
+        consume(a);
+    }
+
+    return a.x; // invalid: a may have been moved by the else branch
+}

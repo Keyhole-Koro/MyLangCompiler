@@ -419,6 +419,52 @@ static SemanticBinding *find_binding(SemanticContext *ctx, const char *name) {
     return NULL;
 }
 
+static int semantic_location_is_known(SemanticLocation loc);
+
+typedef struct {
+    int binding_count;
+    SemanticBinding bindings[256];
+} SemanticBindingSnapshot;
+
+static void snapshot_bindings(SemanticContext *ctx, SemanticBindingSnapshot *snapshot) {
+    if (!ctx || !snapshot) return;
+    snapshot->binding_count = ctx->binding_count;
+    for (int i = 0; i < ctx->binding_count; i++) {
+        snapshot->bindings[i] = ctx->bindings[i];
+    }
+}
+
+static void restore_bindings(SemanticContext *ctx, const SemanticBindingSnapshot *snapshot) {
+    if (!ctx || !snapshot) return;
+    ctx->binding_count = snapshot->binding_count;
+    for (int i = 0; i < snapshot->binding_count; i++) {
+        ctx->bindings[i] = snapshot->bindings[i];
+    }
+}
+
+static void merge_if_binding_states(SemanticContext *ctx,
+                                    const SemanticBindingSnapshot *base,
+                                    const SemanticBindingSnapshot *then_state,
+                                    const SemanticBindingSnapshot *else_state) {
+    if (!ctx || !base || !then_state || !else_state) return;
+
+    restore_bindings(ctx, base);
+    for (int i = 0; i < base->binding_count; i++) {
+        SemanticBinding *out = &ctx->bindings[i];
+        const SemanticBinding *then_binding = &then_state->bindings[i];
+        const SemanticBinding *else_binding = &else_state->bindings[i];
+
+        out->moved = then_binding->moved || else_binding->moved;
+        if (then_binding->moved && semantic_location_is_known(then_binding->move_loc)) {
+            out->move_loc = then_binding->move_loc;
+        } else if (else_binding->moved && semantic_location_is_known(else_binding->move_loc)) {
+            out->move_loc = else_binding->move_loc;
+        } else {
+            out->move_loc = base->bindings[i].move_loc;
+        }
+    }
+}
+
 static SemanticBinding *borrow_target_binding(SemanticContext *ctx, ASTNode *expr) {
     ASTNode *ident = semantic_as_identifier(expr);
 
@@ -1224,11 +1270,26 @@ static void semantic_walk_stmt(SemanticContext *ctx, ASTNode *node) {
         semantic_walk_expr(ctx, node->expr_stmt.expr, EXPRCTX_READ);
         break;
     case AST_IF:
+    {
+        SemanticBindingSnapshot base_state;
+        SemanticBindingSnapshot then_state;
+        SemanticBindingSnapshot else_state;
+
         semantic_walk_expr(ctx, node->if_stmt.cond, EXPRCTX_READ);
         check_condition_type(ctx, node->if_stmt.cond);
+        snapshot_bindings(ctx, &base_state);
+
+        restore_bindings(ctx, &base_state);
         semantic_walk_stmt(ctx, node->if_stmt.then_stmt);
+        snapshot_bindings(ctx, &then_state);
+
+        restore_bindings(ctx, &base_state);
         semantic_walk_stmt(ctx, node->if_stmt.else_stmt);
+        snapshot_bindings(ctx, &else_state);
+
+        merge_if_binding_states(ctx, &base_state, &then_state, &else_state);
         break;
+    }
     case AST_RETURN:
         check_return_type(ctx, node);
         check_return_reference_escape(ctx, node->ret.expr);

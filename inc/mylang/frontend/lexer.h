@@ -1,5 +1,6 @@
 #ifndef TOKEN_H
 #define TOKEN_H
+#include <stdbool.h>
 
 typedef int symbol;
 
@@ -101,8 +102,13 @@ typedef enum {
     CHAR_LITERAL,   // 'a'
     IDENTIFIER,     // defined by user
     INLINE,         // inline but not implemented
-    EOT,            // end of token
+    MLX_TAG_OPEN,
+    MLX_TAG_CLOSE,
+    MLX_TAG_SELF_CLOSE,
+    MLX_CLOSE_TAG_OPEN,
+    MLX_TEXT,
 
+    EOT            // end of token
 } TokenKind;
 
 typedef struct Token Token;
@@ -115,6 +121,29 @@ struct Token{
   int length;   // source width in bytes (may differ from strlen(value): hex->dec, escapes, quotes)
   Token *next;
 };
+
+
+typedef enum {
+    MODE_DEFAULT,
+    MODE_MLX_TAG,
+    MODE_MLX_TEXT
+} LexerMode;
+
+typedef struct {
+    char *input;
+    char *ptr;
+    int line;
+    int col;
+    LexerMode mode_stack[16];
+    int depth;
+    int mlx_tag_depth;
+    TokenKind last_token_kind;
+    bool eot_returned;
+} LexerContext;
+
+LexerContext *lexer_context_create(char *input);
+void lexer_context_destroy(LexerContext *ctx);
+Token *lexer_next_token(LexerContext *ctx);
 
 typedef struct {
   char *str;

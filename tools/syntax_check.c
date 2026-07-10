@@ -445,7 +445,16 @@ int main(int argc, char **argv) {
         if (argc > 3) cache_path = argv[3];
     }
 
-    SyntaxGrammar *grammar = syntax_load_grammar(grammar_path);
+    char *gpaths[16];
+    int gcount = 0;
+    char *path_copy = strdup(grammar_path);
+    char *tok = strtok(path_copy, ",");
+    while (tok && gcount < 16) {
+        gpaths[gcount++] = tok;
+        tok = strtok(NULL, ",");
+    }
+    SyntaxGrammar *grammar = syntax_load_grammar_multiple((const char **)gpaths, gcount);
+    free(path_copy);
     if (!grammar) return 1;
     SyntaxTable *table = load_or_build_table(grammar, cache_path);
     if (!table) {
