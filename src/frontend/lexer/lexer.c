@@ -411,8 +411,6 @@ Token *lexer_next_token(LexerContext *ctx) {
                 ctx->ptr += 2;
                 ctx->depth--;
                 ctx->mlx_tag_depth--;
-                if (ctx->mlx_tag_depth > 0) ctx->mode_stack[ctx->depth++] = MODE_MLX_TEXT;
-                else ctx->mode_stack[ctx->depth - 1] = MODE_DEFAULT;
                 ctx->last_token_kind = MLX_TAG_SELF_CLOSE;
                 free(buffer);
                 return t;
