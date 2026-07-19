@@ -151,6 +151,8 @@ struct ASTNode {
         struct {
             char *name;
             ASTNode **args;
+            char **arg_names;
+            int *arg_source_indices;
             int arg_count;
         } call;
         struct {
