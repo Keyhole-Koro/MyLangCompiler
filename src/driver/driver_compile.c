@@ -22,6 +22,12 @@ static Token *first_dom_token(Token *tokens) {
     return NULL;
 }
 
+static SemanticSafetyProfile semantic_profile_for_source(MyLangSafetyProfile profile) {
+    return profile == MYLANG_SAFETY_STRICT
+        ? SEMANTIC_SAFETY_STRICT
+        : SEMANTIC_SAFETY_DEFAULT;
+}
+
 int compile_one(const char *input_path, const char *output_path) {
     MyLangSourceSpecResult source = mylang_source_spec_parse(input_path);
     if (!source.ok) {
@@ -53,6 +59,7 @@ int compile_one(const char *input_path, const char *output_path) {
     parser_reset();
     parser_set_filename(input_path);
     semantic_set_filename(input_path);
+    semantic_set_safety_profile(semantic_profile_for_source(source.spec.safety));
 
     dump_tokens(stdout, tokens);
 
