@@ -18,7 +18,7 @@ The canonical order is:
 <name>.<syntax modifiers>.<semantic policy modifiers>.mln
 ```
 
-`dom` enables DOM expression syntax. `safe` enables the strict memory-safety
+`dom` enables DOM expression syntax. `safe` selects the strict memory-safety
 profile. The two axes are independent, so DOM syntax can be compiled with or
 without the strict policy.
 
@@ -34,10 +34,11 @@ page.mlx            # legacy extension is not supported
 There is intentionally no `.mlx` compatibility mode. DOM syntax is a native
 MyLang frontend feature rather than a source-to-source preprocessing stage.
 
-## Pipeline contract
+## Driver behavior
 
-The driver resolves the filename once and stores the result in the compilation
-context:
+The driver resolves the filename before parsing and reports the selected source
+profile. DOM tokens in a plain `.mln` or `.safe.mln` file are rejected with a
+source-positioned diagnostic requiring `.dom.mln`.
 
 ```text
 page.dom.safe.mln
@@ -48,6 +49,6 @@ page.dom.safe.mln
 The parser consumes the syntax profile. Semantic passes consume the safety
 profile. Neither subsystem should inspect the source filename directly.
 
-DOM nodes are lowered from extension AST nodes to core MyLang AST nodes. The
+DOM nodes will be lowered from extension AST nodes to core MyLang AST nodes. The
 normal semantic and code-generation pipeline then processes the lowered tree;
 no generated `.mln` intermediary is part of normal compilation.
