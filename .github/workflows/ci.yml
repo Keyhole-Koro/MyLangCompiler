@@ -69,6 +69,9 @@ jobs:
       - name: Run integration tests
         run: make test-integration
 
+      - name: Run source profile tests
+        run: make test-source-profiles
+
       - name: Run syntax-check tests
         run: make test-syntax-check
 
