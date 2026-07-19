@@ -63,6 +63,61 @@ static void gen_builtin_call(CompilerContext *cc, ASTNode *node, StringBuilder *
     exit(1);
 }
 
+static int named_arg_slot(int param_index, int fixed_count, int stack_args) {
+    if (param_index < fixed_count) {
+        if (param_index < 3) return stack_args + param_index;
+        return param_index - 3;
+    }
+    return (fixed_count > 3 ? fixed_count - 3 : 0) + (param_index - fixed_count);
+}
+
+static void gen_resolved_named_call(CompilerContext *cc, ASTNode *node, const FunctionSig *sig,
+                                    StringBuilder *sb, const char *target_reg,
+                                    char **params, int param_count, char **locals, int local_count)
+{
+    int argc = node->call.arg_count;
+    int fixed = sig && sig->is_variadic ? sig->fixed_param_count : argc;
+    int fixed_stack_count = fixed > 3 ? fixed - 3 : 0;
+    int rest_count = sig && sig->is_variadic ? argc - fixed : 0;
+    int stack_args = fixed_stack_count + rest_count;
+    int reg_argc = fixed < 3 ? fixed : 3;
+
+    note_import_func(cc, node->call.name);
+    if (argc > 0) {
+        sb_append(sb, "  ; evaluate named arguments in source order\n");
+        sb_append(sb, "  addis sp, -%d\n", argc * SLOT_SIZE);
+    }
+
+    for (int source = 0; source < argc; source++) {
+        int target = -1;
+        for (int i = 0; i < argc; i++) {
+            if (node->call.arg_source_indices[i] == source) {
+                target = i;
+                break;
+            }
+        }
+        if (target < 0) {
+            fprintf(stderr, "Codegen error at %d:%d: invalid named argument mapping\n", node->line, node->col);
+            exit(1);
+        }
+        gen_expr(cc, node->call.args[target], sb, "r1", params, param_count, locals, local_count);
+        sb_append(sb, "  mov r2, sp\n");
+        sb_append(sb, "  addis r2, %d\n", named_arg_slot(target, fixed, stack_args) * SLOT_SIZE);
+        sb_append(sb, "  store r2, r1\n");
+    }
+
+    for (int i = 0; i < reg_argc; i++) {
+        sb_append(sb, "  mov r3, sp\n");
+        sb_append(sb, "  addis r3, %d\n", named_arg_slot(i, fixed, stack_args) * SLOT_SIZE);
+        emit_load_from_addr(sb, arg_regs[i], "r3", 0);
+    }
+    if (sig && sig->is_variadic) sb_append(sb, "  movi r4, %d\n", rest_count);
+    sb_append(sb, "  call %s\n", node->call.name);
+
+    if (argc > 0) sb_append(sb, "  addis sp, %d\n", argc * SLOT_SIZE);
+    if (strcmp(target_reg, "r1") != 0) sb_append(sb, "  mov %s, r1\n", target_reg);
+}
+
 void gen_call(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char *target_reg,
               char **params, int param_count, char **locals, int local_count)
 {
@@ -73,6 +128,11 @@ void gen_call(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char 
 
     const FunctionSig *sig = find_func_sig(cc, node->call.name);
     int argc = node->call.arg_count;
+
+    if (node->call.arg_source_indices) {
+        gen_resolved_named_call(cc, node, sig, sb, target_reg, params, param_count, locals, local_count);
+        return;
+    }
 
     if (sig && sig->is_variadic) {
         int fixed = sig->fixed_param_count;
