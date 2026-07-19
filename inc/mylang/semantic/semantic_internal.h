@@ -72,6 +72,7 @@ typedef struct {
 
 typedef struct {
     const char *filename;
+    SemanticSafetyProfile safety_profile;
     int error_count;
     int warning_count;
     int warnings_as_errors;
