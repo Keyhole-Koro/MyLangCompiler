@@ -11,6 +11,7 @@
 
 #include "mylang/ast/AST.h"
 #include "mylang/backend/codegen.h"
+#include "mylang/driver/source_spec.h"
 #include "mylang/frontend/lexer.h"
 #include "mylang/frontend/parser.h"
 #include "mylang/semantic/semantic.h"
