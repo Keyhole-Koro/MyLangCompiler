@@ -3,6 +3,9 @@
 #include <stdio.h>
 #include <string.h>
 
+#define SOURCE_NAME_CAP 512
+#define SOURCE_SEGMENT_CAP 10
+
 static const char *basename_of(const char *path) {
     const char *base = path;
     if (!path) return NULL;
@@ -39,7 +42,7 @@ MyLangSourceSpecResult mylang_source_spec_parse(const char *path) {
         return result;
     }
 
-    char name[512];
+    char name[SOURCE_NAME_CAP];
     if (len - 4 >= sizeof(name)) {
         fail(&result, "source filename is too long", NULL);
         return result;
@@ -47,14 +50,14 @@ MyLangSourceSpecResult mylang_source_spec_parse(const char *path) {
     memcpy(name, base, len - 4);
     name[len - 4] = '\0';
 
-    char *segments[MYLANG_SOURCE_SPEC_MAX_MODIFIERS + 2];
+    char *segments[SOURCE_SEGMENT_CAP];
     size_t segment_count = 0;
     char *cursor = name;
     segments[segment_count++] = cursor;
     while (*cursor) {
         if (*cursor == '.') {
             *cursor = '\0';
-            if (segment_count >= sizeof(segments) / sizeof(segments[0])) {
+            if (segment_count >= SOURCE_SEGMENT_CAP) {
                 fail(&result, "too many source modifiers", NULL);
                 return result;
             }
@@ -76,10 +79,6 @@ MyLangSourceSpecResult mylang_source_spec_parse(const char *path) {
         const char *modifier = segments[i];
         if (!modifier[0]) {
             fail(&result, "source filename contains an empty modifier", NULL);
-            return result;
-        }
-        if (result.spec.modifier_count >= MYLANG_SOURCE_SPEC_MAX_MODIFIERS) {
-            fail(&result, "too many source modifiers", NULL);
             return result;
         }
 
@@ -106,8 +105,6 @@ MyLangSourceSpecResult mylang_source_spec_parse(const char *path) {
             fail(&result, "unknown source modifier '%s'", modifier);
             return result;
         }
-
-        result.spec.modifiers[result.spec.modifier_count++] = modifier;
     }
 
     result.ok = true;
