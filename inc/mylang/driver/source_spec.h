@@ -2,9 +2,7 @@
 #define MYLANG_DRIVER_SOURCE_SPEC_H
 
 #include <stdbool.h>
-#include <stddef.h>
 
-#define MYLANG_SOURCE_SPEC_MAX_MODIFIERS 8
 #define MYLANG_SOURCE_SPEC_ERROR_CAP 160
 
 typedef enum {
@@ -20,8 +18,6 @@ typedef enum {
 typedef struct {
     MyLangSyntaxProfile syntax;
     MyLangSafetyProfile safety;
-    const char *modifiers[MYLANG_SOURCE_SPEC_MAX_MODIFIERS];
-    size_t modifier_count;
 } MyLangSourceSpec;
 
 typedef struct {
