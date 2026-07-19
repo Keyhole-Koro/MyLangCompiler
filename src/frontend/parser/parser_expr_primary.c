@@ -40,12 +40,25 @@ static ASTNode *parse_identifier_primary(Token **cur) {
     if ((*cur)->kind == L_PARENTHESES) {
         *cur = (*cur)->next;
         ASTNode **args = NULL;
+        char **arg_names = NULL;
         int arg_count = 0;
+        int saw_named = 0;
         if ((*cur)->kind != R_PARENTHESES) {
             while (1) {
+                char *arg_name = NULL;
+                if ((*cur)->kind == IDENTIFIER && (*cur)->next && (*cur)->next->kind == COLON) {
+                    arg_name = strdup((*cur)->value);
+                    saw_named = 1;
+                    *cur = (*cur)->next->next;
+                } else if (saw_named) {
+                    parse_error("positional argument cannot follow a named argument", token_head, *cur);
+                }
                 ASTNode *arg = parse_expr(cur);
                 args = realloc(args, sizeof(ASTNode*) * (arg_count + 1));
-                args[arg_count++] = arg;
+                arg_names = realloc(arg_names, sizeof(char*) * (arg_count + 1));
+                args[arg_count] = arg;
+                arg_names[arg_count] = arg_name;
+                arg_count++;
                 if ((*cur)->kind == COMMA) {
                     *cur = (*cur)->next;
                     continue;
@@ -57,7 +70,7 @@ static ASTNode *parse_identifier_primary(Token **cur) {
         Token *end_tok = *cur;
         if (!expect(cur, R_PARENTHESES))
             parse_error("expected ')' after args", token_head, *cur);
-        ASTNode *call = new_call(name, args, arg_count);
+        ASTNode *call = new_call(name, args, arg_names, arg_count);
         set_node_loc_from_tokens(call, tok, NULL);
         set_node_end_from_token(call, end_tok);
         return call;
