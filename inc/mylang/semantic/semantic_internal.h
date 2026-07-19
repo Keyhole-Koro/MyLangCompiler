@@ -11,12 +11,7 @@
 
 #define SEMANTIC_MAX_FUNCTION_PARAMS 32
 
-typedef struct {
-    int line;
-    int col;
-    int end_line;
-    int end_col;
-} SemanticLocation;
+typedef struct { int line; int col; int end_line; int end_col; } SemanticLocation;
 
 typedef enum {
     SEMANTIC_DIAG_ERROR = 1,
@@ -50,10 +45,7 @@ typedef struct {
     SemanticLocation last_mut_borrow_loc;
 } SemanticBinding;
 
-typedef struct {
-    const char *name;
-    long value;
-} SemanticEnumValue;
+typedef struct { const char *name; long value; } SemanticEnumValue;
 
 typedef struct {
     const char *name;
@@ -72,6 +64,7 @@ typedef struct {
 
 typedef struct {
     const char *filename;
+    SemanticSafetyProfile safety_profile;
     int error_count;
     int warning_count;
     int warnings_as_errors;
