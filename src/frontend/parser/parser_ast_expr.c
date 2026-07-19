@@ -108,11 +108,13 @@ ASTNode *new_case_expr(ASTNode *target, CaseItem *cases, int case_count, ASTNode
     return node;
 }
 
-ASTNode *new_call(char *name, ASTNode **args, int arg_count) {
+ASTNode *new_call(char *name, ASTNode **args, char **arg_names, int arg_count) {
     ASTNode *node = calloc(1, sizeof(ASTNode));
     node->type = AST_CALL;
     node->call.name = strdup(name);
     node->call.args = args;
+    node->call.arg_names = arg_names;
+    node->call.arg_source_indices = NULL;
     node->call.arg_count = arg_count;
     return node;
 }
