@@ -105,9 +105,13 @@ void free_ast(ASTNode *node) {
             break;
         case AST_CALL:
             free(node->call.name);
-            for (int i = 0; i < node->call.arg_count; i++)
+            for (int i = 0; i < node->call.arg_count; i++) {
                 free_ast(node->call.args[i]);
+                if (node->call.arg_names) free(node->call.arg_names[i]);
+            }
             free(node->call.args);
+            free(node->call.arg_names);
+            free(node->call.arg_source_indices);
             break;
         case AST_PARAM:
             if (node->param.type) free_ast(node->param.type);
