@@ -10,6 +10,9 @@ OUT = test
 MYCC = mlc
 SYNTAX_CHECK = mylang-syntax-check
 
+.PHONY: all syntax-check test test-all test-semantic test-integration \
+	test-source-profiles test-syntax-check test-tokens debug debug-mycc clean
+
 all: mlc
 
 mlc: $(SRC)
@@ -36,6 +39,8 @@ test-tokens: syntax-check
 test: $(SRC_NO_MAIN) $(TESTS)
 	$(CC) $(CFLAGS) -g $(SRC_NO_MAIN) $(TESTS) -o $(OUT)
 	./$(OUT)
+
+test-all: test test-semantic test-integration test-source-profiles test-syntax-check test-tokens
 
 debug: $(SRC_NO_MAIN) $(TESTS)
 	$(CC) $(CFLAGS) -g $(SRC_NO_MAIN) $(TESTS) -o $(OUT)
