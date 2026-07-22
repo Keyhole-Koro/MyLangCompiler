@@ -1,0 +1,7 @@
+i32 combine(i32 a, i32 b, i32 c) {
+    return a * 100 + b * 10 + c;
+}
+
+i32 main() {
+    return combine(c: 3, a: 1, b: 2);
+}
