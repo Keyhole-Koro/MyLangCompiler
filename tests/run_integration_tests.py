@@ -20,6 +20,7 @@ EMU_TIMEOUT_SEC = float(os.environ.get("EMU_TIMEOUT_SEC", "8"))
 
 TESTCASES = [
     ("simpleFunc", ["succeed/function/simpleFunc.mln"], "R1", 15),
+    ("namedCallArgs", ["succeed/function/namedCallArgs.mln"], "R1", 123),
     ("simpleCondition", ["succeed/control/simpleCondition.mln"], "R1", 328),
     ("simpleFor", ["succeed/control/simpleFor.mln"], "R1", 5),
     ("simplePointer", ["succeed/pointer/simplePointer.mln"], "R1", 14),
