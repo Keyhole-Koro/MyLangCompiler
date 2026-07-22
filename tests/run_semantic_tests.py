@@ -110,6 +110,26 @@ FAIL_CASES = {
         "fail/semantic/phase_callReturnTypePropagation_fail.mln",
         ":10:19: error[E0301]: initializer type mismatch: expected char*, got i32",
     ),
+    "namedCallUnknown_fail": (
+        "fail/semantic/namedCallUnknown_fail.mln",
+        "unknown named argument 'nope'",
+        None,
+    ),
+    "namedCallDuplicate_fail": (
+        "fail/semantic/namedCallDuplicate_fail.mln",
+        "duplicate named argument 'a'",
+        None,
+    ),
+    "namedCallMissing_fail": (
+        "fail/semantic/namedCallMissing_fail.mln",
+        "missing argument 'b'",
+        None,
+    ),
+    "namedCallPositionalAfterNamed_fail": (
+        "fail/semantic/namedCallPositionalAfterNamed_fail.mln",
+        "positional argument cannot follow a named argument",
+        None,
+    ),
     "phase_returnMissingValue_fail": (
         "fail/semantic/phase_returnMissingValue_fail.mln",
         ":2:5: error[E0201]: function 'value' must return a value",
