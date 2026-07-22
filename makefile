@@ -20,6 +20,7 @@ syntax-check: tools/syntax_check.c src/frontend/lexer/lexer.c src/support/utils.
 
 test-semantic: mlc
 	python3 tests/run_semantic_tests.py
+	python3 tests/run_named_arg_blackbox_tests.py
 
 test-integration: mlc
 	python3 tests/run_integration_tests.py
