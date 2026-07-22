@@ -10,6 +10,9 @@ OUT = test
 MYCC = mlc
 SYNTAX_CHECK = mylang-syntax-check
 
+.PHONY: all syntax-check test test-component test-all test-e2e test-integration test-semantic \
+	test-source-profiles test-syntax-check test-tokens debug debug-mycc clean
+
 all: mlc
 
 mlc: $(SRC)
@@ -21,8 +24,11 @@ syntax-check: tools/syntax_check.c src/frontend/lexer/lexer.c src/support/utils.
 test-semantic: mlc
 	python3 tests/run_semantic_tests.py
 
-test-integration: mlc
+test-e2e: mlc
 	python3 tests/run_integration_tests.py
+
+# Backward-compatible alias. This suite crosses component boundaries.
+test-integration: test-e2e
 
 test-source-profiles: mlc
 	python3 tests/run_source_profile_tests.py
@@ -36,6 +42,13 @@ test-tokens: syntax-check
 test: $(SRC_NO_MAIN) $(TESTS)
 	$(CC) $(CFLAGS) -g $(SRC_NO_MAIN) $(TESTS) -o $(OUT)
 	./$(OUT)
+
+# Tests owned by and executable within the compiler repository.
+test-component: test test-semantic test-source-profiles test-syntax-check test-tokens
+
+# Developer convenience aggregate. Repository CI runs test-component;
+# MyComputer runs test-e2e against its pinned toolchain revisions.
+test-all: test-component test-e2e
 
 debug: $(SRC_NO_MAIN) $(TESTS)
 	$(CC) $(CFLAGS) -g $(SRC_NO_MAIN) $(TESTS) -o $(OUT)
