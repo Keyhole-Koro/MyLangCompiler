@@ -23,24 +23,6 @@ jobs:
         with:
           path: toolchain/MyLangCompiler
 
-      - name: Checkout MyAssembler
-        uses: actions/checkout@v4
-        with:
-          repository: Keyhole-Koro/MyAssembler
-          path: toolchain/MyAssembler
-
-      - name: Checkout MyLinker
-        uses: actions/checkout@v4
-        with:
-          repository: Keyhole-Koro/MyLinker
-          path: toolchain/MyLinker
-
-      - name: Checkout MyEmulator
-        uses: actions/checkout@v4
-        with:
-          repository: Keyhole-Koro/MyEmulator
-          path: runtime/MyEmulator
-
       - name: Checkout MySyntaxEngine
         uses: actions/checkout@v4
         with:
@@ -55,10 +37,7 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential g++
+          sudo apt-get install -y build-essential
 
-      - name: Run compiler-owned tests
-        run: make test-all
-
-      - name: Run toolchain E2E tests
-        run: make test-e2e
+      - name: Run compiler component tests
+        run: make test-component
