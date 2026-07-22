@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 #include "mylang/driver/driver_internal.h"
 #include "mylang/frontend/parser_internal.h"
@@ -34,6 +36,25 @@ static ASTNode *first_function(ASTNode *root) {
     ASTNode *fn = root->block.stmts[0];
     assert(fn->type == AST_FUNDEF);
     return fn;
+}
+
+static void expect_parse_failure(const char *source) {
+    pid_t pid = fork();
+    assert(pid >= 0);
+    if (pid == 0) {
+        freopen("/dev/null", "w", stderr);
+        Token *tokens = NULL;
+        ASTNode *root = parse_source(source, &tokens);
+        free_ast(root);
+        free_tokens(tokens);
+        _exit(0);
+    }
+
+    int status = 0;
+    assert(waitpid(pid, &status, 0) == pid);
+    assert(WIFEXITED(status));
+    assert(WEXITSTATUS(status) != 0);
+    parser_reset();
 }
 
 static void test_ref_borrow_ast(void) {
@@ -233,6 +254,51 @@ static void test_case_expr_ast(void) {
     parser_reset();
 }
 
+static void test_named_call_args_ast(void) {
+    Token *tokens = NULL;
+    ASTNode *root = parse_source(
+        "i32 combine(i32 a, i32 b, i32 c) { return a * 100 + b * 10 + c; } "
+        "i32 main() { return combine(c: 3, a: 1, b: 2); }",
+        &tokens
+    );
+
+    assert(root->type == AST_BLOCK);
+    assert(root->block.count == 2);
+    ASTNode *main_fn = root->block.stmts[1];
+    ASTNode *ret = main_fn->fundef.body->block.stmts[0];
+    ASTNode *call = ret->ret.expr;
+
+    assert(call->type == AST_CALL);
+    assert(call->call.arg_count == 3);
+    assert(call->call.arg_names == NULL);
+    assert(call->call.arg_source_indices != NULL);
+    assert(strcmp(call->call.args[0]->number.value, "1") == 0);
+    assert(strcmp(call->call.args[1]->number.value, "2") == 0);
+    assert(strcmp(call->call.args[2]->number.value, "3") == 0);
+    assert(call->call.arg_source_indices[0] == 1);
+    assert(call->call.arg_source_indices[1] == 2);
+    assert(call->call.arg_source_indices[2] == 0);
+
+    free_ast(root);
+    free_tokens(tokens);
+    parser_reset();
+}
+
+static void test_named_call_arg_failures(void) {
+    expect_parse_failure(
+        "i32 f(i32 a, i32 b) { return a + b; } i32 main() { return f(a: 1, 2); }"
+    );
+    expect_parse_failure(
+        "i32 f(i32 a, i32 b) { return a + b; } i32 main() { return f(nope: 1, b: 2); }"
+    );
+    expect_parse_failure(
+        "i32 f(i32 a, i32 b) { return a + b; } i32 main() { return f(a: 1, a: 2); }"
+    );
+    expect_parse_failure(
+        "i32 f(i32 a, i32 b) { return a + b; } i32 main() { return f(a: 1); }"
+    );
+}
+
 int main(void) {
     test_ref_borrow_ast();
     test_ref_mut_ast();
@@ -241,6 +307,8 @@ int main(void) {
     test_ref_param_ast();
     test_loop_control_ast();
     test_case_expr_ast();
+    test_named_call_args_ast();
+    test_named_call_arg_failures();
     printf("phase2 whitebox tests passed\n");
     return 0;
 }
