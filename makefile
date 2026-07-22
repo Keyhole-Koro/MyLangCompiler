@@ -10,8 +10,6 @@ OUT = test
 MYCC = mlc
 SYNTAX_CHECK = mylang-syntax-check
 
-.PHONY: all test test-all test-semantic test-integration test-syntax-check test-tokens clean
-
 all: mlc
 
 mlc: $(SRC)
@@ -31,13 +29,6 @@ test-syntax-check: syntax-check
 
 test-tokens: syntax-check
 	MYLANG_SKIP_SYNTAX_CHECK_BUILD=1 python3 tests/run_token_tests.py
-
-test-all:
-	$(MAKE) test
-	$(MAKE) test-semantic
-	$(MAKE) test-integration
-	$(MAKE) test-syntax-check
-	$(MAKE) test-tokens
 
 test: $(SRC_NO_MAIN) $(TESTS)
 	$(CC) $(CFLAGS) -g $(SRC_NO_MAIN) $(TESTS) -o $(OUT)
