@@ -10,7 +10,7 @@ OUT = test
 MYCC = mlc
 SYNTAX_CHECK = mylang-syntax-check
 
-.PHONY: all syntax-check test test-all test-e2e test-integration test-semantic \
+.PHONY: all syntax-check test test-component test-all test-e2e test-integration test-semantic \
 	test-source-profiles test-syntax-check test-tokens debug debug-mycc clean
 
 all: mlc
@@ -44,7 +44,11 @@ test: $(SRC_NO_MAIN) $(TESTS)
 	./$(OUT)
 
 # Tests owned by and executable within the compiler repository.
-test-all: test test-semantic test-source-profiles test-syntax-check test-tokens
+test-component: test test-semantic test-source-profiles test-syntax-check test-tokens
+
+# Developer convenience aggregate. Repository CI runs test-component;
+# MyComputer runs test-e2e against its pinned toolchain revisions.
+test-all: test-component test-e2e
 
 debug: $(SRC_NO_MAIN) $(TESTS)
 	$(CC) $(CFLAGS) -g $(SRC_NO_MAIN) $(TESTS) -o $(OUT)
