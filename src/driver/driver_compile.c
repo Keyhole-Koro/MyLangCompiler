@@ -7,15 +7,59 @@ static void dump_tokens(FILE *out, Token *tokens) {
     }
 }
 
+static int is_dom_token(TokenKind kind) {
+    return kind == MLX_TAG_OPEN ||
+           kind == MLX_TAG_CLOSE ||
+           kind == MLX_TAG_SELF_CLOSE ||
+           kind == MLX_CLOSE_TAG_OPEN ||
+           kind == MLX_TEXT;
+}
+
+static Token *first_dom_token(Token *tokens) {
+    for (Token *t = tokens; t; t = t->next) {
+        if (is_dom_token(t->kind)) return t;
+    }
+    return NULL;
+}
+
+static SemanticSafetyProfile semantic_profile_for_source(MyLangSafetyProfile profile) {
+    return profile == MYLANG_SAFETY_STRICT
+        ? SEMANTIC_SAFETY_STRICT
+        : SEMANTIC_SAFETY_DEFAULT;
+}
+
 int compile_one(const char *input_path, const char *output_path) {
+    MyLangSourceSpecResult source = mylang_source_spec_parse(input_path);
+    if (!source.ok) {
+        fprintf(stderr, "Invalid MyLang source filename: %s\n", source.error);
+        return 1;
+    }
+
     Token *tokens = lexer_from_file(input_path);
     if (!tokens) {
         fprintf(stderr, "Failed to read input file (or included files): %s\n", input_path);
         return 1;
     }
+
+    Token *dom_token = first_dom_token(tokens);
+    if (dom_token && source.spec.syntax != MYLANG_SYNTAX_DOM) {
+        fprintf(stderr,
+                "%s:%d:%d: DOM syntax requires a canonical .dom.mln filename\n",
+                input_path,
+                dom_token->line,
+                dom_token->col);
+        free_tokens(tokens);
+        return 1;
+    }
+
+    printf("Source profile: syntax=%s, safety=%s\n",
+           mylang_syntax_profile_name(source.spec.syntax),
+           mylang_safety_profile_name(source.spec.safety));
+
     parser_reset();
     parser_set_filename(input_path);
     semantic_set_filename(input_path);
+    semantic_set_safety_profile(semantic_profile_for_source(source.spec.safety));
 
     dump_tokens(stdout, tokens);
 
@@ -41,6 +85,7 @@ int compile_one(const char *input_path, const char *output_path) {
         fprintf(stderr, "Code generation failed.\n");
         free_ast(root);
         free_tokens(tokens);
+        parser_reset();
         return 1;
     }
 
