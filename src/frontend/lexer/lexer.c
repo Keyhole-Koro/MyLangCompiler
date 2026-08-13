@@ -330,6 +330,10 @@ LexerContext *lexer_context_create(char *input) {
     ctx->col = 1;
     ctx->mode_stack[0] = MODE_DEFAULT;
     ctx->depth = 1;
+    // Left uninitialized this read as "still inside a DOM element" after the
+    // outermost closing tag, so the following ';' came back as MLX_TEXT.
+    ctx->mlx_tag_depth = 0;
+    ctx->last_token_kind = EOT;
     ctx->eot_returned = false;
     return ctx;
 }
@@ -411,8 +415,6 @@ Token *lexer_next_token(LexerContext *ctx) {
                 ctx->ptr += 2;
                 ctx->depth--;
                 ctx->mlx_tag_depth--;
-                if (ctx->mlx_tag_depth > 0) ctx->mode_stack[ctx->depth++] = MODE_MLX_TEXT;
-                else ctx->mode_stack[ctx->depth - 1] = MODE_DEFAULT;
                 ctx->last_token_kind = MLX_TAG_SELF_CLOSE;
                 free(buffer);
                 return t;

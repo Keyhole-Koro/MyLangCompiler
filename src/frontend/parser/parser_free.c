@@ -177,6 +177,18 @@ void free_ast(ASTNode *node) {
         case AST_BREAK:
         case AST_CONTINUE:
             break;
+        case AST_DOM_ELEMENT:
+            for (int i = 0; i < node->dom_element.prop_count; i++) {
+                free(node->dom_element.props[i].name);
+                if (node->dom_element.props[i].value) free_ast(node->dom_element.props[i].value);
+            }
+            free(node->dom_element.props);
+            for (int i = 0; i < node->dom_element.child_count; i++) {
+                free_ast(node->dom_element.children[i]);
+            }
+            free(node->dom_element.children);
+            free(node->dom_element.tag);
+            break;
         default:
             fprintf(stderr, "Unknown AST Node Type: %d\n", node->type);
             exit(1);

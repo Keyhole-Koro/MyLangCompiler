@@ -1,5 +1,6 @@
 #include "mylang/frontend/parser_internal.h"
 #include "mylang/frontend/parser_ast_internal.h"
+#include "mylang/frontend/parser_dom_internal.h"
 #include "mylang/frontend/lexer.h"
 #include <limits.h>
 
@@ -187,6 +188,10 @@ ASTNode* parse_program(Token **cur) {
         nodes[count++] = node;
     }
     ASTNode *prog = new_block(nodes, count);
+    dom_lowering_reset();
+    dom_lowering_set_program(prog);
+    lower_dom_block(prog);
+    ensure_no_dom_elements(prog);
     lower_fun_literals_block(prog, "g", NULL, 0);
     if (g_hoisted_count > 0) {
         prog->block.stmts = realloc(prog->block.stmts, sizeof(ASTNode*) * (prog->block.count + g_hoisted_count));

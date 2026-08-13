@@ -1029,6 +1029,11 @@ static void check_call_signature(SemanticContext *ctx, ASTNode *node) {
     sig = find_function_sig(ctx, node->call.name);
     if (!sig) {
         if (call_may_be_package_import(node->call.name)) return;
+        // A call whose name is a variable in scope is an indirect call through a
+        // function-pointer value (taken by naming a function bare, stored as i32).
+        // We have no signature to check against, so accept it and let codegen
+        // emit the indirect dispatch.
+        if (find_binding(ctx, node->call.name)) return;
         semantic_error_code_at(ctx, semantic_location_from_ast(node),
                                SEMCODE_UNDEFINED_FUNCTION,
                                "undefined function '%s'", node->call.name);
