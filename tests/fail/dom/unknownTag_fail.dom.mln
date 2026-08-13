@@ -1,0 +1,3 @@
+import dom from "../../support/dom/dom.mln";
+
+i32 f() { return <Column></Column>; }

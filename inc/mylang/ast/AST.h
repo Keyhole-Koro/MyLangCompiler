@@ -47,6 +47,9 @@ typedef enum {
     AST_STMT_EXPR,
     AST_CASE,
     AST_UNCHECKED,
+    // DOM syntax extension node. Only reachable in a .dom.mln source, and only
+    // between parsing and DOM lowering; later passes never see one.
+    AST_DOM_ELEMENT,
 } ASTNodeType;
 
 typedef enum {
@@ -68,6 +71,14 @@ typedef struct {
     ASTNode *key;
     ASTNode *expr;
 } CaseItem;
+
+// One `name="text"` / `name={expr}` property on a DOM element.
+typedef struct {
+    char *name;
+    ASTNode *value;
+    int line;
+    int col;
+} DomProp;
 
 struct ASTNode {
     ASTNodeType type;
@@ -153,6 +164,13 @@ struct ASTNode {
             ASTNode **args;
             int arg_count;
         } call;
+        struct {
+            char *tag;
+            DomProp *props;
+            int prop_count;
+            ASTNode **children;
+            int child_count;
+        } dom_element;
         struct {
             ASTNode *cond;
             ASTNode *body;

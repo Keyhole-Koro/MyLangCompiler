@@ -116,3 +116,14 @@ ASTNode *new_call(char *name, ASTNode **args, int arg_count) {
     node->call.arg_count = arg_count;
     return node;
 }
+
+ASTNode *new_dom_element(char *tag, DomProp *props, int prop_count, ASTNode **children, int child_count) {
+    ASTNode *node = calloc(1, sizeof(ASTNode));
+    node->type = AST_DOM_ELEMENT;
+    node->dom_element.tag = strdup(tag);
+    node->dom_element.props = props;
+    node->dom_element.prop_count = prop_count;
+    node->dom_element.children = children;
+    node->dom_element.child_count = child_count;
+    return node;
+}

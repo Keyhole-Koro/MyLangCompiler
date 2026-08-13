@@ -1,0 +1,8 @@
+// A tag resolves to a function in this file before any import is searched.
+// The local Text names its first parameter `label`, the imported dom.Text
+// names it `text`, so this only compiles if the local function backed the tag.
+import dom from "../../support/dom/dom.mln";
+
+i32 Text(char *label, i32 x, i32 y) { return 9; }
+
+i32 f() { return <Text label="a" x={1} y={2} />; }
