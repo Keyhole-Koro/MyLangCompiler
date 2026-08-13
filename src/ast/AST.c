@@ -44,6 +44,7 @@ char *astType2str(ASTNodeType type) {
         case AST_STMT_EXPR: return "AST_STMT_EXPR";
         case AST_CASE: return "AST_CASE";
         case AST_UNCHECKED: return "AST_UNCHECKED";
+        case AST_DOM_ELEMENT: return "AST_DOM_ELEMENT";
     }
     return "<unknown>";
 }

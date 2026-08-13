@@ -1,0 +1,11 @@
+// Element vocabulary shared by the DOM lowering cases under tests/fail/dom and
+// tests/succeed/dom. A tag resolves to the function of the same name and its
+// properties to that function's parameters, so these signatures are what the
+// cases are checked against.
+package dom;
+
+export void append_child(i32 p, i32 c) { }
+
+export i32 Window(char *title, i32 x, i32 y, i32 w, i32 h) { return 1; }
+export i32 Button(char *text, i32 x, i32 y, i32 w, i32 h, i32 onClick) { return 2; }
+export i32 Text(char *text, i32 x, i32 y) { return 3; }
