@@ -1,5 +1,6 @@
 #include "mylang/frontend/parser_internal.h"
 #include "mylang/frontend/parser_ast_internal.h"
+#include "mylang/frontend/parser_dom_internal.h"
 
 static ASTNode *parse_case_primary(Token **cur) {
     *cur = (*cur)->next;
@@ -110,6 +111,9 @@ ASTNode *parse_primary(Token **cur) {
     }
     if ((*cur)->kind == IDENTIFIER) {
         return parse_identifier_primary(cur);
+    }
+    if ((*cur)->kind == MLX_TAG_OPEN) {
+        return parse_dom_element(cur);
     }
     if ((*cur)->kind == L_PARENTHESES && looks_like_fun_literal(*cur)) {
         *cur = (*cur)->next;

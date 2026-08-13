@@ -28,6 +28,7 @@ PASS_CASES = {
     "phase_enumAutoValues": "succeed/semantic/phase_enumAutoValues.mln",
     "phase_enumExplicitBase": "succeed/semantic/phase_enumExplicitBase.mln",
     "phase_enumMultipleTypes": "succeed/semantic/phase_enumMultipleTypes.mln",
+    "dom_localFunctionWins": "succeed/dom/localFunctionWins.dom.mln",
 }
 
 WARN_CASES = {
@@ -144,6 +145,35 @@ FAIL_CASES = {
             ":2:13: error[E0001]: undefined identifier 'first_missing'",
             ":2:29: error[E0001]: undefined identifier 'second_missing'",
         ],
+    ),
+    # DOM lowering: a tag is a function, a property is that function's
+    # parameter of the same name, a child is an append_child call. What the
+    # lowering produces when it succeeds is covered end to end by
+    # system/MyKernel/tests/dom/dom_lowering.dom.test.mln in MyComputer.
+    "dom_unknownTag_fail": (
+        "fail/dom/unknownTag_fail.dom.mln",
+        "no function named 'Column' is in scope",
+        None,  # rejected while lowering, before semantic analysis runs
+    ),
+    "dom_unknownProperty_fail": (
+        "fail/dom/unknownProperty_fail.dom.mln",
+        "has no property 'foo'",
+        None,  # rejected while lowering, before semantic analysis runs
+    ),
+    "dom_missingProperty_fail": (
+        "fail/dom/missingProperty_fail.dom.mln",
+        "is missing property 'y'",
+        None,  # rejected while lowering, before semantic analysis runs
+    ),
+    "dom_duplicateProperty_fail": (
+        "fail/dom/duplicateProperty_fail.dom.mln",
+        "sets 'text' twice",
+        None,  # rejected while lowering, before semantic analysis runs
+    ),
+    "dom_childNeedsAppendChild_fail": (
+        "fail/dom/childNeedsAppendChild_fail.dom.mln",
+        "function named 'append_child'",
+        None,  # rejected while lowering, before semantic analysis runs
     ),
 }
 
