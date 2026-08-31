@@ -12,7 +12,7 @@ static ASTNode *parse_source(const char *source, Token **out_tokens) {
     assert(buffer);
 
     parser_reset();
-    parser_set_filename("<whitebox>");
+    parser_set_filename("<parser-ast-test>");
 
     Token *tokens = lexer(buffer);
     free(buffer);
@@ -241,6 +241,6 @@ int main(void) {
     test_ref_param_ast();
     test_loop_control_ast();
     test_case_expr_ast();
-    printf("phase2 whitebox tests passed\n");
+    printf("parser AST tests passed\n");
     return 0;
 }
