@@ -16,13 +16,20 @@ ASTNode *parse_postfix(Token **cur) {
                 parse_error("expected identifier after '.'", token_head, *cur);
             char *member_name = (*cur)->value;
             *cur = (*cur)->next;
-            if (node->type == AST_IDENTIFIER && is_imported_package(node->identifier.name)) {
-                char buf[256];
-                snprintf(buf, sizeof(buf), "%s_%s", node->identifier.name, member_name);
-                node = new_identifier(buf);
-            } else {
-                node = new_member_access(node, member_name);
+            node = new_member_access(node, member_name);
+        } else if ((*cur)->kind == COLON && (*cur)->next && (*cur)->next->kind == COLON) {
+            Token *scope_tok = *cur;
+            if (node->type != AST_IDENTIFIER || !is_imported_package(node->identifier.name)) {
+                parse_error("expected imported package before '::'", token_head, scope_tok);
             }
+            *cur = (*cur)->next->next;
+            if ((*cur)->kind != IDENTIFIER)
+                parse_error("expected identifier after '::'", token_head, *cur);
+            char *member_name = (*cur)->value;
+            *cur = (*cur)->next;
+            char buf[256];
+            snprintf(buf, sizeof(buf), "%s_%s", node->identifier.name, member_name);
+            node = new_identifier(buf);
         } else if ((*cur)->kind == ARROW) {
             if (!(*cur)->next || (*cur)->next->kind != IDENTIFIER) break;
             if (g_stop_at_arrow) {
