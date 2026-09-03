@@ -233,6 +233,36 @@ static void test_case_expr_ast(void) {
     parser_reset();
 }
 
+static void test_package_scope_ast(void) {
+    Token *tokens = NULL;
+    ASTNode *root = parse_source(
+        "import math; i32 main() { i32 x = math.value; return math::Add(x, 3); }",
+        &tokens
+    );
+
+    ASTNode *fn = first_function(root);
+    ASTNode *body = fn->fundef.body;
+    assert(body->type == AST_BLOCK);
+    assert(body->block.count == 2);
+
+    ASTNode *decl = body->block.stmts[0];
+    assert(decl->type == AST_VAR_DECL);
+    assert(decl->var_decl.init->type == AST_MEMBER_ACCESS);
+    assert(decl->var_decl.init->member_access.lhs->type == AST_IDENTIFIER);
+    assert(strcmp(decl->var_decl.init->member_access.lhs->identifier.name, "math") == 0);
+    assert(strcmp(decl->var_decl.init->member_access.member, "value") == 0);
+
+    ASTNode *ret = body->block.stmts[1];
+    assert(ret->type == AST_RETURN);
+    assert(ret->ret.expr->type == AST_CALL);
+    assert(strcmp(ret->ret.expr->call.name, "math_Add") == 0);
+    assert(ret->ret.expr->call.arg_count == 2);
+
+    free_ast(root);
+    free_tokens(tokens);
+    parser_reset();
+}
+
 int main(void) {
     test_ref_borrow_ast();
     test_ref_mut_ast();
@@ -241,6 +271,7 @@ int main(void) {
     test_ref_param_ast();
     test_loop_control_ast();
     test_case_expr_ast();
+    test_package_scope_ast();
     printf("phase2 whitebox tests passed\n");
     return 0;
 }
