@@ -23,9 +23,11 @@ A code is `<prefix><4 digits>`.
 | `E02xx` | Return | return type |
 | `E03xx` | Expression type | assignment / binary / condition |
 | `E04xx` | Package / import | reserved for package symbol resolution (ISSUE-019) |
+| `E05xx` | Generics | reserved for type parameters (`docs/generics.md`) |
+| `E06xx` | Methods | reserved for receiver methods (`docs/methods.md`) |
 | `W00xx` | Warnings | unreachable statement, ... |
 
-Bands `E05xx` and above are unused and reserved for future categories.
+Bands `E07xx` and above are unused and reserved for future categories.
 
 ## Error codes
 
@@ -58,6 +60,16 @@ them. They are not emitted by the compiler yet.
 | `E0401` | Package / import | Package does not export symbol | ISSUE-019 (package symbol resolution) |
 | `E0402` | Package / import | Ambiguous imported symbol | ISSUE-019 |
 | `E0403` | Package / import | Cyclic import detected | ISSUE-019 |
+| `E0501` | Generics | Type-argument count mismatch | `docs/generics.md` |
+| `E0502` | Generics | Generic name used without type arguments | `docs/generics.md` |
+| `E0503` | Generics | Instantiation depth limit exceeded | `docs/generics.md` |
+| `E0504` | Generics | User symbol uses the reserved `__` separator | `docs/generics.md` |
+| `E0505` | Generics | Conflicting exported template definitions | `docs/generics.md` |
+| `E0601` | Methods | Receiver is not a struct type | `docs/methods.md` |
+| `E0602` | Methods | Duplicate method for receiver type | `docs/methods.md` |
+| `E0603` | Methods | Method is not defined for receiver type | `docs/methods.md` |
+| `E0604` | Methods | Mutable receiver requires mutable unique access | `docs/methods.md` |
+| `E0605` | Methods | Method declared outside receiver package | `docs/methods.md` |
 
 ## Location and base convention
 
