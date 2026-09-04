@@ -9,6 +9,7 @@ typedef enum {
     AST_IDENTIFIER,
     AST_BINARY,
     AST_TYPE,
+    AST_TYPE_GENERIC,
     AST_TYPE_ARRAY,
     AST_VAR_DECL,
     AST_BORROW,
@@ -98,6 +99,11 @@ struct ASTNode {
             int ref_kind; // RefKind
         } type_node;
         struct {
+            char *name;
+            ASTNode **args;
+            int arg_count;
+        } generic_type;
+        struct {
             ASTNode *var_type;
             char *name;
             ASTNode *init;
@@ -152,6 +158,8 @@ struct ASTNode {
             int is_exported;
             char *package;
             bool is_variadic;
+            char **type_params;
+            int type_param_count;
         } fundef;
         struct { 
             ASTNode *type;
@@ -161,6 +169,8 @@ struct ASTNode {
         } param;
         struct {
             char *name;
+            ASTNode **type_args;
+            int type_arg_count;
             ASTNode **args;
             int arg_count;
         } call;
@@ -192,6 +202,10 @@ struct ASTNode {
             char *name;
             ASTNode **members;
             int member_count;
+            char **type_params;
+            int type_param_count;
+            int is_exported;
+            char *package;
         } struct_stmt;
         
         struct {

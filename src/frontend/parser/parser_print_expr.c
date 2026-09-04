@@ -78,6 +78,10 @@ int fprint_ast_expr_node(FILE *out, ASTNode *node, int indent) {
         return 1;
     case AST_CALL:
         fprint_indent(out, indent); fprintf(out, "Call: %s\n", node->call.name);
+        for (int i = 0; i < node->call.type_arg_count; i++) {
+            fprint_indent(out, indent + 1); fprintf(out, "TypeArg:\n");
+            fprint_ast(out, node->call.type_args[i], indent + 2);
+        }
         for (int i = 0; i < node->call.arg_count; i++) fprint_ast(out, node->call.args[i], indent + 1);
         return 1;
     case AST_STRING_LITERAL:

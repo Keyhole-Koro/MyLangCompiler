@@ -38,7 +38,50 @@ static ASTNode *parse_identifier_primary(Token **cur) {
     char *name = tok->value;
     *cur = (*cur)->next;
 
+    ASTNode **type_args = NULL;
+    int type_arg_count = 0;
+    ASTNode *generic_declaration = find_generic_function_template(name);
+    int is_generic_function = generic_declaration != NULL;
+    if ((*cur)->kind == LT &&
+        (is_generic_function ||
+         (g_current_generic_function_name && strcmp(g_current_generic_function_name, name) == 0))) {
+        type_args = parse_type_args(cur, &type_arg_count);
+        if ((*cur)->kind != L_PARENTHESES)
+            parse_error("expected '(' after generic function arguments", token_head, *cur);
+        if (is_generic_function &&
+            type_arg_count != generic_declaration->fundef.type_param_count) {
+            char message[256];
+            snprintf(
+                message,
+                sizeof(message),
+                "generic function '%s' expects %d type argument%s but got %d",
+                name,
+                generic_declaration->fundef.type_param_count,
+                generic_declaration->fundef.type_param_count == 1 ? "" : "s",
+                type_arg_count
+            );
+            parse_error_code(
+                SEMCODE_GENERIC_ARG_COUNT_MISMATCH,
+                message,
+                token_head,
+                tok
+            );
+        }
+    }
+
     if ((*cur)->kind == L_PARENTHESES) {
+        if (type_arg_count == 0 &&
+            (is_generic_function ||
+             (g_current_generic_function_name && strcmp(g_current_generic_function_name, name) == 0))) {
+            char message[256];
+            snprintf(message, sizeof(message), "generic function '%s' requires type arguments", name);
+            parse_error_code(
+                SEMCODE_GENERIC_ARGS_REQUIRED,
+                message,
+                token_head,
+                tok
+            );
+        }
         *cur = (*cur)->next;
         ASTNode **args = NULL;
         int arg_count = 0;
@@ -58,9 +101,14 @@ static ASTNode *parse_identifier_primary(Token **cur) {
         Token *end_tok = *cur;
         if (!expect(cur, R_PARENTHESES))
             parse_error("expected ')' after args", token_head, *cur);
-        ASTNode *call = new_call(name, args, arg_count);
+        ASTNode *call = new_generic_call(name, type_args, type_arg_count, args, arg_count);
         set_node_loc_from_tokens(call, tok, NULL);
         set_node_end_from_token(call, end_tok);
+        if (type_arg_count > 0 && g_generic_decl_depth == 0) {
+            char message[256];
+            snprintf(message, sizeof(message), "generic function instantiation for '%s' is not implemented yet", name);
+            parse_error(message, token_head, tok);
+        }
         return call;
     }
 

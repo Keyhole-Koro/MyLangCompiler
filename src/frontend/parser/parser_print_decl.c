@@ -40,6 +40,11 @@ int fprint_ast_decl_node(FILE *out, ASTNode *node, int indent) {
         fprint_ref_kind(out, node, indent);
         fprint_type_modifiers(out, node, indent);
         return 1;
+    case AST_TYPE_GENERIC:
+        fprint_indent(out, indent); fprintf(out, "GenericType: %s\n", node->generic_type.name);
+        for (int i = 0; i < node->generic_type.arg_count; i++)
+            fprint_ast(out, node->generic_type.args[i], indent + 1);
+        return 1;
     case AST_TYPE_ARRAY:
         fprint_indent(out, indent); fprintf(out, "TypeArray: size=%d\n", node->type_array.array_size);
         fprint_ast(out, node->type_array.element_type, indent + 1);
@@ -64,6 +69,9 @@ int fprint_ast_decl_node(FILE *out, ASTNode *node, int indent) {
         return 1;
     case AST_STRUCT:
         fprint_indent(out, indent); fprintf(out, "Struct: %s\n", node->struct_stmt.name);
+        for (int i = 0; i < node->struct_stmt.type_param_count; i++) {
+            fprint_indent(out, indent + 1); fprintf(out, "TypeParam: %s\n", node->struct_stmt.type_params[i]);
+        }
         for (int i = 0; i < node->struct_stmt.member_count; i++)
             fprint_member_name(out, node->struct_stmt.members[i], indent + 1);
         return 1;
@@ -100,6 +108,9 @@ int fprint_ast_decl_node(FILE *out, ASTNode *node, int indent) {
         return 1;
     case AST_FUNDEF:
         fprint_indent(out, indent); fprintf(out, "Function:  %s\n", node->fundef.name);
+        for (int i = 0; i < node->fundef.type_param_count; i++) {
+            fprint_indent(out, indent); fprintf(out, "  TypeParam: %s\n", node->fundef.type_params[i]);
+        }
         for (int i = 0; i < node->fundef.param_count; i++) {
             ASTNode *param = node->fundef.params[i];
             fprint_indent(out, indent); fprintf(out, "  Param:  %s%s\n", param->param.is_rest ? "rest " : "", param->param.name);

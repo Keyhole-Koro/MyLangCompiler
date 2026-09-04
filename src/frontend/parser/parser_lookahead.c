@@ -39,6 +39,45 @@ int looks_like_function(Token *cur) {
     return t && t->kind == IDENTIFIER && t->next && t->next->kind == L_PARENTHESES;
 }
 
+Token *generic_function_type_params_start(Token *cur) {
+    Token *t = cur;
+    while (t && (t->kind == CONST || t->kind == REF || t->kind == MUT)) t = t->next;
+    if (!t || !(is_type(t->kind, t) || t->kind == IDENTIFIER)) return NULL;
+    t = t->next;
+
+    if (t && t->kind == LT) {
+        int depth = 1;
+        t = t->next;
+        while (t && depth > 0) {
+            if (t->kind == LT) depth++;
+            else if (t->kind == GT) depth--;
+            else if (t->kind == RSH) depth -= 2;
+            t = t->next;
+        }
+        if (depth != 0) return NULL;
+    }
+    while (t && t->kind == ASTARISK) t = t->next;
+    if (!t || t->kind != IDENTIFIER || !t->next || t->next->kind != LT) return NULL;
+
+    Token *params_start = t->next;
+    Token *p = params_start->next;
+    if (!p || p->kind != IDENTIFIER) return NULL;
+    while (p && p->kind == IDENTIFIER) {
+        p = p->next;
+        if (p && p->kind == COMMA) {
+            p = p->next;
+            continue;
+        }
+        break;
+    }
+    if (!p || p->kind != GT || !p->next || p->next->kind != L_PARENTHESES) return NULL;
+    return params_start;
+}
+
+int looks_like_generic_function(Token *cur) {
+    return generic_function_type_params_start(cur) != NULL;
+}
+
 static int token_starts_fun_literal_body(Token *t) {
     if (!t) return 0;
     if (t->kind == L_BRACE) return 1;
