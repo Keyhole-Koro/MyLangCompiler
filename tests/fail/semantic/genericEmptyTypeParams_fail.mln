@@ -1,0 +1,6 @@
+struct Empty<> {
+};
+
+i32 main() {
+    return 0;
+}
