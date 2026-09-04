@@ -1,36 +1,45 @@
 # MyLang Generics
 
-**Status: design proposal. Not implemented.** This document defines the intended
-shape of type parameters in MyLang so the work can be split into reviewable
-steps. `docs/containers.md` builds `map` and `queue` on top of it.
+**Status: design proposal. Not implemented.** This document defines generic
+types and functions as the foundation for ordinary MyLang library containers.
+The first usable release includes cross-module templates and linker
+deduplication; module-local generics alone are an implementation milestone, not
+a supported endpoint.
 
 ## 1. Goals
 
 1. Type-parameterized `struct`s and functions, checked at compile time.
-2. No runtime cost and no runtime type information: every instantiation becomes
-   ordinary monomorphic code.
-3. No changes to semantic analysis or code generation. Generics are erased by a
-   frontend pass, exactly as `AST_DOM_ELEMENT` is erased before the rest of the
-   pipeline runs (`docs/source-modifiers.md`, `parser_lower_dom.c`).
-4. Enough expressive power to write the standard containers as library code
-   instead of compiler builtins.
+2. No runtime type information and no dispatch cost: each used instantiation
+   becomes ordinary monomorphic code.
+3. Exported templates work across module boundaries, so generic types can live
+   in `std` rather than beside every use site.
+4. Identical public instantiations emitted by different compilation units are
+   merged by the linker.
+5. The design leaves a clean path to receiver methods (`docs/methods.md`).
 
 ### Non-goals for the first version
 
-- Type-argument inference at call sites. Type arguments are written explicitly.
-- Constraints, traits, or bounds. A type parameter is unconstrained.
-- Generic lambdas, explicit specialization, and variance.
-- Anything that needs a heap. See `docs/containers.md`.
+- Type-argument inference at free-function call sites.
+- Constraints, traits, bounds, specialization, or variance.
+- Generic lambdas or methods with type parameters independent of their
+  receiver type.
+- Anything requiring a heap. See `docs/containers.md`.
 
 ## 2. Surface syntax
 
+Type parameters are declared before any position that can use them. This avoids
+the circular parse in `T max<T>(...)`: the current parser must recognize `T` as
+a type before it reaches the function name and its trailing `<T>`.
+
 ```mylang
-struct Pair<T> {
+generic<T>
+struct Pair {
     T first;
     T second;
-}
+};
 
-T max<T>(T a, T b) {
+generic<T>
+T max(T a, T b) {
     return (a > b) ? a : b;
 }
 
@@ -41,185 +50,251 @@ i32 main() {
 }
 ```
 
+`export` precedes `generic`:
+
+```mylang
+export generic<T>
+struct Queue { /* ... */ };
+```
+
 ### Grammar additions
 
-Written against `docs/grammar.md`, which is updated in the same change that
-implements this.
+Written against `docs/grammar.md`, which is updated with the parser change.
 
 ```text
-type_params -> < IDENTIFIER ( , IDENTIFIER )* >
-type_args   -> < type ( , type )* >
+type_params  -> < IDENTIFIER ( , IDENTIFIER )* >
+type_args    -> < type ( , type )* >
+generic_decl -> generic type_params ( struct_decl | fundef | methoddef )
+export_decl  -> export ( generic_decl | fundef | var_decl | ... )
 
-base_type   -> primitive_type | IDENTIFIER type_args?
-struct_decl -> struct IDENTIFIER type_params? { var_decl* } (IDENTIFIER)? ;
-fundef      -> type IDENTIFIER type_params? ( param_list ) ( block | ; )
-call        -> IDENTIFIER type_args? ( arg_list )
+base_type    -> primitive_type | IDENTIFIER type_args?
+call         -> IDENTIFIER type_args? ( arg_list )
 ```
 
-### Why `<` is not ambiguous here
+On entering `generic<T, ...>`, the parser pushes the parameters into a scoped
+typename table before parsing the following declaration and pops them at its
+end. `is_type()` can therefore recognize `T` in return types, fields,
+parameters, locals, and nested type arguments.
 
-C++ needs backtracking because `a < b > (c)` is a valid expression. MyLang does
-not, because `<` is consumed as a type-argument list **only when the preceding
-identifier is already registered as a generic name**. The parser keeps those
-tables today: `is_user_typename()` backs `is_type()`
-(`src/frontend/parser/parser_lookahead.c:16`) and function names are tracked in
-`parser_state_tables.c`. A generic name is registered when its template is
-parsed, so an identifier that is not a template keeps parsing as a comparison
-chain and no existing program changes meaning.
+### Parsing `<` in expressions
 
-`looks_like_function()` (`parser_lookahead.c:31`) and `looks_like_fun_literal()`
-must learn to skip a `<...>` group when they skip a base type; this is the only
-lookahead change required.
+Type position is unambiguous. In expression position, `<...>` is parsed as type
+arguments only when all of these conditions hold:
 
-### Type parameters inside a template
+1. ordinary lexical name resolution finds a generic function (a local binding
+   with the same spelling shadows it);
+2. the contents parse as a comma-separated type list; and
+3. the closing `>` is immediately followed by `(`.
 
-While a template is being parsed, its type parameters are pushed into the
-typename table so `is_type()` accepts `T` in type position, and popped when the
-template ends. A template body is therefore parsed but not type-checked until it
-is instantiated. A template that is never instantiated is never checked. This
-matches C++ two-phase behavior and is accepted for the first version.
+Otherwise `<` remains a comparison operator. This preserves expressions such
+as `a < b > (c)` and avoids relying on a global name table that ignores local
+shadowing. The parser uses bounded lookahead for the complete `<...>(` shape;
+it does not consume tokens until the shape is confirmed.
 
-## 3. Pipeline placement
+## 3. Template model and pipeline
+
+The parser records generic declarations in a template table instead of emitting
+them as ordinary declarations. An exported entry contains its complete AST,
+source location, package identity, and ordered type-parameter list—not merely a
+call signature.
 
 ```text
-lexer -> parser -> [monomorphize] -> semantic -> codegen
-                   ^ new frontend pass
+lexer -> parser/import templates -> monomorphize -> semantic -> codegen
 ```
 
-The parser records templates in a side table and does not emit them into the
-program tree. The monomorphization pass expands every instantiation into
-ordinary declarations and rewrites the use sites. **After this pass no generic
-node survives**, so `src/semantic/` and `src/backend/codegen/` need no changes
-at all. This is the same contract the DOM extension already follows.
+Free functions and structs are monomorphized before semantic analysis. The
+monomorphizer clones a template, substitutes concrete type arguments, and emits
+ordinary AST nodes. No generic type node reaches the existing semantic or
+backend paths.
 
-The pass lives in `src/frontend/parser/parser_mono.c`, next to the other
-`parser_lower*.c` passes, and runs after parsing completes and before
-`semantic_walk_ast()`.
+Receiver method calls are the deliberate exception described in
+`docs/methods.md`: the receiver expression needs semantic type resolution. A
+generic struct instantiation eagerly emits its concrete methods before semantic
+analysis; semantic analysis then resolves `value.method(...)` against those
+ordinary concrete methods and a method-lowering pass rewrites the call before
+code generation.
 
 ## 4. AST additions
 
 In `inc/mylang/ast/AST.h`:
 
 ```c
-AST_TYPE_GENERIC,   // new node type
+AST_TYPE_GENERIC,
 
 struct {
-    char *base_name;      // "Pair"
-    ASTNode **args;       // type nodes
+    char *base_name;
+    ASTNode **args;
     int arg_count;
 } type_generic;
 ```
 
-Existing members gain template information:
+Existing declaration nodes gain:
 
-- `fundef`: `char **type_params; int type_param_count;`
-- `struct_stmt` / `typedef_struct`: the same two fields.
-- `call`: `ASTNode **type_args; int type_arg_count;`
+```c
+char **type_params;
+int type_param_count;
+```
 
-A node with `type_param_count > 0` is a template and is never emitted. A node
-carrying `AST_TYPE_GENERIC` or `type_args` is an instantiation site.
+Calls gain explicit type arguments:
+
+```c
+ASTNode **type_args;
+int type_arg_count;
+```
+
+Template records own their AST independently of the main program tree. Clone,
+print, rewrite, validation, and free walkers must handle every added field.
 
 ## 5. Monomorphization
 
-1. **Collect.** Walk the top-level block. Move every declaration with type
-   parameters into a template table and remove it from the tree.
-2. **Seed.** Walk the remaining, non-generic code for instantiation sites: a
-   `AST_TYPE_GENERIC` in any type position, and a call carrying type arguments.
-   Push each `(template, type arguments)` pair onto a worklist.
-3. **Expand.** For each pair not already instantiated: clone the template AST,
-   substitute the type parameters, mangle the name, register the result as an
-   ordinary typename or function, and append it to the top-level block. Scan the
-   clone for further instantiation sites and push those too.
-4. **Rewrite.** Replace each use site with the mangled name.
-5. Repeat until the worklist is empty.
+1. **Collect.** Record local generic declarations and imported exported
+   templates under `(package, public name)`.
+2. **Seed.** Walk ordinary code for `AST_TYPE_GENERIC` nodes and explicit
+   generic calls.
+3. **Canonicalize.** Resolve aliases and serialize each concrete type argument
+   into its canonical form (section 6).
+4. **Expand.** For each unseen `(template identity, canonical arguments)`, clone
+   the template AST, substitute its parameters, assign the canonical generated
+   name, and append an ordinary declaration.
+5. **Discover.** Scan the clone for nested instantiations and add them to the
+   worklist.
+6. **Rewrite.** Replace generic type and call sites with generated ordinary
+   names.
+7. Repeat until the worklist is empty.
 
-Substitution is a pure AST rewrite over type nodes. Pointer levels compose: `T*`
-with `T = char*` becomes `char**`. Reference kinds and modifiers on the use site
-are applied on top of the substituted type.
+Pointer levels compose: `T*` with `T = char*` becomes `char**`. Reference kinds
+and modifiers at the use site apply outside the substituted type.
 
-Recursive templates (`struct Node<T> { Node<Node<T>> next; }`) do not reach a
-fixed point. The pass caps instantiation depth at 32 and reports `E0503`.
+Only used instantiations are emitted. Recursive expansion is capped at depth 32
+and reports `E0503` with both the original use and expansion chain.
 
-## 6. Name mangling
+## 6. Canonical types and generated names
 
-Instantiated names become assembly labels (`codegen_func.c` emits `%s:`), and
-package qualification already joins names with `_`
-(`parser_expr_postfix.c:21`), so mangled names stay within `[A-Za-z0-9_]`.
+Generated names must be injective: distinct source types cannot share a symbol.
+Appending letters such as `p` is insufficient because `Bar*` would collide with
+a user type named `Barp`.
+
+The canonical type encoding is recursive and self-delimiting:
 
 ```text
-mangled  := base ( "__" arg )*
-arg      := ["c"] ["r" | "m"] base_name ("p" * pointer_level)
+primitive   := I32 | U32 | U16 | U8 | CHAR | BOOL | ...
+named       := N <decimal-byte-length> _ <qualified-name>
+pointer     := P <type>
+ref         := R <type>
+ref-mut     := M <type>
+const       := C <type>
+array       := A <decimal-count> _ <type>
+generic     := G <named> _ <arg-count> _ <type>...
 ```
 
-| Source | Mangled |
+Aliases are resolved before encoding. Nested generics, qualifiers, references,
+pointers, and arrays therefore all contribute unambiguously.
+
+Examples:
+
+| Source type | Canonical encoding |
 | --- | --- |
-| `Pair<i32>` | `Pair__i32` |
-| `map<char*, i32>` | `map__charp__i32` |
-| `max<char**>` | `max__charpp` |
-| `Box<ref mut Point>` | `Box__mPoint` |
+| `i32` | `I32` |
+| `char*` | `PCHAR` |
+| `Pair<i32>` | `GN4_Pair_1_I32` |
+| `Pair<char*>` | `GN4_Pair_1_PCHAR` |
 
-`__` is reserved as the compiler's separator. A user symbol containing `__` is
-rejected with `E0504`; the compiler already reserves this shape for generated
-names such as `__dom0` and `__rest_len`.
+A public free-function instantiation is named from its package, public template
+name, and canonical arguments. The consuming module is intentionally absent:
 
-## 7. Module boundaries
+```text
+std__queue_init__I32
+```
 
-This is the one part of the design that is **not** settled, and the first
-version deliberately avoids it.
+Private generic instantiations include the defining compilation-unit identity
+and are never eligible for cross-object deduplication. The compiler-reserved
+`__` namespace remains unavailable to source declarations (`E0504`).
 
-Each `.mln` file compiles to its own `.masm` (`src/driver/driver_walk.c`), and
-`import` resolves symbols by name only: the importer never builds the AST of the
-imported file. A template body is therefore unavailable across a module
-boundary, and a template cannot be instantiated where its body is unknown.
+## 7. Cross-module templates
 
-- **v1:** templates are module-local. `export` on a generic declaration is
-  rejected with `E0505`.
-- **Phase 2:** the importer parses imported sources for templates and
-  instantiates them locally. The infrastructure exists — `parse_import()`
-  already resolves a path relative to the importer and lexes the target file
-  (`parser_toplevel.c:9`, `:31`). The open question is symbol duplication: two
-  modules that both instantiate `map<i32,i32>` emit the same mangled label into
-  two objects. Whether the MyComputer assembler and linker dedupe such symbols,
-  or whether instantiations must be file-local, has to be decided with that
-  toolchain before phase 2 lands.
+An ordinary import needs only an exported symbol signature. A generic import
+also needs the template body. When parsing an import, the compiler loads the
+target source's exported template records into an import cache. Cache keys use
+canonical source identity plus package name, preventing repeated parsing and
+detecting cycles.
 
-## 8. Ownership
+Instantiation happens in each consuming compilation unit:
 
-Generics are erased before semantic analysis, so `docs/ownership.md` applies to
-the substituted code unchanged. A generic type is not Copy by declaration; each
-instantiation is Copy exactly when its substituted members are. No new borrow or
-move rules are introduced.
+```text
+main.mln   -> queue_push<i32> definition in main.masm
+worker.mln -> queue_push<i32> definition in worker.masm
+```
 
-## 9. Diagnostics
+Both definitions deliberately use the same public generated name. This is the
+same broad model used by C++ implicit template instantiation: consumers see the
+definition, emit what they use, and the linker coalesces duplicates.
 
-New codes take the `E05xx` band, which `docs/diagnostic-codes.md` reserves as
-unused. They are added to that table as "reserved" by this proposal and moved to
-the live table when implemented.
+Conflicting exported templates with the same `(package, public name)` are an
+error (`E0505`). Import cycles continue to use the package/import diagnostic
+band.
+
+## 8. Link-once definitions
+
+The object/assembly pipeline gains a `linkonce`-equivalent marker for generated
+public generic functions. Linker behavior is:
+
+- duplicate strong definitions remain an error;
+- duplicate `linkonce` definitions with the same symbol and identical content
+  are coalesced to one definition;
+- a strong definition colliding with `linkonce` is an error;
+- same-name `linkonce` definitions with different bytes or relocations are an
+  error, rather than silently selecting one.
+
+Struct instantiations are compile-time layout information and emit no linker
+symbol by themselves. Any generated functions using them follow the rules
+above. Content comparison includes relocation targets, not only instruction
+bytes.
+
+Explicit-instantiation declarations and `extern template`-style suppression are
+future optimizations, not part of v1.
+
+## 9. Ownership
+
+After substitution, `docs/ownership.md` applies to the concrete program. A
+generic type is not implicitly Copy: each concrete instantiation is Copy only
+when the corresponding ordinary struct would be Copy. No new borrow or move
+rules are introduced.
+
+## 10. Diagnostics
 
 | Code | Meaning |
 | --- | --- |
-| `E0501` | Type-argument count mismatch (`Pair<i32,i32>` for `Pair<T>`) |
-| `E0502` | Generic name used without type arguments |
-| `E0503` | Instantiation depth limit exceeded (recursive template) |
-| `E0504` | User symbol uses the reserved `__` separator |
-| `E0505` | Generic declaration cannot be exported (v1 restriction) |
+| `E0501` | Type-argument count mismatch |
+| `E0502` | Generic name used without required type arguments |
+| `E0503` | Instantiation depth limit exceeded |
+| `E0504` | Source symbol uses the compiler-reserved `__` namespace |
+| `E0505` | Conflicting exported template definitions |
 
-## 10. Testing
+## 11. Testing
 
-- `tests/succeed/generic/`, `tests/fail/generic/` for surface behavior, picked
-  up by `run_semantic_tests.py`.
-- A whitebox case in `tests/` for the mangling function, so the scheme is
-  pinned independently of the parser.
-- A case asserting that a program using no generics produces byte-identical
-  assembly before and after the pass, proving erasure is complete.
-- All of it runs under `make test-component`; nothing here needs the e2e suite.
+- Parser cases for prefix `generic<T>` declarations and comparison expressions
+  adjacent to generic names.
+- Single-module struct/function instantiation and nested type substitution.
+- Imports of an exported generic from two independent consumers.
+- Two consumers linked together, proving identical generated definitions are
+  coalesced.
+- A negative linker test where equal generated names have different content.
+- Mangling whitebox cases covering user names ending in `p`, nested generics,
+  aliases, pointers, arrays, and reference modifiers.
+- A non-generic program must produce byte-identical assembly after the pass is
+  introduced.
 
-## 11. Milestones
+## 12. Milestones
 
 | PR | Content |
 | --- | --- |
-| 1 | `AST_TYPE_GENERIC`, template fields, parsing and lookahead. Using a generic is a "not implemented" error. |
-| 2 | Monomorphization of generic `struct`s, mangling, `E0501`–`E0505`. |
-| 3 | Monomorphization of generic functions, including calls inside templates. |
-| 4 | `std/queue.mln` and `std/map.mln` (`docs/containers.md`). |
-| 5 | Cross-module templates, once the linker question in section 7 is answered. |
+| 1 | `generic<T>` token/grammar, AST fields, scoped type parameters, and diagnostics for unsupported use. |
+| 2 | Canonical type encoding and single-module monomorphization of structs and free functions. |
+| 3 | Export/import of complete template records and cross-module instantiation. |
+| 4 | `linkonce` object/assembly marker and linker coalescing with mismatch diagnostics. |
+| 5 | Receiver methods and type-aware method-call lowering (`docs/methods.md`). |
+| 6 | `std/queue.mln` with its final method API. |
+| 7 | Typed callbacks, then `std/map.mln`. |
+
+The feature is advertised as usable only after milestone 4. Queue is published
+only after receiver methods so its public API does not immediately change.
