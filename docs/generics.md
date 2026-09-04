@@ -27,19 +27,16 @@ a supported endpoint.
 
 ## 2. Surface syntax
 
-Type parameters are declared before any position that can use them. This avoids
-the circular parse in `T max<T>(...)`: the current parser must recognize `T` as
-a type before it reaches the function name and its trailing `<T>`.
+Type parameters are attached to the declared type or function name. There is no
+separate `generic` keyword.
 
 ```mylang
-generic<T>
-struct Pair {
+struct Pair<T> {
     T first;
     T second;
 };
 
-generic<T>
-T max(T a, T b) {
+T max<T>(T a, T b) {
     return (a > b) ? a : b;
 }
 
@@ -50,11 +47,12 @@ i32 main() {
 }
 ```
 
-`export` precedes `generic`:
+`export` keeps its existing position:
 
 ```mylang
-export generic<T>
-struct Queue { /* ... */ };
+export struct Queue<T> { /* ... */ };
+
+export T max<T>(T a, T b) { /* ... */ }
 ```
 
 ### Grammar additions
@@ -64,17 +62,29 @@ Written against `docs/grammar.md`, which is updated with the parser change.
 ```text
 type_params  -> < IDENTIFIER ( , IDENTIFIER )* >
 type_args    -> < type ( , type )* >
-generic_decl -> generic type_params ( struct_decl | fundef | methoddef )
-export_decl  -> export ( generic_decl | fundef | var_decl | ... )
 
 base_type    -> primitive_type | IDENTIFIER type_args?
+struct_decl  -> struct IDENTIFIER type_params? { var_decl* } ( IDENTIFIER )? ;
+fundef       -> type IDENTIFIER type_params? ( param_list ) ( block | ; )
 call         -> IDENTIFIER type_args? ( arg_list )
 ```
 
-On entering `generic<T, ...>`, the parser pushes the parameters into a scoped
-typename table before parsing the following declaration and pops them at its
-end. `is_type()` can therefore recognize `T` in return types, fields,
-parameters, locals, and nested type arguments.
+For a struct, the parser encounters `<T>` before its body and can push the
+parameters into the scoped typename table directly. For a function, the type
+parameters lexically follow the return type, so their scope is defined to cover
+the complete declaration, including that return type:
+
+```text
+T max<T>(T a, T b)
+^     +------------- T is in scope here too
+```
+
+At declaration position the parser performs non-consuming header lookahead. It
+finds an identifier followed by a type-parameter list and `(`, records those
+parameter names, then parses the declaration normally from its first token.
+After the declaration it pops the temporary type names. This also handles a
+generic return type such as `Pair<T> make_pair<T>(...)` without adding a new
+function keyword or changing return-type placement.
 
 ### Parsing `<` in expressions
 
@@ -272,8 +282,8 @@ rules are introduced.
 
 ## 11. Testing
 
-- Parser cases for prefix `generic<T>` declarations and comparison expressions
-  adjacent to generic names.
+- Parser cases for `struct Pair<T>` and `T max<T>(...)`, generic return types,
+  and comparison expressions adjacent to generic names.
 - Single-module struct/function instantiation and nested type substitution.
 - Imports of an exported generic from two independent consumers.
 - Two consumers linked together, proving identical generated definitions are
@@ -288,7 +298,7 @@ rules are introduced.
 
 | PR | Content |
 | --- | --- |
-| 1 | `generic<T>` token/grammar, AST fields, scoped type parameters, and diagnostics for unsupported use. |
+| 1 | Type-parameter grammar, declaration-header lookahead, AST fields, scoped type parameters, and diagnostics for unsupported use. |
 | 2 | Canonical type encoding and single-module monomorphization of structs and free functions. |
 | 3 | Export/import of complete template records and cross-module instantiation. |
 | 4 | `linkonce` object/assembly marker and linker coalescing with mismatch diagnostics. |

@@ -33,13 +33,25 @@ void (ref mut Point self) move(i32 dx, i32 dy) {
 }
 ```
 
-Generic receiver methods declare the struct's type parameters before the
-declaration:
+For a generic receiver, identifier arguments in the receiver type bind that
+struct's type parameters for the whole method declaration:
 
 ```mylang
-export generic<T>
-bool (ref mut Queue<T> self) push(T value) { /* ... */ }
+export bool (ref mut Queue<T> self) push(T value) { /* ... */ }
 ```
+
+`Queue<T>` here is a receiver pattern, not a concrete instantiation. `Queue`
+must name a generic struct and the number of identifiers must match its declared
+parameters. Those identifiers are in scope in the return type as well:
+
+```mylang
+T (ref Queue<T> self) front() { /* ... */ }
+```
+
+As with a generic function return type, declaration-header lookahead discovers
+the receiver parameters before parsing from the first token. A method does not
+repeat type arguments on its name or at the call site; its concrete receiver
+determines them.
 
 Calls use ordinary postfix syntax:
 

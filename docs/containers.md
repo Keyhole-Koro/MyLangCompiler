@@ -51,16 +51,14 @@ the storage-taking initializer. Existing container operations need not change.
 ```mylang
 package std;
 
-export generic<T>
-struct Queue {
+export struct Queue<T> {
     T *buf;
     i32 cap;
     i32 head;
     i32 len;
 };
 
-export generic<T>
-bool queue_init(ref mut Queue<T> queue, T *storage, i32 cap) {
+export bool queue_init<T>(ref mut Queue<T> queue, T *storage, i32 cap) {
     if (cap <= 0) return false;
     queue->buf = storage;
     queue->cap = cap;
@@ -69,13 +67,11 @@ bool queue_init(ref mut Queue<T> queue, T *storage, i32 cap) {
     return true;
 }
 
-export generic<T>
-i32 (ref Queue<T> self) len() {
+export i32 (ref Queue<T> self) len() {
     return self->len;
 }
 
-export generic<T>
-bool (ref mut Queue<T> self) push(T value) {
+export bool (ref mut Queue<T> self) push(T value) {
     if (self->len == self->cap) return false;
     mut i32 slot = self->head + self->len;
     if (slot >= self->cap) slot = slot - self->cap;
@@ -84,8 +80,7 @@ bool (ref mut Queue<T> self) push(T value) {
     return true;
 }
 
-export generic<T>
-bool (ref mut Queue<T> self) pop(ref mut T out) {
+export bool (ref mut Queue<T> self) pop(ref mut T out) {
     if (self->len == 0) return false;
     *out = self->buf[self->head];
     self->head = self->head + 1;
@@ -108,8 +103,7 @@ addressing with linear probing over caller-supplied key, value, and slot-state
 arrays.
 
 ```mylang
-export generic<K, V>
-struct Map {
+export struct Map<K, V> {
     K *keys;
     V *values;
     u8 *states;
