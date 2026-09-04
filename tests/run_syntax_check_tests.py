@@ -115,6 +115,29 @@ CASES = [
         source="enum TaskState { TASK_RUNNABLE = 0, TASK_SLEEPING = 1, TASK_EMPTY = 2 }\ni32 task_state[256];\n",
         status="ok",
     ),
+    SyntaxCase(
+        name="generic_declarations_and_call_ok",
+        source=(
+            "T max<T>(T a, T b) { return a; }\n"
+            "i32 main() { return max<i32>(1, 2); }\n"
+        ),
+        status="ok",
+        token_roles={1: "function", 3: "type", 23: "function"},
+    ),
+    SyntaxCase(
+        name="nested_generic_type_ok",
+        source=(
+            "struct Pair<T> { T value; };\n"
+            "struct Wrapper<T> { T value; };\n"
+            "Wrapper<Pair<i32>> value;\n"
+        ),
+        status="ok",
+    ),
+    SyntaxCase(
+        name="generic_angles_preserve_relational_and_shift_ok",
+        source="i32 main() { i32 x = a < b > c; return x >> 1; }\n",
+        status="ok",
+    ),
 ]
 
 
@@ -133,8 +156,15 @@ def ensure_built() -> None:
 
 
 def run_cases() -> list[dict]:
+    command = [str(SYNTAX_CHECK_PATH), "--stdio"]
+    grammar_path = os.environ.get("MYLANG_SYNTAX_GRAMMAR")
+    cache_path = os.environ.get("MYLANG_SYNTAX_CACHE")
+    if grammar_path:
+        command.append(grammar_path)
+        if cache_path:
+            command.append(cache_path)
     proc = subprocess.Popen(
-        [str(SYNTAX_CHECK_PATH), "--stdio"],
+        command,
         cwd=REPO_ROOT,
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,

@@ -8,6 +8,13 @@
 
 #define TOKEN_KIND_COUNT ((int)EOT + 1)
 
+typedef enum {
+    ANGLE_NORMAL = 0,
+    ANGLE_GENERIC_OPEN,
+    ANGLE_GENERIC_CLOSE,
+    ANGLE_GENERIC_DOUBLE_CLOSE,
+} AngleKind;
+
 static const char *default_grammar_path =
     "../MySyntaxEngine/tests/fixtures/grammars/mylang_lsp.grammar";
 static const char *default_table_cache_path = "mylang-syntax-check.table";
@@ -257,6 +264,86 @@ static int build_token_map(const SyntaxGrammar *grammar, int *map) {
     return 0;
 }
 
+static int generic_name_contains(const char **names, size_t count, const char *name) {
+    for (size_t i = 0; i < count; i++) {
+        if (strcmp(names[i], name) == 0) return 1;
+    }
+    return 0;
+}
+
+static void generic_name_add(const char ***names, size_t *count, const char *name) {
+    if (!name || generic_name_contains(*names, *count, name)) return;
+    const char **resized = realloc((void *)*names, sizeof(char *) * (*count + 1));
+    if (!resized) return;
+    *names = resized;
+    (*names)[(*count)++] = name;
+}
+
+static int find_angle_close(Token **tokens, size_t token_count, size_t open_index, size_t *out_close) {
+    int depth = 1;
+    for (size_t i = open_index + 1; i < token_count; i++) {
+        if (tokens[i]->kind == LT) depth++;
+        else if (tokens[i]->kind == GT) depth--;
+        else if (tokens[i]->kind == RSH) depth -= 2;
+        if (depth == 0) {
+            *out_close = i;
+            return 1;
+        }
+        if (depth < 0) return 0;
+    }
+    return 0;
+}
+
+static void mark_generic_span(
+    Token **tokens,
+    AngleKind *angles,
+    size_t open_index,
+    size_t close_index
+) {
+    for (size_t i = open_index; i <= close_index; i++) {
+        if (tokens[i]->kind == LT) angles[i] = ANGLE_GENERIC_OPEN;
+        else if (tokens[i]->kind == GT) angles[i] = ANGLE_GENERIC_CLOSE;
+        else if (tokens[i]->kind == RSH) angles[i] = ANGLE_GENERIC_DOUBLE_CLOSE;
+    }
+}
+
+static AngleKind *classify_generic_angles(Token **tokens, size_t token_count) {
+    AngleKind *angles = calloc(token_count ? token_count : 1, sizeof(AngleKind));
+    const char **generic_names = NULL;
+    size_t generic_name_count = 0;
+    int brace_depth = 0;
+
+    for (size_t i = 0; i < token_count; i++) {
+        if (tokens[i]->kind == L_BRACE) brace_depth++;
+        else if (tokens[i]->kind == R_BRACE && brace_depth > 0) brace_depth--;
+
+        if (i + 2 >= token_count || tokens[i]->kind != IDENTIFIER || tokens[i + 1]->kind != LT)
+            continue;
+
+        size_t close_index = 0;
+        if (!find_angle_close(tokens, token_count, i + 1, &close_index)) continue;
+        TokenKind next_kind = close_index + 1 < token_count ? tokens[close_index + 1]->kind : EOT;
+        int is_struct_declaration = i > 0 && tokens[i - 1]->kind == STRUCT && next_kind == L_BRACE;
+        int is_function_declaration = brace_depth == 0 && next_kind == L_PARENTHESES;
+        if (!is_struct_declaration && !is_function_declaration) continue;
+
+        generic_name_add(&generic_names, &generic_name_count, tokens[i]->value);
+        mark_generic_span(tokens, angles, i + 1, close_index);
+    }
+
+    for (size_t i = 0; i + 1 < token_count; i++) {
+        if (tokens[i]->kind != IDENTIFIER || tokens[i + 1]->kind != LT ||
+            !generic_name_contains(generic_names, generic_name_count, tokens[i]->value))
+            continue;
+        size_t close_index = 0;
+        if (find_angle_close(tokens, token_count, i + 1, &close_index))
+            mark_generic_span(tokens, angles, i + 1, close_index);
+    }
+
+    free(generic_names);
+    return angles;
+}
+
 static SyntaxTable *load_or_build_table(SyntaxGrammar *grammar, const char *cache_path) {
     SyntaxTable *table = NULL;
     if (cache_path) {
@@ -271,38 +358,78 @@ static SyntaxTable *load_or_build_table(SyntaxGrammar *grammar, const char *cach
     return table;
 }
 
-static int check_tokens(SyntaxTable *table, const int *token_map, Token *tokens) {
+static int check_tokens(
+    const SyntaxGrammar *grammar,
+    SyntaxTable *table,
+    const int *token_map,
+    Token *tokens
+) {
     if (!tokens) {
         printf("{\"status\":\"error\",\"diagnostics\":[{\"line\":0,\"character\":0,\"endCharacter\":1,\"message\":\"Failed to read source file.\"}]}\n");
         return 0;
     }
 
-    size_t token_count = 0;
-    for (Token *t = tokens; t && t->kind != EOT; t = t->next) token_count++;
+    size_t source_count = 0;
+    for (Token *t = tokens; t && t->kind != EOT; t = t->next) source_count++;
 
-    int *token_ids = calloc(token_count ? token_count : 1, sizeof(int));
-    Token **token_refs = calloc(token_count ? token_count : 1, sizeof(Token *));
-    int *roles = calloc(token_count ? token_count : 1, sizeof(int));
-    SyntaxSymbol *symbols = calloc(token_count ? token_count : 1, sizeof(SyntaxSymbol));
+    Token **source_tokens = calloc(source_count ? source_count : 1, sizeof(Token *));
+    size_t source_index = 0;
+    for (Token *t = tokens; t && t->kind != EOT; t = t->next)
+        source_tokens[source_index++] = t;
+
+    if (!source_tokens) {
+        free_tokens(tokens);
+        return 1;
+    }
+    AngleKind *angles = classify_generic_angles(source_tokens, source_count);
+    size_t parse_capacity = source_count * 2 + 1;
+    int *token_ids = calloc(parse_capacity, sizeof(int));
+    Token **token_refs = calloc(parse_capacity, sizeof(Token *));
+    size_t *token_source_indices = calloc(parse_capacity, sizeof(size_t));
+    int *roles = calloc(parse_capacity, sizeof(int));
+    int *source_roles = calloc(source_count ? source_count : 1, sizeof(int));
+    SyntaxSymbol *symbols = calloc(parse_capacity, sizeof(SyntaxSymbol));
     size_t symbol_count = 0;
-    if (!token_ids || !token_refs || !roles || !symbols) {
+    if (!angles || !token_ids || !token_refs ||
+        !token_source_indices || !roles || !source_roles || !symbols) {
+        free(source_tokens);
+        free(angles);
         free(token_ids);
         free(token_refs);
+        free(token_source_indices);
         free(roles);
+        free(source_roles);
         free(symbols);
         free_tokens(tokens);
         return 1;
     }
 
-    size_t index = 0;
-    for (Token *t = tokens; t && t->kind != EOT; t = t->next) {
-        token_ids[index] = token_map[t->kind];
-        token_refs[index] = t;
-        index++;
+    int generic_lt = syntax_terminal_id(grammar, "GENERIC_LT");
+    int generic_gt = syntax_terminal_id(grammar, "GENERIC_GT");
+    size_t token_count = 0;
+    for (size_t i = 0; i < source_count; i++) {
+        Token *t = source_tokens[i];
+        if (angles[i] == ANGLE_GENERIC_DOUBLE_CLOSE) {
+            for (int close = 0; close < 2; close++) {
+                token_ids[token_count] = generic_gt;
+                token_refs[token_count] = t;
+                token_source_indices[token_count++] = i;
+            }
+            continue;
+        }
+        token_ids[token_count] = angles[i] == ANGLE_GENERIC_OPEN ? generic_lt :
+                                 angles[i] == ANGLE_GENERIC_CLOSE ? generic_gt :
+                                 token_map[t->kind];
+        token_refs[token_count] = t;
+        token_source_indices[token_count++] = i;
     }
 
     SyntaxResult result = syntax_parse_token_ids_ex(
-        table, token_ids, token_count, roles, symbols, token_count, &symbol_count);
+        table, token_ids, token_count, roles, symbols, parse_capacity, &symbol_count);
+
+    for (size_t i = 0; i < token_count; i++) {
+        if (roles[i] != 0) source_roles[token_source_indices[i]] = roles[i];
+    }
 
     printf("{\"status\":");
     print_json_string(result.status == SYNTAX_OK ? "ok" : result.status == SYNTAX_INCOMPLETE ? "incomplete" : "error");
@@ -334,7 +461,7 @@ static int check_tokens(SyntaxTable *table, const int *token_map, Token *tokens)
         for (Token *t = tokens; t && t->kind != EOT; t = t->next, ti++) {
             if (!first) printf(",");
             first = 0;
-            const char *role = (ti < token_count) ? syntax_label_name(table, roles[ti]) : NULL;
+            const char *role = (ti < source_count) ? syntax_label_name(table, source_roles[ti]) : NULL;
             if (role)
                 printf("[%d,%d,%d,\"%s\",\"%s\"]",
                        t->line - 1, t->col - 1, t->length, tokenkind2str(t->kind), role);
@@ -360,23 +487,37 @@ static int check_tokens(SyntaxTable *table, const int *token_map, Token *tokens)
 
     syntax_result_free(&result);
     free(symbols);
+    free(source_roles);
     free(token_ids);
     free(token_refs);
+    free(token_source_indices);
     free(roles);
+    free(angles);
+    free(source_tokens);
     free_tokens(tokens);
     return 0;
 }
 
-static int check_file(SyntaxTable *table, const int *token_map, const char *source_path) {
-    return check_tokens(table, token_map, lexer_from_file(source_path));
+static int check_file(
+    const SyntaxGrammar *grammar,
+    SyntaxTable *table,
+    const int *token_map,
+    const char *source_path
+) {
+    return check_tokens(grammar, table, token_map, lexer_from_file(source_path));
 }
 
-static int check_source(SyntaxTable *table, const int *token_map, char *source) {
+static int check_source(
+    const SyntaxGrammar *grammar,
+    SyntaxTable *table,
+    const int *token_map,
+    char *source
+) {
     if (!source) {
         printf("{\"status\":\"error\",\"diagnostics\":[{\"line\":0,\"character\":0,\"endCharacter\":1,\"message\":\"Failed to read source text.\"}]}\n");
         return 0;
     }
-    return check_tokens(table, token_map, lexer(source));
+    return check_tokens(grammar, table, token_map, lexer(source));
 }
 
 static int consume_record_separator(void) {
@@ -389,7 +530,7 @@ static int consume_record_separator(void) {
     return 1;
 }
 
-static int run_stdio(SyntaxTable *table, const int *token_map) {
+static int run_stdio(const SyntaxGrammar *grammar, SyntaxTable *table, const int *token_map) {
     printf("ready\n");
     fflush(stdout);
 
@@ -412,14 +553,14 @@ static int run_stdio(SyntaxTable *table, const int *token_map) {
                 return 1;
             }
 
-            int status = check_source(table, token_map, source);
+            int status = check_source(grammar, table, token_map, source);
             free(source);
             if (status != 0) return status;
             fflush(stdout);
             continue;
         }
 
-        if (check_file(table, token_map, path) != 0) return 1;
+        if (check_file(grammar, table, token_map, path) != 0) return 1;
         fflush(stdout);
     }
     return 0;
@@ -465,7 +606,9 @@ int main(int argc, char **argv) {
     int token_map[TOKEN_KIND_COUNT];
     build_token_map(grammar, token_map);
 
-    int status = stdio ? run_stdio(table, token_map) : check_file(table, token_map, source_path);
+    int status = stdio
+        ? run_stdio(grammar, table, token_map)
+        : check_file(grammar, table, token_map, source_path);
     syntax_free_table(table);
     syntax_free_grammar(grammar);
     return status;
