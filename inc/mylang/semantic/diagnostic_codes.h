@@ -13,6 +13,7 @@
  *   E02xx  return                 (return type)
  *   E03xx  expression type        (assignment / binary / condition)
  *   E04xx  package / import       (reserved for package symbol resolution)
+ *   E05xx  generics               (type parameters / type arguments)
  *   W00xx  warnings               (unreachable statement, ...)
  *
  * When adding a code, keep it inside its category band and update
@@ -35,6 +36,10 @@
 #define SEMCODE_ASSIGNMENT_TYPE_MISMATCH "E0301"
 #define SEMCODE_INVALID_BINARY_OPERANDS "E0302"
 #define SEMCODE_INVALID_CONDITION_TYPE "E0303"
+
+/* E05xx: generics */
+#define SEMCODE_GENERIC_ARG_COUNT_MISMATCH "E0501"
+#define SEMCODE_GENERIC_ARGS_REQUIRED "E0502"
 
 /* W00xx: warnings */
 #define SEMCODE_UNREACHABLE_STATEMENT "W0001"

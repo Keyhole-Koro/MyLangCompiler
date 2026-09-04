@@ -19,11 +19,14 @@ static void print_line_snippet(const char *file, int line, int col) {
     fclose(fp);
 }
 
-void parse_error(const char *msg, Token *head, Token *cur) {
-    fprintf(stderr, "%s:%d:%d: error: %s\n",
+static void parse_error_impl(const char *code, const char *msg, Token *head, Token *cur) {
+    fprintf(stderr, "%s:%d:%d: error%s%s%s: %s\n",
             g_parse_filename ? g_parse_filename : "<input>",
             cur ? cur->line : 0,
             cur ? cur->col : 0,
+            code ? "[" : "",
+            code ? code : "",
+            code ? "]" : "",
             msg);
     if (cur) print_line_snippet(g_parse_filename, cur->line, cur->col);
 
@@ -64,6 +67,14 @@ void parse_error(const char *msg, Token *head, Token *cur) {
                 nexts[1]->value ? nexts[1]->value : "(null)",
                 nexts[1]->line, nexts[1]->col);
     exit(1);
+}
+
+void parse_error(const char *msg, Token *head, Token *cur) {
+    parse_error_impl(NULL, msg, head, cur);
+}
+
+void parse_error_code(const char *code, const char *msg, Token *head, Token *cur) {
+    parse_error_impl(code, msg, head, cur);
 }
 int expect(Token **cur, TokenKind kind) {
     if (*cur && (*cur)->kind == kind) {

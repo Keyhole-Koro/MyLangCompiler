@@ -5,6 +5,9 @@ ASTNode *root;
 StructTable g_struct_table = { NULL, 0 };
 FunctionTable g_func_table = { NULL, 0 };
 TypeTable g_type_table = { NULL, 0 };
+GenericTemplateTable g_generic_template_table = { NULL, 0 };
+int g_generic_decl_depth = 0;
+const char *g_current_generic_function_name = NULL;
 int g_stop_at_arrow = 0;
 int g_unchecked_depth = 0;
 const char g_default_package[] = "main";
@@ -45,6 +48,77 @@ int is_user_typename(const char *name) {
         if (strcmp(g_type_table.typenames[i], name) == 0) return 1;
     }
     return 0;
+}
+
+int typename_scope_mark(void) {
+    return g_type_table.count;
+}
+
+void restore_typenames(int mark) {
+    if (mark < 0 || mark > g_type_table.count) return;
+    for (int i = mark; i < g_type_table.count; i++) {
+        free(g_type_table.typenames[i]);
+    }
+    g_type_table.count = mark;
+    if (mark == 0) {
+        free(g_type_table.typenames);
+        g_type_table.typenames = NULL;
+        return;
+    }
+    g_type_table.typenames = realloc(g_type_table.typenames, sizeof(char *) * mark);
+}
+
+static const char *generic_declaration_name(ASTNode *declaration) {
+    if (!declaration) return NULL;
+    if (declaration->type == AST_FUNDEF) return declaration->fundef.name;
+    if (declaration->type == AST_STRUCT) return declaration->struct_stmt.name;
+    return NULL;
+}
+
+void add_generic_template(ASTNode *declaration) {
+    const char *name = generic_declaration_name(declaration);
+    if (!name) return;
+    ASTNode *existing = declaration->type == AST_STRUCT
+        ? find_generic_type_template(name)
+        : find_generic_function_template(name);
+    if (existing) {
+        fprintf(stderr, "duplicate generic declaration '%s'\n", name);
+        exit(1);
+    }
+    g_generic_template_table.declarations = realloc(
+        g_generic_template_table.declarations,
+        sizeof(ASTNode *) * (g_generic_template_table.count + 1)
+    );
+    g_generic_template_table.declarations[g_generic_template_table.count++] = declaration;
+}
+
+static ASTNode *find_generic_template(const char *name, ASTNodeType declaration_type) {
+    if (!name) return NULL;
+    for (int i = 0; i < g_generic_template_table.count; i++) {
+        ASTNode *declaration = g_generic_template_table.declarations[i];
+        const char *candidate = generic_declaration_name(declaration);
+        if (declaration->type == declaration_type &&
+            candidate && strcmp(candidate, name) == 0)
+            return declaration;
+    }
+    return NULL;
+}
+
+ASTNode *find_generic_type_template(const char *name) {
+    return find_generic_template(name, AST_STRUCT);
+}
+
+ASTNode *find_generic_function_template(const char *name) {
+    return find_generic_template(name, AST_FUNDEF);
+}
+
+ASTNode *generic_template_at(int index) {
+    if (index < 0 || index >= g_generic_template_table.count) return NULL;
+    return g_generic_template_table.declarations[index];
+}
+
+int generic_template_count(void) {
+    return g_generic_template_table.count;
 }
 
 void add_structdef(char *name, ASTNode **members, int member_count) {

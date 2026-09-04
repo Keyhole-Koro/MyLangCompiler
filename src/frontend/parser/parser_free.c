@@ -20,6 +20,7 @@ void free_ast(ASTNode *node) {
         case AST_VAR_DECL:
             free_ast(node->var_decl.var_type);
             free(node->var_decl.name);
+            free(node->var_decl.package);
             if (node->var_decl.init) free_ast(node->var_decl.init);
             break;
         case AST_BORROW:
@@ -30,6 +31,12 @@ void free_ast(ASTNode *node) {
             break;
         case AST_TYPE:
             free_ast(node->type_node.base_type);
+            break;
+        case AST_TYPE_GENERIC:
+            free(node->generic_type.name);
+            for (int i = 0; i < node->generic_type.arg_count; i++)
+                free_ast(node->generic_type.args[i]);
+            free(node->generic_type.args);
             break;
         case AST_TYPE_ARRAY:
             free_ast(node->type_array.element_type);
@@ -98,6 +105,10 @@ void free_ast(ASTNode *node) {
             break;
                 case AST_FUNDEF:            if (node->fundef.ret_type) free_ast(node->fundef.ret_type);
             free(node->fundef.name);
+            free(node->fundef.package);
+            for (int i = 0; i < node->fundef.type_param_count; i++)
+                free(node->fundef.type_params[i]);
+            free(node->fundef.type_params);
             for (int i = 0; i < node->fundef.param_count; i++)
                 free_ast(node->fundef.params[i]);
             free(node->fundef.params);
@@ -105,6 +116,9 @@ void free_ast(ASTNode *node) {
             break;
         case AST_CALL:
             free(node->call.name);
+            for (int i = 0; i < node->call.type_arg_count; i++)
+                free_ast(node->call.type_args[i]);
+            free(node->call.type_args);
             for (int i = 0; i < node->call.arg_count; i++)
                 free_ast(node->call.args[i]);
             free(node->call.args);
@@ -115,6 +129,10 @@ void free_ast(ASTNode *node) {
             break;
         case AST_STRUCT:
             free(node->struct_stmt.name);
+            free(node->struct_stmt.package);
+            for (int i = 0; i < node->struct_stmt.type_param_count; i++)
+                free(node->struct_stmt.type_params[i]);
+            free(node->struct_stmt.type_params);
             for (int i = 0; i < node->struct_stmt.member_count; i++)
                 free_ast(node->struct_stmt.members[i]);
             free(node->struct_stmt.members);

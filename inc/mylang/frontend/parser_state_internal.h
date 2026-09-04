@@ -17,6 +17,11 @@ typedef struct TypeTable {
     int count;
 } TypeTable;
 
+typedef struct GenericTemplateTable {
+    ASTNode **declarations;
+    int count;
+} GenericTemplateTable;
+
 typedef struct StructDef {
     char *name;
     ASTNode **members;
@@ -43,6 +48,9 @@ extern ASTNode *root;
 extern StructTable g_struct_table;
 extern FunctionTable g_func_table;
 extern TypeTable g_type_table;
+extern GenericTemplateTable g_generic_template_table;
+extern int g_generic_decl_depth;
+extern const char *g_current_generic_function_name;
 extern int g_stop_at_arrow;
 extern int g_unchecked_depth;
 extern const char g_default_package[];
@@ -64,6 +72,13 @@ void add_function(ASTNode *fn);
 ASTNode *find_function(const char *name);
 void add_typename(const char *name);
 int is_user_typename(const char *name);
+int typename_scope_mark(void);
+void restore_typenames(int mark);
+void add_generic_template(ASTNode *declaration);
+ASTNode *find_generic_type_template(const char *name);
+ASTNode *find_generic_function_template(const char *name);
+ASTNode *generic_template_at(int index);
+int generic_template_count(void);
 void add_structdef(char *name, ASTNode **members, int member_count);
 StructDef *find_structdef(const char *name);
 void add_enum_constant(const char *name, long value);

@@ -109,9 +109,15 @@ ASTNode *new_case_expr(ASTNode *target, CaseItem *cases, int case_count, ASTNode
 }
 
 ASTNode *new_call(char *name, ASTNode **args, int arg_count) {
+    return new_generic_call(name, NULL, 0, args, arg_count);
+}
+
+ASTNode *new_generic_call(char *name, ASTNode **type_args, int type_arg_count, ASTNode **args, int arg_count) {
     ASTNode *node = calloc(1, sizeof(ASTNode));
     node->type = AST_CALL;
     node->call.name = strdup(name);
+    node->call.type_args = type_args;
+    node->call.type_arg_count = type_arg_count;
     node->call.args = args;
     node->call.arg_count = arg_count;
     return node;

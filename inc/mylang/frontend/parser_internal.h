@@ -9,6 +9,7 @@
 #include "mylang/frontend/lexer.h"
 #include "mylang/ast/AST.h"
 #include "mylang/frontend/parser_state_internal.h"
+#include "mylang/semantic/diagnostic_codes.h"
 
 typedef struct FunAlias FunAlias;
 
@@ -40,10 +41,13 @@ static inline void set_node_range_from_children(ASTNode *node, ASTNode *start, A
 }
 
 void parse_error(const char *msg, Token *head, Token *cur);
+void parse_error_code(const char *code, const char *msg, Token *head, Token *cur);
 int expect(Token **cur, TokenKind kind);
 int is_type(TokenKind kind, Token *cur);
 ASTNode *parse_expr_until_arrow(Token **cur);
 int looks_like_function(Token *cur);
+int looks_like_generic_function(Token *cur);
+Token *generic_function_type_params_start(Token *cur);
 int looks_like_fun_literal(Token *cur);
 
 ASTNode *parse_base_type(Token **cur);
@@ -81,6 +85,9 @@ ASTNode *parse_variable_declaration(Token **cur, int need_semicolon);
 ASTNode *parse_variable_assignment(Token **cur);
 ASTNode *parse_stmt(Token **cur);
 ASTNode *parse_fundef(Token **cur);
+ASTNode *parse_generic_fundef(Token **cur);
+char **parse_type_params(Token **cur, int *out_count, int add_to_scope);
+ASTNode **parse_type_args(Token **cur, int *out_count);
 ASTNode *parse_import(Token **cur);
 ASTNode *parse_toplevel(Token **cur);
 

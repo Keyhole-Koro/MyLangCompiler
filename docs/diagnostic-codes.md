@@ -23,9 +23,10 @@ A code is `<prefix><4 digits>`.
 | `E02xx` | Return | return type |
 | `E03xx` | Expression type | assignment / binary / condition |
 | `E04xx` | Package / import | reserved for package symbol resolution (ISSUE-019) |
+| `E05xx` | Generics | type parameters / type arguments |
 | `W00xx` | Warnings | unreachable statement, ... |
 
-Bands `E05xx` and above are unused and reserved for future categories.
+Bands `E06xx` and above are unused and reserved for future categories.
 
 ## Error codes
 
@@ -39,6 +40,8 @@ Bands `E05xx` and above are unused and reserved for future categories.
 | `E0301` | Expression type | Assignment / initializer type mismatch | assignment or initializer expected / actual mismatch |
 | `E0302` | Expression type | Invalid binary operands | `invalid operands to '+': i32 and char*` |
 | `E0303` | Expression type | Invalid condition type | `condition must be integer-like, pointer, or reference, got ...` |
+| `E0501` | Generics | Type-argument count mismatch | `generic type 'Pair' expects 1 type argument but got 2` |
+| `E0502` | Generics | Generic name used without required type arguments | `generic type 'Pair' requires type arguments` |
 
 ## Warning codes
 

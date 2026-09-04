@@ -4,8 +4,52 @@
 ASTNode *parse_base_type(Token **cur) {
     if (!is_type((*cur)->kind, *cur))
         parse_error("expected type", token_head, *cur);
-    ASTNode *base = new_identifier((*cur)->value);
+    Token *name_tok = *cur;
+    char *name = (*cur)->value;
     *cur = (*cur)->next;
+    ASTNode *generic_declaration = find_generic_type_template(name);
+    if ((*cur)->kind != LT) {
+        if (generic_declaration) {
+            char message[256];
+            snprintf(message, sizeof(message), "generic type '%s' requires type arguments", name);
+            parse_error_code(
+                SEMCODE_GENERIC_ARGS_REQUIRED,
+                message,
+                token_head,
+                name_tok
+            );
+        }
+        return new_identifier(name);
+    }
+
+    int arg_count = 0;
+    ASTNode **args = parse_type_args(cur, &arg_count);
+    ASTNode *base = new_generic_type(name, args, arg_count);
+    set_node_loc_from_tokens(base, name_tok, NULL);
+    if (generic_declaration &&
+        arg_count != generic_declaration->struct_stmt.type_param_count) {
+        char message[256];
+        snprintf(
+            message,
+            sizeof(message),
+            "generic type '%s' expects %d type argument%s but got %d",
+            name,
+            generic_declaration->struct_stmt.type_param_count,
+            generic_declaration->struct_stmt.type_param_count == 1 ? "" : "s",
+            arg_count
+        );
+        parse_error_code(
+            SEMCODE_GENERIC_ARG_COUNT_MISMATCH,
+            message,
+            token_head,
+            name_tok
+        );
+    }
+    if (g_generic_decl_depth == 0) {
+        char message[256];
+        snprintf(message, sizeof(message), "generic type instantiation for '%s' is not implemented yet", name);
+        parse_error(message, token_head, name_tok);
+    }
     return base;
 }
 
@@ -26,9 +70,20 @@ ASTNode *parse_struct(Token **cur) {
         parse_error("expected 'struct'", token_head, *cur);
 
     char *name = NULL;
+    char **type_params = NULL;
+    int type_param_count = 0;
+    int type_scope_mark = -1;
     if ((*cur)->kind == IDENTIFIER) {
         name = strdup((*cur)->value);
         *cur = (*cur)->next;
+    }
+
+    if ((*cur)->kind == LT) {
+        if (!name) parse_error("generic struct requires a name", token_head, *cur);
+        add_typename(name);
+        type_scope_mark = typename_scope_mark();
+        type_params = parse_type_params(cur, &type_param_count, 1);
+        g_generic_decl_depth++;
     }
 
     ASTNode **members = NULL;
@@ -42,17 +97,35 @@ ASTNode *parse_struct(Token **cur) {
             if (!expect(cur, SEMICOLON))
                 parse_error("expected ';' after typedef struct", token_head, *cur);
             add_typename(typedef_name);
+            if (type_param_count > 0)
+                parse_error("generic typedef struct is not supported", token_head, *cur);
             return new_typedef_struct(name ? name : "", members, member_count, typedef_name);
         }
         if (!expect(cur, SEMICOLON))
             parse_error("expected ';' after struct definition", token_head, *cur);
-        if (name) add_typename(name);
-        return new_struct(name ? name : "", members, member_count);
+        if (name && type_param_count == 0) add_typename(name);
+        ASTNode *node = new_struct(name ? name : "", members, member_count);
+        node->struct_stmt.type_params = type_params;
+        node->struct_stmt.type_param_count = type_param_count;
+        if (type_param_count > 0) {
+            g_generic_decl_depth--;
+            restore_typenames(type_scope_mark);
+        }
+        free(name);
+        return node;
     }
     if (!expect(cur, SEMICOLON))
         parse_error("expected ';' after struct declaration", token_head, *cur);
-    if (name) add_typename(name);
-    return new_struct(name ? name : "", NULL, 0);
+    if (name && type_param_count == 0) add_typename(name);
+    ASTNode *node = new_struct(name ? name : "", NULL, 0);
+    node->struct_stmt.type_params = type_params;
+    node->struct_stmt.type_param_count = type_param_count;
+    if (type_param_count > 0) {
+        g_generic_decl_depth--;
+        restore_typenames(type_scope_mark);
+    }
+    free(name);
+    return node;
 }
 
 ASTNode *parse_enum(Token **cur) {
