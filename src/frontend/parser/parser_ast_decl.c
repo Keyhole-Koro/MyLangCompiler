@@ -83,6 +83,15 @@ ASTNode *new_type_node(ASTNode *base_type, int pointer_level, int modifiers, int
     return node;
 }
 
+ASTNode *new_generic_type(char *name, ASTNode **args, int arg_count) {
+    ASTNode *node = calloc(1, sizeof(ASTNode));
+    node->type = AST_TYPE_GENERIC;
+    node->generic_type.name = strdup(name);
+    node->generic_type.args = args;
+    node->generic_type.arg_count = arg_count;
+    return node;
+}
+
 ASTNode *new_typedef(ASTNode *src_type, char *alias) {
     ASTNode *node = calloc(1, sizeof(ASTNode));
     node->type = AST_TYPEDEF;
@@ -107,6 +116,8 @@ ASTNode *new_struct(char *name, ASTNode **members, int member_count) {
     node->struct_stmt.name = strdup(name);
     node->struct_stmt.members = members;
     node->struct_stmt.member_count = member_count;
+    node->struct_stmt.is_exported = 0;
+    node->struct_stmt.package = NULL;
     return node;
 }
 

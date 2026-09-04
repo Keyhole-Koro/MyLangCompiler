@@ -6,6 +6,7 @@ char *astType2str(ASTNodeType type) {
         case AST_IDENTIFIER: return "AST_IDENTIFIER";
         case AST_BINARY: return "AST_BINARY";
         case AST_TYPE: return "AST_TYPE";
+        case AST_TYPE_GENERIC: return "AST_TYPE_GENERIC";
         case AST_TYPE_ARRAY: return "AST_TYPE_ARRAY";
         case AST_VAR_DECL: return "AST_VAR_DECL";
         case AST_BORROW: return "AST_BORROW";

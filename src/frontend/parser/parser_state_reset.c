@@ -8,6 +8,15 @@ void parser_set_filename(const char *name) {
 }
 
 void parser_reset(void) {
+    if (g_generic_template_table.declarations) {
+        for (int i = 0; i < g_generic_template_table.count; i++) {
+            free_ast(g_generic_template_table.declarations[i]);
+        }
+        free(g_generic_template_table.declarations);
+        g_generic_template_table.declarations = NULL;
+        g_generic_template_table.count = 0;
+    }
+
     if (g_func_table.funcs) {
         free(g_func_table.funcs);
         g_func_table.funcs = NULL;
@@ -80,5 +89,7 @@ void parser_reset(void) {
     root = NULL;
     g_stop_at_arrow = 0;
     g_unchecked_depth = 0;
+    g_generic_decl_depth = 0;
+    g_current_generic_function_name = NULL;
     g_parse_filename = NULL;
 }

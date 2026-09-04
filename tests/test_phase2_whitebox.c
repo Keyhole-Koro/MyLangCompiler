@@ -233,6 +233,100 @@ static void test_case_expr_ast(void) {
     parser_reset();
 }
 
+static void test_generic_declaration_ast(void) {
+    Token *tokens = NULL;
+    ASTNode *root = parse_source(
+        "struct Pair<T, U> { T first; U second; }; "
+        "Pair<T, T> make_pair<T>(T value) { Pair<T, T> result; return result; } "
+        "i32 main() { return 0; }",
+        &tokens
+    );
+
+    assert(root->type == AST_BLOCK);
+    assert(root->block.count == 1);
+    assert(root->block.stmts[0]->type == AST_FUNDEF);
+    assert(strcmp(root->block.stmts[0]->fundef.name, "main") == 0);
+
+    assert(generic_template_count() == 2);
+    ASTNode *pair = generic_template_at(0);
+    assert(pair && pair->type == AST_STRUCT);
+    assert(strcmp(pair->struct_stmt.name, "Pair") == 0);
+    assert(pair->struct_stmt.type_param_count == 2);
+    assert(strcmp(pair->struct_stmt.type_params[0], "T") == 0);
+    assert(strcmp(pair->struct_stmt.type_params[1], "U") == 0);
+    assert(pair->struct_stmt.member_count == 2);
+    assert(pair->struct_stmt.members[0]->var_decl.var_type->type == AST_TYPE);
+    assert(strcmp(
+        pair->struct_stmt.members[0]->var_decl.var_type->type_node.base_type->identifier.name,
+        "T"
+    ) == 0);
+
+    ASTNode *make_pair = generic_template_at(1);
+    assert(make_pair && make_pair->type == AST_FUNDEF);
+    assert(strcmp(make_pair->fundef.name, "make_pair") == 0);
+    assert(make_pair->fundef.type_param_count == 1);
+    assert(strcmp(make_pair->fundef.type_params[0], "T") == 0);
+    assert(make_pair->fundef.ret_type->type == AST_TYPE);
+    ASTNode *ret_base = make_pair->fundef.ret_type->type_node.base_type;
+    assert(ret_base->type == AST_TYPE_GENERIC);
+    assert(strcmp(ret_base->generic_type.name, "Pair") == 0);
+    assert(ret_base->generic_type.arg_count == 2);
+    assert(!is_user_typename("T"));
+    assert(is_user_typename("Pair"));
+
+    free_ast(root);
+    free_tokens(tokens);
+    parser_reset();
+}
+
+static void test_generic_call_ast_inside_template(void) {
+    Token *tokens = NULL;
+    ASTNode *root = parse_source(
+        "T identity<T>(T value) { return identity<T>(value); } "
+        "i32 main() { return 0; }",
+        &tokens
+    );
+
+    assert(generic_template_count() == 1);
+    ASTNode *identity = generic_template_at(0);
+    ASTNode *ret = identity->fundef.body->block.stmts[0];
+    assert(ret->type == AST_RETURN);
+    assert(ret->ret.expr->type == AST_CALL);
+    assert(ret->ret.expr->call.type_arg_count == 1);
+    assert(ret->ret.expr->call.type_args[0]->type == AST_TYPE);
+
+    free_ast(root);
+    free_tokens(tokens);
+    parser_reset();
+}
+
+static void test_nested_generic_type_ast(void) {
+    Token *tokens = NULL;
+    ASTNode *root = parse_source(
+        "struct Pair<T> { T value; }; "
+        "struct Wrapper<T> { T value; }; "
+        "Wrapper<Pair<T>> wrap<T>(T value) { Wrapper<Pair<T>> result; return result; } "
+        "i32 main() { return 0; }",
+        &tokens
+    );
+
+    assert(generic_template_count() == 3);
+    ASTNode *wrap = generic_template_at(2);
+    ASTNode *outer = wrap->fundef.ret_type->type_node.base_type;
+    assert(outer->type == AST_TYPE_GENERIC);
+    assert(strcmp(outer->generic_type.name, "Wrapper") == 0);
+    assert(outer->generic_type.arg_count == 1);
+    ASTNode *inner_type = outer->generic_type.args[0];
+    assert(inner_type->type == AST_TYPE);
+    ASTNode *inner = inner_type->type_node.base_type;
+    assert(inner->type == AST_TYPE_GENERIC);
+    assert(strcmp(inner->generic_type.name, "Pair") == 0);
+
+    free_ast(root);
+    free_tokens(tokens);
+    parser_reset();
+}
+
 int main(void) {
     test_ref_borrow_ast();
     test_ref_mut_ast();
@@ -241,6 +335,9 @@ int main(void) {
     test_ref_param_ast();
     test_loop_control_ast();
     test_case_expr_ast();
+    test_generic_declaration_ast();
+    test_generic_call_ast_inside_template();
+    test_nested_generic_type_ast();
     printf("phase2 whitebox tests passed\n");
     return 0;
 }

@@ -78,6 +78,11 @@ ASTNode* parse_fundef(Token **cur) {
     Token *name_tok = *cur;
     char *name = name_tok->value;
     *cur = (*cur)->next;
+    char **type_params = NULL;
+    int type_param_count = 0;
+    if ((*cur)->kind == LT) {
+        type_params = parse_type_params(cur, &type_param_count, 0);
+    }
     if (!expect(cur, L_PARENTHESES)) parse_error("expected '(' after function name", token_head, *cur);
 
     int param_count = 0;
@@ -92,14 +97,18 @@ ASTNode* parse_fundef(Token **cur) {
         *cur = (*cur)->next;
         // For now, treat declarations as fundefs with no body
         ASTNode *fndef = new_fundef(ret_type, name, params, param_count, NULL, is_variadic);
+        fndef->fundef.type_params = type_params;
+        fndef->fundef.type_param_count = type_param_count;
         set_node_loc_from_tokens(fndef, start, name_tok);
-        add_function(fndef);
+        if (type_param_count == 0) add_function(fndef);
         return fndef;
     }
 
     ASTNode *body = parse_block(cur);
     ASTNode *fndef = new_fundef(ret_type, name, params, param_count, body, is_variadic);
+    fndef->fundef.type_params = type_params;
+    fndef->fundef.type_param_count = type_param_count;
     set_node_loc_from_tokens(fndef, start, name_tok);
-    add_function(fndef);
+    if (type_param_count == 0) add_function(fndef);
     return fndef;
 }
