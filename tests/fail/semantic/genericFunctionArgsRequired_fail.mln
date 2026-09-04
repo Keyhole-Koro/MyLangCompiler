@@ -1,0 +1,7 @@
+T identity<T>(T value) {
+    return value;
+}
+
+i32 main() {
+    return identity(1);
+}

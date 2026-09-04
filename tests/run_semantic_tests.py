@@ -43,6 +43,36 @@ WARN_CASES = {
 }
 
 FAIL_CASES = {
+    "genericTypeArgCountMismatch_fail": (
+        "fail/semantic/genericTypeArgCountMismatch_fail.mln",
+        "error[E0501]: generic type 'Box' expects 1 type argument but got 2",
+        None,
+    ),
+    "genericFunctionArgsRequired_fail": (
+        "fail/semantic/genericFunctionArgsRequired_fail.mln",
+        "error[E0502]: generic function 'identity' requires type arguments",
+        None,
+    ),
+    "genericDuplicateTypeParam_fail": (
+        "fail/semantic/genericDuplicateTypeParam_fail.mln",
+        "duplicate type parameter",
+        None,
+    ),
+    "genericEmptyTypeParams_fail": (
+        "fail/semantic/genericEmptyTypeParams_fail.mln",
+        "generic declaration requires at least one type parameter",
+        None,
+    ),
+    "genericTrailingTypeParamComma_fail": (
+        "fail/semantic/genericTrailingTypeParamComma_fail.mln",
+        "trailing comma in type parameter list",
+        None,
+    ),
+    "genericTrailingTypeArgComma_fail": (
+        "fail/semantic/genericTrailingTypeArgComma_fail.mln",
+        "trailing comma in type argument list",
+        None,
+    ),
     "genericArgsRequired_fail": (
         "fail/semantic/genericArgsRequired_fail.mln",
         "error[E0502]: generic type 'Box' requires type arguments",

@@ -327,6 +327,74 @@ static void test_nested_generic_type_ast(void) {
     parser_reset();
 }
 
+static void test_generic_prototype_ast(void) {
+    Token *tokens = NULL;
+    ASTNode *root = parse_source(
+        "T identity<T>(T value); i32 main() { return 0; }",
+        &tokens
+    );
+
+    assert(generic_template_count() == 1);
+    ASTNode *identity = find_generic_function_template("identity");
+    assert(identity && identity->type == AST_FUNDEF);
+    assert(identity->fundef.body == NULL);
+    assert(identity->fundef.type_param_count == 1);
+    assert(identity->fundef.param_count == 1);
+
+    free_ast(root);
+    free_tokens(tokens);
+    parser_reset();
+}
+
+static void test_exported_generic_metadata_and_namespaces(void) {
+    Token *tokens = NULL;
+    ASTNode *root = parse_source(
+        "package collections; "
+        "export struct Factory<T> { T value; }; "
+        "export T Factory<T>(T value) { return value; } "
+        "i32 main() { return 0; }",
+        &tokens
+    );
+
+    assert(generic_template_count() == 2);
+    ASTNode *type_template = find_generic_type_template("Factory");
+    ASTNode *function_template = find_generic_function_template("Factory");
+    assert(type_template && type_template->type == AST_STRUCT);
+    assert(function_template && function_template->type == AST_FUNDEF);
+    assert(type_template != function_template);
+    assert(type_template->struct_stmt.is_exported == 1);
+    assert(strcmp(type_template->struct_stmt.package, "collections") == 0);
+    assert(function_template->fundef.is_exported == 1);
+    assert(strcmp(function_template->fundef.package, "collections") == 0);
+    assert(strcmp(type_template->struct_stmt.name, "Factory") == 0);
+    assert(strcmp(function_template->fundef.name, "Factory") == 0);
+
+    free_ast(root);
+    free_tokens(tokens);
+    parser_reset();
+}
+
+static void test_generic_state_reset(void) {
+    Token *tokens = NULL;
+    ASTNode *root = parse_source(
+        "struct Box<T> { T value; }; i32 main() { return 0; }",
+        &tokens
+    );
+
+    assert(generic_template_count() == 1);
+    assert(find_generic_type_template("Box") != NULL);
+    assert(is_user_typename("Box"));
+
+    free_ast(root);
+    free_tokens(tokens);
+    parser_reset();
+
+    assert(generic_template_count() == 0);
+    assert(find_generic_type_template("Box") == NULL);
+    assert(!is_user_typename("Box"));
+    assert(!is_user_typename("T"));
+}
+
 int main(void) {
     test_ref_borrow_ast();
     test_ref_mut_ast();
@@ -338,6 +406,9 @@ int main(void) {
     test_generic_declaration_ast();
     test_generic_call_ast_inside_template();
     test_nested_generic_type_ast();
+    test_generic_prototype_ast();
+    test_exported_generic_metadata_and_namespaces();
+    test_generic_state_reset();
     printf("phase2 whitebox tests passed\n");
     return 0;
 }
