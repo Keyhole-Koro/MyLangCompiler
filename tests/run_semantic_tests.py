@@ -10,6 +10,7 @@ TESTS_DIR = REPO_ROOT / "tests"
 MLC_PATH = REPO_ROOT / "mlc"
 
 PASS_CASES = {
+    "genericDeclarations": "succeed/semantic/genericDeclarations.mln",
     "phase1_simpleFunc": "succeed/semantic/phase1_simpleFunc.mln",
     "phase1_simpleStruct": "succeed/semantic/phase1_simpleStruct.mln",
     "phase1_testTernary": "succeed/semantic/phase1_testTernary.mln",
@@ -42,6 +43,56 @@ WARN_CASES = {
 }
 
 FAIL_CASES = {
+    "genericTypeArgCountMismatch_fail": (
+        "fail/semantic/genericTypeArgCountMismatch_fail.mln",
+        "error[E0501]: generic type 'Box' expects 1 type argument but got 2",
+        None,
+    ),
+    "genericFunctionArgsRequired_fail": (
+        "fail/semantic/genericFunctionArgsRequired_fail.mln",
+        "error[E0502]: generic function 'identity' requires type arguments",
+        None,
+    ),
+    "genericDuplicateTypeParam_fail": (
+        "fail/semantic/genericDuplicateTypeParam_fail.mln",
+        "duplicate type parameter",
+        None,
+    ),
+    "genericEmptyTypeParams_fail": (
+        "fail/semantic/genericEmptyTypeParams_fail.mln",
+        "generic declaration requires at least one type parameter",
+        None,
+    ),
+    "genericTrailingTypeParamComma_fail": (
+        "fail/semantic/genericTrailingTypeParamComma_fail.mln",
+        "trailing comma in type parameter list",
+        None,
+    ),
+    "genericTrailingTypeArgComma_fail": (
+        "fail/semantic/genericTrailingTypeArgComma_fail.mln",
+        "trailing comma in type argument list",
+        None,
+    ),
+    "genericArgsRequired_fail": (
+        "fail/semantic/genericArgsRequired_fail.mln",
+        "error[E0502]: generic type 'Box' requires type arguments",
+        None,
+    ),
+    "genericArgCountMismatch_fail": (
+        "fail/semantic/genericArgCountMismatch_fail.mln",
+        "error[E0501]: generic function 'identity' expects 1 type argument but got 2",
+        None,
+    ),
+    "genericTypeUseNotImplemented_fail": (
+        "fail/semantic/genericTypeUseNotImplemented_fail.mln",
+        "generic type instantiation for 'Box' is not implemented yet",
+        None,
+    ),
+    "genericFunctionUseNotImplemented_fail": (
+        "fail/semantic/genericFunctionUseNotImplemented_fail.mln",
+        "generic function instantiation for 'identity' is not implemented yet",
+        None,
+    ),
     "phase3_useAfterMove_fail": (
         "fail/semantic/phase3_useAfterMove_fail.mln",
         "use of moved value 'a'",

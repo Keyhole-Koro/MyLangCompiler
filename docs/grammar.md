@@ -31,7 +31,8 @@ MyLang uses a package-based module system.
 ## 3. Declarations and Definitions
 
 ### Functions
-- `fundef` -> `type IDENTIFIER ( param_list ) ( block | ; )`
+- `fundef` -> `type IDENTIFIER type_params? ( param_list ) ( block | ; )`
+- `type_params` -> `< IDENTIFIER ( , IDENTIFIER )* >`
 - `param_list` -> `( param ( , param )* ( , rest_param )? )?`
 - `param` -> `mut? type IDENTIFIER ( [ NUMBER? ] )*`
 - `rest_param` -> `rest IDENTIFIER`
@@ -41,13 +42,14 @@ MyLang uses a package-based module system.
 - `init_list` -> `{ expr ( , expr )* ,? }`
 
 ### Types and Enumerations
-- `struct_decl` -> `struct IDENTIFIER? { var_decl* } (IDENTIFIER)? ;`
+- `struct_decl` -> `struct IDENTIFIER? { var_decl* } IDENTIFIER? ;` | `struct IDENTIFIER type_params { var_decl* } ;`
 - `enum_decl` -> `enum IDENTIFIER { IDENTIFIER ( = NUMBER )? ( , IDENTIFIER ( = NUMBER )? )* ,? } ;`
 - `typedef_stmt` -> `typedef type IDENTIFIER ;` | `typedef struct ... IDENTIFIER ;`
 
 ## 4. Type System
 - `type` -> `const* ( ref mut? )? base_type ( * )*`
-- `base_type` -> `primitive_type` | `IDENTIFIER`
+- `base_type` -> `primitive_type` | `IDENTIFIER type_args?`
+- `type_args` -> `< type ( , type )* >`
 - `primitive_type` -> `u8` | `u16` | `i32` | `u32` | `bool` | `char` | `float` | `double` | `void` | `long` | `short`
 
 ## 5. Statements
@@ -83,7 +85,7 @@ Expressions are listed in order of decreasing precedence.
 | 11 | `+`, `-` | Addition / Subtraction |
 | 12 | `*`, `/`, `%` | Multiplication / Division / Modulo |
 | 13 | `!`, `~`, `-`, `*`, `&`, `++`, `--`, `(type)`, `sizeof` | Unary operators |
-| 14 | `++`, `--`, `.`, `->`, `(args)` | Postfix operators / Function call |
+| 14 | `++`, `--`, `.`, `->`, `(args)`, `type_args (args)` | Postfix operators / Function call |
 | 15 | `( expr )`, literals, `IDENTIFIER`, `case`, lambdas | Primary expressions |
 
 ### Special Expressions

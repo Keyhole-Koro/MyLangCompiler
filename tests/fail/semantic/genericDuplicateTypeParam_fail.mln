@@ -1,0 +1,8 @@
+struct Pair<T, T> {
+    T first;
+    T second;
+};
+
+i32 main() {
+    return 0;
+}

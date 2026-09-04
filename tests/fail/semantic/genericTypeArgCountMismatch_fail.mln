@@ -1,0 +1,8 @@
+struct Box<T> {
+    T value;
+};
+
+i32 main() {
+    Box<i32, u8> box;
+    return 0;
+}

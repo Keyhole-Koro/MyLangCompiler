@@ -1,0 +1,13 @@
+struct Pair<T, U> {
+    T first;
+    U second;
+};
+
+Pair<T, T> make_pair<T>(T value) {
+    Pair<T, T> result;
+    return result;
+}
+
+i32 main() {
+    return 0;
+}

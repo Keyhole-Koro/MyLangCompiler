@@ -147,8 +147,27 @@ ASTNode* parse_toplevel(Token **cur) {
 
     if ((*cur)->kind == IMPORT) return parse_import(cur);
     if ((*cur)->kind == TYPEDEF) return parse_typedef(cur);
-    if ((*cur)->kind == STRUCT) return parse_struct(cur);
+    if ((*cur)->kind == STRUCT) {
+        ASTNode *declaration = parse_struct(cur);
+        if (declaration && declaration->type == AST_STRUCT && declaration->struct_stmt.type_param_count > 0) {
+            declaration->struct_stmt.is_exported = want_export;
+            if (want_export) declaration->struct_stmt.package = strdup(g_current_package);
+            add_generic_template(declaration);
+            return NULL;
+        }
+        return declaration;
+    }
     if ((*cur)->kind == ENUM) return parse_enum(cur);
+    if (looks_like_generic_function(*cur)) {
+        ASTNode *fn = parse_generic_fundef(cur);
+        if (fn && fn->fundef.type_param_count > 0) {
+            fn->fundef.is_exported = want_export;
+            if (want_export) fn->fundef.package = strdup(g_current_package);
+            add_generic_template(fn);
+            return NULL;
+        }
+        parse_error("generic function must declare type parameters", token_head, *cur);
+    }
     if (is_type((*cur)->kind, *cur)) {
         if (looks_like_function(*cur)) {
             ASTNode *fn = parse_fundef(cur);
