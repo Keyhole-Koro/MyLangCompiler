@@ -7,11 +7,12 @@
 #include <stdlib.h>
 #include <string.h>
 
-ModuleLoader *module_loader_create(ModuleGraph *graph) {
-    if (!graph) return NULL;
+ModuleLoader *module_loader_create(ModuleGraph *graph, FrontendSession *session) {
+    if (!graph || !session) return NULL;
     ModuleLoader *loader = calloc(1, sizeof(ModuleLoader));
     if (!loader) return NULL;
     loader->graph = graph;
+    loader->session = session;
     return loader;
 }
 
@@ -170,6 +171,7 @@ Module *module_loader_load(ModuleLoader *loader, const char *importer_path, cons
     ParserContext ctx;
     parser_context_init(&ctx);
     ctx.module.filename = module->canonical_path; /* borrowed */
+    ctx.session = loader->session;
 
     Token *cur = tokens;
     ASTNode *program = parse_program_syntax(&ctx, &cur);

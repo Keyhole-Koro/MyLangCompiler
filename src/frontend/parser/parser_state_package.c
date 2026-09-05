@@ -29,29 +29,6 @@ int is_imported_package(ParserContext *context, const char *name) {
     return 0;
 }
 
-int parser_name_has_imported_package_prefix(const char *name) {
-    ParserContext *context = parser_context_current();
-    if (!name) return 0;
-    for (int i = 0; i < context->module.imported_package_count; i++) {
-        const char *package = context->module.imported_packages[i];
-        size_t length = package ? strlen(package) : 0;
-        if (length > 0 && strncmp(name, package, length) == 0 && name[length] == '_')
-            return 1;
-    }
-    return 0;
-}
-
-int parser_get_imported_package_count(void) {
-    ParserContext *context = parser_context_current();
-    return context ? context->module.imported_package_count : 0;
-}
-
-const char *parser_get_imported_package(int index) {
-    ParserContext *context = parser_context_current();
-    if (!context || index < 0 || index >= context->module.imported_package_count) return NULL;
-    return context->module.imported_packages[index];
-}
-
 char *mangle(const char *pkg, const char *name) {
     size_t len = strlen(pkg) + 1 + strlen(name) + 1;
     char *buf = malloc(len);

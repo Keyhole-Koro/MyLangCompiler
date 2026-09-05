@@ -32,7 +32,7 @@ int dom_signature_lookup(ParserContext *context, ASTNode *program,
     if (!program || program->type != AST_BLOCK) return 0;
 
     /* 2. Check imported modules via module loader and resolver */
-    FrontendSession *session = frontend_session_current();
+    FrontendSession *session = context->session;
     if (!session || !session->loader) return 0;
 
     for (int i = 0; i < program->block.count; i++) {

@@ -1,9 +1,11 @@
 #include "mylang/backend/codegen_internal.h"
+#include "mylang/frontend/module.h"
 
-char *codegen(ASTNode *root)
+char *codegen_with_session(ASTNode *root, FrontendSession *session)
 {
     CompilerContext ctx = {0};
     CompilerContext *cc = &ctx;
+    cc->session = session;
     ASTNode *block = cg_as_block(root);
     StringBuilder sb;
     sb_init(&sb);
@@ -30,4 +32,8 @@ char *codegen(ASTNode *root)
     cleanup_codegen_context(cc);
     sb_free(&sb);
     return result;
+}
+
+char *codegen(ASTNode *root) {
+    return codegen_with_session(root, frontend_session_current());
 }

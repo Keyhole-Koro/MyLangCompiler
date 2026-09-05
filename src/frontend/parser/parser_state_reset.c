@@ -10,7 +10,7 @@ void parser_set_filename(const char *name) {
 }
 
 void parser_reset(void) {
-    frontend_session_destroy(frontend_session_current());
+    frontend_session_destroy_implicit_current();
     parser_context_reset(parser_context_current());
 }
 
@@ -93,6 +93,8 @@ void parser_context_reset(ParserContext *context) {
     context->module.current_package_heap = 0;
 
     context->token_head = NULL;
+    context->session = NULL;
+    context->is_root_module = 0;
     context->control.stop_at_arrow = 0;
     context->control.unchecked_depth = 0;
     context->control.generic_decl_depth = 0;

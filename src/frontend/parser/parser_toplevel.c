@@ -11,7 +11,7 @@
 static int import_path_declares_package(ParserContext *context, const char *rel_path,
                                         const char *pkg) {
     if (!rel_path || !pkg || !module_loader_is_mylang_source(rel_path)) return 0;
-    FrontendSession *session = frontend_session_current();
+    FrontendSession *session = context->session;
     if (!session || !session->loader) return 0;
 
     Module *mod = module_loader_load(session->loader, context->module.filename, rel_path);
@@ -23,6 +23,15 @@ static ASTNode *make_import_node_with_templates(ParserContext *context, char *pa
                                                 char **symbols, int count) {
     ASTNode *node = new_import_stmt(path, symbols, count);
     if (!module_loader_is_mylang_source(path)) return node;
+
+    if (!context->session || !context->session->loader) {
+        parse_error(context, "missing frontend session while loading import", context->token_head);
+    }
+    Module *module = module_loader_load(context->session->loader,
+                                        context->module.filename, path);
+    if (!module || module->state == MODULE_FAILED) {
+        parse_error(context, "failed to load imported MyLang module", context->token_head);
+    }
     load_imported_generic_templates(context, node, path);
     return node;
 }
@@ -33,6 +42,9 @@ ASTNode *parse_import(ParserContext *context, Token **cur) {
     if ((*cur)->kind == IDENTIFIER && (*cur)->next && (*cur)->next->kind == SEMICOLON) {
         context->module.imported_packages = realloc(context->module.imported_packages, sizeof(char*) * (context->module.imported_package_count + 1));
         context->module.imported_packages[context->module.imported_package_count++] = strdup((*cur)->value);
+        if (context->is_root_module) {
+            frontend_session_add_root_imported_package(context->session, (*cur)->value);
+        }
         *cur = (*cur)->next;
         expect(cur, SEMICOLON);
         return NULL;
@@ -55,6 +67,9 @@ ASTNode *parse_import(ParserContext *context, Token **cur) {
         if (import_path_declares_package(context, path, ident)) {
             context->module.imported_packages = realloc(context->module.imported_packages, sizeof(char*) * (context->module.imported_package_count + 1));
             context->module.imported_packages[context->module.imported_package_count++] = ident;
+            if (context->is_root_module) {
+                frontend_session_add_root_imported_package(context->session, ident);
+            }
             char **symbols = NULL;
             return make_import_node_with_templates(context, path, symbols, 0);
         }
@@ -143,10 +158,11 @@ ASTNode* parse_toplevel(ParserContext *context, Token **cur) {
             if (fn && want_export) {
                 fn->fundef.is_exported = 1;
                 fn->fundef.package = strdup(context->module.current_package);
-                const char *m = mangle(context->module.current_package, fn->fundef.name);
+                char *m = mangle(context->module.current_package, fn->fundef.name);
                 add_export(context, fn->fundef.name, m);
                 free(fn->fundef.name);
                 fn->fundef.name = strdup(m);
+                free(m);
             }
             return fn;
         }
@@ -154,10 +170,11 @@ ASTNode* parse_toplevel(ParserContext *context, Token **cur) {
         if (vd && want_export) {
             vd->var_decl.is_exported = 1;
             vd->var_decl.package = strdup(context->module.current_package);
-            const char *m = mangle(context->module.current_package, vd->var_decl.name);
+            char *m = mangle(context->module.current_package, vd->var_decl.name);
             add_export(context, vd->var_decl.name, m);
             free(vd->var_decl.name);
             vd->var_decl.name = strdup(m);
+            free(m);
         }
         return vd;
     }

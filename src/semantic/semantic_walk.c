@@ -190,7 +190,7 @@ static void semantic_collect_function_sigs(SemanticContext *ctx, ASTNode *node) 
         break;
     case AST_IMPORT:
         if (node->import_stmt.path && module_loader_is_mylang_source(node->import_stmt.path)) {
-            FrontendSession *session = frontend_session_current();
+            FrontendSession *session = ctx->session;
             if (session && session->loader) {
                 Module *mod = module_loader_load(session->loader, ctx->filename, node->import_stmt.path);
                 if (mod) {
