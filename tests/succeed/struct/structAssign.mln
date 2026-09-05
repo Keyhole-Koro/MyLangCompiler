@@ -1,0 +1,67 @@
+// Whole-struct assignment copies every member.
+//
+// `b = a;` used to emit a single store, so b kept its own value for every
+// member after the first and the compiler said nothing. Each case here would
+// have returned a wrong answer rather than failing to build.
+
+typedef struct { i32 x; i32 y; } P;
+typedef struct { i32 a; i32 b; i32 c; } T;
+
+// Two words, the smallest aggregate that a single store gets wrong.
+i32 pair_copy() {
+    P a; a.x = 3; a.y = 4;
+    P b; b.x = 0; b.y = 0;
+    b = a;
+    return b.x + b.y;               // 7
+}
+
+// Three words, to catch a copy that stops after two.
+i32 triple_copy() {
+    T s; s.a = 1; s.b = 20; s.c = 300;
+    T d; d.a = 0; d.b = 0; d.c = 0;
+    d = s;
+    return d.a + d.b + d.c;         // 321
+}
+
+// The copy must not run backwards into the source.
+i32 source_survives() {
+    P a; a.x = 5; a.y = 6;
+    P b; b.x = 9; b.y = 9;
+    b = a;
+    return a.x + a.y + b.x + b.y;   // 22
+}
+
+// Through a pointer on either side.
+i32 via_pointer() {
+    P a; a.x = 7; a.y = 8;
+    P b; b.x = 0; b.y = 0;
+    P *pb = &b;
+    *pb = a;
+    return b.x + b.y;               // 15
+}
+
+i32 from_pointer() {
+    P a; a.x = 2; a.y = 3;
+    P b; b.x = 0; b.y = 0;
+    P *pa = &a;
+    b = *pa;
+    return b.x + b.y;               // 5
+}
+
+// A scalar assignment still takes the single-store path.
+i32 scalar_still_works() {
+    i32 v = 0;
+    v = 11;
+    return v;                       // 11
+}
+
+i32 main() {
+    i32 total = 0;
+    total = total + pair_copy();          // 7
+    total = total + triple_copy();        // 328
+    total = total + source_survives();    // 350
+    total = total + via_pointer();        // 365
+    total = total + from_pointer();       // 370
+    total = total + scalar_still_works(); // 381
+    return total;                         // 381
+}
