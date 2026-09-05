@@ -79,9 +79,17 @@ Nodes are represented by the `ASTNode` struct, which contains a union of specifi
 
 ### AST_CASE
 - `case_expr.target`: `ASTNode*`
-- `case_expr.cases`: `CaseItem*` (Array of key-expression pairs)
+- `case_expr.cases`: `CaseItem*` (Array of pattern-expression pairs)
 - `case_expr.case_count`: `int`
-- `case_expr.default_expr`: `ASTNode*` (Optional)
+
+A wildcard pattern is represented as a normal `CaseItem`; there is no separate
+default-expression field in the pattern-based form.
+
+### CasePattern
+- `kind`: wildcard, literal, zero-payload variant, or single-payload variant
+- `variant_name`: Variant name for variant patterns
+- `binding_name`: Arm-local binding name for `Variant(identifier)` patterns
+- `literal`: Literal value for literal patterns
 
 ### AST_STMT_EXPR (`( { ... } )`)
 - `stmt_expr.block`: `ASTNode*` (A block node)
