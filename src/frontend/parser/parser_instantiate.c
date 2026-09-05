@@ -79,7 +79,9 @@ static const char *instantiate(Instantiation *ctx, ASTNode *use, const char *nam
     ParserContext *context = ctx->parser_context;
     ASTNode *tpl = is_function ? find_generic_function_template(context, name) : find_generic_type_template(context, name);
     if (!tpl) generic_error(context, use, "generic declaration is not available in this module");
-    int expected = is_function ? tpl->fundef.type_param_count : tpl->struct_stmt.type_param_count;
+    int is_enum = !is_function && tpl->type == AST_ENUM;
+    int expected = is_function ? tpl->fundef.type_param_count :
+                   is_enum ? tpl->enum_stmt.type_param_count : tpl->struct_stmt.type_param_count;
     if (count != expected) generic_error(context, use, "generic type argument count mismatch");
     if (is_function && !tpl->fundef.body)
         generic_error(context, use,
@@ -102,12 +104,14 @@ static const char *instantiate(Instantiation *ctx, ASTNode *use, const char *nam
     ASTNode *decl = ast_clone(tpl);
     Substitution sub = {
         context,
-        is_function ? tpl->fundef.type_params : tpl->struct_stmt.type_params,
+        is_function ? tpl->fundef.type_params :
+        is_enum ? tpl->enum_stmt.type_params : tpl->struct_stmt.type_params,
         args,
         count,
     };
     substitute(&decl, &sub);
-    char **params = is_function ? decl->fundef.type_params : decl->struct_stmt.type_params;
+    char **params = is_function ? decl->fundef.type_params :
+                    is_enum ? decl->enum_stmt.type_params : decl->struct_stmt.type_params;
     for (int i = 0; i < count; i++) free(params[i]);
     free(params);
     char *concrete_name = key.buf;
@@ -117,6 +121,12 @@ static const char *instantiate(Instantiation *ctx, ASTNode *use, const char *nam
         decl->fundef.type_params = NULL;
         decl->fundef.type_param_count = 0;
         decl->fundef.is_exported = 0;
+    } else if (is_enum) {
+        free(decl->enum_stmt.name);
+        decl->enum_stmt.name = strdup(concrete_name);
+        decl->enum_stmt.type_params = NULL;
+        decl->enum_stmt.type_param_count = 0;
+        decl->enum_stmt.is_exported = 0;
     } else {
         free(decl->struct_stmt.name);
         decl->struct_stmt.name = strdup(concrete_name);
@@ -132,6 +142,36 @@ static const char *instantiate(Instantiation *ctx, ASTNode *use, const char *nam
     ctx->depth--;
     if (is_function) add_function(context, decl);
     return concrete_name;
+}
+
+/* The backend already has complete struct layout support. Until payload enum
+ * constructors and aggregate return ABI arrive, represent every payload enum
+ * as its explicit tag plus one storage field per variant. This keeps generic
+ * specialization concrete and gives the later constructor/pattern lowering a
+ * stable layout to target. */
+static ASTNode *lower_payload_enum(ASTNode *node) {
+    if (!node || node->type != AST_ENUM || !node->enum_stmt.has_payloads) return node;
+
+    int member_count = node->enum_stmt.member_count;
+    ASTNode **members = calloc((size_t)member_count + 1, sizeof(ASTNode *));
+    members[0] = new_var_decl(new_type_node(new_identifier("i32"), 0,
+                                             TYPEMOD_NONE, REFKIND_NONE),
+                              "__tag", NULL);
+    for (int i = 0; i < member_count; i++) {
+        ASTNode *variant = node->enum_stmt.members[i];
+        if (!variant || !variant->enum_member.payload_type)
+            return node;
+        members[i + 1] = new_var_decl(ast_clone(variant->enum_member.payload_type),
+                                      variant->enum_member.name, NULL);
+    }
+
+    ASTNode *result = new_struct(node->enum_stmt.name, members, member_count + 1);
+    result->line = node->line;
+    result->col = node->col;
+    result->end_line = node->end_line;
+    result->end_col = node->end_col;
+    free_ast(node);
+    return result;
 }
 
 static void concrete_node(ASTNode **slot, void *user_data) {
@@ -244,6 +284,9 @@ void instantiate_generics(ParserContext *context, ASTNode *program) {
         program->block.count += ctx.count;
         program->block.stmts = realloc(program->block.stmts, sizeof(ASTNode *) * program->block.count);
         for (int i = 0; i < ctx.count; i++) program->block.stmts[old_count + i] = ctx.instances[i].declaration;
+        for (int i = 0; i < program->block.count; i++) {
+            program->block.stmts[i] = lower_payload_enum(program->block.stmts[i]);
+        }
         int *state = calloc(program->block.count, sizeof(int));
         ASTNode **ordered = malloc(sizeof(ASTNode *) * program->block.count);
         int count = 0;
@@ -260,6 +303,10 @@ void instantiate_generics(ParserContext *context, ASTNode *program) {
         free(state);
         free(program->block.stmts);
         program->block.stmts = ordered;
+    } else {
+        for (int i = 0; i < program->block.count; i++) {
+            program->block.stmts[i] = lower_payload_enum(program->block.stmts[i]);
+        }
     }
     for (int i = 0; i < ctx.count; i++) free(ctx.instances[i].name);
     free(ctx.instances);

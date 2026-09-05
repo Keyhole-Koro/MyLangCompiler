@@ -101,6 +101,10 @@ ASTNode *resolver_find_exported_generic_template(const Module *module, const cha
             tpl->struct_stmt.name && strcmp(tpl->struct_stmt.name, name) == 0) {
             return tpl;
         }
+        if (tpl->type == AST_ENUM && tpl->enum_stmt.is_exported &&
+            tpl->enum_stmt.name && strcmp(tpl->enum_stmt.name, name) == 0) {
+            return tpl;
+        }
     }
     return NULL;
 }

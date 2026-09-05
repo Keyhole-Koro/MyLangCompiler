@@ -25,16 +25,19 @@ ASTNode *parse_base_type(ParserContext *context, Token **cur) {
     ASTNode **args = parse_type_args(context, cur, &arg_count);
     ASTNode *base = new_generic_type(name, args, arg_count);
     set_node_loc_from_tokens(base, name_tok, NULL);
+    int expected_type_args = generic_declaration && generic_declaration->type == AST_ENUM
+        ? generic_declaration->enum_stmt.type_param_count
+        : generic_declaration ? generic_declaration->struct_stmt.type_param_count : 0;
     if (generic_declaration &&
-        arg_count != generic_declaration->struct_stmt.type_param_count) {
+        arg_count != expected_type_args) {
         char message[256];
         snprintf(
             message,
             sizeof(message),
             "generic type '%s' expects %d type argument%s but got %d",
             name,
-            generic_declaration->struct_stmt.type_param_count,
-            generic_declaration->struct_stmt.type_param_count == 1 ? "" : "s",
+            expected_type_args,
+            expected_type_args == 1 ? "" : "s",
             arg_count
         );
         parse_error_code(context,
@@ -135,12 +138,23 @@ ASTNode *parse_enum(ParserContext *context, Token **cur) {
     char *name = strdup((*cur)->value);
     *cur = (*cur)->next;
 
+    char **type_params = NULL;
+    int type_param_count = 0;
+    int type_scope_mark = -1;
+    if ((*cur)->kind == LT) {
+        add_typename(context, name);
+        type_scope_mark = typename_scope_mark(context);
+        type_params = parse_type_params(context, cur, &type_param_count, 1);
+        context->control.generic_decl_depth++;
+    }
+
     if (!expect(cur, L_BRACE))
         parse_error(context, "expected '{' in enum definition", *cur);
 
     ASTNode **members = NULL;
     int member_count = 0;
     long next_value = 0;
+    int payload_mode = -1;
 
     while ((*cur)->kind != R_BRACE) {
         if ((*cur)->kind != IDENTIFIER)
@@ -151,8 +165,22 @@ ASTNode *parse_enum(ParserContext *context, Token **cur) {
         *cur = (*cur)->next;
 
         ASTNode *value_expr = NULL;
+        ASTNode *payload_type = NULL;
         long resolved_value = next_value;
-        if ((*cur)->kind == ASSIGN) {
+        if ((*cur)->kind == L_PARENTHESES) {
+            if (payload_mode == 0)
+                parse_error(context, "cannot mix payload and numeric enum members", *cur);
+            payload_mode = 1;
+            *cur = (*cur)->next;
+            if ((*cur)->kind == R_PARENTHESES)
+                parse_error(context, "payload enum member requires exactly one payload type", *cur);
+            payload_type = parse_type(context, cur);
+            if (!expect(cur, R_PARENTHESES))
+                parse_error(context, "expected ')' after enum payload type", *cur);
+        } else if ((*cur)->kind == ASSIGN) {
+            if (payload_mode == 1)
+                parse_error(context, "cannot mix payload and numeric enum members", *cur);
+            payload_mode = 0;
             *cur = (*cur)->next;
             if ((*cur)->kind != NUMBER) {
                 parse_error(context, "enum member value must be a number literal", *cur);
@@ -160,13 +188,18 @@ ASTNode *parse_enum(ParserContext *context, Token **cur) {
             value_expr = new_number((*cur)->value);
             resolved_value = strtol((*cur)->value, NULL, 10);
             *cur = (*cur)->next;
+        } else {
+            if (payload_mode == 1)
+                parse_error(context, "payload enum member requires a payload type", *cur);
+            payload_mode = 0;
         }
 
-        ASTNode *member = new_enum_member(member_name, value_expr, resolved_value);
+        ASTNode *member = new_enum_member(member_name, value_expr, payload_type, resolved_value);
         set_node_loc_from_tokens(member, member_tok, NULL);
         members = realloc(members, sizeof(ASTNode*) * (member_count + 1));
         members[member_count++] = member;
-        add_enum_constant(context, member_name, resolved_value);
+        if (payload_mode == 0)
+            add_enum_constant(context, member_name, resolved_value);
         next_value = resolved_value + 1;
         free(member_name);
 
@@ -183,9 +216,16 @@ ASTNode *parse_enum(ParserContext *context, Token **cur) {
     if ((*cur)->kind == SEMICOLON)
         *cur = (*cur)->next;
 
-    add_typename(context, name);
+    if (type_param_count == 0) add_typename(context, name);
     ASTNode *node = new_enum(name, members, member_count);
+    node->enum_stmt.type_params = type_params;
+    node->enum_stmt.type_param_count = type_param_count;
+    node->enum_stmt.has_payloads = payload_mode == 1;
     set_node_loc_from_tokens(node, name_tok, NULL);
+    if (type_param_count > 0) {
+        context->control.generic_decl_depth--;
+        restore_typenames(context, type_scope_mark);
+    }
     free(name);
     return node;
 }

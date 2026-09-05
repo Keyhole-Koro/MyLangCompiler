@@ -29,6 +29,7 @@ typedef enum SymbolKind {
     SYMBOL_GLOBAL,
     SYMBOL_GENERIC_FUNCTION,
     SYMBOL_GENERIC_STRUCT,
+    SYMBOL_GENERIC_ENUM,
 } SymbolKind;
 
 /*

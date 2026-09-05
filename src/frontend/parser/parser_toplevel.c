@@ -141,7 +141,16 @@ ASTNode* parse_toplevel(ParserContext *context, Token **cur) {
         }
         return declaration;
     }
-    if ((*cur)->kind == ENUM) return parse_enum(context, cur);
+    if ((*cur)->kind == ENUM) {
+        ASTNode *declaration = parse_enum(context, cur);
+        if (declaration && declaration->enum_stmt.type_param_count > 0) {
+            declaration->enum_stmt.is_exported = want_export;
+            if (want_export) declaration->enum_stmt.package = strdup(context->module.current_package);
+            add_generic_template(context, declaration);
+            return NULL;
+        }
+        return declaration;
+    }
     if (looks_like_generic_function(context, *cur)) {
         ASTNode *fn = parse_generic_fundef(context, cur);
         if (fn && fn->fundef.type_param_count > 0) {

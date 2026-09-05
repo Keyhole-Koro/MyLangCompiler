@@ -102,7 +102,7 @@ void ast_visit_children(ASTNode *n, void (*visit)(ASTNode **, void *), void *ctx
     case AST_STRUCT: CHILDREN(struct_stmt.members, struct_stmt.member_count); break;
     case AST_TYPEDEF_STRUCT: CHILDREN(typedef_struct.members, typedef_struct.member_count); break;
     case AST_ENUM: CHILDREN(enum_stmt.members, enum_stmt.member_count); break;
-    case AST_ENUM_MEMBER: CHILD(enum_member.value); break;
+    case AST_ENUM_MEMBER: CHILD(enum_member.value); CHILD(enum_member.payload_type); break;
     case AST_MEMBER_ACCESS: CHILD(member_access.lhs); break;
     case AST_ARROW_ACCESS: CHILD(arrow_access.lhs); break;
     case AST_INIT_LIST: CHILDREN(init_list.elements, init_list.count); break;
@@ -164,7 +164,9 @@ ASTNode *ast_clone(const ASTNode *src) {
     case AST_TYPEDEF_STRUCT:
         STR(typedef_struct.struct_name); STR(typedef_struct.typedef_name);
         ARRAY(typedef_struct.members, typedef_struct.member_count); break;
-    case AST_ENUM: STR(enum_stmt.name); ARRAY(enum_stmt.members, enum_stmt.member_count); break;
+    case AST_ENUM:
+        STR(enum_stmt.name); STR(enum_stmt.package); ARRAY(enum_stmt.members, enum_stmt.member_count);
+        STRINGS(enum_stmt.type_params, enum_stmt.type_param_count); break;
     case AST_ENUM_MEMBER: STR(enum_member.name); break;
     case AST_CHAR_LITERAL: STR(char_literal.value); break;
     case AST_STRING_LITERAL: STR(string_literal.value); break;

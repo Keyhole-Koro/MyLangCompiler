@@ -15,6 +15,7 @@ static int template_is_exported(const ASTNode *node) {
     if (!node) return 0;
     if (node->type == AST_FUNDEF) return node->fundef.is_exported;
     if (node->type == AST_STRUCT) return node->struct_stmt.is_exported;
+    if (node->type == AST_ENUM) return node->enum_stmt.is_exported;
     return 0;
 }
 
@@ -22,6 +23,7 @@ static const char *template_name(const ASTNode *node) {
     if (!node) return NULL;
     if (node->type == AST_FUNDEF) return node->fundef.name;
     if (node->type == AST_STRUCT) return node->struct_stmt.name;
+    if (node->type == AST_ENUM) return node->enum_stmt.name;
     return NULL;
 }
 
@@ -61,8 +63,10 @@ void load_imported_generic_templates(ParserContext *context, ASTNode *import_nod
             continue;
 
         ASTNode *copy = ast_clone(template);
-        if (copy->type == AST_STRUCT) {
-            add_typename(context, copy->struct_stmt.name);
+        if (copy->type == AST_STRUCT || copy->type == AST_ENUM) {
+            const char *type_name = copy->type == AST_STRUCT
+                ? copy->struct_stmt.name : copy->enum_stmt.name;
+            add_typename(context, type_name);
         }
         add_generic_template(context, copy);
         remove_import_symbol(import_node, name);
