@@ -53,6 +53,13 @@ typedef struct {
     char *label;
 } StrItem;
 
+// A 32-bit constant parked in the data section. `movi` carries only a 21-bit
+// immediate, so anything wider is loaded from here instead.
+typedef struct {
+    long value;
+    char *label;
+} ConstItem;
+
 typedef struct {
     const char *name;
     int param_count;
@@ -81,6 +88,8 @@ typedef struct {
     int locals_count;
     StrItem *strings;
     int string_count;
+    ConstItem *consts;
+    int const_count;
     StringBuilder data_sb;
     int data_sb_inited;
     int label_counter;
@@ -106,6 +115,8 @@ typedef struct {
 #define cg_locals_count   (cc->locals_count)
 #define cg_strings        (cc->strings)
 #define cg_string_count   (cc->string_count)
+#define cg_consts         (cc->consts)
+#define cg_const_count    (cc->const_count)
 #define cg_data_sb        (cc->data_sb)
 #define cg_data_sb_inited (cc->data_sb_inited)
 
@@ -148,6 +159,8 @@ void emit_codegen_functions(CompilerContext *cc, ASTNode *root, StringBuilder *s
 char *prepend_codegen_imports(CompilerContext *cc, StringBuilder *body);
 void cleanup_codegen_context(CompilerContext *cc);
 const char *intern_string_literal(CompilerContext *cc, const char *s);
+const char *intern_word_constant(CompilerContext *cc, long value);
+void emit_load_const(CompilerContext *cc, StringBuilder *sb, const char *target_reg, long value);
 
 int param_offset(int n);
 int local_offset(int param_count, int n);
