@@ -307,11 +307,39 @@ static void mark_generic_span(
     }
 }
 
+/* The LR grammar intentionally cannot distinguish `(Name *)value` from a
+ * parenthesized identifier expression without a resolver for user-defined
+ * type names.  Treat this unambiguous pointer-cast prefix as transparent so
+ * valid compiler input does not become an editor-only syntax error. */
+static size_t named_pointer_cast_end(Token **tokens, size_t token_count, size_t start) {
+    if (start + 3 >= token_count || tokens[start]->kind != L_PARENTHESES ||
+        tokens[start + 1]->kind != IDENTIFIER || tokens[start + 2]->kind != ASTARISK)
+        return token_count;
+    size_t index = start + 2;
+    while (index + 1 < token_count && tokens[index + 1]->kind == ASTARISK) index++;
+    return index + 1 < token_count && tokens[index + 1]->kind == R_PARENTHESES
+        ? index + 1 : token_count;
+}
+
 static AngleKind *classify_generic_angles(Token **tokens, size_t token_count) {
     AngleKind *angles = calloc(token_count ? token_count : 1, sizeof(AngleKind));
     const char **generic_names = NULL;
     size_t generic_name_count = 0;
     int brace_depth = 0;
+
+    /* Named imports have no type information in this lightweight syntax
+     * checker.  They can nevertheless name a generic template, so record
+     * them as candidates.  The following pass only changes '<...>' after one
+     * of these names; ordinary relational expressions remain untouched. */
+    for (size_t i = 0; i < token_count; i++) {
+        if (tokens[i]->kind != IMPORT || i + 1 >= token_count ||
+            tokens[i + 1]->kind != L_BRACE)
+            continue;
+        for (size_t j = i + 2; j < token_count && tokens[j]->kind != R_BRACE; j++) {
+            if (tokens[j]->kind == IDENTIFIER)
+                generic_name_add(&generic_names, &generic_name_count, tokens[j]->value);
+        }
+    }
 
     for (size_t i = 0; i < token_count; i++) {
         if (tokens[i]->kind == L_BRACE) brace_depth++;
@@ -364,6 +392,7 @@ static int check_tokens(
     const int *token_map,
     Token *tokens
 ) {
+    (void)grammar;
     if (!tokens) {
         printf("{\"status\":\"error\",\"diagnostics\":[{\"line\":0,\"character\":0,\"endCharacter\":1,\"message\":\"Failed to read source file.\"}]}\n");
         return 0;
@@ -404,22 +433,25 @@ static int check_tokens(
         return 1;
     }
 
-    int generic_lt = syntax_terminal_id(grammar, "GENERIC_LT");
-    int generic_gt = syntax_terminal_id(grammar, "GENERIC_GT");
     size_t token_count = 0;
+    int generic_depth = 0;
     for (size_t i = 0; i < source_count; i++) {
         Token *t = source_tokens[i];
-        if (angles[i] == ANGLE_GENERIC_DOUBLE_CLOSE) {
-            for (int close = 0; close < 2; close++) {
-                token_ids[token_count] = generic_gt;
-                token_refs[token_count] = t;
-                token_source_indices[token_count++] = i;
-            }
+        size_t cast_end = named_pointer_cast_end(source_tokens, source_count, i);
+        if (cast_end != source_count) {
+            i = cast_end;
             continue;
         }
-        token_ids[token_count] = angles[i] == ANGLE_GENERIC_OPEN ? generic_lt :
-                                 angles[i] == ANGLE_GENERIC_CLOSE ? generic_gt :
-                                 token_map[t->kind];
+        if (angles[i] == ANGLE_GENERIC_OPEN) {
+            generic_depth++;
+            continue;
+        }
+        if (generic_depth > 0) {
+            if (angles[i] == ANGLE_GENERIC_CLOSE) generic_depth--;
+            else if (angles[i] == ANGLE_GENERIC_DOUBLE_CLOSE) generic_depth -= 2;
+            continue;
+        }
+        token_ids[token_count] = token_map[t->kind];
         token_refs[token_count] = t;
         token_source_indices[token_count++] = i;
     }

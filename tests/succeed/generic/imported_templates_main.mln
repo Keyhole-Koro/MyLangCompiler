@@ -1,0 +1,8 @@
+import { twice, Pair } from "imported_templates_lib.mln";
+
+i32 main() {
+    Pair<i32> pair;
+    pair.first = twice<i32>(6);
+    pair.second = 1;
+    return pair.first + pair.second;
+}

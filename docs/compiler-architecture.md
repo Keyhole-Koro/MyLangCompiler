@@ -51,7 +51,8 @@ The main groups are:
 - `parser_type.c`: type syntax, `struct`, and `typedef`
 - `parser_decl.c`: function parameters and function declarations/definitions
 - `parser_generic.c`: generic parameter and argument parsing
-- `parser_instantiate.c`: module-local monomorphization before semantic checking
+- `parser_instantiate.c`: monomorphization before semantic checking
+- `parser_import_generics.c`: isolated loading of named imported generic templates
 - `parser_stmt.c`: statement parsing
 - `parser_toplevel.c`: package/import/export and whole-program parsing
 - `parser_expr_*.c`: expression parsing split by precedence/shape
@@ -76,7 +77,7 @@ That keeps general parser declarations in `parser_internal.h` smaller.
 
 Generic templates are kept separate from the executable program AST. The
 [instantiation pass](generics.md) clones only used templates into concrete
-declarations; `src/ast/ast_copy.c` owns deep copying and child-slot traversal.
+declarations; `src/ast/AST.c` owns deep copying and child-slot traversal.
 
 ## Semantic
 

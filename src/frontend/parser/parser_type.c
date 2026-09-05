@@ -79,6 +79,9 @@ ASTNode *parse_struct(Token **cur) {
         type_scope_mark = typename_scope_mark();
         type_params = parse_type_params(cur, &type_param_count, 1);
         g_generic_decl_depth++;
+    } else if (name) {
+        /* Make a named struct visible while parsing its own pointer members. */
+        add_typename(name);
     }
 
     ASTNode **members = NULL;
@@ -98,7 +101,6 @@ ASTNode *parse_struct(Token **cur) {
         }
         if (!expect(cur, SEMICOLON))
             parse_error("expected ';' after struct definition", token_head, *cur);
-        if (name && type_param_count == 0) add_typename(name);
         ASTNode *node = new_struct(name ? name : "", members, member_count);
         node->struct_stmt.type_params = type_params;
         node->struct_stmt.type_param_count = type_param_count;
@@ -111,7 +113,6 @@ ASTNode *parse_struct(Token **cur) {
     }
     if (!expect(cur, SEMICOLON))
         parse_error("expected ';' after struct declaration", token_head, *cur);
-    if (name && type_param_count == 0) add_typename(name);
     ASTNode *node = new_struct(name ? name : "", NULL, 0);
     node->struct_stmt.type_params = type_params;
     node->struct_stmt.type_param_count = type_param_count;
