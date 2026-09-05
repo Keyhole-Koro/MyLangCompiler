@@ -43,6 +43,37 @@ typedef struct EnumConstant {
     long value;
 } EnumConstant;
 
+/*
+ * One complete parser session.  The parser still exposes legacy globals while
+ * it is being migrated, but nested module parsing must switch every bit of
+ * state as one unit.  Keeping this definition here prevents import handling
+ * from silently falling out of sync when parser state grows.
+ */
+typedef struct ParserContext {
+    Token *token_head;
+    ASTNode *root;
+    StructTable struct_table;
+    FunctionTable func_table;
+    TypeTable type_table;
+    GenericTemplateTable generic_template_table;
+    int generic_decl_depth;
+    const char *current_generic_function_name;
+    int stop_at_arrow;
+    int unchecked_depth;
+    char *current_package;
+    int current_package_heap;
+    ExportEntry *exports;
+    int export_count;
+    char **imported_packages;
+    int imported_pkg_count;
+    ASTNode **hoisted_funcs;
+    int hoisted_count;
+    int funlit_counter;
+    const char *parse_filename;
+    EnumConstant *enum_constants;
+    int enum_constant_count;
+} ParserContext;
+
 extern Token *token_head;
 extern ASTNode *root;
 extern StructTable g_struct_table;
@@ -85,6 +116,9 @@ void add_enum_constant(const char *name, long value);
 int find_enum_constant(const char *name, long *out_value);
 void parser_reset(void);
 void parser_set_filename(const char *name);
+void parser_context_save(ParserContext *context);
+void parser_context_activate_empty(void);
+void parser_context_restore(const ParserContext *context);
 void add_export(const char *orig, const char *mangled);
 const char *find_export_mangled(const char *orig);
 int is_imported_package(const char *name);
