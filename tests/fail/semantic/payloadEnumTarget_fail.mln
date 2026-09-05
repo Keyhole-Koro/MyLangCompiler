@@ -1,0 +1,15 @@
+// A binding names the matched value again for each occurrence, so the match
+// target has to be something repeatable. A call is not.
+enum Result<T, E> { Ok(T), Err(E) }
+
+Result<i32, char> make() {
+    Result<i32, char> r = Ok(1);
+    return r;
+}
+
+i32 main() {
+    return case make() of {
+        Ok(v)  -> v;
+        Err(c) -> 0;
+    };
+}

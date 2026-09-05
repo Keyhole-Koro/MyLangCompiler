@@ -1,0 +1,10 @@
+// A construction builds a struct, and the backend cannot return one, so it is
+// only meaningful where it can be stored directly. Passing it as an argument
+// has nowhere to put the result.
+enum Result<T, E> { Ok(T), Err(E) }
+
+i32 take(Result<i32, char> r) { return 0; }
+
+i32 main() {
+    return take(Ok(1));
+}

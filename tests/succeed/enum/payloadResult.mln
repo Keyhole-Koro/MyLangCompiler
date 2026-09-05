@@ -1,0 +1,42 @@
+// Payload enum construction and matching, on the struct layout specialization
+// lowers a payload enum to: a __tag field plus one field per variant.
+//
+// `Ok(40)` cannot be an expression -- it builds a struct, and the backend has
+// no way to return one -- so it is only meaningful as the whole right-hand
+// side of an initialiser or assignment, where it expands into the two field
+// stores. A case arm binds by substitution: `Ok(v) -> v` becomes
+// `0 -> r.Ok`, which needs no type inference and no copy.
+
+enum Result<T, E> {
+    Ok(T),
+    Err(E),
+}
+
+i32 unwrap_or(Result<i32, char> *r, i32 fallback) {
+    return case *r of {
+        Ok(v)  -> v;
+        Err(c) -> fallback + (i32)c;
+    };
+}
+
+i32 main() {
+    Result<i32, char> a = Ok(40);
+    Result<i32, char> b = Err('A'); // 65
+
+    i32 total = 0;
+    total = total + unwrap_or(&a, 0); // 40
+    total = total + unwrap_or(&b, 0); // 105
+
+    // Assignment switches the variant in place, not just the payload.
+    a = Err('B');                     // 66
+    total = total + unwrap_or(&a, 0); // 171
+
+    // An arm may ignore what it binds, and the tag decides which one runs.
+    i32 which = case a of {
+        Ok(ignored)  -> 0;
+        Err(ignored) -> 1;
+    };
+    total = total + which;            // 172
+
+    return total;
+}

@@ -284,6 +284,7 @@ void instantiate_generics(ParserContext *context, ASTNode *program) {
         program->block.count += ctx.count;
         program->block.stmts = realloc(program->block.stmts, sizeof(ASTNode *) * program->block.count);
         for (int i = 0; i < ctx.count; i++) program->block.stmts[old_count + i] = ctx.instances[i].declaration;
+        lower_payload_enum_uses(context, program);
         for (int i = 0; i < program->block.count; i++) {
             program->block.stmts[i] = lower_payload_enum(program->block.stmts[i]);
         }
@@ -304,6 +305,7 @@ void instantiate_generics(ParserContext *context, ASTNode *program) {
         free(program->block.stmts);
         program->block.stmts = ordered;
     } else {
+        lower_payload_enum_uses(context, program);
         for (int i = 0; i < program->block.count; i++) {
             program->block.stmts[i] = lower_payload_enum(program->block.stmts[i]);
         }

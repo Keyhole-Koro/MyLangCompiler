@@ -46,6 +46,21 @@ WARN_CASES = {
 }
 
 FAIL_CASES = {
+    "payloadEnumBadPosition_fail": (
+        "fail/semantic/payloadEnumBadPosition_fail.mln",
+        "constructs a payload enum, which can only appear as the whole right-hand side",
+        None,
+    ),
+    "payloadEnumArity_fail": (
+        "fail/semantic/payloadEnumArity_fail.mln",
+        "carries one payload, but 2 were given",
+        None,
+    ),
+    "payloadEnumTarget_fail": (
+        "fail/semantic/payloadEnumTarget_fail.mln",
+        "can only be matched on a variable or a field of one",
+        None,
+    ),
     "genericTypeArgCountMismatch_fail": (
         "fail/semantic/genericTypeArgCountMismatch_fail.mln",
         "error[E0501]: generic type 'Box' expects 1 type argument but got 2",
