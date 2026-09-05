@@ -6,6 +6,22 @@ void gen_func(CompilerContext *cc, ASTNode *node, StringBuilder *sb)
     if (!fn) return;
 
     char *fname = is_entry_name(fn->fundef.name) ? "__START__" : fn->fundef.name;
+    // Returning a struct or array by value needs a hidden destination pointer
+    // the caller supplies; codegen has no such convention, so it would return
+    // one word and silently drop the rest. Refuse it until MLC-015 adds one.
+    if (fn->fundef.ret_type) {
+        LocalInfo ret = {0};
+        set_localinfo_from_type(cc, &ret, fn->fundef.ret_type);
+        if (ret.pointer_level == 0 && (ret.is_array || find_struct(cc, ret.base_type))) {
+            fprintf(stderr,
+                    "Codegen error: '%s' returns a struct or array by value, "
+                    "which is not supported yet; return a pointer or write "
+                    "through an out parameter instead\n",
+                    fn->fundef.name ? fn->fundef.name : "?");
+            exit(1);
+        }
+    }
+
     int param_count = fn->fundef.param_count;
     int fixed_param_count = fn->fundef.is_variadic ? (param_count - 1) : param_count;
     char **params = NULL;
@@ -39,6 +55,25 @@ void gen_func(CompilerContext *cc, ASTNode *node, StringBuilder *sb)
                 for (int d = 0; d < 8; d++) cg_locals_info[idx].dims[d] = 0;
             } else {
                 set_localinfo_from_type(cc, &cg_locals_info[idx], p->param.type);
+
+                // A struct or array parameter taken by value would need the
+                // caller to copy it and the callee to address that copy.
+                // Neither exists yet: codegen would pass one word and the
+                // callee would read the rest off whatever happened to follow
+                // it, producing a wrong answer with no diagnostic. Refuse it
+                // until the calling convention grows a memory-argument form
+                // (MLC-015).
+                if (cg_locals_info[idx].pointer_level == 0 &&
+                    (cg_locals_info[idx].is_array ||
+                     find_struct(cc, cg_locals_info[idx].base_type))) {
+                    fprintf(stderr,
+                            "Codegen error: parameter '%s' of '%s' passes a "
+                            "struct or array by value, which is not supported "
+                            "yet; pass a pointer instead\n",
+                            p->param.name ? p->param.name : "?",
+                            fn->fundef.name ? fn->fundef.name : "?");
+                    exit(1);
+                }
             }
         }
         if (locals_only_count > 0) {
