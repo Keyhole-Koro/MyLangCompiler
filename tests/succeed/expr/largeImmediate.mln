@@ -1,0 +1,24 @@
+// Integer constants wider than the 21 bits `movi` encodes.
+//
+// The target has no load-upper and `movis` is the sign-extended form of
+// `movi`, not a shifted one, so anything outside [-2^20, 2^21) has to come
+// from the data section. This checks the values survive that round trip,
+// including a full 32-bit one and an MMIO-shaped address used as a local.
+
+i32 main() {
+    i32 a = 0x1FFFFF;      // largest value movi can carry
+    i32 b = 0x200000;      // first value that needs the constant pool
+    i32 c = 0xDEADBEEF;    // full 32 bits
+    i32 d = 0x24000000;    // an MMIO address, as a local rather than a global
+
+    if (a != 2097151)   { return 1; }
+    if (b != 2097152)   { return 2; }
+    if (c != 0xDEADBEEF) { return 3; }
+    if (d != 0x24000000) { return 4; }
+
+    // The pool is interned, so naming the same constant twice must still
+    // compare equal rather than picking up a second, different entry.
+    if (c != 0xDEADBEEF) { return 5; }
+
+    return 42;
+}
