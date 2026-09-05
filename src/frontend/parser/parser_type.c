@@ -3,7 +3,7 @@
 
 ASTNode *parse_base_type(Token **cur) {
     if (!is_type((*cur)->kind, *cur))
-        parse_error("expected type", token_head, *cur);
+        parse_error("expected type", *cur);
     Token *name_tok = *cur;
     char *name = (*cur)->value;
     *cur = (*cur)->next;
@@ -15,7 +15,6 @@ ASTNode *parse_base_type(Token **cur) {
             parse_error_code(
                 SEMCODE_GENERIC_ARGS_REQUIRED,
                 message,
-                token_head,
                 name_tok
             );
         }
@@ -41,7 +40,6 @@ ASTNode *parse_base_type(Token **cur) {
         parse_error_code(
             SEMCODE_GENERIC_ARG_COUNT_MISMATCH,
             message,
-            token_head,
             name_tok
         );
     }
@@ -51,18 +49,18 @@ ASTNode *parse_base_type(Token **cur) {
 void parse_struct_members(Token **cur, ASTNode ***members, int *member_count) {
     *members = NULL;
     *member_count = 0;
-    if (!expect(cur, L_BRACE)) parse_error("expected '{' in struct", token_head, *cur);
+    if (!expect(cur, L_BRACE)) parse_error("expected '{' in struct", *cur);
     while ((*cur)->kind != R_BRACE) {
         ASTNode *member = parse_variable_declaration(cur, 1);
         *members = realloc(*members, sizeof(ASTNode*) * (*member_count + 1));
         (*members)[(*member_count)++] = member;
     }
-    if (!expect(cur, R_BRACE)) parse_error("expected '}' to close struct definition", token_head, *cur);
+    if (!expect(cur, R_BRACE)) parse_error("expected '}' to close struct definition", *cur);
 }
 
 ASTNode *parse_struct(Token **cur) {
     if (!expect(cur, STRUCT))
-        parse_error("expected 'struct'", token_head, *cur);
+        parse_error("expected 'struct'", *cur);
 
     char *name = NULL;
     char **type_params = NULL;
@@ -74,11 +72,11 @@ ASTNode *parse_struct(Token **cur) {
     }
 
     if ((*cur)->kind == LT) {
-        if (!name) parse_error("generic struct requires a name", token_head, *cur);
+        if (!name) parse_error("generic struct requires a name", *cur);
         add_typename(name);
         type_scope_mark = typename_scope_mark();
         type_params = parse_type_params(cur, &type_param_count, 1);
-        g_generic_decl_depth++;
+        parser_context_current()->control.generic_decl_depth++;
     } else if (name) {
         /* Make a named struct visible while parsing its own pointer members. */
         add_typename(name);
@@ -93,31 +91,31 @@ ASTNode *parse_struct(Token **cur) {
             char *typedef_name = strdup((*cur)->value);
             *cur = (*cur)->next;
             if (!expect(cur, SEMICOLON))
-                parse_error("expected ';' after typedef struct", token_head, *cur);
+                parse_error("expected ';' after typedef struct", *cur);
             add_typename(typedef_name);
             if (type_param_count > 0)
-                parse_error("generic typedef struct is not supported", token_head, *cur);
+                parse_error("generic typedef struct is not supported", *cur);
             return new_typedef_struct(name ? name : "", members, member_count, typedef_name);
         }
         if (!expect(cur, SEMICOLON))
-            parse_error("expected ';' after struct definition", token_head, *cur);
+            parse_error("expected ';' after struct definition", *cur);
         ASTNode *node = new_struct(name ? name : "", members, member_count);
         node->struct_stmt.type_params = type_params;
         node->struct_stmt.type_param_count = type_param_count;
         if (type_param_count > 0) {
-            g_generic_decl_depth--;
+            parser_context_current()->control.generic_decl_depth--;
             restore_typenames(type_scope_mark);
         }
         free(name);
         return node;
     }
     if (!expect(cur, SEMICOLON))
-        parse_error("expected ';' after struct declaration", token_head, *cur);
+        parse_error("expected ';' after struct declaration", *cur);
     ASTNode *node = new_struct(name ? name : "", NULL, 0);
     node->struct_stmt.type_params = type_params;
     node->struct_stmt.type_param_count = type_param_count;
     if (type_param_count > 0) {
-        g_generic_decl_depth--;
+        parser_context_current()->control.generic_decl_depth--;
         restore_typenames(type_scope_mark);
     }
     free(name);
@@ -126,16 +124,16 @@ ASTNode *parse_struct(Token **cur) {
 
 ASTNode *parse_enum(Token **cur) {
     if (!expect(cur, ENUM))
-        parse_error("expected 'enum'", token_head, *cur);
+        parse_error("expected 'enum'", *cur);
     if ((*cur)->kind != IDENTIFIER)
-        parse_error("expected enum name", token_head, *cur);
+        parse_error("expected enum name", *cur);
 
     Token *name_tok = *cur;
     char *name = strdup((*cur)->value);
     *cur = (*cur)->next;
 
     if (!expect(cur, L_BRACE))
-        parse_error("expected '{' in enum definition", token_head, *cur);
+        parse_error("expected '{' in enum definition", *cur);
 
     ASTNode **members = NULL;
     int member_count = 0;
@@ -143,7 +141,7 @@ ASTNode *parse_enum(Token **cur) {
 
     while ((*cur)->kind != R_BRACE) {
         if ((*cur)->kind != IDENTIFIER)
-            parse_error("expected enum member name", token_head, *cur);
+            parse_error("expected enum member name", *cur);
 
         Token *member_tok = *cur;
         char *member_name = strdup((*cur)->value);
@@ -154,7 +152,7 @@ ASTNode *parse_enum(Token **cur) {
         if ((*cur)->kind == ASSIGN) {
             *cur = (*cur)->next;
             if ((*cur)->kind != NUMBER) {
-                parse_error("enum member value must be a number literal", token_head, *cur);
+                parse_error("enum member value must be a number literal", *cur);
             }
             value_expr = new_number((*cur)->value);
             resolved_value = strtol((*cur)->value, NULL, 10);
@@ -178,7 +176,7 @@ ASTNode *parse_enum(Token **cur) {
     }
 
     if (!expect(cur, R_BRACE))
-        parse_error("expected '}' after enum body", token_head, *cur);
+        parse_error("expected '}' after enum body", *cur);
     if ((*cur)->kind == SEMICOLON)
         *cur = (*cur)->next;
 
@@ -190,7 +188,7 @@ ASTNode *parse_enum(Token **cur) {
 }
 
 ASTNode *parse_typedef(Token **cur) {
-    if (!expect(cur, TYPEDEF)) parse_error("expected 'typedef'", token_head, *cur);
+    if (!expect(cur, TYPEDEF)) parse_error("expected 'typedef'", *cur);
 
     if ((*cur)->kind == STRUCT) {
         *cur = (*cur)->next;
@@ -203,22 +201,22 @@ ASTNode *parse_typedef(Token **cur) {
         int member_count = 0;
         parse_struct_members(cur, &members, &member_count);
         if ((*cur)->kind != IDENTIFIER)
-            parse_error("expected typedef name after struct definition", token_head, *cur);
+            parse_error("expected typedef name after struct definition", *cur);
         char *typedef_name = strdup((*cur)->value);
         *cur = (*cur)->next;
         if (!expect(cur, SEMICOLON))
-            parse_error("expected ';' after typedef", token_head, *cur);
+            parse_error("expected ';' after typedef", *cur);
         add_typename(typedef_name);
         return new_typedef_struct(struct_name ? struct_name : "", members, member_count, typedef_name);
     }
 
     ASTNode *type = parse_type(cur);
     if ((*cur)->kind != IDENTIFIER)
-        parse_error("expected typedef name", token_head, *cur);
+        parse_error("expected typedef name", *cur);
     char *typedef_name = strdup((*cur)->value);
     *cur = (*cur)->next;
     if (!expect(cur, SEMICOLON))
-        parse_error("expected ';' after typedef", token_head, *cur);
+        parse_error("expected ';' after typedef", *cur);
     add_typename(typedef_name);
     return new_typedef(type, typedef_name);
 }
@@ -242,7 +240,7 @@ ASTNode *parse_type(Token **cur) {
     }
 
     if (!is_type((*cur)->kind, *cur))
-        parse_error("expected base type", token_head, *cur);
+        parse_error("expected base type", *cur);
 
     ASTNode *base_type = parse_base_type(cur);
 

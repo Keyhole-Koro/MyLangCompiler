@@ -27,11 +27,11 @@ ASTNode *parse_unary(Token **cur) {
     }
     if ((*cur)->kind == AMPERSAND) {
         *cur = (*cur)->next;
-        if (g_unchecked_depth == 0 && (*cur)->kind == MUT) {
+        if (parser_context_current()->control.unchecked_depth == 0 && (*cur)->kind == MUT) {
             *cur = (*cur)->next;
             return new_borrow_mut(parse_unary(cur));
         }
-        if (g_unchecked_depth == 0) {
+        if (parser_context_current()->control.unchecked_depth == 0) {
             return new_borrow(parse_unary(cur));
         }
         return new_unary(AMPERSAND, parse_unary(cur));
@@ -50,9 +50,9 @@ ASTNode *parse_unary(Token **cur) {
     }
     if ((*cur)->kind == SIZEOF) {
         *cur = (*cur)->next;
-        if (!expect(cur, L_PARENTHESES)) parse_error("expected '(' after sizeof", token_head, *cur);
+        if (!expect(cur, L_PARENTHESES)) parse_error("expected '(' after sizeof", *cur);
         ASTNode *inner = parse_expr(cur);
-        if (!expect(cur, R_PARENTHESES)) parse_error("expected ')' after sizeof expression", token_head, *cur);
+        if (!expect(cur, R_PARENTHESES)) parse_error("expected ')' after sizeof expression", *cur);
         return new_sizeof(inner);
     }
     if ((*cur)->kind == STRING_LITERAL) {

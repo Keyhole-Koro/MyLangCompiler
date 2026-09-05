@@ -18,7 +18,6 @@ static ASTNode *parse_source(const char *source, Token **out_tokens) {
     free(buffer);
     assert(tokens);
 
-    token_head = tokens;
     Token *cur = tokens;
     ASTNode *root = parse_program(&cur);
     assert(root);
@@ -395,6 +394,28 @@ static void test_generic_state_reset(void) {
     assert(!is_user_typename("T"));
 }
 
+static void test_parser_context_isolation(void) {
+    ParserContext imported_context;
+
+    parser_reset();
+    add_typename("OuterType");
+
+    parser_context_init(&imported_context);
+    ParserContext *outer_context = parser_context_activate(&imported_context);
+    assert(!is_user_typename("OuterType"));
+    add_typename("ImportedType");
+    assert(is_user_typename("ImportedType"));
+
+    parser_context_activate(outer_context);
+    assert(is_user_typename("OuterType"));
+    assert(!is_user_typename("ImportedType"));
+
+    parser_context_activate(&imported_context);
+    parser_reset();
+    parser_context_activate(outer_context);
+    parser_reset();
+}
+
 void test_generic_instantiation(void);
 
 int main(void) {
@@ -412,6 +433,7 @@ int main(void) {
     test_generic_prototype_ast();
     test_exported_generic_metadata_and_namespaces();
     test_generic_state_reset();
+    test_parser_context_isolation();
     printf("phase2 whitebox tests passed\n");
     return 0;
 }

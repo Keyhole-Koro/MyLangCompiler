@@ -122,7 +122,7 @@ ASTNode *parse_conditional(Token **cur) {
         *cur = (*cur)->next;
         ASTNode *then_expr = parse_expr(cur);
         if (!expect(cur, COLON))
-            parse_error("expected ':' in ternary expression", token_head, *cur);
+            parse_error("expected ':' in ternary expression", *cur);
         ASTNode *else_expr = parse_conditional(cur);
         return new_ternary(cond, then_expr, else_expr);
     }

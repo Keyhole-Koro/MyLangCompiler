@@ -31,7 +31,7 @@ static DomProp *parse_dom_props(Token **cur, int *out_count) {
         *cur = (*cur)->next;
 
         if (!expect(cur, ASSIGN))
-            parse_error("expected '=' after DOM property name", token_head, *cur);
+            parse_error("expected '=' after DOM property name", *cur);
 
         ASTNode *value = NULL;
         if ((*cur)->kind == STRING_LITERAL) {
@@ -43,9 +43,9 @@ static DomProp *parse_dom_props(Token **cur, int *out_count) {
             *cur = (*cur)->next;
             value = parse_expr(cur);
             if (!expect(cur, R_BRACE))
-                parse_error("expected '}' after DOM property expression", token_head, *cur);
+                parse_error("expected '}' after DOM property expression", *cur);
         } else {
-            parse_error("expected a string or '{expr}' as the DOM property value", token_head, *cur);
+            parse_error("expected a string or '{expr}' as the DOM property value", *cur);
         }
 
         props = realloc(props, sizeof(DomProp) * (count + 1));
@@ -63,10 +63,10 @@ static DomProp *parse_dom_props(Token **cur, int *out_count) {
 ASTNode *parse_dom_element(Token **cur) {
     Token *open_tok = *cur;
     if (!expect(cur, MLX_TAG_OPEN))
-        parse_error("expected '<' to open a DOM element", token_head, *cur);
+        parse_error("expected '<' to open a DOM element", *cur);
 
     if ((*cur)->kind != IDENTIFIER)
-        parse_error("expected an element name after '<'", token_head, *cur);
+        parse_error("expected an element name after '<'", *cur);
     char *tag = strdup((*cur)->value);
     *cur = (*cur)->next;
 
@@ -84,7 +84,7 @@ ASTNode *parse_dom_element(Token **cur) {
         while (1) {
             if ((*cur)->kind == MLX_TEXT) {
                 if (!text_is_blank((*cur)->value))
-                    parse_error("text children are not supported; use <Text text=\"...\"/>", token_head, *cur);
+                    parse_error("text children are not supported; use <Text text=\"...\"/>", *cur);
                 *cur = (*cur)->next;
                 continue;
             }
@@ -98,17 +98,17 @@ ASTNode *parse_dom_element(Token **cur) {
         }
 
         if (!expect(cur, MLX_CLOSE_TAG_OPEN))
-            parse_error("expected '</' to close a DOM element", token_head, *cur);
+            parse_error("expected '</' to close a DOM element", *cur);
         if ((*cur)->kind != IDENTIFIER)
-            parse_error("expected an element name after '</'", token_head, *cur);
+            parse_error("expected an element name after '</'", *cur);
         if (strcmp((*cur)->value, tag) != 0)
-            parse_error("closing tag does not match the opening element name", token_head, *cur);
+            parse_error("closing tag does not match the opening element name", *cur);
         *cur = (*cur)->next;
         end_tok = *cur;
         if (!expect(cur, MLX_TAG_CLOSE))
-            parse_error("expected '>' after a closing tag name", token_head, *cur);
+            parse_error("expected '>' after a closing tag name", *cur);
     } else {
-        parse_error("expected '>' or '/>' after DOM element properties", token_head, *cur);
+        parse_error("expected '>' or '/>' after DOM element properties", *cur);
     }
 
     ASTNode *node = new_dom_element(tag, props, prop_count, children, child_count);

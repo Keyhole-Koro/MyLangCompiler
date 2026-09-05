@@ -22,7 +22,7 @@ void lower_fun_literals_block(ASTNode *block, const char *func_prefix, FunAlias 
             stmt->var_decl.init &&
             stmt->var_decl.init->type == AST_FUN_LITERAL) {
             char buf[128];
-            snprintf(buf, sizeof(buf), "%s_lam%d", func_prefix ? func_prefix : "g", g_funlit_counter++);
+            snprintf(buf, sizeof(buf), "%s_lam%d", func_prefix ? func_prefix : "g", parser_context_current()->lowering.function_literal_counter++);
             ASTNode *lit = stmt->var_decl.init;
             ASTNode *fn = new_fundef(stmt->var_decl.var_type, buf,
                                      lit->fun_literal.params, lit->fun_literal.param_count,
@@ -30,8 +30,8 @@ void lower_fun_literals_block(ASTNode *block, const char *func_prefix, FunAlias 
             fn->fundef.is_exported = 0;
             fn->fundef.package = NULL;
             add_function(fn);
-            g_hoisted_funcs = realloc(g_hoisted_funcs, sizeof(ASTNode*) * (g_hoisted_count + 1));
-            g_hoisted_funcs[g_hoisted_count++] = fn;
+            parser_context_current()->lowering.hoisted_functions = realloc(parser_context_current()->lowering.hoisted_functions, sizeof(ASTNode*) * (parser_context_current()->lowering.hoisted_function_count + 1));
+            parser_context_current()->lowering.hoisted_functions[parser_context_current()->lowering.hoisted_function_count++] = fn;
             lower_fun_literals_block(fn->fundef.body, buf, NULL, 0);
             lower_alias_push(&local_aliases, &local_count, stmt->var_decl.name, buf);
             continue;

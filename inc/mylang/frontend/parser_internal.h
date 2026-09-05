@@ -40,8 +40,8 @@ static inline void set_node_range_from_children(ASTNode *node, ASTNode *start, A
     }
 }
 
-void parse_error(const char *msg, Token *head, Token *cur);
-void parse_error_code(const char *code, const char *msg, Token *head, Token *cur);
+void parse_error(const char *msg, Token *cur);
+void parse_error_code(const char *code, const char *msg, Token *cur);
 int expect(Token **cur, TokenKind kind);
 int is_type(TokenKind kind, Token *cur);
 ASTNode *parse_expr_until_arrow(Token **cur);
@@ -92,6 +92,7 @@ void instantiate_generics(ASTNode *program);
 void load_imported_generic_templates(ASTNode *import_node, const char *source_path);
 ASTNode *parse_import(Token **cur);
 ASTNode *parse_toplevel(Token **cur);
+ASTNode *parse_program_syntax(Token **cur);
 
 void rewrite_node(ASTNode *node, char **scope, int scope_count);
 void lower_fun_literals_block(ASTNode *block, const char *func_prefix, FunAlias *aliases, int alias_count);

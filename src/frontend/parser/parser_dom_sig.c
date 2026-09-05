@@ -27,11 +27,11 @@ static void dom_resolve_path(const char *rel_path, char *out, size_t out_size) {
     char dir_buf[PATH_MAX];
 
     if (!rel_path || !out || out_size == 0) return;
-    if (rel_path[0] == '/' || !g_parse_filename) {
+    if (rel_path[0] == '/' || !parser_context_current()->module.filename) {
         snprintf(out, out_size, "%s", rel_path);
         return;
     }
-    snprintf(dir_buf, sizeof(dir_buf), "%s", g_parse_filename);
+    snprintf(dir_buf, sizeof(dir_buf), "%s", parser_context_current()->module.filename);
     slash = strrchr(dir_buf, '/');
     if (!slash) {
         snprintf(out, out_size, "%s", rel_path);

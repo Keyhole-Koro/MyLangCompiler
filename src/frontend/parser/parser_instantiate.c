@@ -29,7 +29,7 @@ static void generic_error(ASTNode *node, const char *message) {
     Token location = {0};
     location.line = node ? node->line : 0;
     location.col = node ? node->col : 0;
-    parse_error(message, NULL, &location);
+    parse_error(message, &location);
 }
 
 static void substitute(ASTNode **slot, void *context) {

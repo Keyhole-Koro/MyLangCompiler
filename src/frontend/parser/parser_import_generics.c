@@ -53,7 +53,8 @@ static void remove_import_symbol(ASTNode *node, const char *name) {
 }
 
 void load_imported_generic_templates(ASTNode *import_node, const char *source_path) {
-    ParserContext saved;
+    ParserContext imported_context;
+    ParserContext *previous_context;
     Token *tokens;
     Token *cur;
     ASTNode *program;
@@ -67,15 +68,16 @@ void load_imported_generic_templates(ASTNode *import_node, const char *source_pa
     tokens = lexer_from_file(source_path);
     if (!tokens) return; /* Imports may also name linker-provided symbols. */
 
-    parser_context_save(&saved);
-    parser_context_activate_empty();
-    token_head = tokens;
+    parser_context_init(&imported_context);
+    previous_context = parser_context_activate(&imported_context);
     parser_set_filename(source_path);
     cur = tokens;
-    program = parse_program(&cur);
+    /* Templates are copied in syntax form. The importing program's normal
+     * frontend pipeline specializes and lowers them after instantiation. */
+    program = parse_program_syntax(&cur);
 
-    for (int i = 0; i < g_generic_template_table.count; i++) {
-        ASTNode *template = g_generic_template_table.declarations[i];
+    for (int i = 0; i < parser_context_current()->symbols.generic_templates.count; i++) {
+        ASTNode *template = parser_context_current()->symbols.generic_templates.declarations[i];
         const char *name = template_name(template);
         if (!template_is_exported(template) || !import_requests_symbol(import_node, name))
             continue;
@@ -87,7 +89,7 @@ void load_imported_generic_templates(ASTNode *import_node, const char *source_pa
     free_ast(program);
     free_import_tokens(tokens);
     parser_reset();
-    parser_context_restore(&saved);
+    parser_context_activate(previous_context);
 
     for (int i = 0; i < copy_count; i++) {
         ASTNode *copy = copies[i];

@@ -5,8 +5,8 @@
 static ASTNode *parse_case_primary(Token **cur) {
     *cur = (*cur)->next;
     ASTNode *target = parse_expr(cur);
-    if (!expect(cur, OF)) parse_error("expected 'of' after case target", token_head, *cur);
-    if (!expect(cur, L_BRACE)) parse_error("expected '{' after of", token_head, *cur);
+    if (!expect(cur, OF)) parse_error("expected 'of' after case target", *cur);
+    if (!expect(cur, L_BRACE)) parse_error("expected '{' after of", *cur);
 
     CaseItem *cases = NULL;
     int count = 0;
@@ -15,21 +15,21 @@ static ASTNode *parse_case_primary(Token **cur) {
     while ((*cur)->kind != R_BRACE && (*cur)->kind != EOT) {
         if ((*cur)->kind == UNDERSCORE) {
             *cur = (*cur)->next;
-            if (!expect(cur, ARROW)) parse_error("expected '->' after _", token_head, *cur);
-            if (default_expr) parse_error("duplicate default case", token_head, *cur);
+            if (!expect(cur, ARROW)) parse_error("expected '->' after _", *cur);
+            if (default_expr) parse_error("duplicate default case", *cur);
             default_expr = parse_expr(cur);
         } else {
             ASTNode *key = parse_expr_until_arrow(cur);
-            if (!expect(cur, ARROW)) parse_error("expected '->' after case key", token_head, *cur);
+            if (!expect(cur, ARROW)) parse_error("expected '->' after case key", *cur);
             ASTNode *expr = parse_expr(cur);
             cases = realloc(cases, sizeof(CaseItem) * (count + 1));
             cases[count].key = key;
             cases[count].expr = expr;
             count++;
         }
-        if (!expect(cur, SEMICOLON)) parse_error("expected ';' after case expression", token_head, *cur);
+        if (!expect(cur, SEMICOLON)) parse_error("expected ';' after case expression", *cur);
     }
-    if (!expect(cur, R_BRACE)) parse_error("expected '}'", token_head, *cur);
+    if (!expect(cur, R_BRACE)) parse_error("expected '}'", *cur);
     return new_case_expr(target, cases, count, default_expr);
 }
 
@@ -44,10 +44,10 @@ static ASTNode *parse_identifier_primary(Token **cur) {
     int is_generic_function = generic_declaration != NULL;
     if ((*cur)->kind == LT &&
         (is_generic_function ||
-         (g_current_generic_function_name && strcmp(g_current_generic_function_name, name) == 0))) {
+         (parser_context_current()->control.current_generic_function_name && strcmp(parser_context_current()->control.current_generic_function_name, name) == 0))) {
         type_args = parse_type_args(cur, &type_arg_count);
         if ((*cur)->kind != L_PARENTHESES)
-            parse_error("expected '(' after generic function arguments", token_head, *cur);
+            parse_error("expected '(' after generic function arguments", *cur);
         if (is_generic_function &&
             type_arg_count != generic_declaration->fundef.type_param_count) {
             char message[256];
@@ -63,7 +63,6 @@ static ASTNode *parse_identifier_primary(Token **cur) {
             parse_error_code(
                 SEMCODE_GENERIC_ARG_COUNT_MISMATCH,
                 message,
-                token_head,
                 tok
             );
         }
@@ -72,13 +71,12 @@ static ASTNode *parse_identifier_primary(Token **cur) {
     if ((*cur)->kind == L_PARENTHESES) {
         if (type_arg_count == 0 &&
             (is_generic_function ||
-             (g_current_generic_function_name && strcmp(g_current_generic_function_name, name) == 0))) {
+             (parser_context_current()->control.current_generic_function_name && strcmp(parser_context_current()->control.current_generic_function_name, name) == 0))) {
             char message[256];
             snprintf(message, sizeof(message), "generic function '%s' requires type arguments", name);
             parse_error_code(
                 SEMCODE_GENERIC_ARGS_REQUIRED,
                 message,
-                token_head,
                 tok
             );
         }
@@ -100,7 +98,7 @@ static ASTNode *parse_identifier_primary(Token **cur) {
 
         Token *end_tok = *cur;
         if (!expect(cur, R_PARENTHESES))
-            parse_error("expected ')' after args", token_head, *cur);
+            parse_error("expected ')' after args", *cur);
         ASTNode *call = new_generic_call(name, type_args, type_arg_count, args, arg_count);
         set_node_loc_from_tokens(call, tok, NULL);
         set_node_end_from_token(call, end_tok);
@@ -124,7 +122,7 @@ static ASTNode *parse_identifier_primary(Token **cur) {
 
         Token *end_tok = *cur;
         if (!expect(cur, R_BRACKET))
-            parse_error("expected ']' after array index", token_head, *cur);
+            parse_error("expected ']' after array index", *cur);
 
         ASTNode *add = new_binary(ADD, node, index);
         node = new_unary(ASTARISK, add);
@@ -166,7 +164,7 @@ ASTNode *parse_primary(Token **cur) {
         if ((*cur)->kind != R_PARENTHESES) {
             params = parse_param_list(cur, &param_count, &is_variadic);
         }
-        if (!expect(cur, R_PARENTHESES)) parse_error("expected ')' after function literal parameters", token_head, *cur);
+        if (!expect(cur, R_PARENTHESES)) parse_error("expected ')' after function literal parameters", *cur);
         if ((*cur)->kind == FAT_ARROW) {
             *cur = (*cur)->next;
         }
@@ -177,13 +175,13 @@ ASTNode *parse_primary(Token **cur) {
         *cur = (*cur)->next;
         if ((*cur)->kind == L_BRACE) {
             ASTNode *block = parse_block(cur);
-            if (!expect(cur, R_PARENTHESES)) parse_error("expected ')' after statement expression", token_head, *cur);
+            if (!expect(cur, R_PARENTHESES)) parse_error("expected ')' after statement expression", *cur);
             return new_stmt_expr(block);
         }
         ASTNode *node = parse_expr(cur);
-        if (!expect(cur, R_PARENTHESES)) parse_error("expected ')'", token_head, *cur);
+        if (!expect(cur, R_PARENTHESES)) parse_error("expected ')'", *cur);
         return node;
     }
-    parse_error("expected primary", token_head, *cur);
+    parse_error("expected primary", *cur);
     return NULL;
 }

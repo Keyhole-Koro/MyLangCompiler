@@ -1,6 +1,5 @@
 #include "mylang/frontend/parser_internal.h"
 #include "mylang/frontend/parser_ast_internal.h"
-#include "mylang/frontend/parser_dom_internal.h"
 #include "mylang/frontend/lexer.h"
 #include <limits.h>
 
@@ -11,11 +10,11 @@ static void resolve_relative_to_source(const char *rel_path, char *out, size_t o
     char dir_buf[PATH_MAX];
 
     if (!rel_path || !out || out_size == 0) return;
-    if (rel_path[0] == '/' || !g_parse_filename) {
+    if (rel_path[0] == '/' || !parser_context_current()->module.filename) {
         snprintf(out, out_size, "%s", rel_path);
         return;
     }
-    snprintf(dir_buf, sizeof(dir_buf), "%s", g_parse_filename);
+    snprintf(dir_buf, sizeof(dir_buf), "%s", parser_context_current()->module.filename);
     slash = strrchr(dir_buf, '/');
     if (!slash) {
         snprintf(out, out_size, "%s", rel_path);
@@ -80,11 +79,11 @@ static ASTNode *make_import_node_with_templates(char *path, char **symbols, int 
 }
 
 ASTNode *parse_import(Token **cur) {
-    if (!expect(cur, IMPORT)) parse_error("expected 'import'", token_head, *cur);
+    if (!expect(cur, IMPORT)) parse_error("expected 'import'", *cur);
 
     if ((*cur)->kind == IDENTIFIER && (*cur)->next && (*cur)->next->kind == SEMICOLON) {
-        g_imported_packages = realloc(g_imported_packages, sizeof(char*) * (g_imported_pkg_count + 1));
-        g_imported_packages[g_imported_pkg_count++] = strdup((*cur)->value);
+        parser_context_current()->module.imported_packages = realloc(parser_context_current()->module.imported_packages, sizeof(char*) * (parser_context_current()->module.imported_package_count + 1));
+        parser_context_current()->module.imported_packages[parser_context_current()->module.imported_package_count++] = strdup((*cur)->value);
         *cur = (*cur)->next;
         expect(cur, SEMICOLON);
         return NULL;
@@ -94,19 +93,19 @@ ASTNode *parse_import(Token **cur) {
         char *ident = strdup((*cur)->value);
         *cur = (*cur)->next;
 
-        if (!expect(cur, FROM)) parse_error("expected 'from'", token_head, *cur);
-        if ((*cur)->kind != STRING_LITERAL) parse_error("expected file path string", token_head, *cur);
+        if (!expect(cur, FROM)) parse_error("expected 'from'", *cur);
+        if ((*cur)->kind != STRING_LITERAL) parse_error("expected file path string", *cur);
         char *path = (*cur)->value;
         *cur = (*cur)->next;
-        if (!expect(cur, SEMICOLON)) parse_error("expected ';'", token_head, *cur);
+        if (!expect(cur, SEMICOLON)) parse_error("expected ';'", *cur);
 
         /* If the target file declares `package <ident>;`, treat this as a
          * package import: register the namespace so `ident.func()` qualified
          * calls rewrite to `ident_func`, while still emitting an import node so
          * codegen scans the file for (variadic-aware) exported signatures. */
         if (import_path_declares_package(path, ident)) {
-            g_imported_packages = realloc(g_imported_packages, sizeof(char*) * (g_imported_pkg_count + 1));
-            g_imported_packages[g_imported_pkg_count++] = ident;
+            parser_context_current()->module.imported_packages = realloc(parser_context_current()->module.imported_packages, sizeof(char*) * (parser_context_current()->module.imported_package_count + 1));
+            parser_context_current()->module.imported_packages[parser_context_current()->module.imported_package_count++] = ident;
             char **symbols = NULL;
             return make_import_node_with_templates(path, symbols, 0);
         }
@@ -116,14 +115,14 @@ ASTNode *parse_import(Token **cur) {
         return make_import_node_with_templates(path, symbols, 1);
     }
 
-    if (!expect(cur, L_BRACE)) parse_error("expected '{'", token_head, *cur);
+    if (!expect(cur, L_BRACE)) parse_error("expected '{'", *cur);
 
     char **symbols = NULL;
     int count = 0;
 
     if ((*cur)->kind != R_BRACE) {
         while (1) {
-            if ((*cur)->kind != IDENTIFIER) parse_error("expected identifier in import list", token_head, *cur);
+            if ((*cur)->kind != IDENTIFIER) parse_error("expected identifier in import list", *cur);
             symbols = realloc(symbols, sizeof(char*) * (count + 1));
             symbols[count++] = strdup((*cur)->value);
             *cur = (*cur)->next;
@@ -135,14 +134,14 @@ ASTNode *parse_import(Token **cur) {
         }
     }
 
-    if (!expect(cur, R_BRACE)) parse_error("expected '}'", token_head, *cur);
-    if (!expect(cur, FROM)) parse_error("expected 'from'", token_head, *cur);
+    if (!expect(cur, R_BRACE)) parse_error("expected '}'", *cur);
+    if (!expect(cur, FROM)) parse_error("expected 'from'", *cur);
 
-    if ((*cur)->kind != STRING_LITERAL) parse_error("expected file path string", token_head, *cur);
+    if ((*cur)->kind != STRING_LITERAL) parse_error("expected file path string", *cur);
     char *path = (*cur)->value;
     *cur = (*cur)->next;
 
-    if (!expect(cur, SEMICOLON)) parse_error("expected ';'", token_head, *cur);
+    if (!expect(cur, SEMICOLON)) parse_error("expected ';'", *cur);
 
     return make_import_node_with_templates(path, symbols, count);
 }
@@ -150,10 +149,10 @@ ASTNode *parse_import(Token **cur) {
 ASTNode* parse_toplevel(Token **cur) {
     if ((*cur)->kind == PACKAGE) {
         *cur = (*cur)->next;
-        if ((*cur)->kind != IDENTIFIER) parse_error("expected package name", token_head, *cur);
+        if ((*cur)->kind != IDENTIFIER) parse_error("expected package name", *cur);
         set_current_package((*cur)->value);
         *cur = (*cur)->next;
-        if (!expect(cur, SEMICOLON)) parse_error("expected ';' after package name", token_head, *cur);
+        if (!expect(cur, SEMICOLON)) parse_error("expected ';' after package name", *cur);
         return NULL;
     }
 
@@ -172,7 +171,7 @@ ASTNode* parse_toplevel(Token **cur) {
         ASTNode *declaration = parse_struct(cur);
         if (declaration && declaration->type == AST_STRUCT && declaration->struct_stmt.type_param_count > 0) {
             declaration->struct_stmt.is_exported = want_export;
-            if (want_export) declaration->struct_stmt.package = strdup(g_current_package);
+            if (want_export) declaration->struct_stmt.package = strdup(parser_context_current()->module.current_package);
             add_generic_template(declaration);
             return NULL;
         }
@@ -183,19 +182,19 @@ ASTNode* parse_toplevel(Token **cur) {
         ASTNode *fn = parse_generic_fundef(cur);
         if (fn && fn->fundef.type_param_count > 0) {
             fn->fundef.is_exported = want_export;
-            if (want_export) fn->fundef.package = strdup(g_current_package);
+            if (want_export) fn->fundef.package = strdup(parser_context_current()->module.current_package);
             add_generic_template(fn);
             return NULL;
         }
-        parse_error("generic function must declare type parameters", token_head, *cur);
+        parse_error("generic function must declare type parameters", *cur);
     }
     if (is_type((*cur)->kind, *cur)) {
         if (looks_like_function(*cur)) {
             ASTNode *fn = parse_fundef(cur);
             if (fn && want_export) {
                 fn->fundef.is_exported = 1;
-                fn->fundef.package = strdup(g_current_package);
-                const char *m = mangle(g_current_package, fn->fundef.name);
+                fn->fundef.package = strdup(parser_context_current()->module.current_package);
+                const char *m = mangle(parser_context_current()->module.current_package, fn->fundef.name);
                 add_export(fn->fundef.name, m);
                 free(fn->fundef.name);
                 fn->fundef.name = strdup(m);
@@ -205,8 +204,8 @@ ASTNode* parse_toplevel(Token **cur) {
         ASTNode *vd = parse_variable_declaration(cur, 1);
         if (vd && want_export) {
             vd->var_decl.is_exported = 1;
-            vd->var_decl.package = strdup(g_current_package);
-            const char *m = mangle(g_current_package, vd->var_decl.name);
+            vd->var_decl.package = strdup(parser_context_current()->module.current_package);
+            const char *m = mangle(parser_context_current()->module.current_package, vd->var_decl.name);
             add_export(vd->var_decl.name, m);
             free(vd->var_decl.name);
             vd->var_decl.name = strdup(m);
@@ -214,11 +213,12 @@ ASTNode* parse_toplevel(Token **cur) {
         return vd;
     }
 
-    parse_error("unexpected toplevel construct: only declarations and definitions are allowed", token_head, *cur);
+    parse_error("unexpected toplevel construct: only declarations and definitions are allowed", *cur);
     return NULL;
 }
 
-ASTNode* parse_program(Token **cur) {
+ASTNode *parse_program_syntax(Token **cur) {
+    parser_context_current()->token_head = cur ? *cur : NULL;
     ASTNode **nodes = NULL;
     int count = 0;
     while ((*cur)->kind != EOT) {
@@ -227,25 +227,5 @@ ASTNode* parse_program(Token **cur) {
         nodes = realloc(nodes, sizeof(ASTNode*) * (count + 1));
         nodes[count++] = node;
     }
-    ASTNode *prog = new_block(nodes, count);
-    instantiate_generics(prog);
-    dom_lowering_reset();
-    dom_lowering_set_program(prog);
-    lower_dom_block(prog);
-    ensure_no_dom_elements(prog);
-    lower_fun_literals_block(prog, "g", NULL, 0);
-    if (g_hoisted_count > 0) {
-        prog->block.stmts = realloc(prog->block.stmts, sizeof(ASTNode*) * (prog->block.count + g_hoisted_count));
-        for (int i = 0; i < g_hoisted_count; i++) {
-            prog->block.stmts[prog->block.count + i] = g_hoisted_funcs[i];
-        }
-        prog->block.count += g_hoisted_count;
-        g_hoisted_count = 0;
-        free(g_hoisted_funcs);
-        g_hoisted_funcs = NULL;
-    }
-    ensure_no_fun_literals(prog);
-    char *scope_buf[128] = {0};
-    rewrite_node(prog, scope_buf, 0);
-    return prog;
+    return new_block(nodes, count);
 }

@@ -6,7 +6,8 @@
 
 ASTNode* parse_program(Token **cur);
 void parser_set_filename(const char *name);
-// Reset parser global state between independent compilation units.
+int parser_name_has_imported_package_prefix(const char *name);
+// Reset the active parser context between independent compilation units.
 void parser_reset(void);
 void print_ast(ASTNode *node, int indent);
 // Writes the AST to a FILE* instead of stdout.
