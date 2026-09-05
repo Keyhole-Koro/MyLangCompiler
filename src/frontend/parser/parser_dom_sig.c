@@ -22,16 +22,17 @@
  * and imports can all use; until that exists this stays DOM-local.
  */
 
-static void dom_resolve_path(const char *rel_path, char *out, size_t out_size) {
+static void dom_resolve_path(ParserContext *context, const char *rel_path,
+                             char *out, size_t out_size) {
     const char *slash;
     char dir_buf[PATH_MAX];
 
     if (!rel_path || !out || out_size == 0) return;
-    if (rel_path[0] == '/' || !parser_context_current()->module.filename) {
+    if (rel_path[0] == '/' || !context->module.filename) {
         snprintf(out, out_size, "%s", rel_path);
         return;
     }
-    snprintf(dir_buf, sizeof(dir_buf), "%s", parser_context_current()->module.filename);
+    snprintf(dir_buf, sizeof(dir_buf), "%s", context->module.filename);
     slash = strrchr(dir_buf, '/');
     if (!slash) {
         snprintf(out, out_size, "%s", rel_path);
@@ -160,11 +161,12 @@ static int package_name_of(const char *path, char *out, size_t out_size) {
     return found;
 }
 
-int dom_signature_lookup(ASTNode *program, const char *tag, DomSignature *out) {
+int dom_signature_lookup(ParserContext *context, ASTNode *program,
+                         const char *tag, DomSignature *out) {
     if (!tag || !out) return 0;
     memset(out, 0, sizeof(*out));
 
-    ASTNode *local = find_function(tag);
+    ASTNode *local = find_function(context, tag);
     if (local && local->type == AST_FUNDEF) {
         out->call_name = strdup(tag);
         for (int i = 0; i < local->fundef.param_count; i++) {
@@ -181,7 +183,7 @@ int dom_signature_lookup(ASTNode *program, const char *tag, DomSignature *out) {
         if (!node || node->type != AST_IMPORT || !node->import_stmt.path) continue;
 
         char path[PATH_MAX];
-        dom_resolve_path(node->import_stmt.path, path, sizeof(path));
+        dom_resolve_path(context, node->import_stmt.path, path, sizeof(path));
         size_t len = strlen(path);
         if (len < 4 || strcmp(path + len - 4, ".mln") != 0) continue;
 

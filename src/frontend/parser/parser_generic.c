@@ -32,80 +32,80 @@ static int expect_type_arg_close(Token **cur) {
     return 0;
 }
 
-char **parse_type_params(Token **cur, int *out_count, int add_to_scope) {
+char **parse_type_params(ParserContext *context, Token **cur, int *out_count, int add_to_scope) {
     char **params = NULL;
     int count = 0;
 
-    if (!expect(cur, LT)) parse_error("expected '<' before type parameters", *cur);
-    if ((*cur)->kind == GT) parse_error("generic declaration requires at least one type parameter", *cur);
+    if (!expect(cur, LT)) parse_error(context, "expected '<' before type parameters", *cur);
+    if ((*cur)->kind == GT) parse_error(context, "generic declaration requires at least one type parameter", *cur);
 
     while (1) {
         if ((*cur)->kind != IDENTIFIER)
-            parse_error("expected type parameter name", *cur);
+            parse_error(context, "expected type parameter name", *cur);
         if (contains_name(params, count, (*cur)->value))
-            parse_error("duplicate type parameter", *cur);
+            parse_error(context, "duplicate type parameter", *cur);
 
         params = realloc(params, sizeof(char *) * (count + 1));
         params[count] = strdup((*cur)->value);
-        if (add_to_scope) add_typename((*cur)->value);
+        if (add_to_scope) add_typename(context, (*cur)->value);
         count++;
         *cur = (*cur)->next;
 
         if ((*cur)->kind != COMMA) break;
         *cur = (*cur)->next;
         if ((*cur)->kind == GT)
-            parse_error("trailing comma in type parameter list", *cur);
+            parse_error(context, "trailing comma in type parameter list", *cur);
     }
 
-    if (!expect(cur, GT)) parse_error("expected '>' after type parameters", *cur);
+    if (!expect(cur, GT)) parse_error(context, "expected '>' after type parameters", *cur);
     *out_count = count;
     return params;
 }
 
-ASTNode **parse_type_args(Token **cur, int *out_count) {
+ASTNode **parse_type_args(ParserContext *context, Token **cur, int *out_count) {
     ASTNode **args = NULL;
     int count = 0;
 
-    if (!expect(cur, LT)) parse_error("expected '<' before type arguments", *cur);
-    if ((*cur)->kind == GT) parse_error("generic use requires at least one type argument", *cur);
+    if (!expect(cur, LT)) parse_error(context, "expected '<' before type arguments", *cur);
+    if ((*cur)->kind == GT) parse_error(context, "generic use requires at least one type argument", *cur);
 
     while (1) {
-        ASTNode *arg = parse_type(cur);
+        ASTNode *arg = parse_type(context, cur);
         args = realloc(args, sizeof(ASTNode *) * (count + 1));
         args[count++] = arg;
         if ((*cur)->kind != COMMA) break;
         *cur = (*cur)->next;
         if ((*cur)->kind == GT)
-            parse_error("trailing comma in type argument list", *cur);
+            parse_error(context, "trailing comma in type argument list", *cur);
     }
 
-    if (!expect_type_arg_close(cur)) parse_error("expected '>' after type arguments", *cur);
+    if (!expect_type_arg_close(cur)) parse_error(context, "expected '>' after type arguments", *cur);
     *out_count = count;
     return args;
 }
 
-ASTNode *parse_generic_fundef(Token **cur) {
-    Token *params_start = generic_function_type_params_start(*cur);
-    if (!params_start) parse_error("invalid generic function declaration", *cur);
+ASTNode *parse_generic_fundef(ParserContext *context, Token **cur) {
+    Token *params_start = generic_function_type_params_start(context, *cur);
+    if (!params_start) parse_error(context, "invalid generic function declaration", *cur);
 
     Token *name_tok = *cur;
     while (name_tok && name_tok->next != params_start) name_tok = name_tok->next;
     if (!name_tok || name_tok->kind != IDENTIFIER)
-        parse_error("expected generic function name", *cur);
+        parse_error(context, "expected generic function name", *cur);
 
-    int mark = typename_scope_mark();
+    int mark = typename_scope_mark(context);
     int scope_param_count = 0;
     Token *lookahead = params_start;
-    char **scope_params = parse_type_params(&lookahead, &scope_param_count, 1);
+    char **scope_params = parse_type_params(context, &lookahead, &scope_param_count, 1);
     for (int i = 0; i < scope_param_count; i++) free(scope_params[i]);
     free(scope_params);
 
-    const char *previous_generic_function = parser_context_current()->control.current_generic_function_name;
-    parser_context_current()->control.current_generic_function_name = name_tok->value;
-    parser_context_current()->control.generic_decl_depth++;
-    ASTNode *fn = parse_fundef(cur);
-    parser_context_current()->control.generic_decl_depth--;
-    parser_context_current()->control.current_generic_function_name = previous_generic_function;
-    restore_typenames(mark);
+    const char *previous_generic_function = context->control.current_generic_function_name;
+    context->control.current_generic_function_name = name_tok->value;
+    context->control.generic_decl_depth++;
+    ASTNode *fn = parse_fundef(context, cur);
+    context->control.generic_decl_depth--;
+    context->control.current_generic_function_name = previous_generic_function;
+    restore_typenames(context, mark);
     return fn;
 }
