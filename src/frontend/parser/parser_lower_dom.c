@@ -34,13 +34,11 @@ typedef struct {
     int count;
 } DomEmit;
 
-static int g_dom_node_counter = 0;
-static ASTNode *g_dom_program = NULL;
-
-static void dom_error(const ASTNode *node, int line, int col, const char *fmt, ...) {
+static void dom_error(ParserContext *context, const ASTNode *node,
+                      int line, int col, const char *fmt, ...) {
     va_list ap;
     fprintf(stderr, "%s:%d:%d: error: ",
-            g_parse_filename ? g_parse_filename : "<input>",
+            context->module.filename ? context->module.filename : "<input>",
             node ? (line ? line : node->line) : line,
             node ? (col ? col : node->col) : col);
     va_start(ap, fmt);
@@ -94,12 +92,12 @@ static void free_element_shell(ASTNode *el) {
 
 // Lowers one element (and its subtree) into `out`, returning the name of the
 // local that holds its node id.
-static char *emit_element(ASTNode *el, DomEmit *out) {
+static char *emit_element(ParserContext *context, ASTNode *el, DomEmit *out) {
     const char *tag = el->dom_element.tag;
     DomSignature sig;
 
-    if (!dom_signature_lookup(g_dom_program, tag, &sig)) {
-        dom_error(el, 0, 0,
+    if (!dom_signature_lookup(context, context->lowering.dom_program, tag, &sig)) {
+        dom_error(context, el, 0, 0,
                   "no function named '%s' is in scope for <%s>; a DOM element "
                   "calls the function of the same name", tag, tag);
     }
@@ -108,7 +106,7 @@ static char *emit_element(ASTNode *el, DomEmit *out) {
         DomProp *p = &el->dom_element.props[i];
         for (int j = 0; j < i; j++) {
             if (strcmp(el->dom_element.props[j].name, p->name) == 0) {
-                dom_error(el, p->line, p->col, "<%s> sets '%s' twice", tag, p->name);
+                dom_error(context, el, p->line, p->col, "<%s> sets '%s' twice", tag, p->name);
             }
         }
         int matched = 0;
@@ -116,7 +114,7 @@ static char *emit_element(ASTNode *el, DomEmit *out) {
             if (strcmp(sig.param_names[j], p->name) == 0) { matched = 1; break; }
         }
         if (!matched) {
-            dom_error(el, p->line, p->col, "<%s> has no property '%s'; '%s' has no such parameter",
+            dom_error(context, el, p->line, p->col, "<%s> has no property '%s'; '%s' has no such parameter",
                       tag, p->name, sig.call_name);
         }
     }
@@ -127,25 +125,25 @@ static char *emit_element(ASTNode *el, DomEmit *out) {
     for (int i = 0; i < sig.param_count; i++) {
         ASTNode *value = take_prop(el, sig.param_names[i]);
         if (!value) {
-            dom_error(el, 0, 0, "<%s> is missing property '%s'; '%s' takes it as a parameter",
+            dom_error(context, el, 0, 0, "<%s> is missing property '%s'; '%s' takes it as a parameter",
                       tag, sig.param_names[i], sig.call_name);
         }
         args[i] = value;
     }
 
     char var[32];
-    snprintf(var, sizeof(var), "__dom%d", g_dom_node_counter++);
+    snprintf(var, sizeof(var), "__dom%d", context->lowering.dom_node_counter++);
     emit_stmt(out, new_var_decl(i32_type(), var,
                                 dom_call(sig.call_name, args, sig.param_count, el)));
 
     if (el->dom_element.child_count > 0) {
         DomSignature append_sig;
-        if (!dom_signature_lookup(g_dom_program, DOM_APPEND_CHILD, &append_sig)) {
-            dom_error(el, 0, 0,
+        if (!dom_signature_lookup(context, context->lowering.dom_program, DOM_APPEND_CHILD, &append_sig)) {
+            dom_error(context, el, 0, 0,
                       "children need a function named '%s' in scope", DOM_APPEND_CHILD);
         }
         for (int i = 0; i < el->dom_element.child_count; i++) {
-            char *child_var = emit_element(el->dom_element.children[i], out);
+            char *child_var = emit_element(context, el->dom_element.children[i], out);
             ASTNode **child_args = malloc(sizeof(ASTNode*) * 2);
             child_args[0] = new_identifier(var);
             child_args[1] = new_identifier(child_var);
@@ -161,13 +159,13 @@ static char *emit_element(ASTNode *el, DomEmit *out) {
     return strdup(var);
 }
 
-static void lower_expr(ASTNode **slot, DomEmit *out) {
+static void lower_expr(ParserContext *context, ASTNode **slot, DomEmit *out) {
     ASTNode *node = slot ? *slot : NULL;
     if (!node) return;
 
     if (node->type == AST_DOM_ELEMENT) {
         int line = node->line, col = node->col;
-        char *var = emit_element(node, out);
+        char *var = emit_element(context, node, out);
         ASTNode *ref = new_identifier(var);
         ref->line = line;
         ref->col = col;
@@ -178,48 +176,48 @@ static void lower_expr(ASTNode **slot, DomEmit *out) {
 
     switch (node->type) {
     case AST_BINARY:
-        lower_expr(&node->binary.left, out);
-        lower_expr(&node->binary.right, out);
+        lower_expr(context, &node->binary.left, out);
+        lower_expr(context, &node->binary.right, out);
         break;
     case AST_ASSIGN:
-        lower_expr(&node->assign.left, out);
-        lower_expr(&node->assign.right, out);
+        lower_expr(context, &node->assign.left, out);
+        lower_expr(context, &node->assign.right, out);
         break;
     case AST_UNARY:
-        lower_expr(&node->unary.operand, out);
+        lower_expr(context, &node->unary.operand, out);
         break;
     case AST_BORROW:
-        lower_expr(&node->borrow.expr, out);
+        lower_expr(context, &node->borrow.expr, out);
         break;
     case AST_BORROW_MUT:
-        lower_expr(&node->borrow_mut.expr, out);
+        lower_expr(context, &node->borrow_mut.expr, out);
         break;
     case AST_CAST:
-        lower_expr(&node->cast.expr, out);
+        lower_expr(context, &node->cast.expr, out);
         break;
     case AST_TERNARY:
-        lower_expr(&node->ternary.cond, out);
-        lower_expr(&node->ternary.then_expr, out);
-        lower_expr(&node->ternary.else_expr, out);
+        lower_expr(context, &node->ternary.cond, out);
+        lower_expr(context, &node->ternary.then_expr, out);
+        lower_expr(context, &node->ternary.else_expr, out);
         break;
     case AST_CALL:
         for (int i = 0; i < node->call.arg_count; i++) {
-            lower_expr(&node->call.args[i], out);
+            lower_expr(context, &node->call.args[i], out);
         }
         break;
     case AST_MEMBER_ACCESS:
-        lower_expr(&node->member_access.lhs, out);
+        lower_expr(context, &node->member_access.lhs, out);
         break;
     case AST_ARROW_ACCESS:
-        lower_expr(&node->arrow_access.lhs, out);
+        lower_expr(context, &node->arrow_access.lhs, out);
         break;
     case AST_INIT_LIST:
         for (int i = 0; i < node->init_list.count; i++) {
-            lower_expr(&node->init_list.elements[i], out);
+            lower_expr(context, &node->init_list.elements[i], out);
         }
         break;
     case AST_SIZEOF:
-        lower_expr(&node->sizeof_expr.expr, out);
+        lower_expr(context, &node->sizeof_expr.expr, out);
         break;
     default:
         break;
@@ -228,83 +226,83 @@ static void lower_expr(ASTNode **slot, DomEmit *out) {
 
 // Lowers the expressions a statement owns directly. Nested blocks are handled
 // separately so their statements hoist into their own scope.
-static void lower_stmt_exprs(ASTNode *stmt, DomEmit *out) {
+static void lower_stmt_exprs(ParserContext *context, ASTNode *stmt, DomEmit *out) {
     if (!stmt) return;
     switch (stmt->type) {
     case AST_RETURN:
-        lower_expr(&stmt->ret.expr, out);
+        lower_expr(context, &stmt->ret.expr, out);
         break;
     case AST_YIELD:
-        lower_expr(&stmt->yield_stmt.expr, out);
+        lower_expr(context, &stmt->yield_stmt.expr, out);
         break;
     case AST_EXPR_STMT:
-        lower_expr(&stmt->expr_stmt.expr, out);
+        lower_expr(context, &stmt->expr_stmt.expr, out);
         break;
     case AST_VAR_DECL:
-        lower_expr(&stmt->var_decl.init, out);
+        lower_expr(context, &stmt->var_decl.init, out);
         break;
     case AST_ASSIGN:
-        lower_expr(&stmt->assign.right, out);
+        lower_expr(context, &stmt->assign.right, out);
         break;
     case AST_IF:
-        lower_expr(&stmt->if_stmt.cond, out);
+        lower_expr(context, &stmt->if_stmt.cond, out);
         break;
     case AST_WHILE:
-        lower_expr(&stmt->while_stmt.cond, out);
+        lower_expr(context, &stmt->while_stmt.cond, out);
         break;
     case AST_DO_WHILE:
-        lower_expr(&stmt->do_while_stmt.cond, out);
+        lower_expr(context, &stmt->do_while_stmt.cond, out);
         break;
     case AST_FOR:
-        lower_stmt_exprs(stmt->for_stmt.init, out);
-        lower_expr(&stmt->for_stmt.cond, out);
-        lower_stmt_exprs(stmt->for_stmt.inc, out);
+        lower_stmt_exprs(context, stmt->for_stmt.init, out);
+        lower_expr(context, &stmt->for_stmt.cond, out);
+        lower_stmt_exprs(context, stmt->for_stmt.inc, out);
         break;
     default:
         break;
     }
 }
 
-static void lower_nested_blocks(ASTNode *stmt) {
+static void lower_nested_blocks(ParserContext *context, ASTNode *stmt) {
     if (!stmt) return;
     switch (stmt->type) {
     case AST_BLOCK:
-        lower_dom_block(stmt);
+        lower_dom_block(context, stmt);
         break;
     case AST_FUNDEF:
-        lower_nested_blocks(stmt->fundef.body);
+        lower_nested_blocks(context, stmt->fundef.body);
         break;
     case AST_FUN_LITERAL:
-        lower_nested_blocks(stmt->fun_literal.body);
+        lower_nested_blocks(context, stmt->fun_literal.body);
         break;
     case AST_IF:
-        lower_nested_blocks(stmt->if_stmt.then_stmt);
-        lower_nested_blocks(stmt->if_stmt.else_stmt);
+        lower_nested_blocks(context, stmt->if_stmt.then_stmt);
+        lower_nested_blocks(context, stmt->if_stmt.else_stmt);
         break;
     case AST_WHILE:
-        lower_nested_blocks(stmt->while_stmt.body);
+        lower_nested_blocks(context, stmt->while_stmt.body);
         break;
     case AST_DO_WHILE:
-        lower_nested_blocks(stmt->do_while_stmt.body);
+        lower_nested_blocks(context, stmt->do_while_stmt.body);
         break;
     case AST_FOR:
-        lower_nested_blocks(stmt->for_stmt.body);
+        lower_nested_blocks(context, stmt->for_stmt.body);
         break;
     case AST_UNCHECKED:
-        lower_nested_blocks(stmt->unchecked_block.body);
+        lower_nested_blocks(context, stmt->unchecked_block.body);
         break;
     case AST_STMT_EXPR:
-        lower_nested_blocks(stmt->stmt_expr.block);
+        lower_nested_blocks(context, stmt->stmt_expr.block);
         break;
     case AST_VAR_DECL:
-        if (stmt->var_decl.init) lower_nested_blocks(stmt->var_decl.init);
+        if (stmt->var_decl.init) lower_nested_blocks(context, stmt->var_decl.init);
         break;
     default:
         break;
     }
 }
 
-void lower_dom_block(ASTNode *block) {
+void lower_dom_block(ParserContext *context, ASTNode *block) {
     if (!block || block->type != AST_BLOCK) return;
 
     ASTNode **stmts = NULL;
@@ -315,14 +313,14 @@ void lower_dom_block(ASTNode *block) {
         if (!stmt) continue;
 
         DomEmit emit = { NULL, 0 };
-        lower_stmt_exprs(stmt, &emit);
+        lower_stmt_exprs(context, stmt, &emit);
         for (int j = 0; j < emit.count; j++) {
             stmts = realloc(stmts, sizeof(ASTNode*) * (count + 1));
             stmts[count++] = emit.stmts[j];
         }
         free(emit.stmts);
 
-        lower_nested_blocks(stmt);
+        lower_nested_blocks(context, stmt);
 
         stmts = realloc(stmts, sizeof(ASTNode*) * (count + 1));
         stmts[count++] = stmt;
@@ -333,117 +331,117 @@ void lower_dom_block(ASTNode *block) {
     block->block.count = count;
 }
 
-void ensure_no_dom_elements(ASTNode *node) {
+void ensure_no_dom_elements(ParserContext *context, ASTNode *node) {
     if (!node) return;
     switch (node->type) {
     case AST_DOM_ELEMENT:
-        dom_error(node, 0, 0,
+        dom_error(context, node, 0, 0,
                   "a DOM element is only allowed as a value inside a statement, "
                   "such as `return <%s .../>;`", node->dom_element.tag);
         break;
     case AST_VAR_DECL:
-        ensure_no_dom_elements(node->var_decl.init);
+        ensure_no_dom_elements(context, node->var_decl.init);
         break;
     case AST_ASSIGN:
-        ensure_no_dom_elements(node->assign.left);
-        ensure_no_dom_elements(node->assign.right);
+        ensure_no_dom_elements(context, node->assign.left);
+        ensure_no_dom_elements(context, node->assign.right);
         break;
     case AST_BINARY:
-        ensure_no_dom_elements(node->binary.left);
-        ensure_no_dom_elements(node->binary.right);
+        ensure_no_dom_elements(context, node->binary.left);
+        ensure_no_dom_elements(context, node->binary.right);
         break;
     case AST_UNARY:
-        ensure_no_dom_elements(node->unary.operand);
+        ensure_no_dom_elements(context, node->unary.operand);
         break;
     case AST_BORROW:
-        ensure_no_dom_elements(node->borrow.expr);
+        ensure_no_dom_elements(context, node->borrow.expr);
         break;
     case AST_BORROW_MUT:
-        ensure_no_dom_elements(node->borrow_mut.expr);
+        ensure_no_dom_elements(context, node->borrow_mut.expr);
         break;
     case AST_CAST:
-        ensure_no_dom_elements(node->cast.expr);
+        ensure_no_dom_elements(context, node->cast.expr);
         break;
     case AST_TERNARY:
-        ensure_no_dom_elements(node->ternary.cond);
-        ensure_no_dom_elements(node->ternary.then_expr);
-        ensure_no_dom_elements(node->ternary.else_expr);
+        ensure_no_dom_elements(context, node->ternary.cond);
+        ensure_no_dom_elements(context, node->ternary.then_expr);
+        ensure_no_dom_elements(context, node->ternary.else_expr);
         break;
     case AST_IF:
-        ensure_no_dom_elements(node->if_stmt.cond);
-        ensure_no_dom_elements(node->if_stmt.then_stmt);
-        ensure_no_dom_elements(node->if_stmt.else_stmt);
+        ensure_no_dom_elements(context, node->if_stmt.cond);
+        ensure_no_dom_elements(context, node->if_stmt.then_stmt);
+        ensure_no_dom_elements(context, node->if_stmt.else_stmt);
         break;
     case AST_WHILE:
-        ensure_no_dom_elements(node->while_stmt.cond);
-        ensure_no_dom_elements(node->while_stmt.body);
+        ensure_no_dom_elements(context, node->while_stmt.cond);
+        ensure_no_dom_elements(context, node->while_stmt.body);
         break;
     case AST_DO_WHILE:
-        ensure_no_dom_elements(node->do_while_stmt.cond);
-        ensure_no_dom_elements(node->do_while_stmt.body);
+        ensure_no_dom_elements(context, node->do_while_stmt.cond);
+        ensure_no_dom_elements(context, node->do_while_stmt.body);
         break;
     case AST_FOR:
-        ensure_no_dom_elements(node->for_stmt.init);
-        ensure_no_dom_elements(node->for_stmt.cond);
-        ensure_no_dom_elements(node->for_stmt.inc);
-        ensure_no_dom_elements(node->for_stmt.body);
+        ensure_no_dom_elements(context, node->for_stmt.init);
+        ensure_no_dom_elements(context, node->for_stmt.cond);
+        ensure_no_dom_elements(context, node->for_stmt.inc);
+        ensure_no_dom_elements(context, node->for_stmt.body);
         break;
     case AST_RETURN:
-        ensure_no_dom_elements(node->ret.expr);
+        ensure_no_dom_elements(context, node->ret.expr);
         break;
     case AST_YIELD:
-        ensure_no_dom_elements(node->yield_stmt.expr);
+        ensure_no_dom_elements(context, node->yield_stmt.expr);
         break;
     case AST_EXPR_STMT:
-        ensure_no_dom_elements(node->expr_stmt.expr);
+        ensure_no_dom_elements(context, node->expr_stmt.expr);
         break;
     case AST_CALL:
         for (int i = 0; i < node->call.arg_count; i++) {
-            ensure_no_dom_elements(node->call.args[i]);
+            ensure_no_dom_elements(context, node->call.args[i]);
         }
         break;
     case AST_INIT_LIST:
         for (int i = 0; i < node->init_list.count; i++) {
-            ensure_no_dom_elements(node->init_list.elements[i]);
+            ensure_no_dom_elements(context, node->init_list.elements[i]);
         }
         break;
     case AST_BLOCK:
         for (int i = 0; i < node->block.count; i++) {
-            ensure_no_dom_elements(node->block.stmts[i]);
+            ensure_no_dom_elements(context, node->block.stmts[i]);
         }
         break;
     case AST_UNCHECKED:
-        ensure_no_dom_elements(node->unchecked_block.body);
+        ensure_no_dom_elements(context, node->unchecked_block.body);
         break;
     case AST_STMT_EXPR:
-        ensure_no_dom_elements(node->stmt_expr.block);
+        ensure_no_dom_elements(context, node->stmt_expr.block);
         break;
     case AST_FUNDEF:
-        ensure_no_dom_elements(node->fundef.body);
+        ensure_no_dom_elements(context, node->fundef.body);
         break;
     case AST_FUN_LITERAL:
-        ensure_no_dom_elements(node->fun_literal.body);
+        ensure_no_dom_elements(context, node->fun_literal.body);
         break;
     case AST_MEMBER_ACCESS:
-        ensure_no_dom_elements(node->member_access.lhs);
+        ensure_no_dom_elements(context, node->member_access.lhs);
         break;
     case AST_ARROW_ACCESS:
-        ensure_no_dom_elements(node->arrow_access.lhs);
+        ensure_no_dom_elements(context, node->arrow_access.lhs);
         break;
     case AST_SIZEOF:
-        ensure_no_dom_elements(node->sizeof_expr.expr);
+        ensure_no_dom_elements(context, node->sizeof_expr.expr);
         break;
     default:
         break;
     }
 }
 
-void dom_lowering_reset(void) {
-    g_dom_node_counter = 0;
-    g_dom_program = NULL;
+void dom_lowering_reset(ParserContext *context) {
+    context->lowering.dom_node_counter = 0;
+    context->lowering.dom_program = NULL;
 }
 
 // The whole program is kept so element tags can be resolved against imports.
-void dom_lowering_set_program(ASTNode *program) {
-    g_dom_program = program;
+void dom_lowering_set_program(ParserContext *context, ASTNode *program) {
+    context->lowering.dom_program = program;
 }

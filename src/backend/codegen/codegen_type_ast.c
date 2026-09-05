@@ -1,6 +1,8 @@
 #include "mylang/backend/codegen_internal.h"
 
 void set_localinfo_from_type(CompilerContext *cc, LocalInfo *info, ASTNode *type_node) {
+    MylangType type;
+
     if (!info) return;
     info->base_type = "";
     info->pointer_level = 0;
@@ -9,37 +11,21 @@ void set_localinfo_from_type(CompilerContext *cc, LocalInfo *info, ASTNode *type
     info->array_length = 0;
     info->dims_count = 0;
     for (int i = 0; i < 8; i++) info->dims[i] = 0;
-    if (!type_node) return;
+    if (!mylang_type_from_ast(type_node, &type)) return;
 
-    int tmp_dims[8] = {0};
-    int tmp_count = 0;
-    ASTNode *node = type_node;
-    while (node && node->type == AST_TYPE_ARRAY && tmp_count < 8) {
-        tmp_dims[tmp_count++] = node->type_array.array_size;
-        node = node->type_array.element_type;
-    }
-    if (tmp_count > 0) info->is_array = 1;
-    for (int i = 0; i < tmp_count; i++) {
-        int dim = tmp_dims[tmp_count - 1 - i];
-        info->dims[i] = dim;
-        if (i == 0 && info->array_length == 0 && dim > 0) info->array_length = dim;
-        info->dims_count++;
-    }
-
-    if (node->type == AST_TYPE) {
-        ASTNode *bt = node->type_node.base_type;
-        if (bt && bt->type == AST_IDENTIFIER) info->base_type = bt->identifier.name;
-        info->pointer_level = node->type_node.pointer_level;
-        if (node->type_node.ref_kind != REFKIND_NONE) info->pointer_level += 1;
-        info->type_modifiers = node->type_node.type_modifiers;
-    } else {
-        info->pointer_level = 0;
-    }
+    info->base_type = type.base_type;
+    info->pointer_level = type.pointer_level + (type.ref_kind != REFKIND_NONE);
+    info->type_modifiers = type.type_modifiers;
+    info->is_array = type.is_array;
+    info->dims_count = type.dims_count;
+    for (int i = 0; i < type.dims_count; i++) info->dims[i] = type.dims[i];
+    if (info->is_array && info->dims_count > 0) info->array_length = info->dims[0];
 
     TypeInfo ti;
     ti.base_type = info->base_type;
     ti.pointer_level = info->pointer_level;
     ti.type_modifiers = info->type_modifiers;
+    ti.ref_kind = REFKIND_NONE;
     ti.is_array = info->is_array;
     ti.dims_count = info->dims_count;
     for (int i = 0; i < 8; i++) ti.dims[i] = info->dims[i];

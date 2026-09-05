@@ -28,6 +28,11 @@ static SemanticSafetyProfile semantic_profile_for_source(MyLangSafetyProfile pro
         : SEMANTIC_SAFETY_DEFAULT;
 }
 
+static void destroy_compile_session(FrontendSession *session) {
+    parser_reset();
+    frontend_session_destroy(session);
+}
+
 int compile_one(const char *input_path, const char *output_path) {
     MyLangSourceSpecResult source = mylang_source_spec_parse(input_path);
     if (!source.ok) {
@@ -57,6 +62,13 @@ int compile_one(const char *input_path, const char *output_path) {
            mylang_safety_profile_name(source.spec.safety));
 
     parser_reset();
+    FrontendSession *session = frontend_session_create();
+    if (!session) {
+        fprintf(stderr, "Failed to create frontend session.\n");
+        free_tokens(tokens);
+        return 1;
+    }
+    frontend_session_set_current(session);
     parser_set_filename(input_path);
     semantic_set_filename(input_path);
     semantic_set_safety_profile(semantic_profile_for_source(source.spec.safety));
@@ -69,23 +81,23 @@ int compile_one(const char *input_path, const char *output_path) {
     print_ast(root, 0);
     printf("AST parsing completed.\n");
 
-    int success = semantic_check(root);
+    int success = semantic_check_with_session(root, session);
     if (!success) {
         fprintf(stderr, "Semantic analysis failed.\n");
         free_ast(root);
         free_tokens(tokens);
-        parser_reset();
+        destroy_compile_session(session);
         return 1;
     }
     printf("Semantic analysis completed.\n");
 
     codegen_set_source_path(input_path);
-    char *output = codegen(root);
+    char *output = codegen_with_session(root, session);
     if (!output) {
         fprintf(stderr, "Code generation failed.\n");
         free_ast(root);
         free_tokens(tokens);
-        parser_reset();
+        destroy_compile_session(session);
         return 1;
     }
 
@@ -122,6 +134,6 @@ int compile_one(const char *input_path, const char *output_path) {
     free(output);
     free_ast(root);
     free_tokens(tokens);
-    parser_reset();
+    destroy_compile_session(session);
     return 0;
 }

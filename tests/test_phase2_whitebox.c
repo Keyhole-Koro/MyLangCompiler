@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "mylang/driver/driver_internal.h"
+#include "mylang/frontend/parser_ast_internal.h"
 #include "mylang/frontend/parser_internal.h"
 #include "mylang/semantic/semantic_types.h"
 
@@ -18,7 +19,6 @@ static ASTNode *parse_source(const char *source, Token **out_tokens) {
     free(buffer);
     assert(tokens);
 
-    token_head = tokens;
     Token *cur = tokens;
     ASTNode *root = parse_program(&cur);
     assert(root);
@@ -247,8 +247,8 @@ static void test_generic_declaration_ast(void) {
     assert(root->block.stmts[0]->type == AST_FUNDEF);
     assert(strcmp(root->block.stmts[0]->fundef.name, "main") == 0);
 
-    assert(generic_template_count() == 2);
-    ASTNode *pair = generic_template_at(0);
+    assert(generic_template_count(parser_context_current()) == 2);
+    ASTNode *pair = generic_template_at(parser_context_current(), 0);
     assert(pair && pair->type == AST_STRUCT);
     assert(strcmp(pair->struct_stmt.name, "Pair") == 0);
     assert(pair->struct_stmt.type_param_count == 2);
@@ -261,7 +261,7 @@ static void test_generic_declaration_ast(void) {
         "T"
     ) == 0);
 
-    ASTNode *make_pair = generic_template_at(1);
+    ASTNode *make_pair = generic_template_at(parser_context_current(), 1);
     assert(make_pair && make_pair->type == AST_FUNDEF);
     assert(strcmp(make_pair->fundef.name, "make_pair") == 0);
     assert(make_pair->fundef.type_param_count == 1);
@@ -271,8 +271,8 @@ static void test_generic_declaration_ast(void) {
     assert(ret_base->type == AST_TYPE_GENERIC);
     assert(strcmp(ret_base->generic_type.name, "Pair") == 0);
     assert(ret_base->generic_type.arg_count == 2);
-    assert(!is_user_typename("T"));
-    assert(is_user_typename("Pair"));
+    assert(!is_user_typename(parser_context_current(), "T"));
+    assert(is_user_typename(parser_context_current(), "Pair"));
 
     free_ast(root);
     free_tokens(tokens);
@@ -287,8 +287,8 @@ static void test_generic_call_ast_inside_template(void) {
         &tokens
     );
 
-    assert(generic_template_count() == 1);
-    ASTNode *identity = generic_template_at(0);
+    assert(generic_template_count(parser_context_current()) == 1);
+    ASTNode *identity = generic_template_at(parser_context_current(), 0);
     ASTNode *ret = identity->fundef.body->block.stmts[0];
     assert(ret->type == AST_RETURN);
     assert(ret->ret.expr->type == AST_CALL);
@@ -310,8 +310,8 @@ static void test_nested_generic_type_ast(void) {
         &tokens
     );
 
-    assert(generic_template_count() == 3);
-    ASTNode *wrap = generic_template_at(2);
+    assert(generic_template_count(parser_context_current()) == 3);
+    ASTNode *wrap = generic_template_at(parser_context_current(), 2);
     ASTNode *outer = wrap->fundef.ret_type->type_node.base_type;
     assert(outer->type == AST_TYPE_GENERIC);
     assert(strcmp(outer->generic_type.name, "Wrapper") == 0);
@@ -334,8 +334,8 @@ static void test_generic_prototype_ast(void) {
         &tokens
     );
 
-    assert(generic_template_count() == 1);
-    ASTNode *identity = find_generic_function_template("identity");
+    assert(generic_template_count(parser_context_current()) == 1);
+    ASTNode *identity = find_generic_function_template(parser_context_current(), "identity");
     assert(identity && identity->type == AST_FUNDEF);
     assert(identity->fundef.body == NULL);
     assert(identity->fundef.type_param_count == 1);
@@ -356,9 +356,9 @@ static void test_exported_generic_metadata_and_namespaces(void) {
         &tokens
     );
 
-    assert(generic_template_count() == 2);
-    ASTNode *type_template = find_generic_type_template("Factory");
-    ASTNode *function_template = find_generic_function_template("Factory");
+    assert(generic_template_count(parser_context_current()) == 2);
+    ASTNode *type_template = find_generic_type_template(parser_context_current(), "Factory");
+    ASTNode *function_template = find_generic_function_template(parser_context_current(), "Factory");
     assert(type_template && type_template->type == AST_STRUCT);
     assert(function_template && function_template->type == AST_FUNDEF);
     assert(type_template != function_template);
@@ -381,23 +381,70 @@ static void test_generic_state_reset(void) {
         &tokens
     );
 
-    assert(generic_template_count() == 1);
-    assert(find_generic_type_template("Box") != NULL);
-    assert(is_user_typename("Box"));
+    assert(generic_template_count(parser_context_current()) == 1);
+    assert(find_generic_type_template(parser_context_current(), "Box") != NULL);
+    assert(is_user_typename(parser_context_current(), "Box"));
 
     free_ast(root);
     free_tokens(tokens);
     parser_reset();
 
-    assert(generic_template_count() == 0);
-    assert(find_generic_type_template("Box") == NULL);
-    assert(!is_user_typename("Box"));
-    assert(!is_user_typename("T"));
+    assert(generic_template_count(parser_context_current()) == 0);
+    assert(find_generic_type_template(parser_context_current(), "Box") == NULL);
+    assert(!is_user_typename(parser_context_current(), "Box"));
+    assert(!is_user_typename(parser_context_current(), "T"));
+}
+
+static void test_parser_context_isolation(void) {
+    ParserContext imported_context;
+    ParserContext *outer_context = parser_context_current();
+
+    parser_reset();
+    add_typename(outer_context, "OuterType");
+
+    parser_context_init(&imported_context);
+    assert(!is_user_typename(&imported_context, "OuterType"));
+    add_typename(&imported_context, "ImportedType");
+    assert(is_user_typename(&imported_context, "ImportedType"));
+
+    assert(is_user_typename(outer_context, "OuterType"));
+    assert(!is_user_typename(outer_context, "ImportedType"));
+
+    parser_context_reset(&imported_context);
+    parser_context_reset(outer_context);
+}
+
+static void test_shared_type_info(void) {
+    ASTNode *base = new_type_node(
+        new_identifier("Widget"),
+        2,
+        TYPEMOD_CONST,
+        REFKIND_SHARED
+    );
+    ASTNode *inner = new_type_array(base, 4);
+    ASTNode *outer = new_type_array(inner, 8);
+    MylangType type;
+
+    assert(mylang_type_from_ast(outer, &type));
+    assert(strcmp(type.base_type, "Widget") == 0);
+    assert(type.pointer_level == 2);
+    assert(type.type_modifiers == TYPEMOD_CONST);
+    assert(type.ref_kind == REFKIND_SHARED);
+    assert(type.is_array);
+    assert(type.dims_count == 2);
+    assert(type.dims[0] == 4);
+    assert(type.dims[1] == 8);
+    assert(mylang_type_is_builtin("i32"));
+    assert(!mylang_type_is_builtin("Widget"));
+
+    free_ast(outer);
 }
 
 void test_generic_instantiation(void);
+void test_module_graph_all(void);
 
 int main(void) {
+    test_module_graph_all();
     test_generic_instantiation();
     test_ref_borrow_ast();
     test_ref_mut_ast();
@@ -412,6 +459,8 @@ int main(void) {
     test_generic_prototype_ast();
     test_exported_generic_metadata_and_namespaces();
     test_generic_state_reset();
+    test_parser_context_isolation();
+    test_shared_type_info();
     printf("phase2 whitebox tests passed\n");
     return 0;
 }

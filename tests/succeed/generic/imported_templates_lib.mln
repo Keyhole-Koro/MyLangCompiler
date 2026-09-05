@@ -1,0 +1,8 @@
+export T twice<T>(T value) {
+    return value + value;
+}
+
+export struct Pair<T> {
+    T first;
+    T second;
+};

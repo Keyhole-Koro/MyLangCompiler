@@ -1,0 +1,80 @@
+import { Slice, slice_init, slice_at }
+    from "../../../../../system/MyKernel/src/lib/generics/slice.mln";
+import { Vec, vec_init, vec_push, vec_pop }
+    from "../../../../../system/MyKernel/src/lib/generics/vec.mln";
+import { Arena, arena_init, arena_alloc }
+    from "../../../../../system/MyKernel/src/lib/generics/arena.mln";
+import { RingBuffer, ring_init, ring_push, ring_pop }
+    from "../../../../../system/MyKernel/src/lib/generics/ringbuf.mln";
+import { IntrusiveList, intrusive_list_init, intrusive_push_front, intrusive_pop_front }
+    from "../../../../../system/MyKernel/src/lib/generics/intrusive_list.mln";
+import { Option, option_some, option_take }
+    from "../../../../../system/MyKernel/src/lib/generics/option.mln";
+import { Result, result_err, result_take_err }
+    from "../../../../../system/MyKernel/src/lib/generics/result.mln";
+import { HashMap, hashmap_init, hashmap_put, hashmap_get }
+    from "../../../../../system/MyKernel/src/lib/generics/hashmap.mln";
+
+struct Node {
+    i32 value;
+    Node *next;
+};
+
+i32 main() {
+    i32 storage[8];
+    Vec<i32> values;
+    vec_init<i32>(&values, &storage[0], 8);
+    vec_push<i32>(&values, 3);
+    vec_push<i32>(&values, 4);
+    i32 value = 0;
+    vec_pop<i32>(&values, &value);
+
+    Slice<i32> slice;
+    slice_init<i32>(&slice, &storage[0], 8);
+    i32 *slice_value = slice_at<i32>(&slice, 1);
+
+    i32 arena_storage[4];
+    Arena<i32> arena;
+    arena_init<i32>(&arena, &arena_storage[0], 4);
+    i32 *allocated = arena_alloc<i32>(&arena, 1);
+    *allocated = 20;
+
+    i32 ring_storage[4];
+    RingBuffer<i32> ring;
+    ring_init<i32>(&ring, &ring_storage[0], 4);
+    ring_push<i32>(&ring, 10);
+    i32 ring_value = 0;
+    ring_pop<i32>(&ring, &ring_value);
+
+    Option<i32> option;
+    option_some<i32>(&option, 2);
+    i32 option_value = 0;
+    option_take<i32>(&option, &option_value);
+
+    Result<i32, i32> result;
+    result_err<i32, i32>(&result, 7);
+    i32 error = 0;
+    result_take_err<i32, i32>(&result, &error);
+
+    Node first;
+    first.value = 1;
+    first.next = (Node *)0;
+    Node second;
+    second.value = 5;
+    second.next = (Node *)0;
+    IntrusiveList<Node> list;
+    intrusive_list_init<Node>(&list);
+    intrusive_push_front<Node>(&list, &first, &first.next);
+    intrusive_push_front<Node>(&list, &second, &second.next);
+    Node *front = intrusive_pop_front<Node>(&list, &second.next);
+
+    i32 keys[8];
+    i32 map_values[8];
+    HashMap<i32> map;
+    hashmap_init<i32>(&map, &keys[0], &map_values[0], 8);
+    hashmap_put<i32>(&map, "answer", 11);
+    i32 mapped = 0;
+    hashmap_get<i32>(&map, "answer", &mapped);
+
+    return value + *slice_value + *allocated + ring_value + option_value + error + front->value + mapped;
+}

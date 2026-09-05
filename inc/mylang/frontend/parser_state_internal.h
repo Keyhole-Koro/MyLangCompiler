@@ -5,6 +5,8 @@
 #include "mylang/frontend/lexer.h"
 #include "mylang/ast/AST.h"
 
+typedef struct FrontendSession FrontendSession;
+
 typedef struct FunctionTable {
     ASTNode **funcs;
     int count;
@@ -43,51 +45,82 @@ typedef struct EnumConstant {
     long value;
 } EnumConstant;
 
-extern Token *token_head;
-extern ASTNode *root;
-extern StructTable g_struct_table;
-extern FunctionTable g_func_table;
-extern TypeTable g_type_table;
-extern GenericTemplateTable g_generic_template_table;
-extern int g_generic_decl_depth;
-extern const char *g_current_generic_function_name;
-extern int g_stop_at_arrow;
-extern int g_unchecked_depth;
-extern const char g_default_package[];
-extern char *g_current_package;
-extern int g_current_package_heap;
-extern ExportEntry *g_exports;
-extern int g_export_count;
-extern char **g_imported_packages;
-extern int g_imported_pkg_count;
-extern ASTNode **g_hoisted_funcs;
-extern int g_hoisted_count;
-extern int g_funlit_counter;
-extern const char *g_parse_filename;
-extern EnumConstant *g_enum_constants;
-extern int g_enum_constant_count;
+typedef struct ParserSymbolState {
+    StructTable structs;
+    FunctionTable functions;
+    TypeTable types;
+    GenericTemplateTable generic_templates;
+    EnumConstant *enum_constants;
+    int enum_constant_count;
+} ParserSymbolState;
 
-void set_current_package(const char *name);
-void add_function(ASTNode *fn);
-ASTNode *find_function(const char *name);
-void add_typename(const char *name);
-int is_user_typename(const char *name);
-int typename_scope_mark(void);
-void restore_typenames(int mark);
-void add_generic_template(ASTNode *declaration);
-ASTNode *find_generic_type_template(const char *name);
-ASTNode *find_generic_function_template(const char *name);
-ASTNode *generic_template_at(int index);
-int generic_template_count(void);
-void add_structdef(char *name, ASTNode **members, int member_count);
-StructDef *find_structdef(const char *name);
-void add_enum_constant(const char *name, long value);
-int find_enum_constant(const char *name, long *out_value);
+typedef struct ParserModuleState {
+    char *current_package;
+    int current_package_heap;
+    ExportEntry *exports;
+    int export_count;
+    char **imported_packages;
+    int imported_package_count;
+    const char *filename;
+} ParserModuleState;
+
+typedef struct ParserControlState {
+    int generic_decl_depth;
+    const char *current_generic_function_name;
+    int stop_at_arrow;
+    int unchecked_depth;
+} ParserControlState;
+
+typedef struct ParserLoweringState {
+    ASTNode **hoisted_functions;
+    int hoisted_function_count;
+    int function_literal_counter;
+    int dom_node_counter;
+    ASTNode *dom_program;
+} ParserLoweringState;
+
+/* One complete parser session. Nested module parsing switches the active
+ * context as one unit, so parser state never needs a field-by-field snapshot. */
+typedef struct ParserContext {
+    Token *token_head;
+    /* Borrowed session used for all imports reached while parsing this module. */
+    FrontendSession *session;
+    int is_root_module;
+    ParserSymbolState symbols;
+    ParserModuleState module;
+    ParserControlState control;
+    ParserLoweringState lowering;
+} ParserContext;
+
+extern const char g_default_package[];
+
+/* Parser state has one owner. Parsing an imported module temporarily
+ * activates another context instead of copying a collection of globals. */
+ParserContext *parser_context_current(void);
+void parser_context_init(ParserContext *context);
+void parser_context_reset(ParserContext *context);
+
+void set_current_package(ParserContext *context, const char *name);
+void add_function(ParserContext *context, ASTNode *fn);
+ASTNode *find_function(ParserContext *context, const char *name);
+void add_typename(ParserContext *context, const char *name);
+int is_user_typename(ParserContext *context, const char *name);
+int typename_scope_mark(ParserContext *context);
+void restore_typenames(ParserContext *context, int mark);
+void add_generic_template(ParserContext *context, ASTNode *declaration);
+ASTNode *find_generic_type_template(ParserContext *context, const char *name);
+ASTNode *find_generic_function_template(ParserContext *context, const char *name);
+ASTNode *generic_template_at(ParserContext *context, int index);
+int generic_template_count(ParserContext *context);
+void add_structdef(ParserContext *context, char *name, ASTNode **members, int member_count);
+StructDef *find_structdef(ParserContext *context, const char *name);
+void add_enum_constant(ParserContext *context, const char *name, long value);
+int find_enum_constant(ParserContext *context, const char *name, long *out_value);
 void parser_reset(void);
 void parser_set_filename(const char *name);
-void add_export(const char *orig, const char *mangled);
-const char *find_export_mangled(const char *orig);
-int is_imported_package(const char *name);
+void add_export(ParserContext *context, const char *orig, const char *mangled);
+const char *find_export_mangled(ParserContext *context, const char *orig);
+int is_imported_package(ParserContext *context, const char *name);
 char *mangle(const char *pkg, const char *name);
 
 #endif

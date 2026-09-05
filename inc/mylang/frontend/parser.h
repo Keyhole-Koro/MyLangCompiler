@@ -1,12 +1,13 @@
 #ifndef PARSER_H
 #define PARSER_H
 
+#include <stdio.h>
 #include "mylang/frontend/lexer.h"
 #include "mylang/ast/AST.h"
 
 ASTNode* parse_program(Token **cur);
 void parser_set_filename(const char *name);
-// Reset parser global state between independent compilation units.
+// Reset the active parser context between independent compilation units.
 void parser_reset(void);
 void print_ast(ASTNode *node, int indent);
 // Writes the AST to a FILE* instead of stdout.

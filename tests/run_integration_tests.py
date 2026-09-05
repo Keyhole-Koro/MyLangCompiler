@@ -22,6 +22,8 @@ TESTCASES = [
     ("genericInstantiation", ["succeed/generic/instantiation.mln"], "R1", 45),
     ("genericNestedStruct", ["succeed/generic/nestedStruct.mln"], "R1", 57),
     ("genericRecursive", ["succeed/generic/recursive.mln"], "R1", 15),
+    ("genericImportedTemplates", ["succeed/generic/imported_templates_main.mln", "succeed/generic/imported_templates_lib.mln"], "R1", 13),
+    ("genericKernelContainers", ["succeed/generic/kernel_containers.mln"], "R1", 63),
     ("genericModuleIsolation", ["succeed/generic/modules_main.mln", "succeed/generic/modules_one.mln", "succeed/generic/modules_two.mln"], "R1", 33),
     ("simpleFunc", ["succeed/function/simpleFunc.mln"], "R1", 15),
     ("simpleCondition", ["succeed/control/simpleCondition.mln"], "R1", 328),

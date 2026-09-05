@@ -30,7 +30,6 @@ void test_generic_instantiation(void) {
     Token *tokens = lexer(buffer);
     free(buffer);
     Token *cur = tokens;
-    token_head = tokens;
     ASTNode *program = parse_program(&cur);
     assert_concrete(&program, NULL);
     assert(semantic_check(program));
@@ -42,9 +41,9 @@ void test_generic_instantiation(void) {
     }
     assert(structs == 2); /* Box<Int> and Box<i32> share a specialization. */
     assert(functions == 4); /* main, identity<i32>, address<i32>, read<i32>. */
-    ASTNode *tpl = find_generic_type_template("Box");
+    ASTNode *tpl = find_generic_type_template(parser_context_current(), "Box");
     assert(strcmp(tpl->struct_stmt.members[0]->var_decl.var_type->type_node.base_type->identifier.name, "T") == 0);
-    ASTNode *read = find_generic_function_template("read");
+    ASTNode *read = find_generic_function_template(parser_context_current(), "read");
     assert(read->fundef.params[0]->param.type->type_node.ref_kind == REFKIND_SHARED);
     assert(strcmp(read->fundef.params[0]->param.type->type_node.base_type->identifier.name, "T") == 0);
 
