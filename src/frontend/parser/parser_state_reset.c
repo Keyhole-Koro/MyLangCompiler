@@ -1,4 +1,5 @@
 #include "mylang/frontend/parser_internal.h"
+#include "mylang/frontend/module.h"
 
 /* Clears the active parser context so declarations cannot leak between
  * independent translation units. */
@@ -9,6 +10,7 @@ void parser_set_filename(const char *name) {
 }
 
 void parser_reset(void) {
+    frontend_session_destroy(frontend_session_current());
     parser_context_reset(parser_context_current());
 }
 

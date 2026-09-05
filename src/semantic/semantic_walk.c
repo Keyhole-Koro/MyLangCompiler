@@ -1,6 +1,7 @@
 #include "mylang/semantic/semantic_internal.h"
 #include "mylang/semantic/diagnostic_codes.h"
-#include "mylang/frontend/parser.h"
+#include "mylang/frontend/module.h"
+#include "mylang/frontend/resolver.h"
 
 typedef enum {
     EXPRCTX_READ = 0,
@@ -130,8 +131,23 @@ static void register_function_sig(SemanticContext *ctx, const char *name, int pa
     populate_function_sig_types(ctx, sig, return_type, params, param_count, loc);
 }
 
-static int call_may_be_package_import(const char *name) {
-    return parser_name_has_imported_package_prefix(name);
+void semantic_register_imported_package(SemanticContext *ctx, const char *name) {
+    if (!ctx || !name || ctx->imported_package_count >= 64) return;
+    for (int i = 0; i < ctx->imported_package_count; i++) {
+        if (ctx->imported_packages[i] && strcmp(ctx->imported_packages[i], name) == 0) return;
+    }
+    ctx->imported_packages[ctx->imported_package_count++] = strdup(name);
+}
+
+static int call_may_be_package_import(SemanticContext *ctx, const char *name) {
+    if (!ctx || !name) return 0;
+    for (int i = 0; i < ctx->imported_package_count; i++) {
+        const char *package = ctx->imported_packages[i];
+        size_t length = package ? strlen(package) : 0;
+        if (length > 0 && strncmp(name, package, length) == 0 && name[length] == '_')
+            return 1;
+    }
+    return 0;
 }
 
 static void semantic_register_enum(SemanticContext *ctx, ASTNode *node) {
@@ -173,6 +189,18 @@ static void semantic_collect_function_sigs(SemanticContext *ctx, ASTNode *node) 
                               node->fundef.params);
         break;
     case AST_IMPORT:
+        if (node->import_stmt.path && module_loader_is_mylang_source(node->import_stmt.path)) {
+            FrontendSession *session = frontend_session_current();
+            if (session && session->loader) {
+                Module *mod = module_loader_load(session->loader, ctx->filename, node->import_stmt.path);
+                if (mod) {
+                    const char *pkg = resolver_import_package_name(node, mod);
+                    if (pkg) {
+                        semantic_register_imported_package(ctx, pkg);
+                    }
+                }
+            }
+        }
         for (int i = 0; i < node->import_stmt.symbol_count; i++) {
             register_function_sig(ctx,
                                   node->import_stmt.symbols[i],
@@ -683,7 +711,7 @@ static void use_identifier(SemanticContext *ctx, ASTNode *node, ExprContext expr
         }
         return;
     }
-    if (call_may_be_package_import(ident->identifier.name)) {
+    if (call_may_be_package_import(ctx, ident->identifier.name)) {
         if (expr_ctx == EXPRCTX_WRITE) {
             semantic_error_at(ctx, semantic_location_from_ast(node),
                               "cannot assign to function '%s'", ident->identifier.name);
@@ -771,7 +799,7 @@ static int semantic_infer_identifier_type(SemanticContext *ctx, ASTNode *expr, S
         semantic_typeinfo_make_scalar(out, "i32");
         return 1;
     }
-    if (call_may_be_package_import(expr->identifier.name)) {
+    if (call_may_be_package_import(ctx, expr->identifier.name)) {
         semantic_typeinfo_make_scalar(out, "i32");
         return 1;
     }
@@ -1022,7 +1050,7 @@ static void check_call_signature(SemanticContext *ctx, ASTNode *node) {
 
     sig = find_function_sig(ctx, node->call.name);
     if (!sig) {
-        if (call_may_be_package_import(node->call.name)) return;
+        if (call_may_be_package_import(ctx, node->call.name)) return;
         // A call whose name is a variable in scope is an indirect call through a
         // function-pointer value (taken by naming a function bare, stored as i32).
         // We have no signature to check against, so accept it and let codegen

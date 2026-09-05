@@ -83,7 +83,11 @@ typedef struct {
     SemanticFunctionSig function_sigs[256];
     int user_type_count;
     const char *user_types[256];
+    int imported_package_count;
+    char *imported_packages[64];
 } SemanticContext;
+
+void semantic_register_imported_package(SemanticContext *ctx, const char *name);
 
 SemanticLocation semantic_location_unknown(void);
 SemanticLocation semantic_location_from_ast(ASTNode *node);

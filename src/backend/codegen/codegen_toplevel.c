@@ -1,15 +1,8 @@
 #include "mylang/backend/codegen_internal.h"
+#include "mylang/frontend/module.h"
+#include "mylang/frontend/resolver.h"
 
 #include <limits.h>
-
-static void free_import_tokens(Token *t) {
-    while (t) {
-        Token *next = t->next;
-        free(t->value);
-        free(t);
-        t = next;
-    }
-}
 
 static ASTNode *cg_fundef_with_name(ASTNode *node) {
     ASTNode *fn = cg_as_fundef(node);
@@ -132,151 +125,49 @@ static void append_imported_func_sig(CompilerContext *cc, const char *name, int 
     cc->func_sig_count++;
 }
 
-static int import_requests_symbol(ASTNode *node, const char *name) {
-    if (!node || node->type != AST_IMPORT || !name) return 0;
-    for (int i = 0; i < node->import_stmt.symbol_count; i++) {
-        if (node->import_stmt.symbols[i] && strcmp(node->import_stmt.symbols[i], name) == 0) return 1;
-    }
-    return 0;
-}
-
-static int resolve_import_path(ASTNode *node, char *out, size_t out_size) {
-    const char *source_path = codegen_current_source_path();
-    const char *rel_path;
-    char dir_buf[PATH_MAX];
-    const char *slash;
-
-    if (!node || node->type != AST_IMPORT || !out || out_size == 0) return 0;
-    rel_path = node->import_stmt.path;
-    if (!source_path || !rel_path) return 0;
-    if (rel_path[0] == '/') {
-        snprintf(out, out_size, "%s", rel_path);
-        return 1;
-    }
-
-    snprintf(dir_buf, sizeof(dir_buf), "%s", source_path);
-    slash = strrchr(dir_buf, '/');
-    if (!slash) {
-        snprintf(out, out_size, "%s", rel_path);
-        return 1;
-    }
-    dir_buf[(size_t)(slash - dir_buf)] = '\0';
-    snprintf(out, out_size, "%s/%s", dir_buf, rel_path);
-    return 1;
-}
-
-static Token *skip_function_body(Token *tok) {
-    int depth = 0;
-    for (Token *p = tok; p; p = p->next) {
-        if (p->kind == L_BRACE) depth++;
-        else if (p->kind == R_BRACE) {
-            depth--;
-            if (depth <= 0) return p->next;
-        }
-    }
-    return tok;
-}
-
 /*
- * Scans an imported .mln source file for function signatures and registers them
- * in the CompilerContext. This allows the current file to resolve and call
- * functions defined in external source files. It performs a lightweight parse
- * of the imported file, focusing only on 'export' or 'extern' function declarations
- * and skipping function bodies for efficiency.
+ * Registers exported function signatures from an imported .mln source module
+ * using the shared ModuleLoader and Resolver.
  */
 static void append_import_sigs_from_source(CompilerContext *cc, ASTNode *node) {
-    char import_path[PATH_MAX];
-    Token *tokens;
-    Token *tok;
-    /* A package import (`import pkg from "pkg.mln"`) carries a path but no
-     * explicit symbol list; in that case we register the signatures of every
-     * exported function under its package-mangled name `pkg_func`, matching the
-     * name the caller emits for qualified `pkg.func()` calls. */
-    int is_package_import = (node && node->import_stmt.symbol_count == 0);
-    char pkg_prefix[256];
-    pkg_prefix[0] = '\0';
-
     if (!cc || !node || node->type != AST_IMPORT || !node->import_stmt.path) return;
-    if (!resolve_import_path(node, import_path, sizeof(import_path))) return;
-    if (strlen(import_path) < 4 || strcmp(import_path + strlen(import_path) - 4, ".mln") != 0) return;
+    if (!module_loader_is_mylang_source(node->import_stmt.path)) return;
 
-    tokens = lexer_from_file(import_path);
-    if (!tokens) return;
+    FrontendSession *session = frontend_session_current();
+    if (!session || !session->loader) return;
+
+    const char *source_path = codegen_current_source_path();
+    Module *mod = module_loader_load(session->loader, source_path, node->import_stmt.path);
+    if (!mod || mod->state != MODULE_LOADED) return;
+
+    int is_package_import = (node->import_stmt.symbol_count == 0);
 
     if (is_package_import) {
-        for (Token *p = tokens; p && p->kind != EOT; p = p->next) {
-            if (p->kind == PACKAGE && p->next && p->next->kind == IDENTIFIER) {
-                snprintf(pkg_prefix, sizeof(pkg_prefix), "%s", p->next->value);
+        for (int i = 0; i < mod->symbol_count; i++) {
+            ModuleSymbol *sym = &mod->symbols[i];
+            if (!sym->is_exported || sym->kind != SYMBOL_FUNCTION) continue;
+
+            ResolverFunctionInfo fn_info;
+            if (resolver_get_function_info(sym, &fn_info)) {
+                append_imported_func_sig(cc, sym->link_name, fn_info.param_count, fn_info.is_variadic);
+                resolver_free_function_info(&fn_info);
             }
-            break;
         }
-        if (pkg_prefix[0] == '\0') {
-            free_import_tokens(tokens);
-            return;
+    } else {
+        for (int i = 0; i < node->import_stmt.symbol_count; i++) {
+            const char *req_name = node->import_stmt.symbols[i];
+            if (!req_name) continue;
+
+            ModuleSymbol *sym = resolver_lookup_import_symbol(node, mod, req_name);
+            if (!sym || sym->kind != SYMBOL_FUNCTION) continue;
+
+            ResolverFunctionInfo fn_info;
+            if (resolver_get_function_info(sym, &fn_info)) {
+                append_imported_func_sig(cc, sym->source_name, fn_info.param_count, fn_info.is_variadic);
+                resolver_free_function_info(&fn_info);
+            }
         }
     }
-
-    for (tok = tokens; tok && tok->kind != EOT; ) {
-        Token *scan = tok;
-        Token *name_tok = NULL;
-        Token *after_params = NULL;
-        int param_count = 0;
-        int is_variadic = 0;
-        int is_exported = 0;
-
-        if (scan->kind == EXPORT || scan->kind == EXTERN) {
-            is_exported = 1;
-            scan = scan->next;
-            if (scan && scan->kind == EXTERN) scan = scan->next;
-        }
-
-        for (Token *p = scan; p && p->kind != EOT; p = p->next) {
-            if (p->kind == SEMICOLON) break;
-            if (p->kind == L_BRACE) break;
-            if (p->kind == IDENTIFIER && p->next && p->next->kind == L_PARENTHESES) {
-                name_tok = p;
-                break;
-            }
-        }
-
-        /* For a symbol-list import, only the explicitly requested symbols are
-         * registered. For a package import, every exported function is. */
-        int wanted = name_tok &&
-            (is_package_import ? is_exported : import_requests_symbol(node, name_tok->value));
-        if (!wanted) {
-            if (tok->kind == L_BRACE) tok = skip_function_body(tok);
-            else tok = tok->next;
-            continue;
-        }
-
-        scan = name_tok->next->next;
-        if (scan && scan->kind != R_PARENTHESES) {
-            param_count = 1;
-            for (; scan && scan->kind != R_PARENTHESES && scan->kind != EOT; scan = scan->next) {
-                if (scan->kind == REST) is_variadic = 1;
-                else if (scan->kind == COMMA) param_count++;
-            }
-        } else {
-            scan = scan ? scan : name_tok->next;
-        }
-
-        if (scan && scan->kind == R_PARENTHESES) after_params = scan->next;
-        if (after_params && (after_params->kind == SEMICOLON || after_params->kind == L_BRACE)) {
-            if (is_package_import) {
-                char mangled[512];
-                snprintf(mangled, sizeof(mangled), "%s_%s", pkg_prefix, name_tok->value);
-                append_imported_func_sig(cc, mangled, param_count, is_variadic);
-            } else {
-                append_imported_func_sig(cc, name_tok->value, param_count, is_variadic);
-            }
-            tok = (after_params->kind == L_BRACE) ? skip_function_body(after_params) : after_params->next;
-            continue;
-        }
-
-        tok = tok->next;
-    }
-
-    free_import_tokens(tokens);
 }
 
 static void append_enum_info(CompilerContext *cc, ASTNode *node) {
