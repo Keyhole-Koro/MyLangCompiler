@@ -58,6 +58,27 @@ static int import_path_declares_package(const char *rel_path, const char *pkg) {
     return matched;
 }
 
+/* True for an import target the MyLang parser can read. Generic templates are
+ * recovered by parsing the imported file, so only .mln sources qualify: an
+ * `import { hw_irq_enable } from "interrupt.masm"` names assembler symbols,
+ * and handing that to parse_program fails on the first line. The same
+ * extension check guards import_path_declares_package above. */
+static int import_path_is_mylang(const char *rel_path) {
+    size_t len;
+    if (!rel_path) return 0;
+    len = strlen(rel_path);
+    return len >= 4 && strcmp(rel_path + len - 4, ".mln") == 0;
+}
+
+static ASTNode *make_import_node_with_templates(char *path, char **symbols, int count) {
+    ASTNode *node = new_import_stmt(path, symbols, count);
+    char resolved_path[PATH_MAX];
+    if (!import_path_is_mylang(path)) return node;
+    resolve_relative_to_source(path, resolved_path, sizeof(resolved_path));
+    load_imported_generic_templates(node, resolved_path);
+    return node;
+}
+
 ASTNode *parse_import(Token **cur) {
     if (!expect(cur, IMPORT)) parse_error("expected 'import'", token_head, *cur);
 
@@ -87,12 +108,12 @@ ASTNode *parse_import(Token **cur) {
             g_imported_packages = realloc(g_imported_packages, sizeof(char*) * (g_imported_pkg_count + 1));
             g_imported_packages[g_imported_pkg_count++] = ident;
             char **symbols = NULL;
-            return new_import_stmt(path, symbols, 0);
+            return make_import_node_with_templates(path, symbols, 0);
         }
 
         char **symbols = malloc(sizeof(char *));
         symbols[0] = ident;
-        return new_import_stmt(path, symbols, 1);
+        return make_import_node_with_templates(path, symbols, 1);
     }
 
     if (!expect(cur, L_BRACE)) parse_error("expected '{'", token_head, *cur);
@@ -123,7 +144,7 @@ ASTNode *parse_import(Token **cur) {
 
     if (!expect(cur, SEMICOLON)) parse_error("expected ';'", token_head, *cur);
 
-    return new_import_stmt(path, symbols, count);
+    return make_import_node_with_templates(path, symbols, count);
 }
 
 ASTNode* parse_toplevel(Token **cur) {

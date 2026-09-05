@@ -62,6 +62,23 @@ def run():
         assert assembly.read_text() == first, "specialization names changed between compilations"
         print("[PASS] cache, qualifiers, namespaces, deterministic code generation")
 
+        # Imported exported templates are instantiated by the importing module.
+        library = temp / "generic_library.mln"
+        library.write_text('export T twice<T>(T value) { return value + value; } '
+                           'export struct Pair<T> { T first; T second; };')
+        importer = temp / "generic_importer.mln"
+        importer.write_text('import { twice, Pair } from "generic_library.mln"; '
+                            'i32 main() { Pair<i32> pair; pair.first = twice<i32>(6); '
+                            'pair.second = 1; return pair.first + pair.second; }')
+        assembly = temp / "generic_importer.s"
+        result = subprocess.run([str(ROOT / "mlc"), str(importer), str(assembly)],
+                                capture_output=True, text=True, timeout=10)
+        assert result.returncode == 0, result.stderr
+        generated = assembly.read_text()
+        assert "__mlg_f_" in generated, generated
+        assert "import twice" not in generated, generated
+        print("[PASS] imported exported generic templates")
+
 
 if __name__ == "__main__":
     run()

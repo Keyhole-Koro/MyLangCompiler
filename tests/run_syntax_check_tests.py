@@ -74,6 +74,11 @@ CASES = [
         status="ok",
     ),
     SyntaxCase(
+        name="named_pointer_cast_ok",
+        source="i32 main() { Node *p = (Node *)0; return 0; }\n",
+        status="ok",
+    ),
+    SyntaxCase(
         name="postfix_increment_identifier_role",
         source="void main() { mut i32 i = 0; i++; }\n",
         status="ok",
@@ -122,7 +127,7 @@ CASES = [
             "i32 main() { return max<i32>(1, 2); }\n"
         ),
         status="ok",
-        token_roles={1: "function", 3: "type", 23: "function"},
+        token_roles={0: "type", 1: "function", 23: "function"},
     ),
     SyntaxCase(
         name="nested_generic_type_ok",
@@ -132,6 +137,16 @@ CASES = [
             "Wrapper<Pair<i32>> value;\n"
         ),
         status="ok",
+    ),
+    SyntaxCase(
+        name="imported_generic_containers_ok",
+        source=(
+            'import { Vec, vec_init, vec_push } from "generics/vec.mln";\n'
+            'i32 main() { i32 storage[4]; Vec<i32> values; '
+            'vec_init<i32>(&values, &storage[0], 4); vec_push<i32>(&values, 7); return 0; }\n'
+        ),
+        status="ok",
+        token_roles={12: "function", 22: "type", 28: "function"},
     ),
     SyntaxCase(
         name="generic_angles_preserve_relational_and_shift_ok",
