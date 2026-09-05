@@ -50,6 +50,8 @@ The main groups are:
 - `parser_lookahead.c`: type checks and syntactic lookahead
 - `parser_type.c`: type syntax, `struct`, and `typedef`
 - `parser_decl.c`: function parameters and function declarations/definitions
+- `parser_generic.c`: generic parameter and argument parsing
+- `parser_instantiate.c`: module-local monomorphization before semantic checking
 - `parser_stmt.c`: statement parsing
 - `parser_toplevel.c`: package/import/export and whole-program parsing
 - `parser_expr_*.c`: expression parsing split by precedence/shape
@@ -71,6 +73,10 @@ Parser state is still global, but it is now grouped more clearly:
 
 The state declarations live in `inc/mylang/frontend/parser_state_internal.h`.
 That keeps general parser declarations in `parser_internal.h` smaller.
+
+Generic templates are kept separate from the executable program AST. The
+[instantiation pass](generics.md) clones only used templates into concrete
+declarations; `src/ast/ast_copy.c` owns deep copying and child-slot traversal.
 
 ## Semantic
 

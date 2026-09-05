@@ -1,0 +1,10 @@
+struct Pair<T> { T first; T second; };
+struct Wrapper<T> { T value; i32 tail; };
+
+i32 main() {
+    Wrapper<Pair<i32>> wrapped;
+    wrapped.value.first = 20;
+    wrapped.value.second = 22;
+    wrapped.tail = 3;
+    return wrapped.value.first + wrapped.value.second + wrapped.tail + sizeof(wrapped);
+}

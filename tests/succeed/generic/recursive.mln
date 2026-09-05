@@ -1,0 +1,13 @@
+struct Node<T> { T value; Node<T> *next; };
+
+T count<T>(T value) {
+    if (value == 0) return value;
+    return value + count<T>(value - 1);
+}
+
+i32 main() {
+    Node<i32> node;
+    node.value = count<i32>(5);
+    node.next = &node;
+    return node.next->value;
+}

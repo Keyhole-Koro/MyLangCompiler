@@ -45,11 +45,6 @@ ASTNode *parse_base_type(Token **cur) {
             name_tok
         );
     }
-    if (g_generic_decl_depth == 0) {
-        char message[256];
-        snprintf(message, sizeof(message), "generic type instantiation for '%s' is not implemented yet", name);
-        parse_error(message, token_head, name_tok);
-    }
     return base;
 }
 
