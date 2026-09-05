@@ -1,6 +1,7 @@
 #ifndef PARSER_H
 #define PARSER_H
 
+#include <stdio.h>
 #include "mylang/frontend/lexer.h"
 #include "mylang/ast/AST.h"
 

@@ -441,8 +441,10 @@ static void test_shared_type_info(void) {
 }
 
 void test_generic_instantiation(void);
+void test_module_graph_all(void);
 
 int main(void) {
+    test_module_graph_all();
     test_generic_instantiation();
     test_ref_borrow_ast();
     test_ref_mut_ast();
