@@ -1,0 +1,12 @@
+struct Box<T> { T value; };
+
+T identity<T>(T value) { return value; }
+T read<T>(Box<T> *box) { return box->value; }
+T twice<T>(T value) { return identity<T>(value) + identity<T>(value); }
+
+i32 main() {
+    Box<i32> box;
+    box.value = twice<i32>(21);
+    char c = identity<char>((char)3);
+    return read<i32>(&box) + (i32)c;
+}

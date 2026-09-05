@@ -1,0 +1,3 @@
+import one from "modules_one.mln";
+import two from "modules_two.mln";
+i32 main() { return one() + two(); }

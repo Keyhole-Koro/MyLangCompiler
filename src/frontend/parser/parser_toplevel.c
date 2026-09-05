@@ -207,6 +207,7 @@ ASTNode* parse_program(Token **cur) {
         nodes[count++] = node;
     }
     ASTNode *prog = new_block(nodes, count);
+    instantiate_generics(prog);
     dom_lowering_reset();
     dom_lowering_set_program(prog);
     lower_dom_block(prog);

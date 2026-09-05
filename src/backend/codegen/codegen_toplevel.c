@@ -373,7 +373,10 @@ char *prepend_codegen_imports(CompilerContext *cc, StringBuilder *body) {
     if (cc->defined_func_count > 0) {
         sb_append(&final_sb, "; exports\n");
         for (int i = 0; i < cc->defined_func_count; i++) {
-            if (!is_entry_name(cc->defined_funcs[i])) {
+            /* Specializations (including their lowered lambdas) are local to
+             * this object, even when the source template was exported. */
+            if (!is_entry_name(cc->defined_funcs[i]) &&
+                strncmp(cc->defined_funcs[i], "__mlg_", 6) != 0) {
                 sb_append(&final_sb, "export %s\n", cc->defined_funcs[i]);
             }
         }

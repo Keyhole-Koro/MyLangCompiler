@@ -1,8 +1,0 @@
-struct Box<T> {
-    T value;
-};
-
-i32 main() {
-    Box<i32> box;
-    return 0;
-}
