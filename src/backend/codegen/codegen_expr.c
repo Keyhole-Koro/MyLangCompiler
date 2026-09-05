@@ -167,10 +167,17 @@ void _gen_expr(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char
         sb_append(sb, "b_case_end_%d:\n", lbl_end);
         break;
     }
-    case AST_NUMBER:
+    case AST_NUMBER: {
         sb_append(sb, "  \n; load constant %s into %s\n", node->number.value, target_reg);
-        sb_append(sb, "  movi  %s, %s\n", target_reg, node->number.value);
-        break;
+        // The lexer normalises 0x / 0b literals to decimal text, so anything
+        // still carrying a '.' is a float, which codegen does not lower.
+        if (node->number.value && strchr(node->number.value, '.')) {
+            sb_append(sb, "  movi  %s, %s\n", target_reg, node->number.value);
+        } else {
+            emit_load_const(cc, sb, target_reg,
+                            strtol(node->number.value ? node->number.value : "0", NULL, 10));
+        }
+        break; }
     case AST_CAST:
         _gen_expr(cc, node->cast.expr, sb, target_reg, params, param_count, locals, local_count, 0);
         break;
@@ -239,7 +246,7 @@ void _gen_expr(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char
 
     case AST_IDENTIFIER:
         if (find_enum_value(cc, node->identifier.name)) {
-            sb_append(sb, "  movi %s, %ld\n", target_reg, find_enum_value(cc, node->identifier.name)->value);
+            emit_load_const(cc, sb, target_reg, find_enum_value(cc, node->identifier.name)->value);
         } else if (find_func_sig(cc, node->identifier.name)) {
             note_import_func(cc, node->identifier.name);
             sb_append(sb, "  \n; load function pointer '%s'\n", node->identifier.name);
