@@ -1,0 +1,4 @@
+; masm fixture
+global sample_asm_symbol
+sample_asm_symbol:
+    ret

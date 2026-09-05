@@ -1,0 +1,6 @@
+package cycle_b;
+import cycle_a from "cycle_a.mln";
+
+export i32 func_b() {
+    return 2;
+}
