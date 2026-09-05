@@ -1,0 +1,2 @@
+T identity<T>(T x) { return x + 2; }
+i32 two() { return identity<i32>(20); }

@@ -52,6 +52,9 @@ MyLang uses a package-based module system.
 - `type_args` -> `< type ( , type )* >`
 - `primitive_type` -> `u8` | `u16` | `i32` | `u32` | `bool` | `char` | `float` | `double` | `void` | `long` | `short`
 
+Generic uses are concretely instantiated before semantic analysis. See
+[Generic instantiation](generics.md) for supported behavior and boundaries.
+
 ## 5. Statements
 - `stmt` ->
     - `block` -> `{ stmt* }`

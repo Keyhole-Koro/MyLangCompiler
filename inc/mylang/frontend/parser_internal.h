@@ -88,6 +88,7 @@ ASTNode *parse_fundef(Token **cur);
 ASTNode *parse_generic_fundef(Token **cur);
 char **parse_type_params(Token **cur, int *out_count, int add_to_scope);
 ASTNode **parse_type_args(Token **cur, int *out_count);
+void instantiate_generics(ASTNode *program);
 ASTNode *parse_import(Token **cur);
 ASTNode *parse_toplevel(Token **cur);
 

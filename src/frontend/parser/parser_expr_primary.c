@@ -104,11 +104,6 @@ static ASTNode *parse_identifier_primary(Token **cur) {
         ASTNode *call = new_generic_call(name, type_args, type_arg_count, args, arg_count);
         set_node_loc_from_tokens(call, tok, NULL);
         set_node_end_from_token(call, end_tok);
-        if (type_arg_count > 0 && g_generic_decl_depth == 0) {
-            char message[256];
-            snprintf(message, sizeof(message), "generic function instantiation for '%s' is not implemented yet", name);
-            parse_error(message, token_head, tok);
-        }
         return call;
     }
 

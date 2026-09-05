@@ -395,7 +395,10 @@ static void test_generic_state_reset(void) {
     assert(!is_user_typename("T"));
 }
 
+void test_generic_instantiation(void);
+
 int main(void) {
+    test_generic_instantiation();
     test_ref_borrow_ast();
     test_ref_mut_ast();
     test_unchecked_ast();
