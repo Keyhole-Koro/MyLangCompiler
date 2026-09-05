@@ -20,7 +20,7 @@ toolchain/MyLangCompiler/
 ├── inc/mylang/
 │   ├── ast/                  # AST public types
 │   ├── backend/              # codegen public/internal interfaces
-│   ├── frontend/             # lexer/parser public/internal interfaces
+│   ├── frontend/             # lexer/parser/module/resolver interfaces
 │   ├── semantic/             # semantic analysis public/internal interfaces
 │   └── support/              # reusable helpers
 ├── src/
@@ -28,6 +28,7 @@ toolchain/MyLangCompiler/
 │   ├── backend/codegen/      # assembly generation
 │   ├── driver/               # CLI entrypoint
 │   ├── frontend/lexer/       # tokenization
+│   ├── frontend/module/      # ModuleLoader, ModuleGraph, Resolver, FrontendSession
 │   ├── frontend/parser/      # parsing + parser-local lowering/rewrites
 │   ├── semantic/             # semantic analysis and validation
 │   └── support/              # string builder and misc helpers
@@ -78,6 +79,37 @@ That keeps general parser declarations in `parser_internal.h` smaller.
 Generic templates are kept separate from the executable program AST. The
 [instantiation pass](generics.md) clones only used templates into concrete
 declarations; `src/ast/AST.c` owns deep copying and child-slot traversal.
+
+### Module Loading and Resolution
+
+The compiler manages imported `.mln` translation units through a centralized
+module system rather than re-scanning or re-parsing sources in each phase:
+
+```text
+FrontendSession
+  ├── ModuleLoader
+  │     └── ModuleGraph
+  │           └── Module[]
+  │                 ├── canonical_path (realpath)
+  │                 ├── package_name
+  │                 ├── program (syntax AST)
+  │                 ├── generic_templates[]
+  │                 └── symbols[] (ModuleSymbol)
+  └── root ParserContext
+
+Resolver
+  └── Queries ModuleGraph for exported symbols, mangled link names,
+      function signatures, variadics, and generic templates
+```
+
+- **Module Caching**: Paths are resolved relative to the importer and canonicalized via `realpath`. Each source file is lexed and parsed into syntax AST at most once per session.
+- **Cycle Safety**: In-progress imports are marked `MODULE_LOADING` to prevent infinite recursion during circular imports.
+- **Ownership**: The `ModuleGraph` owns all `Module` instances, their syntax ASTs, and symbol tables. Pointers inside `ModuleSymbol` (such as `declaration`) borrow AST nodes owned by `Module->program` or `Module->generic_templates`.
+- **Eliminated Phase Scans**:
+  - `parser_import_generics.c`: Obtains exported generic templates directly from cached module ASTs.
+  - `parser_dom_sig.c`: Obtains parameter names and variadics from parsed function declarations via the Resolver without token scanning.
+  - `codegen_toplevel.c`: Obtains exported function signatures and variadics from Resolver metadata instead of manual token scans.
+  - `semantic_walk.c`: Decoupled from parser default context; receives imported package info explicitly through `SemanticContext`.
 
 ## Semantic
 
