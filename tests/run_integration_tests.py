@@ -19,6 +19,10 @@ EMU_PATH = PROJECT_ROOT / "runtime" / "MyEmulator" / "target" / "release" / "mye
 EMU_TIMEOUT_SEC = float(os.environ.get("EMU_TIMEOUT_SEC", "8"))
 
 TESTCASES = [
+    ("genericInstantiation", ["succeed/generic/instantiation.mln"], "R1", 45),
+    ("genericNestedStruct", ["succeed/generic/nestedStruct.mln"], "R1", 57),
+    ("genericRecursive", ["succeed/generic/recursive.mln"], "R1", 15),
+    ("genericModuleIsolation", ["succeed/generic/modules_main.mln", "succeed/generic/modules_one.mln", "succeed/generic/modules_two.mln"], "R1", 33),
     ("simpleFunc", ["succeed/function/simpleFunc.mln"], "R1", 15),
     ("simpleCondition", ["succeed/control/simpleCondition.mln"], "R1", 328),
     ("simpleFor", ["succeed/control/simpleFor.mln"], "R1", 5),

@@ -1,7 +1,0 @@
-T identity<T>(T value) {
-    return value;
-}
-
-i32 main() {
-    return identity<i32>(1);
-}

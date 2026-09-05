@@ -35,6 +35,17 @@ int looks_like_function(Token *cur) {
     }
     if (!t || !is_type(t->kind, t)) return 0;
     t = t->next; // past base type
+    if (t && t->kind == LT) {
+        int depth = 1;
+        t = t->next;
+        while (t && depth > 0) {
+            if (t->kind == LT) depth++;
+            else if (t->kind == GT) depth--;
+            else if (t->kind == RSH) depth -= 2;
+            t = t->next;
+        }
+        if (depth != 0) return 0;
+    }
     while (t && t->kind == ASTARISK) t = t->next;
     return t && t->kind == IDENTIFIER && t->next && t->next->kind == L_PARENTHESES;
 }

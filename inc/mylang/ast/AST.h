@@ -267,4 +267,9 @@ struct ASTNode {
 
 char *astType2str(ASTNodeType type);
 
+/* Visit immediate owned child slots. The callback may replace each child. */
+void ast_visit_children(ASTNode *node, void (*visit)(ASTNode **, void *), void *context);
+/* Deep copy: the result shares no owned strings, arrays, or children. */
+ASTNode *ast_clone(const ASTNode *node);
+
 #endif
