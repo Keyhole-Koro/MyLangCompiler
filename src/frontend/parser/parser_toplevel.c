@@ -1,83 +1,29 @@
 #include "mylang/frontend/parser_internal.h"
 #include "mylang/frontend/parser_ast_internal.h"
 #include "mylang/frontend/lexer.h"
+#include "mylang/frontend/module.h"
+#include "mylang/frontend/resolver.h"
 #include <limits.h>
-
-/* Resolves an import path relative to the file currently being parsed so that
- * `import x from "libs/foo.mln"` finds foo.mln next to the importer. */
-static void resolve_relative_to_source(ParserContext *context, const char *rel_path,
-                                       char *out, size_t out_size) {
-    const char *slash;
-    char dir_buf[PATH_MAX];
-
-    if (!rel_path || !out || out_size == 0) return;
-    if (rel_path[0] == '/' || !context->module.filename) {
-        snprintf(out, out_size, "%s", rel_path);
-        return;
-    }
-    snprintf(dir_buf, sizeof(dir_buf), "%s", context->module.filename);
-    slash = strrchr(dir_buf, '/');
-    if (!slash) {
-        snprintf(out, out_size, "%s", rel_path);
-        return;
-    }
-    dir_buf[(size_t)(slash - dir_buf)] = '\0';
-    snprintf(out, out_size, "%s/%s", dir_buf, rel_path);
-}
 
 /* Returns 1 if the .mln file at `rel_path` declares `package <pkg>;` at its top.
  * Used to let `import pkg from "path"` act as a package import (enabling
  * `pkg.func()` qualified calls) when the target file is that package's source. */
 static int import_path_declares_package(ParserContext *context, const char *rel_path,
                                         const char *pkg) {
-    char path[PATH_MAX];
-    Token *tokens;
-    int matched = 0;
+    if (!rel_path || !pkg || !module_loader_is_mylang_source(rel_path)) return 0;
+    FrontendSession *session = frontend_session_current();
+    if (!session || !session->loader) return 0;
 
-    if (!rel_path || !pkg) return 0;
-    if (strlen(rel_path) < 4 || strcmp(rel_path + strlen(rel_path) - 4, ".mln") != 0) return 0;
-
-    resolve_relative_to_source(context, rel_path, path, sizeof(path));
-    tokens = lexer_from_file(path);
-    if (!tokens) return 0;
-
-    for (Token *t = tokens; t && t->kind != EOT; t = t->next) {
-        if (t->kind == PACKAGE && t->next && t->next->kind == IDENTIFIER) {
-            matched = (strcmp(t->next->value, pkg) == 0);
-            break;
-        }
-        /* package decl must come first; stop at the first non-package toplevel token */
-        break;
-    }
-
-    for (Token *t = tokens; t;) {
-        Token *next = t->next;
-        free(t->value);
-        free(t);
-        t = next;
-    }
-    return matched;
-}
-
-/* True for an import target the MyLang parser can read. Generic templates are
- * recovered by parsing the imported file, so only .mln sources qualify: an
- * `import { hw_irq_enable } from "interrupt.masm"` names assembler symbols,
- * and handing that to parse_program fails on the first line. The same
- * extension check guards import_path_declares_package above. */
-static int import_path_is_mylang(const char *rel_path) {
-    size_t len;
-    if (!rel_path) return 0;
-    len = strlen(rel_path);
-    return len >= 4 && strcmp(rel_path + len - 4, ".mln") == 0;
+    Module *mod = module_loader_load(session->loader, context->module.filename, rel_path);
+    if (!mod || !mod->package_name) return 0;
+    return strcmp(mod->package_name, pkg) == 0;
 }
 
 static ASTNode *make_import_node_with_templates(ParserContext *context, char *path,
                                                 char **symbols, int count) {
     ASTNode *node = new_import_stmt(path, symbols, count);
-    char resolved_path[PATH_MAX];
-    if (!import_path_is_mylang(path)) return node;
-    resolve_relative_to_source(context, path, resolved_path, sizeof(resolved_path));
-    load_imported_generic_templates(context, node, resolved_path);
+    if (!module_loader_is_mylang_source(path)) return node;
+    load_imported_generic_templates(context, node, path);
     return node;
 }
 

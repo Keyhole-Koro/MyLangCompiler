@@ -58,6 +58,7 @@ int compile_one(const char *input_path, const char *output_path) {
 
     parser_reset();
     parser_set_filename(input_path);
+    semantic_reset_imported_packages();
     semantic_set_filename(input_path);
     semantic_set_safety_profile(semantic_profile_for_source(source.spec.safety));
 
@@ -69,11 +70,18 @@ int compile_one(const char *input_path, const char *output_path) {
     print_ast(root, 0);
     printf("AST parsing completed.\n");
 
+    int pkg_count = parser_get_imported_package_count();
+    for (int i = 0; i < pkg_count; i++) {
+        const char *pkg = parser_get_imported_package(i);
+        if (pkg) semantic_add_imported_package(pkg);
+    }
+
     int success = semantic_check(root);
     if (!success) {
         fprintf(stderr, "Semantic analysis failed.\n");
         free_ast(root);
         free_tokens(tokens);
+        semantic_reset_imported_packages();
         parser_reset();
         return 1;
     }
@@ -85,6 +93,7 @@ int compile_one(const char *input_path, const char *output_path) {
         fprintf(stderr, "Code generation failed.\n");
         free_ast(root);
         free_tokens(tokens);
+        semantic_reset_imported_packages();
         parser_reset();
         return 1;
     }
@@ -122,6 +131,7 @@ int compile_one(const char *input_path, const char *output_path) {
     free(output);
     free_ast(root);
     free_tokens(tokens);
+    semantic_reset_imported_packages();
     parser_reset();
     return 0;
 }

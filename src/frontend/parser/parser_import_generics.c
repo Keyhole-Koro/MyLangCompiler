@@ -1,16 +1,6 @@
 #include "mylang/frontend/parser_internal.h"
-
-/* Import parsing normally only records linker-visible symbols. Generic
- * definitions need their bodies at the use site, so parse an imported source
- * in an isolated parser state and retain clones of the requested exports. */
-static void free_import_tokens(Token *tokens) {
-    while (tokens) {
-        Token *next = tokens->next;
-        free(tokens->value);
-        free(tokens);
-        tokens = next;
-    }
-}
+#include "mylang/frontend/module.h"
+#include "mylang/frontend/resolver.h"
 
 static int import_requests_symbol(const ASTNode *node, const char *name) {
     if (!node || node->type != AST_IMPORT || !name) return 0;
@@ -54,47 +44,27 @@ static void remove_import_symbol(ASTNode *node, const char *name) {
 
 void load_imported_generic_templates(ParserContext *context, ASTNode *import_node,
                                      const char *source_path) {
-    ParserContext imported_context;
-    Token *tokens;
-    Token *cur;
-    ASTNode *program;
-    ASTNode **copies = NULL;
-    int copy_count = 0;
-
     if (!import_node || import_node->type != AST_IMPORT ||
         !source_path || import_node->import_stmt.symbol_count == 0)
         return;
 
-    tokens = lexer_from_file(source_path);
-    if (!tokens) return; /* Imports may also name linker-provided symbols. */
+    FrontendSession *session = frontend_session_current();
+    if (!session || !session->loader) return;
 
-    parser_context_init(&imported_context);
-    imported_context.module.filename = source_path;
-    cur = tokens;
-    /* Templates are copied in syntax form. The importing program's normal
-     * frontend pipeline specializes and lowers them after instantiation. */
-    program = parse_program_syntax(&imported_context, &cur);
+    Module *mod = module_loader_load(session->loader, context->module.filename, source_path);
+    if (!mod || mod->state != MODULE_LOADED) return;
 
-    for (int i = 0; i < imported_context.symbols.generic_templates.count; i++) {
-        ASTNode *template = imported_context.symbols.generic_templates.declarations[i];
+    for (int i = 0; i < mod->generic_template_count; i++) {
+        ASTNode *template = mod->generic_templates[i];
         const char *name = template_name(template);
         if (!template_is_exported(template) || !import_requests_symbol(import_node, name))
             continue;
 
-        copies = realloc(copies, sizeof(ASTNode *) * (copy_count + 1));
-        copies[copy_count++] = ast_clone(template);
-    }
-
-    free_ast(program);
-    free_import_tokens(tokens);
-    parser_context_reset(&imported_context);
-
-    for (int i = 0; i < copy_count; i++) {
-        ASTNode *copy = copies[i];
-        const char *name = template_name(copy);
-        if (copy->type == AST_STRUCT) add_typename(context, copy->struct_stmt.name);
+        ASTNode *copy = ast_clone(template);
+        if (copy->type == AST_STRUCT) {
+            add_typename(context, copy->struct_stmt.name);
+        }
         add_generic_template(context, copy);
         remove_import_symbol(import_node, name);
     }
-    free(copies);
 }

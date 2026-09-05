@@ -41,6 +41,17 @@ int parser_name_has_imported_package_prefix(const char *name) {
     return 0;
 }
 
+int parser_get_imported_package_count(void) {
+    ParserContext *context = parser_context_current();
+    return context ? context->module.imported_package_count : 0;
+}
+
+const char *parser_get_imported_package(int index) {
+    ParserContext *context = parser_context_current();
+    if (!context || index < 0 || index >= context->module.imported_package_count) return NULL;
+    return context->module.imported_packages[index];
+}
+
 char *mangle(const char *pkg, const char *name) {
     size_t len = strlen(pkg) + 1 + strlen(name) + 1;
     char *buf = malloc(len);
