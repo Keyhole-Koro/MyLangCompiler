@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "mylang/backend/codegen.h"
+#include "mylang/type/type_info.h"
 
 #define SLOT_SIZE 4
 
@@ -39,14 +40,7 @@ typedef struct {
     int dims_count;
 } LocalInfo;
 
-typedef struct {
-    const char *base_type;
-    int pointer_level;
-    int type_modifiers;
-    int is_array;
-    int dims[8];
-    int dims_count;
-} TypeInfo;
+typedef MylangType TypeInfo;
 
 typedef struct {
     char *text;

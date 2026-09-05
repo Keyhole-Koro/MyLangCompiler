@@ -1,12 +1,7 @@
 #include "mylang/backend/codegen_internal.h"
 
 static void clear_typeinfo(TypeInfo *out) {
-    out->base_type = "";
-    out->pointer_level = 0;
-    out->type_modifiers = 0;
-    out->is_array = 0;
-    out->dims_count = 0;
-    for (int i = 0; i < 8; i++) out->dims[i] = 0;
+    mylang_type_clear(out);
 }
 
 static int infer_identifier_type(CompilerContext *cc, ASTNode *expr, TypeInfo *out) {

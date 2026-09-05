@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "mylang/driver/driver_internal.h"
+#include "mylang/frontend/parser_ast_internal.h"
 #include "mylang/frontend/parser_internal.h"
 #include "mylang/semantic/semantic_types.h"
 
@@ -413,6 +414,32 @@ static void test_parser_context_isolation(void) {
     parser_context_reset(outer_context);
 }
 
+static void test_shared_type_info(void) {
+    ASTNode *base = new_type_node(
+        new_identifier("Widget"),
+        2,
+        TYPEMOD_CONST,
+        REFKIND_SHARED
+    );
+    ASTNode *inner = new_type_array(base, 4);
+    ASTNode *outer = new_type_array(inner, 8);
+    MylangType type;
+
+    assert(mylang_type_from_ast(outer, &type));
+    assert(strcmp(type.base_type, "Widget") == 0);
+    assert(type.pointer_level == 2);
+    assert(type.type_modifiers == TYPEMOD_CONST);
+    assert(type.ref_kind == REFKIND_SHARED);
+    assert(type.is_array);
+    assert(type.dims_count == 2);
+    assert(type.dims[0] == 4);
+    assert(type.dims[1] == 8);
+    assert(mylang_type_is_builtin("i32"));
+    assert(!mylang_type_is_builtin("Widget"));
+
+    free_ast(outer);
+}
+
 void test_generic_instantiation(void);
 
 int main(void) {
@@ -431,6 +458,7 @@ int main(void) {
     test_exported_generic_metadata_and_namespaces();
     test_generic_state_reset();
     test_parser_context_isolation();
+    test_shared_type_info();
     printf("phase2 whitebox tests passed\n");
     return 0;
 }
