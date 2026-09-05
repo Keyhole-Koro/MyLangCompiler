@@ -110,6 +110,78 @@ static void test_session_isolation(void) {
     printf("[PASS] session isolation: independent sessions do not leak state\n");
 }
 
+#include "mylang/frontend/resolver.h"
+#include "mylang/frontend/parser_ast_internal.h"
+
+static void test_resolver_visibility_and_function_info(void) {
+    FrontendSession *session = frontend_session_create();
+    assert(session != NULL);
+
+    Module *mod = module_loader_load(session->loader, NULL, "tests/fixtures/module/sample_lib.mln");
+    assert(mod != NULL);
+    assert(mod->state == MODULE_LOADED);
+
+    /* 1. Package import test */
+    ASTNode *pkg_import = new_import_stmt("sample_lib.mln", NULL, 0);
+    const char *pkg_name = resolver_import_package_name(pkg_import, mod);
+    assert(pkg_name != NULL && strcmp(pkg_name, "sample_lib") == 0);
+
+    ModuleSymbol *sym_exp = resolver_lookup_import_symbol(pkg_import, mod, "exported_add");
+    assert(sym_exp != NULL);
+    assert(strcmp(sym_exp->source_name, "exported_add") == 0);
+    assert(strcmp(sym_exp->link_name, "sample_lib_exported_add") == 0);
+
+    ModuleSymbol *sym_priv = resolver_lookup_import_symbol(pkg_import, mod, "private_add");
+    assert(sym_priv == NULL); /* Private symbol not visible */
+
+    /* 2. Symbol-list import test */
+    char **symbols = malloc(sizeof(char *) * 1);
+    symbols[0] = strdup("exported_add");
+    ASTNode *sym_import = new_import_stmt("sample_lib.mln", symbols, 1);
+
+    ModuleSymbol *sym_visible = resolver_lookup_import_symbol(sym_import, mod, "exported_add");
+    assert(sym_visible != NULL);
+
+    ModuleSymbol *sym_unrequested = resolver_lookup_import_symbol(sym_import, mod, "variadic_log");
+    assert(sym_unrequested == NULL); /* Exported but unrequested symbol is not visible */
+
+    /* 3. Function signature and variadic info test */
+    ModuleSymbol *sym_variadic = module_find_exported_symbol(mod, "variadic_log");
+    assert(sym_variadic != NULL);
+
+    ResolverFunctionInfo fn_info;
+    assert(resolver_get_function_info(sym_variadic, &fn_info) == 1);
+    assert(fn_info.param_count == 2);
+    assert(fn_info.fixed_param_count == 1);
+    assert(fn_info.is_variadic == true);
+    assert(strcmp(fn_info.params[0].name, "level") == 0);
+    assert(strcmp(fn_info.params[1].name, "args") == 0);
+    assert(fn_info.params[1].is_rest == 1);
+    resolver_free_function_info(&fn_info);
+
+    /* 4. Exported generic template lookup test */
+    ASTNode *gen_exp = resolver_find_exported_generic_template(mod, "exported_identity");
+    assert(gen_exp != NULL);
+    assert(gen_exp->type == AST_FUNDEF);
+
+    ASTNode *gen_priv = resolver_find_exported_generic_template(mod, "private_identity");
+    assert(gen_priv == NULL); /* Non-exported generic template must not be found */
+
+    /* 5. DOM signature helper test */
+    DomSignature dom_sig;
+    resolver_fill_dom_signature(sym_exp->declaration, "sample_lib_exported_add", &dom_sig);
+    assert(strcmp(dom_sig.call_name, "sample_lib_exported_add") == 0);
+    assert(dom_sig.param_count == 2);
+    assert(strcmp(dom_sig.param_names[0], "x") == 0);
+    assert(strcmp(dom_sig.param_names[1], "y") == 0);
+    dom_signature_free(&dom_sig);
+
+    free_ast(pkg_import);
+    free_ast(sym_import);
+    frontend_session_destroy(session);
+    printf("[PASS] resolver: visibility, function info, generic exports, and DOM signature\n");
+}
+
 void test_module_graph_all(void) {
     test_module_caching();
     test_relative_path_canonicalization();
@@ -117,4 +189,6 @@ void test_module_graph_all(void) {
     test_package_and_symbols_metadata();
     test_non_mylang_import_ignored();
     test_session_isolation();
+    test_resolver_visibility_and_function_info();
 }
+

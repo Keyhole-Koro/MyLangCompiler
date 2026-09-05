@@ -1,0 +1,21 @@
+package sample_lib;
+
+export i32 exported_add(i32 x, i32 y) {
+    return x + y;
+}
+
+i32 private_add(i32 x, i32 y) {
+    return x + y;
+}
+
+export T exported_identity<T>(T val) {
+    return val;
+}
+
+T private_identity<T>(T val) {
+    return val;
+}
+
+export i32 variadic_log(i32 level, rest args) {
+    return level;
+}
