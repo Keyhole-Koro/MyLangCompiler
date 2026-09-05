@@ -157,15 +157,18 @@ static ASTNode *lower_payload_enum(ASTNode *node) {
     members[0] = new_var_decl(new_type_node(new_identifier("i32"), 0,
                                              TYPEMOD_NONE, REFKIND_NONE),
                               "__tag", NULL);
+    int field_count = 1;
     for (int i = 0; i < member_count; i++) {
         ASTNode *variant = node->enum_stmt.members[i];
-        if (!variant || !variant->enum_member.payload_type)
-            return node;
-        members[i + 1] = new_var_decl(ast_clone(variant->enum_member.payload_type),
-                                      variant->enum_member.name, NULL);
+        if (!variant) return node;
+        /* A variant with nothing to carry contributes only its tag value, so
+         * it gets no storage. `Opt<T> { Some(T), None }` is one field wide. */
+        if (!variant->enum_member.payload_type) continue;
+        members[field_count++] = new_var_decl(ast_clone(variant->enum_member.payload_type),
+                                              variant->enum_member.name, NULL);
     }
 
-    ASTNode *result = new_struct(node->enum_stmt.name, members, member_count + 1);
+    ASTNode *result = new_struct(node->enum_stmt.name, members, field_count);
     result->line = node->line;
     result->col = node->col;
     result->end_line = node->end_line;

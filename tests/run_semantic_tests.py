@@ -46,6 +46,31 @@ WARN_CASES = {
 }
 
 FAIL_CASES = {
+    "payloadEnumNonExhaustive_fail": (
+        "fail/semantic/payloadEnumNonExhaustive_fail.mln",
+        "does not cover one variant of 'Result': Err",
+        None,
+    ),
+    "payloadEnumWrongEnum_fail": (
+        "fail/semantic/payloadEnumWrongEnum_fail.mln",
+        "'Some' is a variant of 'Opt', not of 'Result'",
+        None,
+    ),
+    "payloadEnumDuplicateArm_fail": (
+        "fail/semantic/payloadEnumDuplicateArm_fail.mln",
+        "'Ok' is matched more than once",
+        None,
+    ),
+    "structUnknownMember_fail": (
+        "fail/semantic/structUnknownMember_fail.mln",
+        "'P' has no member named 'zzz'",
+        None,
+    ),
+    "structMemberTypeMismatch_fail": (
+        "fail/semantic/structMemberTypeMismatch_fail.mln",
+        "assignment type mismatch: expected i32",
+        None,
+    ),
     "payloadEnumBadPosition_fail": (
         "fail/semantic/payloadEnumBadPosition_fail.mln",
         "constructs a payload enum, which can only appear as the whole right-hand side",

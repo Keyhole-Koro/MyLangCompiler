@@ -1,0 +1,13 @@
+// The declared type says which enum is being built, so a variant belonging to
+// another one is caught rather than storing into a field the layout lacks.
+enum Result<T, E> { Ok(T), Err(E) }
+enum Opt<T> { Some(T), None }
+
+i32 use_opt(Opt<i32> o) { return 0; }
+
+i32 main() {
+    Opt<i32> o = Some(1);
+    use_opt(o);
+    Result<i32, char> r = Some(1);
+    return r.__tag;
+}

@@ -1,0 +1,9 @@
+// Field assignment is type checked like any other, now that a member access can
+// be given a type.
+typedef struct { i32 a; char b; } P;
+
+i32 main() {
+    P p;
+    p.a = "no";
+    return p.a;
+}

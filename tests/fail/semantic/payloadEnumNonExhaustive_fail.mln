@@ -1,0 +1,10 @@
+// Without a `_` arm every variant has to be named, or the match yields zero for
+// a tag nobody handled -- a wrong answer rather than a missing one.
+enum Result<T, E> { Ok(T), Err(E) }
+
+i32 main() {
+    Result<i32, char> r = Ok(1);
+    return case r of {
+        Ok(v) -> v;
+    };
+}

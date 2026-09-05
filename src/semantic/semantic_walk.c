@@ -10,6 +10,10 @@ typedef enum {
 } ExprContext;
 
 static int semantic_infer_expr_type(SemanticContext *ctx, ASTNode *expr, SemanticTypeInfo *out);
+static const SemanticStructMember *semantic_find_struct_member(SemanticContext *ctx,
+                                                               const char *struct_name,
+                                                               const char *member_name);
+static int semantic_struct_is_known(SemanticContext *ctx, const char *struct_name);
 
 static ASTNode *semantic_as_identifier(ASTNode *node) {
     return (node && node->type == AST_IDENTIFIER) ? node : NULL;
@@ -912,6 +916,28 @@ static int semantic_infer_expr_type(SemanticContext *ctx, ASTNode *expr, Semanti
 
     if (!ctx || !expr || !out) return 0;
     switch (expr->type) {
+    case AST_MEMBER_ACCESS:
+    case AST_ARROW_ACCESS: {
+        /* `p.a` is the type the struct gives `a`. Inferring it is what lets the
+         * assignment and initializer checks apply to fields at all; without it
+         * they returned early and a field took anything. */
+        ASTNode *lhs = expr->type == AST_MEMBER_ACCESS ? expr->member_access.lhs
+                                                       : expr->arrow_access.lhs;
+        const char *field = expr->type == AST_MEMBER_ACCESS ? expr->member_access.member
+                                                            : expr->arrow_access.member;
+        if (!semantic_infer_expr_type(ctx, lhs, &target)) return 0;
+        if (!target.base_type || !semantic_struct_is_known(ctx, target.base_type)) return 0;
+
+        const SemanticStructMember *member =
+            semantic_find_struct_member(ctx, target.base_type, field);
+        if (!member) {
+            semantic_error_at(ctx, semantic_location_from_ast(expr),
+                              "'%s' has no member named '%s'", target.base_type, field);
+            return 0;
+        }
+        *out = member->type;
+        return 1;
+    }
     case AST_NUMBER:
         semantic_typeinfo_make_scalar(out, "i32");
         return 1;
@@ -1420,6 +1446,51 @@ static void semantic_register_user_type(SemanticContext *ctx, const char *name) 
     }
 }
 
+/* Records one struct's members so a later member access can be typed. Anonymous
+ * structs and members without a resolvable type are skipped rather than stored
+ * half-formed: an unknown member type is somebody else's diagnostic. */
+static void semantic_register_struct_layout(SemanticContext *ctx, const char *name,
+                                            ASTNode **members, int member_count) {
+    if (!ctx || !name || ctx->struct_layout_count >= 256) return;
+    for (int i = 0; i < ctx->struct_layout_count; i++)
+        if (strcmp(ctx->struct_layouts[i].name, name) == 0) return;
+
+    SemanticStructLayout *layout = &ctx->struct_layouts[ctx->struct_layout_count];
+    layout->name = name;
+    layout->member_count = 0;
+    for (int i = 0; i < member_count && layout->member_count < SEMANTIC_MAX_STRUCT_MEMBERS; i++) {
+        ASTNode *member = members[i];
+        if (!member || member->type != AST_VAR_DECL || !member->var_decl.name) continue;
+        SemanticTypeInfo info;
+        if (!semantic_typeinfo_from_type_ast(member->var_decl.var_type, &info)) continue;
+        layout->members[layout->member_count].name = member->var_decl.name;
+        layout->members[layout->member_count].type = info;
+        layout->member_count++;
+    }
+    ctx->struct_layout_count++;
+}
+
+static const SemanticStructMember *semantic_find_struct_member(SemanticContext *ctx,
+                                                               const char *struct_name,
+                                                               const char *member_name) {
+    if (!ctx || !struct_name || !member_name) return NULL;
+    for (int i = 0; i < ctx->struct_layout_count; i++) {
+        if (strcmp(ctx->struct_layouts[i].name, struct_name) != 0) continue;
+        for (int m = 0; m < ctx->struct_layouts[i].member_count; m++)
+            if (strcmp(ctx->struct_layouts[i].members[m].name, member_name) == 0)
+                return &ctx->struct_layouts[i].members[m];
+        return NULL; /* the struct is known, the member is not */
+    }
+    return NULL;
+}
+
+static int semantic_struct_is_known(SemanticContext *ctx, const char *struct_name) {
+    if (!ctx || !struct_name) return 0;
+    for (int i = 0; i < ctx->struct_layout_count; i++)
+        if (strcmp(ctx->struct_layouts[i].name, struct_name) == 0) return 1;
+    return 0;
+}
+
 static void semantic_collect_user_types(SemanticContext *ctx, ASTNode *node) {
     if (!ctx || !node) return;
     if (node->type == AST_BLOCK) {
@@ -1428,8 +1499,13 @@ static void semantic_collect_user_types(SemanticContext *ctx, ASTNode *node) {
         }
     } else if (node->type == AST_STRUCT && node->struct_stmt.name) {
         semantic_register_user_type(ctx, node->struct_stmt.name);
+        semantic_register_struct_layout(ctx, node->struct_stmt.name, node->struct_stmt.members,
+                                        node->struct_stmt.member_count);
     } else if (node->type == AST_TYPEDEF_STRUCT && node->typedef_struct.typedef_name) {
         semantic_register_user_type(ctx, node->typedef_struct.typedef_name);
+        semantic_register_struct_layout(ctx, node->typedef_struct.typedef_name,
+                                        node->typedef_struct.members,
+                                        node->typedef_struct.member_count);
     } else if (node->type == AST_TYPEDEF && node->typedef_stmt.alias) {
         semantic_register_user_type(ctx, node->typedef_stmt.alias);
     }

@@ -64,6 +64,19 @@ typedef struct {
     SemanticLocation decl_loc;
 } SemanticFunctionSig;
 
+#define SEMANTIC_MAX_STRUCT_MEMBERS 64
+
+typedef struct {
+    const char *name;
+    SemanticTypeInfo type;
+} SemanticStructMember;
+
+typedef struct {
+    const char *name;
+    SemanticStructMember members[SEMANTIC_MAX_STRUCT_MEMBERS];
+    int member_count;
+} SemanticStructLayout;
+
 typedef struct {
     const char *filename;
     FrontendSession *session;
@@ -86,6 +99,11 @@ typedef struct {
     SemanticFunctionSig function_sigs[256];
     int user_type_count;
     const char *user_types[256];
+    /* Struct layouts, so a member access can be given a type. Without them
+     * `p.a = "no"` had no left-hand type to compare against and the assignment
+     * check returned early, which also let an entirely unknown field through. */
+    int struct_layout_count;
+    SemanticStructLayout struct_layouts[256];
     int imported_package_count;
     char *imported_packages[64];
 } SemanticContext;
