@@ -20,10 +20,10 @@ int is_type(TokenKind kind, Token *cur) {
 // Parse an expression but stop before consuming an ARROW token (used for
 // distinguishing case-pattern arrows from member access).
 ASTNode *parse_expr_until_arrow(Token **cur) {
-    int prev = g_stop_at_arrow;
-    g_stop_at_arrow = 1;
+    int prev = parser_context_current()->control.stop_at_arrow;
+    parser_context_current()->control.stop_at_arrow = 1;
     ASTNode *node = parse_expr(cur);
-    g_stop_at_arrow = prev;
+    parser_context_current()->control.stop_at_arrow = prev;
     return node;
 }
 

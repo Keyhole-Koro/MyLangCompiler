@@ -43,60 +43,57 @@ typedef struct EnumConstant {
     long value;
 } EnumConstant;
 
-/*
- * One complete parser session.  The parser still exposes legacy globals while
- * it is being migrated, but nested module parsing must switch every bit of
- * state as one unit.  Keeping this definition here prevents import handling
- * from silently falling out of sync when parser state grows.
- */
-typedef struct ParserContext {
-    Token *token_head;
-    ASTNode *root;
-    StructTable struct_table;
-    FunctionTable func_table;
-    TypeTable type_table;
-    GenericTemplateTable generic_template_table;
-    int generic_decl_depth;
-    const char *current_generic_function_name;
-    int stop_at_arrow;
-    int unchecked_depth;
+typedef struct ParserSymbolState {
+    StructTable structs;
+    FunctionTable functions;
+    TypeTable types;
+    GenericTemplateTable generic_templates;
+    EnumConstant *enum_constants;
+    int enum_constant_count;
+} ParserSymbolState;
+
+typedef struct ParserModuleState {
     char *current_package;
     int current_package_heap;
     ExportEntry *exports;
     int export_count;
     char **imported_packages;
-    int imported_pkg_count;
-    ASTNode **hoisted_funcs;
-    int hoisted_count;
-    int funlit_counter;
-    const char *parse_filename;
-    EnumConstant *enum_constants;
-    int enum_constant_count;
+    int imported_package_count;
+    const char *filename;
+} ParserModuleState;
+
+typedef struct ParserControlState {
+    int generic_decl_depth;
+    const char *current_generic_function_name;
+    int stop_at_arrow;
+    int unchecked_depth;
+} ParserControlState;
+
+typedef struct ParserLoweringState {
+    ASTNode **hoisted_functions;
+    int hoisted_function_count;
+    int function_literal_counter;
+    int dom_node_counter;
+    ASTNode *dom_program;
+} ParserLoweringState;
+
+/* One complete parser session. Nested module parsing switches the active
+ * context as one unit, so parser state never needs a field-by-field snapshot. */
+typedef struct ParserContext {
+    Token *token_head;
+    ParserSymbolState symbols;
+    ParserModuleState module;
+    ParserControlState control;
+    ParserLoweringState lowering;
 } ParserContext;
 
-extern Token *token_head;
-extern ASTNode *root;
-extern StructTable g_struct_table;
-extern FunctionTable g_func_table;
-extern TypeTable g_type_table;
-extern GenericTemplateTable g_generic_template_table;
-extern int g_generic_decl_depth;
-extern const char *g_current_generic_function_name;
-extern int g_stop_at_arrow;
-extern int g_unchecked_depth;
 extern const char g_default_package[];
-extern char *g_current_package;
-extern int g_current_package_heap;
-extern ExportEntry *g_exports;
-extern int g_export_count;
-extern char **g_imported_packages;
-extern int g_imported_pkg_count;
-extern ASTNode **g_hoisted_funcs;
-extern int g_hoisted_count;
-extern int g_funlit_counter;
-extern const char *g_parse_filename;
-extern EnumConstant *g_enum_constants;
-extern int g_enum_constant_count;
+
+/* Parser state has one owner. Parsing an imported module temporarily
+ * activates another context instead of copying a collection of globals. */
+ParserContext *parser_context_current(void);
+void parser_context_init(ParserContext *context);
+ParserContext *parser_context_activate(ParserContext *context);
 
 void set_current_package(const char *name);
 void add_function(ASTNode *fn);
@@ -116,9 +113,6 @@ void add_enum_constant(const char *name, long value);
 int find_enum_constant(const char *name, long *out_value);
 void parser_reset(void);
 void parser_set_filename(const char *name);
-void parser_context_save(ParserContext *context);
-void parser_context_activate_empty(void);
-void parser_context_restore(const ParserContext *context);
 void add_export(const char *orig, const char *mangled);
 const char *find_export_mangled(const char *orig);
 int is_imported_package(const char *name);

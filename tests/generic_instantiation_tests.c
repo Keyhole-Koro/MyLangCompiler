@@ -30,7 +30,6 @@ void test_generic_instantiation(void) {
     Token *tokens = lexer(buffer);
     free(buffer);
     Token *cur = tokens;
-    token_head = tokens;
     ASTNode *program = parse_program(&cur);
     assert_concrete(&program, NULL);
     assert(semantic_check(program));

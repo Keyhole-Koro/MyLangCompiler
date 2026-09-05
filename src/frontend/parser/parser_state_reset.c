@@ -1,95 +1,96 @@
 #include "mylang/frontend/parser_internal.h"
 
-/* Clears parser-global tables and temporary state so each parse starts from a
- * clean environment without leaking declarations across translation units. */
+/* Clears the active parser context so declarations cannot leak between
+ * independent translation units. */
 
 void parser_set_filename(const char *name) {
-    g_parse_filename = name;
+    ParserContext *context = parser_context_current();
+    context->module.filename = name;
 }
 
 void parser_reset(void) {
-    if (g_generic_template_table.declarations) {
-        for (int i = 0; i < g_generic_template_table.count; i++) {
-            free_ast(g_generic_template_table.declarations[i]);
+    ParserContext *context = parser_context_current();
+    if (context->symbols.generic_templates.declarations) {
+        for (int i = 0; i < context->symbols.generic_templates.count; i++) {
+            free_ast(context->symbols.generic_templates.declarations[i]);
         }
-        free(g_generic_template_table.declarations);
-        g_generic_template_table.declarations = NULL;
-        g_generic_template_table.count = 0;
+        free(context->symbols.generic_templates.declarations);
+        context->symbols.generic_templates.declarations = NULL;
+        context->symbols.generic_templates.count = 0;
     }
 
-    if (g_func_table.funcs) {
-        free(g_func_table.funcs);
-        g_func_table.funcs = NULL;
-        g_func_table.count = 0;
+    if (context->symbols.functions.funcs) {
+        free(context->symbols.functions.funcs);
+        context->symbols.functions.funcs = NULL;
+        context->symbols.functions.count = 0;
     }
 
-    if (g_type_table.typenames) {
-        for (int i = 0; i < g_type_table.count; i++) {
-            free(g_type_table.typenames[i]);
+    if (context->symbols.types.typenames) {
+        for (int i = 0; i < context->symbols.types.count; i++) {
+            free(context->symbols.types.typenames[i]);
         }
-        free(g_type_table.typenames);
-        g_type_table.typenames = NULL;
-        g_type_table.count = 0;
+        free(context->symbols.types.typenames);
+        context->symbols.types.typenames = NULL;
+        context->symbols.types.count = 0;
     }
 
-    if (g_struct_table.structs) {
-        for (int i = 0; i < g_struct_table.count; i++) {
-            if (g_struct_table.structs[i]) {
-                free(g_struct_table.structs[i]->name);
-                free(g_struct_table.structs[i]);
+    if (context->symbols.structs.structs) {
+        for (int i = 0; i < context->symbols.structs.count; i++) {
+            if (context->symbols.structs.structs[i]) {
+                free(context->symbols.structs.structs[i]->name);
+                free(context->symbols.structs.structs[i]);
             }
         }
-        free(g_struct_table.structs);
-        g_struct_table.structs = NULL;
-        g_struct_table.count = 0;
+        free(context->symbols.structs.structs);
+        context->symbols.structs.structs = NULL;
+        context->symbols.structs.count = 0;
     }
 
-    if (g_exports) {
-        for (int i = 0; i < g_export_count; i++) {
-            free(g_exports[i].orig);
-            free(g_exports[i].mangled);
+    if (context->module.exports) {
+        for (int i = 0; i < context->module.export_count; i++) {
+            free(context->module.exports[i].orig);
+            free(context->module.exports[i].mangled);
         }
-        free(g_exports);
-        g_exports = NULL;
-        g_export_count = 0;
+        free(context->module.exports);
+        context->module.exports = NULL;
+        context->module.export_count = 0;
     }
 
-    if (g_imported_packages) {
-        for (int i = 0; i < g_imported_pkg_count; i++) {
-            free(g_imported_packages[i]);
+    if (context->module.imported_packages) {
+        for (int i = 0; i < context->module.imported_package_count; i++) {
+            free(context->module.imported_packages[i]);
         }
-        free(g_imported_packages);
-        g_imported_packages = NULL;
-        g_imported_pkg_count = 0;
+        free(context->module.imported_packages);
+        context->module.imported_packages = NULL;
+        context->module.imported_package_count = 0;
     }
 
-    if (g_hoisted_funcs) {
-        free(g_hoisted_funcs);
-        g_hoisted_funcs = NULL;
+    if (context->lowering.hoisted_functions) {
+        free(context->lowering.hoisted_functions);
+        context->lowering.hoisted_functions = NULL;
     }
-    g_hoisted_count = 0;
-    g_funlit_counter = 0;
+    context->lowering.hoisted_function_count = 0;
+    context->lowering.function_literal_counter = 0;
 
-    if (g_enum_constants) {
-        for (int i = 0; i < g_enum_constant_count; i++) {
-            free(g_enum_constants[i].name);
+    if (context->symbols.enum_constants) {
+        for (int i = 0; i < context->symbols.enum_constant_count; i++) {
+            free(context->symbols.enum_constants[i].name);
         }
-        free(g_enum_constants);
-        g_enum_constants = NULL;
-        g_enum_constant_count = 0;
+        free(context->symbols.enum_constants);
+        context->symbols.enum_constants = NULL;
+        context->symbols.enum_constant_count = 0;
     }
 
-    if (g_current_package_heap && g_current_package) {
-        free(g_current_package);
+    if (context->module.current_package_heap && context->module.current_package) {
+        free(context->module.current_package);
     }
-    g_current_package = (char *)g_default_package;
-    g_current_package_heap = 0;
+    context->module.current_package = (char *)g_default_package;
+    context->module.current_package_heap = 0;
 
-    token_head = NULL;
-    root = NULL;
-    g_stop_at_arrow = 0;
-    g_unchecked_depth = 0;
-    g_generic_decl_depth = 0;
-    g_current_generic_function_name = NULL;
-    g_parse_filename = NULL;
+    context->token_head = NULL;
+    context->control.stop_at_arrow = 0;
+    context->control.unchecked_depth = 0;
+    context->control.generic_decl_depth = 0;
+    context->control.current_generic_function_name = NULL;
+    context->module.filename = NULL;
 }

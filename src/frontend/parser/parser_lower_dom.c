@@ -34,13 +34,10 @@ typedef struct {
     int count;
 } DomEmit;
 
-static int g_dom_node_counter = 0;
-static ASTNode *g_dom_program = NULL;
-
 static void dom_error(const ASTNode *node, int line, int col, const char *fmt, ...) {
     va_list ap;
     fprintf(stderr, "%s:%d:%d: error: ",
-            g_parse_filename ? g_parse_filename : "<input>",
+            parser_context_current()->module.filename ? parser_context_current()->module.filename : "<input>",
             node ? (line ? line : node->line) : line,
             node ? (col ? col : node->col) : col);
     va_start(ap, fmt);
@@ -98,7 +95,7 @@ static char *emit_element(ASTNode *el, DomEmit *out) {
     const char *tag = el->dom_element.tag;
     DomSignature sig;
 
-    if (!dom_signature_lookup(g_dom_program, tag, &sig)) {
+    if (!dom_signature_lookup(parser_context_current()->lowering.dom_program, tag, &sig)) {
         dom_error(el, 0, 0,
                   "no function named '%s' is in scope for <%s>; a DOM element "
                   "calls the function of the same name", tag, tag);
@@ -134,13 +131,13 @@ static char *emit_element(ASTNode *el, DomEmit *out) {
     }
 
     char var[32];
-    snprintf(var, sizeof(var), "__dom%d", g_dom_node_counter++);
+    snprintf(var, sizeof(var), "__dom%d", parser_context_current()->lowering.dom_node_counter++);
     emit_stmt(out, new_var_decl(i32_type(), var,
                                 dom_call(sig.call_name, args, sig.param_count, el)));
 
     if (el->dom_element.child_count > 0) {
         DomSignature append_sig;
-        if (!dom_signature_lookup(g_dom_program, DOM_APPEND_CHILD, &append_sig)) {
+        if (!dom_signature_lookup(parser_context_current()->lowering.dom_program, DOM_APPEND_CHILD, &append_sig)) {
             dom_error(el, 0, 0,
                       "children need a function named '%s' in scope", DOM_APPEND_CHILD);
         }
@@ -439,11 +436,11 @@ void ensure_no_dom_elements(ASTNode *node) {
 }
 
 void dom_lowering_reset(void) {
-    g_dom_node_counter = 0;
-    g_dom_program = NULL;
+    parser_context_current()->lowering.dom_node_counter = 0;
+    parser_context_current()->lowering.dom_program = NULL;
 }
 
 // The whole program is kept so element tags can be resolved against imports.
 void dom_lowering_set_program(ASTNode *program) {
-    g_dom_program = program;
+    parser_context_current()->lowering.dom_program = program;
 }

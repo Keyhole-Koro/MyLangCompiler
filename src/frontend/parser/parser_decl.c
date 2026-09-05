@@ -5,7 +5,7 @@ ASTNode* parse_param(Token **cur) {
     if ((*cur)->kind == REST) {
         Token *rest_tok = *cur;
         *cur = (*cur)->next;
-        if ((*cur)->kind != IDENTIFIER) parse_error("expected rest parameter name", token_head, *cur);
+        if ((*cur)->kind != IDENTIFIER) parse_error("expected rest parameter name", *cur);
         Token *name_tok = *cur;
         char *name = name_tok->value;
         *cur = (*cur)->next;
@@ -23,7 +23,7 @@ ASTNode* parse_param(Token **cur) {
         start = *cur;
     }
     ASTNode *type = parse_type(cur);
-    if ((*cur)->kind != IDENTIFIER) parse_error("expected param name", token_head, *cur);
+    if ((*cur)->kind != IDENTIFIER) parse_error("expected param name", *cur);
     Token *name_tok = *cur;
     char *name = name_tok->value;
     *cur = (*cur)->next;
@@ -36,7 +36,7 @@ ASTNode* parse_param(Token **cur) {
             size = atoi((*cur)->value);
             *cur = (*cur)->next;
         }
-        if (!expect(cur, R_BRACKET)) parse_error("expected ']' for parameter array", token_head, *cur);
+        if (!expect(cur, R_BRACKET)) parse_error("expected ']' for parameter array", *cur);
         final_type = new_type_array(final_type, size);
     }
 
@@ -59,10 +59,10 @@ ASTNode** parse_param_list(Token **cur, int *out_count, bool *out_is_variadic) {
         params[count++] = param;
         if ((*cur)->kind == COMMA) {
             if (param->type == AST_PARAM && param->param.is_rest) {
-                parse_error("rest parameter must be the final parameter", token_head, *cur);
+                parse_error("rest parameter must be the final parameter", *cur);
             }
             *cur = (*cur)->next;
-            if ((*cur)->kind == R_PARENTHESES) parse_error("trailing comma in parameter list", token_head, *cur);
+            if ((*cur)->kind == R_PARENTHESES) parse_error("trailing comma in parameter list", *cur);
             continue;
         }
         break;
@@ -74,7 +74,7 @@ ASTNode** parse_param_list(Token **cur, int *out_count, bool *out_is_variadic) {
 ASTNode* parse_fundef(Token **cur) {
     Token *start = *cur;
     ASTNode *ret_type = parse_type(cur);
-    if ((*cur)->kind != IDENTIFIER) parse_error("expected function name", token_head, *cur);
+    if ((*cur)->kind != IDENTIFIER) parse_error("expected function name", *cur);
     Token *name_tok = *cur;
     char *name = name_tok->value;
     *cur = (*cur)->next;
@@ -83,7 +83,7 @@ ASTNode* parse_fundef(Token **cur) {
     if ((*cur)->kind == LT) {
         type_params = parse_type_params(cur, &type_param_count, 0);
     }
-    if (!expect(cur, L_PARENTHESES)) parse_error("expected '(' after function name", token_head, *cur);
+    if (!expect(cur, L_PARENTHESES)) parse_error("expected '(' after function name", *cur);
 
     int param_count = 0;
     bool is_variadic = false;
@@ -91,7 +91,7 @@ ASTNode* parse_fundef(Token **cur) {
     if ((*cur)->kind != R_PARENTHESES)
         params = parse_param_list(cur, &param_count, &is_variadic);
 
-    if (!expect(cur, R_PARENTHESES)) parse_error("expected ')' after parameter list", token_head, *cur);
+    if (!expect(cur, R_PARENTHESES)) parse_error("expected ')' after parameter list", *cur);
 
     if ((*cur)->kind == SEMICOLON) {
         *cur = (*cur)->next;

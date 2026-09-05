@@ -1,6 +1,6 @@
 #include "mylang/semantic/semantic_internal.h"
 #include "mylang/semantic/diagnostic_codes.h"
-#include "mylang/frontend/parser_state_internal.h"
+#include "mylang/frontend/parser.h"
 
 typedef enum {
     EXPRCTX_READ = 0,
@@ -131,13 +131,7 @@ static void register_function_sig(SemanticContext *ctx, const char *name, int pa
 }
 
 static int call_may_be_package_import(const char *name) {
-    if (!name) return 0;
-    for (int i = 0; i < g_imported_pkg_count; i++) {
-        const char *pkg = g_imported_packages[i];
-        size_t len = pkg ? strlen(pkg) : 0;
-        if (len > 0 && strncmp(name, pkg, len) == 0 && name[len] == '_') return 1;
-    }
-    return 0;
+    return parser_name_has_imported_package_prefix(name);
 }
 
 static void semantic_register_enum(SemanticContext *ctx, ASTNode *node) {

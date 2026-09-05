@@ -13,7 +13,7 @@ ASTNode *parse_postfix(Token **cur) {
         } else if ((*cur)->kind == DOT) {
             *cur = (*cur)->next;
             if ((*cur)->kind != IDENTIFIER)
-                parse_error("expected identifier after '.'", token_head, *cur);
+                parse_error("expected identifier after '.'", *cur);
             char *member_name = (*cur)->value;
             *cur = (*cur)->next;
             if (node->type == AST_IDENTIFIER && is_imported_package(node->identifier.name)) {
@@ -25,7 +25,7 @@ ASTNode *parse_postfix(Token **cur) {
             }
         } else if ((*cur)->kind == ARROW) {
             if (!(*cur)->next || (*cur)->next->kind != IDENTIFIER) break;
-            if (g_stop_at_arrow) {
+            if (parser_context_current()->control.stop_at_arrow) {
                 if (!(node->type == AST_IDENTIFIER ||
                       node->type == AST_MEMBER_ACCESS ||
                       node->type == AST_ARROW_ACCESS)) {
@@ -34,7 +34,7 @@ ASTNode *parse_postfix(Token **cur) {
             }
             *cur = (*cur)->next;
             if ((*cur)->kind != IDENTIFIER)
-                parse_error("expected identifier after '->'", token_head, *cur);
+                parse_error("expected identifier after '->'", *cur);
             char *member_name = (*cur)->value;
             *cur = (*cur)->next;
             node = new_arrow_access(node, member_name);
@@ -57,7 +57,7 @@ ASTNode *parse_postfix(Token **cur) {
                 }
             }
             if (!expect(cur, R_PARENTHESES))
-                parse_error("expected ')' after args", token_head, *cur);
+                parse_error("expected ')' after args", *cur);
             node = new_call(node->identifier.name, args, arg_count);
             node->line = line;
             node->col = col;
