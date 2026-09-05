@@ -2,14 +2,12 @@
 
 const char g_default_package[] = "main";
 
-void add_function(ASTNode *fn) {
-    ParserContext *context = parser_context_current();
+void add_function(ParserContext *context, ASTNode *fn) {
     context->symbols.functions.funcs = realloc(context->symbols.functions.funcs, sizeof(ASTNode*) * (context->symbols.functions.count + 1));
     context->symbols.functions.funcs[context->symbols.functions.count++] = fn;
 }
 
-ASTNode *find_function(const char *name) {
-    ParserContext *context = parser_context_current();
+ASTNode *find_function(ParserContext *context, const char *name) {
     for (int i = 0; i < context->symbols.functions.count; i++) {
         if (strcmp(context->symbols.functions.funcs[i]->fundef.name, name) == 0) {
             return context->symbols.functions.funcs[i];
@@ -18,27 +16,23 @@ ASTNode *find_function(const char *name) {
     return NULL;
 }
 
-void add_typename(const char *name) {
-    ParserContext *context = parser_context_current();
+void add_typename(ParserContext *context, const char *name) {
     context->symbols.types.typenames = realloc(context->symbols.types.typenames, sizeof(char*) * (context->symbols.types.count + 1));
     context->symbols.types.typenames[context->symbols.types.count++] = strdup(name);
 }
 
-int is_user_typename(const char *name) {
-    ParserContext *context = parser_context_current();
+int is_user_typename(ParserContext *context, const char *name) {
     for (int i = 0; i < context->symbols.types.count; i++) {
         if (strcmp(context->symbols.types.typenames[i], name) == 0) return 1;
     }
     return 0;
 }
 
-int typename_scope_mark(void) {
-    ParserContext *context = parser_context_current();
+int typename_scope_mark(ParserContext *context) {
     return context->symbols.types.count;
 }
 
-void restore_typenames(int mark) {
-    ParserContext *context = parser_context_current();
+void restore_typenames(ParserContext *context, int mark) {
     if (mark < 0 || mark > context->symbols.types.count) return;
     for (int i = mark; i < context->symbols.types.count; i++) {
         free(context->symbols.types.typenames[i]);
@@ -59,13 +53,12 @@ static const char *generic_declaration_name(ASTNode *declaration) {
     return NULL;
 }
 
-void add_generic_template(ASTNode *declaration) {
-    ParserContext *context = parser_context_current();
+void add_generic_template(ParserContext *context, ASTNode *declaration) {
     const char *name = generic_declaration_name(declaration);
     if (!name) return;
     ASTNode *existing = declaration->type == AST_STRUCT
-        ? find_generic_type_template(name)
-        : find_generic_function_template(name);
+        ? find_generic_type_template(context, name)
+        : find_generic_function_template(context, name);
     if (existing) {
         fprintf(stderr, "duplicate generic declaration '%s'\n", name);
         exit(1);
@@ -77,8 +70,7 @@ void add_generic_template(ASTNode *declaration) {
     context->symbols.generic_templates.declarations[context->symbols.generic_templates.count++] = declaration;
 }
 
-static ASTNode *find_generic_template(const char *name, ASTNodeType declaration_type) {
-    ParserContext *context = parser_context_current();
+static ASTNode *find_generic_template(ParserContext *context, const char *name, ASTNodeType declaration_type) {
     if (!name) return NULL;
     for (int i = 0; i < context->symbols.generic_templates.count; i++) {
         ASTNode *declaration = context->symbols.generic_templates.declarations[i];
@@ -90,27 +82,24 @@ static ASTNode *find_generic_template(const char *name, ASTNodeType declaration_
     return NULL;
 }
 
-ASTNode *find_generic_type_template(const char *name) {
-    return find_generic_template(name, AST_STRUCT);
+ASTNode *find_generic_type_template(ParserContext *context, const char *name) {
+    return find_generic_template(context, name, AST_STRUCT);
 }
 
-ASTNode *find_generic_function_template(const char *name) {
-    return find_generic_template(name, AST_FUNDEF);
+ASTNode *find_generic_function_template(ParserContext *context, const char *name) {
+    return find_generic_template(context, name, AST_FUNDEF);
 }
 
-ASTNode *generic_template_at(int index) {
-    ParserContext *context = parser_context_current();
+ASTNode *generic_template_at(ParserContext *context, int index) {
     if (index < 0 || index >= context->symbols.generic_templates.count) return NULL;
     return context->symbols.generic_templates.declarations[index];
 }
 
-int generic_template_count(void) {
-    ParserContext *context = parser_context_current();
+int generic_template_count(ParserContext *context) {
     return context->symbols.generic_templates.count;
 }
 
-void add_structdef(char *name, ASTNode **members, int member_count) {
-    ParserContext *context = parser_context_current();
+void add_structdef(ParserContext *context, char *name, ASTNode **members, int member_count) {
     StructDef *def = malloc(sizeof(StructDef));
     def->name = strdup(name);
     def->members = members;
@@ -119,24 +108,21 @@ void add_structdef(char *name, ASTNode **members, int member_count) {
     context->symbols.structs.structs[context->symbols.structs.count++] = def;
 }
 
-StructDef *find_structdef(const char *name) {
-    ParserContext *context = parser_context_current();
+StructDef *find_structdef(ParserContext *context, const char *name) {
     for (int i = 0; i < context->symbols.structs.count; i++) {
         if (strcmp(context->symbols.structs.structs[i]->name, name) == 0) return context->symbols.structs.structs[i];
     }
     return NULL;
 }
 
-void add_enum_constant(const char *name, long value) {
-    ParserContext *context = parser_context_current();
+void add_enum_constant(ParserContext *context, const char *name, long value) {
     context->symbols.enum_constants = realloc(context->symbols.enum_constants, sizeof(EnumConstant) * (context->symbols.enum_constant_count + 1));
     context->symbols.enum_constants[context->symbols.enum_constant_count].name = strdup(name);
     context->symbols.enum_constants[context->symbols.enum_constant_count].value = value;
     context->symbols.enum_constant_count++;
 }
 
-int find_enum_constant(const char *name, long *out_value) {
-    ParserContext *context = parser_context_current();
+int find_enum_constant(ParserContext *context, const char *name, long *out_value) {
     if (!name) return 0;
     for (int i = context->symbols.enum_constant_count - 1; i >= 0; i--) {
         if (strcmp(context->symbols.enum_constants[i].name, name) == 0) {

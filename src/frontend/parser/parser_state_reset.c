@@ -9,7 +9,10 @@ void parser_set_filename(const char *name) {
 }
 
 void parser_reset(void) {
-    ParserContext *context = parser_context_current();
+    parser_context_reset(parser_context_current());
+}
+
+void parser_context_reset(ParserContext *context) {
     if (context->symbols.generic_templates.declarations) {
         for (int i = 0; i < context->symbols.generic_templates.count; i++) {
             free_ast(context->symbols.generic_templates.declarations[i]);

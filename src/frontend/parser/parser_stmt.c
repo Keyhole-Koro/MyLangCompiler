@@ -1,97 +1,97 @@
 #include "mylang/frontend/parser_internal.h"
 #include "mylang/frontend/parser_ast_internal.h"
 
-ASTNode *parse_stmt(Token **cur);
-ASTNode *parse_block(Token **cur);
+ASTNode *parse_stmt(ParserContext *context, Token **cur);
+ASTNode *parse_block(ParserContext *context, Token **cur);
 
-ASTNode *parse_block(Token **cur) {
+ASTNode *parse_block(ParserContext *context, Token **cur) {
     Token *start = *cur;
-    if (!expect(cur, L_BRACE)) parse_error("expected '{'", *cur);
+    if (!expect(cur, L_BRACE)) parse_error(context, "expected '{'", *cur);
     ASTNode **stmts = NULL;
     int count = 0;
     while ((*cur)->kind != R_BRACE && (*cur)->kind != EOT) {
         stmts = realloc(stmts, sizeof(ASTNode*) * (count+1));
-        stmts[count++] = parse_stmt(cur);
+        stmts[count++] = parse_stmt(context, cur);
     }
-    if (!expect(cur, R_BRACE)) parse_error("expected '}'", *cur);
+    if (!expect(cur, R_BRACE)) parse_error(context, "expected '}'", *cur);
     ASTNode *block = new_block(stmts, count);
     set_node_loc_from_tokens(block, start, NULL);
     return block;
 }
 
-ASTNode *parse_while_stmt(Token **cur) {
-    if (!expect(cur, WHILE)) parse_error("expected 'while'", *cur);
-    if (!expect(cur, L_PARENTHESES)) parse_error("expected '(' after while", *cur);
-    ASTNode *cond = parse_expr(cur);
-    if (!expect(cur, R_PARENTHESES)) parse_error("expected ')'", *cur);
-    ASTNode *body = parse_stmt(cur);
+ASTNode *parse_while_stmt(ParserContext *context, Token **cur) {
+    if (!expect(cur, WHILE)) parse_error(context, "expected 'while'", *cur);
+    if (!expect(cur, L_PARENTHESES)) parse_error(context, "expected '(' after while", *cur);
+    ASTNode *cond = parse_expr(context, cur);
+    if (!expect(cur, R_PARENTHESES)) parse_error(context, "expected ')'", *cur);
+    ASTNode *body = parse_stmt(context, cur);
     return new_while(cond, body);
 }
 
-ASTNode *parse_do_while_stmt(Token **cur) {
-    if (!expect(cur, DO)) parse_error("expected 'do'", *cur);
-    ASTNode *body = parse_stmt(cur);
-    if (!expect(cur, WHILE)) parse_error("expected 'while' after do-body", *cur);
-    if (!expect(cur, L_PARENTHESES)) parse_error("expected '(' after while", *cur);
-    ASTNode *cond = parse_expr(cur);
-    if (!expect(cur, R_PARENTHESES)) parse_error("expected ')'", *cur);
-    if (!expect(cur, SEMICOLON)) parse_error("expected ';' after do-while", *cur);
+ASTNode *parse_do_while_stmt(ParserContext *context, Token **cur) {
+    if (!expect(cur, DO)) parse_error(context, "expected 'do'", *cur);
+    ASTNode *body = parse_stmt(context, cur);
+    if (!expect(cur, WHILE)) parse_error(context, "expected 'while' after do-body", *cur);
+    if (!expect(cur, L_PARENTHESES)) parse_error(context, "expected '(' after while", *cur);
+    ASTNode *cond = parse_expr(context, cur);
+    if (!expect(cur, R_PARENTHESES)) parse_error(context, "expected ')'", *cur);
+    if (!expect(cur, SEMICOLON)) parse_error(context, "expected ';' after do-while", *cur);
     return new_do_while(cond, body);
 }
 
-ASTNode *parse_for_stmt(Token **cur) {
-    if (!expect(cur, FOR)) parse_error("expected 'for'", *cur);
-    if (!expect(cur, L_PARENTHESES)) parse_error("expected '(' after for", *cur);
+ASTNode *parse_for_stmt(ParserContext *context, Token **cur) {
+    if (!expect(cur, FOR)) parse_error(context, "expected 'for'", *cur);
+    if (!expect(cur, L_PARENTHESES)) parse_error(context, "expected '(' after for", *cur);
 
     // for (init; cond; inc)
     ASTNode *init = NULL, *cond = NULL, *inc = NULL;
 
     if ((*cur)->kind != SEMICOLON) {
-        if (is_type((*cur)->kind, *cur) ||
-            ((*cur)->kind == MUT && (*cur)->next && is_type((*cur)->next->kind, (*cur)->next))) {
-            init = parse_variable_declaration(cur, 0);
+        if (is_type(context, (*cur)->kind, *cur) ||
+            ((*cur)->kind == MUT && (*cur)->next && is_type(context, (*cur)->next->kind, (*cur)->next))) {
+            init = parse_variable_declaration(context, cur, 0);
         } else {
-            init = parse_expr(cur);
+            init = parse_expr(context, cur);
         }
     }
-    if (!expect(cur, SEMICOLON)) parse_error("expected ';' after for-init", *cur);
+    if (!expect(cur, SEMICOLON)) parse_error(context, "expected ';' after for-init", *cur);
 
     if ((*cur)->kind != SEMICOLON) {
-        cond = parse_expr(cur);
+        cond = parse_expr(context, cur);
     }
-    if (!expect(cur, SEMICOLON)) parse_error("expected second ';' in for", *cur);
+    if (!expect(cur, SEMICOLON)) parse_error(context, "expected second ';' in for", *cur);
 
     if ((*cur)->kind != R_PARENTHESES) {
-        inc = parse_expr(cur);
+        inc = parse_expr(context, cur);
     }
-    if (!expect(cur, R_PARENTHESES)) parse_error("expected ')' after for", *cur);
+    if (!expect(cur, R_PARENTHESES)) parse_error(context, "expected ')' after for", *cur);
 
-    ASTNode *body = parse_stmt(cur);
+    ASTNode *body = parse_stmt(context, cur);
     return new_for(init, cond, inc, body);
 }
 
-ASTNode *parse_if_stmt(Token **cur) {
-    if (!expect(cur, IF)) parse_error("expected 'if'", *cur);
-    if (!expect(cur, L_PARENTHESES)) parse_error("expected '(' after if", *cur);
-    ASTNode *cond = parse_expr(cur);
-    if (!expect(cur, R_PARENTHESES)) parse_error("expected ')'", *cur);
-    ASTNode *then_stmt = parse_stmt(cur);
+ASTNode *parse_if_stmt(ParserContext *context, Token **cur) {
+    if (!expect(cur, IF)) parse_error(context, "expected 'if'", *cur);
+    if (!expect(cur, L_PARENTHESES)) parse_error(context, "expected '(' after if", *cur);
+    ASTNode *cond = parse_expr(context, cur);
+    if (!expect(cur, R_PARENTHESES)) parse_error(context, "expected ')'", *cur);
+    ASTNode *then_stmt = parse_stmt(context, cur);
     ASTNode *else_stmt = NULL;
     if ((*cur)->kind == ELSE) {
         expect(cur, ELSE);
-        else_stmt = parse_stmt(cur);
+        else_stmt = parse_stmt(context, cur);
     }
     return new_if(cond, then_stmt, else_stmt);
 }
-ASTNode *parse_return_stmt(Token **cur) {
+ASTNode *parse_return_stmt(ParserContext *context, Token **cur) {
     Token *start = *cur;
-    if (!expect(cur, RETURN)) parse_error("expected 'return'", *cur);
+    if (!expect(cur, RETURN)) parse_error(context, "expected 'return'", *cur);
     ASTNode *expr = NULL;
     if ((*cur)->kind != SEMICOLON) {
-        expr = parse_expr(cur);
+        expr = parse_expr(context, cur);
     }
     Token *end_tok = *cur;
-    if (!expect(cur, SEMICOLON)) parse_error("expected ';' after return", *cur);
+    if (!expect(cur, SEMICOLON)) parse_error(context, "expected ';' after return", *cur);
     ASTNode *node = new_return(expr);
     set_node_loc_from_tokens(node, start, NULL);
     if (expr) {
@@ -101,19 +101,19 @@ ASTNode *parse_return_stmt(Token **cur) {
     }
     return node;
 }
-ASTNode *parse_expr_stmt(Token **cur) {
-    ASTNode *expr = parse_expr(cur);
-    if (!expect(cur, SEMICOLON)) parse_error("expected ';' after expression", *cur);
+ASTNode *parse_expr_stmt(ParserContext *context, Token **cur) {
+    ASTNode *expr = parse_expr(context, cur);
+    if (!expect(cur, SEMICOLON)) parse_error(context, "expected ';' after expression", *cur);
     return new_expr_stmt(expr);
 }
 
-static ASTNode *parse_init_list(Token **cur) {
-    if (!expect(cur, L_BRACE)) parse_error("expected '{' for initializer list", *cur);
+static ASTNode *parse_init_list(ParserContext *context, Token **cur) {
+    if (!expect(cur, L_BRACE)) parse_error(context, "expected '{' for initializer list", *cur);
     ASTNode **elems = NULL;
     int count = 0;
     if ((*cur)->kind != R_BRACE) {
         while (1) {
-            ASTNode *e = parse_expr(cur);
+            ASTNode *e = parse_expr(context, cur);
             elems = realloc(elems, sizeof(ASTNode*) * (count + 1));
             elems[count++] = e;
             if ((*cur)->kind == COMMA) {
@@ -123,10 +123,10 @@ static ASTNode *parse_init_list(Token **cur) {
             break;
         }
     }
-    if (!expect(cur, R_BRACE)) parse_error("expected '}' to close initializer list", *cur);
+    if (!expect(cur, R_BRACE)) parse_error(context, "expected '}' to close initializer list", *cur);
     return new_init_list(elems, count);
 }
-ASTNode *parse_variable_declaration(Token **cur, int need_semicolon) {
+ASTNode *parse_variable_declaration(ParserContext *context, Token **cur, int need_semicolon) {
     int is_mut = 0;
     Token *start = *cur;
     if ((*cur)->kind == MUT) {
@@ -134,9 +134,9 @@ ASTNode *parse_variable_declaration(Token **cur, int need_semicolon) {
         *cur = (*cur)->next;
         start = *cur;
     }
-    ASTNode *type = parse_type(cur);
+    ASTNode *type = parse_type(context, cur);
     if ((*cur)->kind != IDENTIFIER)
-        parse_error("expected identifier for variable name", *cur);
+        parse_error(context, "expected identifier for variable name", *cur);
     Token *name_tok = *cur;
     char *name = name_tok->value;
     *cur = (*cur)->next;
@@ -149,16 +149,16 @@ ASTNode *parse_variable_declaration(Token **cur, int need_semicolon) {
             size = atoi((*cur)->value);
             *cur = (*cur)->next;
         }
-        if (!expect(cur, R_BRACKET)) parse_error("expected ']' for array", *cur);
+        if (!expect(cur, R_BRACKET)) parse_error(context, "expected ']' for array", *cur);
         final_type = new_type_array(final_type, size);
     }
 
     ASTNode *init = NULL;
     if (expect(cur, ASSIGN)) {
         if ((*cur)->kind == L_BRACE) {
-            init = parse_init_list(cur);
+            init = parse_init_list(context, cur);
         } else {
-            init = parse_expr(cur);
+            init = parse_expr(context, cur);
         }
         if (final_type && final_type->type == AST_TYPE_ARRAY && final_type->type_array.array_size <= 0) {
             if (init && init->type == AST_STRING_LITERAL) {
@@ -172,7 +172,7 @@ ASTNode *parse_variable_declaration(Token **cur, int need_semicolon) {
     Token *end_tok = *cur;
     if (need_semicolon) {
         if (!expect(cur, SEMICOLON))
-            parse_error("expected ';' after variable declaration", *cur);
+            parse_error(context, "expected ';' after variable declaration", *cur);
     }
     ASTNode *decl = new_var_decl_mut(final_type, name, init, is_mut);
     set_node_loc_from_tokens(decl, start, name_tok);
@@ -187,15 +187,15 @@ ASTNode *parse_variable_declaration(Token **cur, int need_semicolon) {
 }
 
 
-ASTNode *parse_variable_assignment(Token **cur) {
-    if ((*cur)->kind != IDENTIFIER) parse_error("expected identifier for assignment", *cur);
+ASTNode *parse_variable_assignment(ParserContext *context, Token **cur) {
+    if ((*cur)->kind != IDENTIFIER) parse_error(context, "expected identifier for assignment", *cur);
     Token *name_tok = *cur;
     char *name = name_tok->value;
     *cur = (*cur)->next;
-    if (!expect(cur, ASSIGN)) parse_error("expected '=' for assignment", *cur);
-    ASTNode *expr = parse_expr(cur);
+    if (!expect(cur, ASSIGN)) parse_error(context, "expected '=' for assignment", *cur);
+    ASTNode *expr = parse_expr(context, cur);
     Token *end_tok = *cur;
-    if (!expect(cur, SEMICOLON)) parse_error("expected ';' after assignment", *cur);
+    if (!expect(cur, SEMICOLON)) parse_error(context, "expected ';' after assignment", *cur);
     ASTNode *lhs = new_identifier(name);
     set_node_loc_from_tokens(lhs, name_tok, NULL);
     ASTNode *assign = new_assign(lhs, expr);
@@ -208,40 +208,40 @@ ASTNode *parse_variable_assignment(Token **cur) {
     return assign;
 }
 
-ASTNode *parse_stmt(Token **cur) {
-    if ((*cur)->kind == IF) return parse_if_stmt(cur);
-    if ((*cur)->kind == WHILE) return parse_while_stmt(cur);
-    if ((*cur)->kind == DO) return parse_do_while_stmt(cur);
-    if ((*cur)->kind == FOR) return parse_for_stmt(cur);
+ASTNode *parse_stmt(ParserContext *context, Token **cur) {
+    if ((*cur)->kind == IF) return parse_if_stmt(context, cur);
+    if ((*cur)->kind == WHILE) return parse_while_stmt(context, cur);
+    if ((*cur)->kind == DO) return parse_do_while_stmt(context, cur);
+    if ((*cur)->kind == FOR) return parse_for_stmt(context, cur);
     if ((*cur)->kind == UNCHECKED) {
         *cur = (*cur)->next;
-        parser_context_current()->control.unchecked_depth++;
-        ASTNode *body = parse_block(cur);
-        parser_context_current()->control.unchecked_depth--;
+        context->control.unchecked_depth++;
+        ASTNode *body = parse_block(context, cur);
+        context->control.unchecked_depth--;
         return new_unchecked_block(body);
     }
-    if ((*cur)->kind == RETURN) return parse_return_stmt(cur);
+    if ((*cur)->kind == RETURN) return parse_return_stmt(context, cur);
     if ((*cur)->kind == YIELD) {
         *cur = (*cur)->next;
-        ASTNode *expr = parse_expr(cur);
-        if (!expect(cur, SEMICOLON)) parse_error("expected ';' after yield", *cur);
+        ASTNode *expr = parse_expr(context, cur);
+        if (!expect(cur, SEMICOLON)) parse_error(context, "expected ';' after yield", *cur);
         return new_yield(expr);
     }
 
     if ((*cur)->kind == BREAK) {
         *cur = (*cur)->next;
-        if (!expect(cur, SEMICOLON)) parse_error("expected ';' after break", *cur);
+        if (!expect(cur, SEMICOLON)) parse_error(context, "expected ';' after break", *cur);
         return new_break();
     }
     if ((*cur)->kind == CONTINUE) {
         *cur = (*cur)->next;
-        if (!expect(cur, SEMICOLON)) parse_error("expected ';' after continue", *cur);
+        if (!expect(cur, SEMICOLON)) parse_error(context, "expected ';' after continue", *cur);
         return new_continue();
     }
 
-    if ((*cur)->kind == L_BRACE) return parse_block(cur);
-    if ((*cur)->kind == MUT && (*cur)->next && is_type((*cur)->next->kind, (*cur)->next)) return parse_variable_declaration(cur, 1);
-    if (is_type((*cur)->kind, *cur)) return parse_variable_declaration(cur, 1);
+    if ((*cur)->kind == L_BRACE) return parse_block(context, cur);
+    if ((*cur)->kind == MUT && (*cur)->next && is_type(context, (*cur)->next->kind, (*cur)->next)) return parse_variable_declaration(context, cur, 1);
+    if (is_type(context, (*cur)->kind, *cur)) return parse_variable_declaration(context, cur, 1);
 
-    return parse_expr_stmt(cur);
+    return parse_expr_stmt(context, cur);
 }
