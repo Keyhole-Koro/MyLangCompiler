@@ -95,7 +95,10 @@ ASTNode *parse_struct(ParserContext *context, Token **cur) {
             add_typename(context, typedef_name);
             if (type_param_count > 0)
                 parse_error(context, "generic typedef struct is not supported", *cur);
-            return new_typedef_struct(name ? name : "", members, member_count, typedef_name);
+            ASTNode *node = new_typedef_struct(name ? name : "", members, member_count, typedef_name);
+            free(name);
+            free(typedef_name);
+            return node;
         }
         if (!expect(cur, SEMICOLON))
             parse_error(context, "expected ';' after struct definition", *cur);
@@ -207,7 +210,10 @@ ASTNode *parse_typedef(ParserContext *context, Token **cur) {
         if (!expect(cur, SEMICOLON))
             parse_error(context, "expected ';' after typedef", *cur);
         add_typename(context, typedef_name);
-        return new_typedef_struct(struct_name ? struct_name : "", members, member_count, typedef_name);
+        ASTNode *node = new_typedef_struct(struct_name ? struct_name : "", members, member_count, typedef_name);
+        free(struct_name);
+        free(typedef_name);
+        return node;
     }
 
     ASTNode *type = parse_type(context, cur);
@@ -218,7 +224,9 @@ ASTNode *parse_typedef(ParserContext *context, Token **cur) {
     if (!expect(cur, SEMICOLON))
         parse_error(context, "expected ';' after typedef", *cur);
     add_typename(context, typedef_name);
-    return new_typedef(type, typedef_name);
+    ASTNode *node = new_typedef(type, typedef_name);
+    free(typedef_name);
+    return node;
 }
 
 ASTNode *parse_type(ParserContext *context, Token **cur) {

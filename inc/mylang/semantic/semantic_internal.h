@@ -9,6 +9,8 @@
 #include "mylang/semantic/semantic.h"
 #include "mylang/semantic/semantic_types.h"
 
+typedef struct FrontendSession FrontendSession;
+
 #define SEMANTIC_MAX_FUNCTION_PARAMS 32
 
 typedef struct { int line; int col; int end_line; int end_col; } SemanticLocation;
@@ -64,6 +66,7 @@ typedef struct {
 
 typedef struct {
     const char *filename;
+    FrontendSession *session;
     SemanticSafetyProfile safety_profile;
     int error_count;
     int warning_count;

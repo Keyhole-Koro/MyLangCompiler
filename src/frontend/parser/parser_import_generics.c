@@ -48,7 +48,7 @@ void load_imported_generic_templates(ParserContext *context, ASTNode *import_nod
         !source_path || import_node->import_stmt.symbol_count == 0)
         return;
 
-    FrontendSession *session = frontend_session_current();
+    FrontendSession *session = context->session;
     if (!session || !session->loader) return;
 
     Module *mod = module_loader_load(session->loader, context->module.filename, source_path);

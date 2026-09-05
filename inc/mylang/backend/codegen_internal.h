@@ -11,6 +11,8 @@
 
 #define SLOT_SIZE 4
 
+typedef struct FrontendSession FrontendSession;
+
 typedef struct {
     const char *name;
     int offset;
@@ -72,6 +74,7 @@ typedef struct {
 } TypedefInfo;
 
 typedef struct {
+    FrontendSession *session;
     StructInfo *structs;
     int struct_count;
     TypedefInfo *typedefs;

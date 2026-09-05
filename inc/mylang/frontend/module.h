@@ -84,22 +84,30 @@ typedef struct ModuleGraph {
     int module_capacity;
 } ModuleGraph;
 
+typedef struct FrontendSession FrontendSession;
+
 /*
  * Loader responsible for resolving relative import paths, canonicalizing them,
  * and caching parsed Module representations.
  */
 typedef struct ModuleLoader {
     ModuleGraph *graph;
+    /* Borrowed. Every parser context created by this loader inherits it. */
+    FrontendSession *session;
 } ModuleLoader;
 
 /*
  * FrontendSession encapsulates a single compilation unit or driver invocation.
  * It owns the ModuleGraph, ModuleLoader, and manages the root parser context.
  */
-typedef struct FrontendSession {
+struct FrontendSession {
     ModuleGraph *graph;
     ModuleLoader *loader;
-} FrontendSession;
+    /* Owned package namespaces imported by the root translation unit. */
+    char **root_imported_packages;
+    int root_imported_package_count;
+    int is_implicit;
+};
 
 /* ModuleGraph lifecycle */
 ModuleGraph *module_graph_create(void);
@@ -114,7 +122,7 @@ void module_add_symbol(Module *module, SymbolKind kind, const char *source_name,
                        const char *link_name, ASTNode *declaration, int is_exported);
 
 /* ModuleLoader operations */
-ModuleLoader *module_loader_create(ModuleGraph *graph);
+ModuleLoader *module_loader_create(ModuleGraph *graph, FrontendSession *session);
 void module_loader_destroy(ModuleLoader *loader);
 int module_loader_is_mylang_source(const char *path);
 int module_loader_resolve_path(const char *importer_path, const char *rel_path,
@@ -126,5 +134,8 @@ FrontendSession *frontend_session_create(void);
 void frontend_session_destroy(FrontendSession *session);
 FrontendSession *frontend_session_current(void);
 void frontend_session_set_current(FrontendSession *session);
+/* Releases only a compatibility session created by frontend_session_current(). */
+void frontend_session_destroy_implicit_current(void);
+void frontend_session_add_root_imported_package(FrontendSession *session, const char *name);
 
 #endif /* MYLANG_FRONTEND_MODULE_H */

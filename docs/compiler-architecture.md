@@ -95,7 +95,7 @@ FrontendSession
   │                 ├── program (syntax AST)
   │                 ├── generic_templates[]
   │                 └── symbols[] (ModuleSymbol)
-  └── root ParserContext
+  └── shared by root and imported ParserContext instances
 
 Resolver
   └── Queries ModuleGraph for exported symbols, mangled link names,

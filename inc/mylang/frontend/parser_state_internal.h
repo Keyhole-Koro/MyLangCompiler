@@ -5,6 +5,8 @@
 #include "mylang/frontend/lexer.h"
 #include "mylang/ast/AST.h"
 
+typedef struct FrontendSession FrontendSession;
+
 typedef struct FunctionTable {
     ASTNode **funcs;
     int count;
@@ -81,6 +83,9 @@ typedef struct ParserLoweringState {
  * context as one unit, so parser state never needs a field-by-field snapshot. */
 typedef struct ParserContext {
     Token *token_head;
+    /* Borrowed session used for all imports reached while parsing this module. */
+    FrontendSession *session;
+    int is_root_module;
     ParserSymbolState symbols;
     ParserModuleState module;
     ParserControlState control;

@@ -133,7 +133,7 @@ static void append_import_sigs_from_source(CompilerContext *cc, ASTNode *node) {
     if (!cc || !node || node->type != AST_IMPORT || !node->import_stmt.path) return;
     if (!module_loader_is_mylang_source(node->import_stmt.path)) return;
 
-    FrontendSession *session = frontend_session_current();
+    FrontendSession *session = cc->session;
     if (!session || !session->loader) return;
 
     const char *source_path = codegen_current_source_path();

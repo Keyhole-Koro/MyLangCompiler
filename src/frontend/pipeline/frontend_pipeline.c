@@ -1,6 +1,7 @@
 #include "mylang/frontend/parser_internal.h"
 #include "mylang/frontend/parser_dom_internal.h"
 #include "mylang/frontend/parser_rewrite_internal.h"
+#include "mylang/frontend/module.h"
 
 static void append_hoisted_functions(ParserContext *context, ASTNode *program) {
     ParserLoweringState *lowering = &context->lowering;
@@ -38,6 +39,8 @@ static void lower_program(ParserContext *context, ASTNode *program) {
 
 ASTNode *parse_program(Token **cur) {
     ParserContext *context = parser_context_current();
+    if (!context->session) context->session = frontend_session_current();
+    context->is_root_module = 1;
     ASTNode *program = parse_program_syntax(context, cur);
     lower_program(context, program);
     return program;

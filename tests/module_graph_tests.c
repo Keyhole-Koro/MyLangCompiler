@@ -39,14 +39,21 @@ static void test_relative_path_canonicalization(void) {
 
 static void test_circular_import_detection(void) {
     FrontendSession *session = frontend_session_create();
-    assert(session != NULL);
+    FrontendSession *unrelated = frontend_session_create();
+    assert(session != NULL && unrelated != NULL);
+
+    /* The loader must use its own session, not the process-global current one. */
+    frontend_session_set_current(unrelated);
 
     /* cycle_a.mln imports cycle_b.mln, and cycle_b.mln imports cycle_a.mln */
     Module *ma = module_loader_load(session->loader, NULL, "tests/fixtures/module/cycle_a.mln");
     assert(ma != NULL);
     assert(ma->state == MODULE_LOADED);
+    assert(session->graph->module_count == 2);
+    assert(unrelated->graph->module_count == 0);
 
     frontend_session_destroy(session);
+    frontend_session_destroy(unrelated);
     printf("[PASS] circular import detection: does not infinitely recurse\n");
 }
 
@@ -191,4 +198,3 @@ void test_module_graph_all(void) {
     test_session_isolation();
     test_resolver_visibility_and_function_info();
 }
-
