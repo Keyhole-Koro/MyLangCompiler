@@ -25,6 +25,7 @@ TESTCASES = [
     ("genericImportedTemplates", ["succeed/generic/imported_templates_main.mln", "succeed/generic/imported_templates_lib.mln"], "R1", 13),
     ("genericKernelContainers", ["succeed/generic/kernel_containers.mln"], "R1", 63),
     ("genericModuleIsolation", ["succeed/generic/modules_main.mln", "succeed/generic/modules_one.mln", "succeed/generic/modules_two.mln"], "R1", 33),
+    ("crossModuleResultReturn", ["succeed/enum/cross_module_result_main.mln", "succeed/enum/cross_module_result_lib.mln"], "R1", 149),
     ("simpleFunc", ["succeed/function/simpleFunc.mln"], "R1", 15),
     ("simpleCondition", ["succeed/control/simpleCondition.mln"], "R1", 328),
     ("simpleFor", ["succeed/control/simpleFor.mln"], "R1", 5),

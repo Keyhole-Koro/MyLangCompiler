@@ -1,0 +1,17 @@
+// See cross_module_result_lib.mln for what this guards against.
+import lib from "cross_module_result_lib.mln";
+
+enum Result<T, E> {
+    Ok(T),
+    Err(E),
+}
+
+i32 main() {
+    Result<i32, i32> a = lib.make(4);
+    i32 va = case a of { Ok(v) -> v; Err(e) -> -1; };      // 40
+
+    Result<i32, i32> b = lib.make(0);
+    i32 vb = case b of { Ok(v) -> v; Err(e) -> 100 + e; }; // 109
+
+    return va + vb; // 149
+}

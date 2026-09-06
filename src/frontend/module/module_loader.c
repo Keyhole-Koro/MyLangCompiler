@@ -187,6 +187,24 @@ Module *module_loader_load(ModuleLoader *loader, const char *importer_path, cons
         return module;
     }
 
+    /* The main compilation unit runs instantiate_generics() (as part of
+     * lower_program()) right after parsing, which both specializes generic
+     * uses into concrete `__mlg_s_...`-named structs and lowers payload-enum
+     * construction/matching onto them. A module loaded here for cross-file
+     * symbol resolution skipped that: parse_program_syntax() alone leaves a
+     * function like `Result<i32, i32> f() {...}` with its declared return
+     * type exactly as written -- the plain generic name "Result", not the
+     * mangled struct name a receiving Result<i32, i32> local elsewhere would
+     * be registered under. append_imported_func_sig() (codegen_toplevel.c)
+     * then can't recognize such a return as an aggregate, so a caller in
+     * another file falls back to treating the call as a plain one-word
+     * return instead of the hidden-out-pointer convention the callee (built
+     * through the real, fully-lowered compile of this same file) actually
+     * uses -- silently reading garbage instead of the struct's fields.
+     * Running the same pass here keeps this module's own declarations in
+     * sync with how its real compilation sees them. */
+    instantiate_generics(&ctx, program);
+
     module->program = program; /* module owns program */
 
     /* Record declared package name if any */
