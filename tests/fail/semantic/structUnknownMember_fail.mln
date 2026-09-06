@@ -1,0 +1,9 @@
+// A member access now carries a type, which is also what makes an entirely
+// unknown field an error instead of silently compiling.
+typedef struct { i32 a; } P;
+
+i32 main() {
+    P p;
+    p.zzz = 1;
+    return p.a;
+}

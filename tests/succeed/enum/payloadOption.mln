@@ -1,0 +1,33 @@
+// A payload enum may mix variants that carry something with variants that do
+// not. `None` takes no storage -- the layout is one tag plus one field for
+// `Some` -- and is written bare wherever it appears, both built and matched.
+//
+// Matching is exhaustive: with no `_` arm, every variant has to be named, so a
+// case cannot quietly yield zero for a tag nobody handled.
+
+enum Opt<T> {
+    Some(T),
+    None,
+}
+
+i32 or_else(Opt<i32> *o, i32 fallback) {
+    return case *o of {
+        Some(v) -> v;
+        None    -> fallback;
+    };
+}
+
+i32 main() {
+    Opt<i32> a = Some(7);
+    Opt<i32> b = None;
+
+    i32 total = 0;
+    total = total + or_else(&a, 100); // 7
+    total = total + or_else(&b, 100); // 107
+
+    // Assigning the empty variant drops what was carried.
+    a = None;
+    total = total + or_else(&a, 30);  // 137
+
+    return total;
+}

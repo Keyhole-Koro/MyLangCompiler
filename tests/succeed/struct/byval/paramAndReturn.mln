@@ -1,0 +1,55 @@
+// Struct/array by value, both directions (MLC-015): a struct or array wider
+// than one word has no register to travel in, so both a parameter and a
+// return of that type are compiled as a hidden pointer. The caller supplies
+// the address either way -- of the argument for a parameter, of the
+// destination for a return -- and only that one address crosses the normal
+// register/stack argument mechanism, unchanged from a scalar call.
+//
+// Passing a non-Copy struct by value already moves it (docs/ownership.md), so
+// no copy is made at the call site: the callee reads/writes the caller's own
+// memory directly, which is safe because the checker refuses to let the
+// caller touch the source again.
+
+typedef struct { i32 x; i32 y; } Point;
+
+// Parameter: take(p) reads through the hidden pointer via ordinary `.field`
+// syntax -- the program never sees that p's slot holds an address rather
+// than the struct's bytes.
+i32 take(Point p) {
+    return p.x + p.y;
+}
+
+// Return: the caller's destination address becomes a hidden fourth register
+// argument (r4); `return r;` copies through it instead of returning in r1.
+Point make(i32 x, i32 y) {
+    Point r;
+    r.x = x;
+    r.y = y;
+    return r;
+}
+
+// Forwarding: a by-value parameter passed on to another by-value parameter
+// just forwards the pointer it already holds, no re-copy.
+i32 relay(Point p) {
+    return take(p);
+}
+
+i32 main() {
+    Point a;
+    a.x = 3;
+    a.y = 4;
+    i32 total = take(a);            // 7
+
+    Point b = make(10, 20);
+    total = total + b.x + b.y;      // 37
+
+    Point c;
+    c = make(1, 1);                 // plain assignment, not just init
+    total = total + c.x + c.y;      // 39
+
+    Point d;
+    d.x = 100; d.y = 1;
+    total = total + relay(d);       // 140
+
+    return total;                   // 140
+}

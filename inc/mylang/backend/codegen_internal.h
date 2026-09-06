@@ -61,6 +61,14 @@ typedef struct {
     int param_count;
     int fixed_param_count;
     bool is_variadic;
+    // A struct or array returned/taken by value has no register wide enough
+    // to hold it, so the calling convention passes its address instead (see
+    // MLC-015: gen_func reserves a hidden out-pointer slot for ret_is_aggregate,
+    // and gen_call passes &arg rather than arg's value for a param this marks).
+    // ret_size_bytes is 0 exactly when ret_is_aggregate is false.
+    bool ret_is_aggregate;
+    int ret_size_bytes;
+    bool *param_is_aggregate; // param_count entries, or NULL if param_count == 0
 } FunctionSig;
 
 typedef struct {
@@ -100,6 +108,13 @@ typedef struct {
     ASTNode *current_func;
     EnumValueInfo *enum_values;
     int enum_value_count;
+    // Set for the duration of gen_func when the function being compiled
+    // returns an aggregate by value: sret_offset is where its hidden
+    // out-pointer parameter (passed in r4) is stashed in the frame, and
+    // sret_size_bytes is how much a `return expr;` there must copy through it.
+    bool sret_active;
+    int sret_offset;
+    int sret_size_bytes;
 } CompilerContext;
 
 #define cg_structs        (cc->structs)
@@ -214,7 +229,29 @@ void gen_expr(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char 
 void _gen_expr(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char *target_reg, char **params, int param_count, char **locals, int local_count, int want_address);
 void gen_expr_binop(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char *target_reg, char **params, int param_count, char **locals, int local_count);
 void gen_call(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char *target_reg, char **params, int param_count, char **locals, int local_count);
+void gen_call_sret(CompilerContext *cc, ASTNode *node, StringBuilder *sb, char **params, int param_count, char **locals, int local_count);
 void gen_assign(CompilerContext *cc, ASTNode *node, StringBuilder *sb, char **params, int param_count, char **locals, int local_count, const char *target_reg);
+
+// -- Aggregate (struct/array) by-value calling convention (MLC-015) --
+// Bytes occupied by `type_ast` when passed/returned as a whole aggregate, or
+// 0 if it is an ordinary scalar/pointer.
+int aggregate_type_size(CompilerContext *cc, ASTNode *type_ast);
+// Forms gen_lvalue_addr can take the address of: an identifier, a member or
+// arrow chain rooted in one, or a dereference. Every aggregate argument,
+// aggregate return source, and sret destination has to be one of these.
+int is_addressable_expr(ASTNode *node);
+// True when `name` is a struct/array PARAMETER of the function currently
+// being compiled. Its slot holds the hidden pointer the caller supplied
+// rather than the aggregate's own bytes; see emit_addr_of_var.
+int is_byval_aggregate_param(CompilerContext *cc, const char *name, char **params, int param_count);
+// node's signature when node is a direct call to a function returning a
+// struct or array by value, or NULL otherwise (not a call, or an ordinary
+// scalar/pointer return).
+const FunctionSig *call_returns_aggregate(CompilerContext *cc, ASTNode *node);
+// Copies total_bytes from [src_addr_reg] to [dest_addr_reg], word by word
+// with a byte tail. Clobbers r1 and r4; neither address register may be one
+// of those.
+void emit_aggregate_copy(StringBuilder *sb, const char *dest_addr_reg, const char *src_addr_reg, int total_bytes);
 
 void gen_if(CompilerContext *cc, ASTNode *node, StringBuilder *sb, char **params, int param_count, char **locals, int local_count, const char *break_label, const char *continue_label);
 void gen_for(CompilerContext *cc, ASTNode *node, StringBuilder *sb, char **params, int param_count, char **locals, int local_count, const char *break_label, const char *continue_label);

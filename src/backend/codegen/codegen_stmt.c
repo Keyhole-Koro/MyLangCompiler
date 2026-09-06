@@ -88,6 +88,14 @@ void gen_stmt_internal(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
             if (vtype && vtype->type == AST_TYPE_ARRAY &&
                 (node->var_decl.init->type == AST_INIT_LIST || node->var_decl.init->type == AST_STRING_LITERAL)) {
                 gen_array_init(cc, node, sb, params, param_count, locals, local_count);
+            } else if (call_returns_aggregate(cc, node->var_decl.init)) {
+                // `T y = callee(args);` where callee returns a struct or array
+                // by value: y's own slot (just reserved by this declaration)
+                // is where it belongs, so pass its address as the hidden
+                // out-pointer rather than copying a truncated word out of r1.
+                emit_addr_of_var(cc, sb, node->var_decl.name, "r1", params, param_count, locals, local_count);
+                sb_append(sb, "  push r1\n");
+                gen_call_sret(cc, node->var_decl.init, sb, params, param_count, locals, local_count);
             } else {
                 gen_expr(cc, node->var_decl.init, sb, "r1", params, param_count, locals, local_count);
                 emit_store_var(cc, sb, node->var_decl.name, "r1", params, param_count, locals, local_count);
@@ -132,8 +140,30 @@ void gen_stmt_internal(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
         break;
     case AST_RETURN:
         // A bare `return;` has no expression; only evaluate one when present.
-        if (node->ret.expr)
+        if (node->ret.expr && cc->sret_active) {
+            // The value doesn't fit in r1; copy it through the hidden
+            // out-pointer the caller supplied (stashed at sret_offset by
+            // gen_func's prologue) instead. expr's address is computed first
+            // and pushed, matching gen_assign's aggregate path, because
+            // loading the out-pointer word uses r3 as scratch and would
+            // otherwise clobber an address still being computed there.
+            if (!is_addressable_expr(node->ret.expr)) {
+                fprintf(stderr,
+                        "Codegen error: returning a struct or array from a "
+                        "non-lvalue is not supported yet\n");
+                exit(1);
+            }
+            gen_lvalue_addr(cc, node->ret.expr, sb, "r1", params, param_count, locals, local_count);
+            sb_append(sb, "  push r1\n");
+            sb_append(sb, "  ; load hidden out-pointer for by-value return\n");
+            sb_append(sb, "  mov   r3, bp\n");
+            sb_append(sb, "  addis r3, %d\n", cc->sret_offset);
+            sb_append(sb, "  load  r3, r3\n");
+            sb_append(sb, "  pop   r2\n");
+            emit_aggregate_copy(sb, "r3", "r2", cc->sret_size_bytes);
+        } else if (node->ret.expr) {
             gen_expr(cc, node->ret.expr, sb, "r1", params, param_count, locals, local_count);
+        }
         sb_append(sb, "  \n; return\n");
         if (cc->return_label)
             sb_append(sb, "  jmp %s\n", cc->return_label);

@@ -1,0 +1,11 @@
+// Two arms for one variant: the second can never run.
+enum Result<T, E> { Ok(T), Err(E) }
+
+i32 main() {
+    Result<i32, char> r = Ok(1);
+    return case r of {
+        Ok(v)  -> v;
+        Ok(w)  -> w;
+        Err(c) -> 0;
+    };
+}

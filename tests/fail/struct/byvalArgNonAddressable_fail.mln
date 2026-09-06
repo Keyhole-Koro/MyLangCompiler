@@ -1,0 +1,12 @@
+// A by-value struct parameter's one word is the ADDRESS of the caller's
+// argument (MLC-015): passing a call result directly has no address to hand
+// over, since it never lives anywhere the caller controls. Bind it to a
+// variable first.
+typedef struct { i32 x; i32 y; } P;
+
+P make() { P r; r.x = 1; r.y = 2; return r; }
+i32 take(P p) { return p.x + p.y; }
+
+i32 main() {
+    return take(make());
+}

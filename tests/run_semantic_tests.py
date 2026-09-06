@@ -46,6 +46,61 @@ WARN_CASES = {
 }
 
 FAIL_CASES = {
+    "byvalArgNonAddressable_fail": (
+        "fail/struct/byvalArgNonAddressable_fail.mln",
+        "takes a struct or array by value, and only a variable, a field of one, or a dereference can be passed that way",
+        None,
+    ),
+    "byvalReturnNonAddressable_fail": (
+        "fail/struct/byvalReturnNonAddressable_fail.mln",
+        "returning a struct or array from a non-lvalue is not supported yet",
+        None,
+    ),
+    "byvalVariadicReturn_fail": (
+        "fail/struct/byvalVariadicReturn_fail.mln",
+        "cannot both be variadic and return a struct or array by value",
+        None,
+    ),
+    "payloadEnumNonExhaustive_fail": (
+        "fail/semantic/payloadEnumNonExhaustive_fail.mln",
+        "does not cover one variant of 'Result': Err",
+        None,
+    ),
+    "payloadEnumWrongEnum_fail": (
+        "fail/semantic/payloadEnumWrongEnum_fail.mln",
+        "'Some' is a variant of 'Opt', not of 'Result'",
+        None,
+    ),
+    "payloadEnumDuplicateArm_fail": (
+        "fail/semantic/payloadEnumDuplicateArm_fail.mln",
+        "'Ok' is matched more than once",
+        None,
+    ),
+    "structUnknownMember_fail": (
+        "fail/semantic/structUnknownMember_fail.mln",
+        "'P' has no member named 'zzz'",
+        None,
+    ),
+    "structMemberTypeMismatch_fail": (
+        "fail/semantic/structMemberTypeMismatch_fail.mln",
+        "assignment type mismatch: expected i32",
+        None,
+    ),
+    "payloadEnumBadPosition_fail": (
+        "fail/semantic/payloadEnumBadPosition_fail.mln",
+        "constructs a payload enum, which can only appear as the whole right-hand side",
+        None,
+    ),
+    "payloadEnumArity_fail": (
+        "fail/semantic/payloadEnumArity_fail.mln",
+        "carries one payload, but 2 were given",
+        None,
+    ),
+    "payloadEnumTarget_fail": (
+        "fail/semantic/payloadEnumTarget_fail.mln",
+        "can only be matched on a variable or a field of one",
+        None,
+    ),
     "genericTypeArgCountMismatch_fail": (
         "fail/semantic/genericTypeArgCountMismatch_fail.mln",
         "error[E0501]: generic type 'Box' expects 1 type argument but got 2",

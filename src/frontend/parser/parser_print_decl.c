@@ -90,10 +90,15 @@ int fprint_ast_decl_node(FILE *out, ASTNode *node, int indent) {
         return 1;
     case AST_ENUM:
         fprint_indent(out, indent); fprintf(out, "Enum: %s\n", node->enum_stmt.name);
+        for (int i = 0; i < node->enum_stmt.type_param_count; i++) {
+            fprint_indent(out, indent + 1); fprintf(out, "TypeParam: %s\n", node->enum_stmt.type_params[i]);
+        }
         for (int i = 0; i < node->enum_stmt.member_count; i++) {
             ASTNode *member = node->enum_stmt.members[i];
             fprint_indent(out, indent + 1);
-            fprintf(out, "Member: %s = %ld\n", member->enum_member.name, member->enum_member.resolved_value);
+            fprintf(out, "Member: %s%s = %ld\n", member->enum_member.name,
+                    member->enum_member.payload_type ? "(payload)" : "",
+                    member->enum_member.resolved_value);
         }
         return 1;
     case AST_ENUM_MEMBER:

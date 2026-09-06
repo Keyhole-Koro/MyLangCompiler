@@ -50,13 +50,14 @@ static const char *generic_declaration_name(ASTNode *declaration) {
     if (!declaration) return NULL;
     if (declaration->type == AST_FUNDEF) return declaration->fundef.name;
     if (declaration->type == AST_STRUCT) return declaration->struct_stmt.name;
+    if (declaration->type == AST_ENUM) return declaration->enum_stmt.name;
     return NULL;
 }
 
 void add_generic_template(ParserContext *context, ASTNode *declaration) {
     const char *name = generic_declaration_name(declaration);
     if (!name) return;
-    ASTNode *existing = declaration->type == AST_STRUCT
+    ASTNode *existing = (declaration->type == AST_STRUCT || declaration->type == AST_ENUM)
         ? find_generic_type_template(context, name)
         : find_generic_function_template(context, name);
     if (existing) {
@@ -83,7 +84,8 @@ static ASTNode *find_generic_template(ParserContext *context, const char *name, 
 }
 
 ASTNode *find_generic_type_template(ParserContext *context, const char *name) {
-    return find_generic_template(context, name, AST_STRUCT);
+    ASTNode *declaration = find_generic_template(context, name, AST_STRUCT);
+    return declaration ? declaration : find_generic_template(context, name, AST_ENUM);
 }
 
 ASTNode *find_generic_function_template(ParserContext *context, const char *name) {

@@ -54,4 +54,46 @@ void test_generic_instantiation(void) {
     assert_concrete(&copy, NULL);
     free_ast(copy);
     free_tokens(tokens);
+
+    const char *payload_source =
+        "enum Result<T, E> { Ok(T), Err(E) }; "
+        "i32 main() { Result<i32, char> value; return sizeof(value); }";
+    parser_reset();
+    buffer = strdup(payload_source);
+    tokens = lexer(buffer);
+    free(buffer);
+    cur = tokens;
+    program = parse_program(&cur);
+    assert_concrete(&program, NULL);
+    assert(semantic_check(program));
+
+    ASTNode *result_template = find_generic_type_template(parser_context_current(), "Result");
+    assert(result_template && result_template->type == AST_ENUM);
+    assert(result_template->enum_stmt.has_payloads);
+    assert(result_template->enum_stmt.type_param_count == 2);
+    assert(result_template->enum_stmt.member_count == 2);
+    assert(result_template->enum_stmt.members[0]->enum_member.payload_type != NULL);
+
+    ASTNode *result_layout = NULL;
+    for (int i = 0; i < program->block.count; i++) {
+        ASTNode *node = program->block.stmts[i];
+        if (node->type == AST_STRUCT && strncmp(node->struct_stmt.name, "__mlg_s_", 8) == 0) {
+            result_layout = node;
+            break;
+        }
+    }
+    assert(result_layout);
+    assert(result_layout->struct_stmt.member_count == 3);
+    assert(strcmp(result_layout->struct_stmt.members[0]->var_decl.name, "__tag") == 0);
+    assert(strcmp(result_layout->struct_stmt.members[1]->var_decl.name, "Ok") == 0);
+    assert(strcmp(result_layout->struct_stmt.members[2]->var_decl.name, "Err") == 0);
+
+    char *assembly = codegen(program);
+    assert(assembly != NULL);
+    assert(strstr(assembly, "movi r1, 9") != NULL);
+    free(assembly);
+
+    free_ast(program);
+    parser_reset();
+    free_tokens(tokens);
 }

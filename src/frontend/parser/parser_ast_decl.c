@@ -127,14 +127,18 @@ ASTNode *new_enum(char *name, ASTNode **members, int member_count) {
     node->enum_stmt.name = strdup(name);
     node->enum_stmt.members = members;
     node->enum_stmt.member_count = member_count;
+    node->enum_stmt.is_exported = 0;
+    node->enum_stmt.package = NULL;
     return node;
 }
 
-ASTNode *new_enum_member(char *name, ASTNode *value, long resolved_value) {
+ASTNode *new_enum_member(char *name, ASTNode *value, ASTNode *payload_type,
+                         long resolved_value) {
     ASTNode *node = calloc(1, sizeof(ASTNode));
     node->type = AST_ENUM_MEMBER;
     node->enum_member.name = strdup(name);
     node->enum_member.value = value;
+    node->enum_member.payload_type = payload_type;
     node->enum_member.resolved_value = resolved_value;
     return node;
 }

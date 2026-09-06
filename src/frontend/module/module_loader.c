@@ -123,6 +123,10 @@ static void collect_module_symbols(Module *module, ParserContext *ctx) {
             module_add_symbol(module, SYMBOL_GENERIC_STRUCT,
                               tpl->struct_stmt.name, tpl->struct_stmt.name,
                               tpl, tpl->struct_stmt.is_exported);
+        } else if (tpl->type == AST_ENUM) {
+            module_add_symbol(module, SYMBOL_GENERIC_ENUM,
+                              tpl->enum_stmt.name, tpl->enum_stmt.name,
+                              tpl, tpl->enum_stmt.is_exported);
         }
     }
 }

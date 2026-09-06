@@ -223,10 +223,16 @@ struct ASTNode {
             char *name;
             ASTNode **members;
             int member_count;
+            char **type_params;
+            int type_param_count;
+            int is_exported;
+            char *package;
+            int has_payloads;
         } enum_stmt;
         struct {
             char *name;
             ASTNode *value;
+            ASTNode *payload_type;
             long resolved_value;
         } enum_member;
         struct {

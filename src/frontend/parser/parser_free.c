@@ -154,6 +154,10 @@ void free_ast(ASTNode *node) {
             break;
         case AST_ENUM:
             free(node->enum_stmt.name);
+            free(node->enum_stmt.package);
+            for (int i = 0; i < node->enum_stmt.type_param_count; i++)
+                free(node->enum_stmt.type_params[i]);
+            free(node->enum_stmt.type_params);
             for (int i = 0; i < node->enum_stmt.member_count; i++)
                 free_ast(node->enum_stmt.members[i]);
             free(node->enum_stmt.members);
@@ -161,6 +165,7 @@ void free_ast(ASTNode *node) {
         case AST_ENUM_MEMBER:
             free(node->enum_member.name);
             free_ast(node->enum_member.value);
+            free_ast(node->enum_member.payload_type);
             break;
         case AST_MEMBER_ACCESS:
             free(node->member_access.member);

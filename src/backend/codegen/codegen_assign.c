@@ -1,21 +1,5 @@
 #include "mylang/backend/codegen_internal.h"
 
-// Whether an expression names storage, so its address can be taken. These are
-// exactly the forms gen_lvalue_addr knows how to lower.
-static int is_lvalue_expr(ASTNode *node) {
-    if (!node) return 0;
-    switch (node->type) {
-    case AST_IDENTIFIER:
-    case AST_MEMBER_ACCESS:
-    case AST_ARROW_ACCESS:
-        return 1;
-    case AST_UNARY:
-        return node->unary.op == ASTARISK;
-    default:
-        return 0;
-    }
-}
-
 // Size in bytes of a struct or array being assigned as a whole, or 0 when the
 // target is an ordinary scalar that a single store covers. A pointer is a
 // scalar however aggregate the thing it points at is.
@@ -43,11 +27,29 @@ void gen_assign(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
     }
     int total = aggregate_assign_size(cc, node->assign.left);
     if (total > 0) {
+        if (call_returns_aggregate(cc, node->assign.right)) {
+            // `y = callee(args);` -- same hidden out-pointer convention as a
+            // var-decl initializer (codegen_stmt.c), just with y's address
+            // computed generally since it may be a field or a deref, not
+            // only a plain name.
+            gen_lvalue_addr(cc, node->assign.left, sb, "r1", params, param_count, locals, local_count);
+            sb_append(sb, "  push r1\n");
+            gen_call_sret(cc, node->assign.right, sb, params, param_count, locals, local_count);
+            // The value of the assignment expression is the destination
+            // itself; recomputing its address is safe here because every
+            // addressable form (identifier/member/arrow/deref) reads it
+            // without side effects.
+            if (target_reg) {
+                gen_lvalue_addr(cc, node->assign.left, sb, target_reg, params, param_count, locals, local_count);
+            }
+            return;
+        }
+
         // Assigning a whole struct or array copies every byte. Evaluating the
         // right side with gen_expr would load only its first word, which used
         // to make `b = a;` silently keep b's other members -- a wrong answer
         // with no diagnostic.
-        if (!is_lvalue_expr(node->assign.right)) {
+        if (!is_addressable_expr(node->assign.right)) {
             fprintf(stderr,
                     "Codegen error: assigning a struct or array from a "
                     "non-lvalue is not supported yet\n");
@@ -59,24 +61,7 @@ void gen_assign(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
         gen_lvalue_addr(cc, node->assign.left, sb, "r3", params, param_count, locals, local_count);
         sb_append(sb, "  pop r2\n");
 
-        sb_append(sb, "  ; copy %d bytes (aggregate assignment)\n", total);
-        int off = 0;
-        for (; off + 4 <= total; off += 4) {
-            sb_append(sb, "  mov   r4, r2\n");
-            if (off) sb_append(sb, "  addis r4, %d\n", off);
-            sb_append(sb, "  load  r1, r4\n");
-            sb_append(sb, "  mov   r4, r3\n");
-            if (off) sb_append(sb, "  addis r4, %d\n", off);
-            sb_append(sb, "  store r4, r1\n");
-        }
-        for (; off < total; off++) {
-            sb_append(sb, "  mov   r4, r2\n");
-            if (off) sb_append(sb, "  addis r4, %d\n", off);
-            sb_append(sb, "  loadb r1, r4\n");
-            sb_append(sb, "  mov   r4, r3\n");
-            if (off) sb_append(sb, "  addis r4, %d\n", off);
-            sb_append(sb, "  storeb r4, r1\n");
-        }
+        emit_aggregate_copy(sb, "r3", "r2", total);
 
         // The value of an aggregate assignment is the destination itself;
         // r3 still holds its address.

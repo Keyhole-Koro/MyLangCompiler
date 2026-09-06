@@ -26,9 +26,18 @@ ASTNode *parse_postfix(ParserContext *context, Token **cur) {
         } else if ((*cur)->kind == ARROW) {
             if (!(*cur)->next || (*cur)->next->kind != IDENTIFIER) break;
             if (context->control.stop_at_arrow) {
-                if (!(node->type == AST_IDENTIFIER ||
-                      node->type == AST_MEMBER_ACCESS ||
-                      node->type == AST_ARROW_ACCESS)) {
+                /* Inside a case key, `->` is ambiguous after a bare name: it
+                 * reads as an access in `addr->val -> 100` and as the arm arrow
+                 * in `None -> fallback`, and a payload variant carrying nothing
+                 * is spelled exactly like the latter. One token of lookahead
+                 * separates them -- an access is followed by another arrow,
+                 * which is the arm's. Once the key is already an access there is
+                 * no ambiguity left, so chains keep working. */
+                if (node->type == AST_IDENTIFIER) {
+                    Token *after_member = (*cur)->next->next;
+                    if (!after_member || after_member->kind != ARROW) break;
+                } else if (!(node->type == AST_MEMBER_ACCESS ||
+                             node->type == AST_ARROW_ACCESS)) {
                     break;
                 }
             }
