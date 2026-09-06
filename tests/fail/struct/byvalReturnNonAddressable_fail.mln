@@ -1,0 +1,15 @@
+// The hidden out-pointer convention for a struct return (MLC-015) needs an
+// address to copy from; a nested call's result has none -- it never lives
+// anywhere the returning function controls.
+typedef struct { i32 x; i32 y; } P;
+
+P make() { P r; r.x = 1; r.y = 2; return r; }
+
+P relay() {
+    return make();
+}
+
+i32 main() {
+    P p = relay();
+    return p.x + p.y;
+}

@@ -90,6 +90,27 @@ void emit_store_var(CompilerContext *cc, StringBuilder *sb, const char *name, co
 void emit_addr_of_var(CompilerContext *cc, StringBuilder *sb, const char *name, const char *target_reg,
                       char **params, int param_count, char **locals, int local_count)
 {
+    // A by-value aggregate parameter's slot holds the pointer the caller
+    // supplied, not the aggregate's bytes (MLC-015). The program sees its
+    // type as the value type T, not T*, so "the address of" it is that
+    // pointer as-is -- load it, the same as reading the parameter's value
+    // anywhere else, rather than taking the address of the slot (which would
+    // give the address of the pointer, one indirection too many).
+    if (is_byval_aggregate_param(cc, name, params, param_count)) {
+        // Load the one word stored in the parameter's own slot directly,
+        // rather than through emit_load_var: for a by-value ARRAY parameter,
+        // emit_load_var's "arrays decay to their address" branch calls right
+        // back into this function, which would recurse forever instead of
+        // ever reaching a param/local slot load.
+        int idx = param_index(name, params, param_count);
+        int offset = idx < 3 ? param_offset(idx) : 8 + (idx - 3) * SLOT_SIZE;
+        sb_append(sb, "  \n; load hidden pointer for by-value aggregate param '%s'\n", name);
+        sb_append(sb, "  mov   r3, bp\n");
+        sb_append(sb, "  addis r3, %d\n", offset);
+        emit_load_width_from_addr(sb, target_reg, "r3", SLOT_SIZE);
+        return;
+    }
+
     int is_param = 0;
     int offset = find_var_offset(name, params, param_count, locals, local_count, &is_param);
     if (is_param == 0) {

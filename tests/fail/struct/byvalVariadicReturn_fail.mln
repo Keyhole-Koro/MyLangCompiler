@@ -1,0 +1,15 @@
+// A variadic function's rest-argument count and a by-value struct return's
+// hidden out-pointer both travel in r4; a function cannot be both.
+typedef struct { i32 x; i32 y; } P;
+
+P make(i32 first, rest more) {
+    P r;
+    r.x = first;
+    r.y = 0;
+    return r;
+}
+
+i32 main() {
+    P p = make(1, 2, 3);
+    return p.x + p.y;
+}

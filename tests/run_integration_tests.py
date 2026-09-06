@@ -54,6 +54,7 @@ TESTCASES = [
     ("structAssign", ["succeed/struct/structAssign.mln"], "R1", 381),
     ("payloadResult", ["succeed/enum/payloadResult.mln"], "R1", 172),
     ("payloadOption", ["succeed/enum/payloadOption.mln"], "R1", 137),
+    ("byvalParamAndReturn", ["succeed/struct/byval/paramAndReturn.mln"], "R1", 140),
     ("argNestedCall", ["succeed/function/argNestedCall.mln"], "R1", 706),
     ("multiInclude", ["succeed/package/multiInclude.mln", "succeed/package/multiInclude_part1.mln", "succeed/package/multiInclude_part2.mln"], "R1", 11),
     ("multiInclude_complex", ["succeed/package/multiInclude_complex.mln", "succeed/package/multiInclude_midA.mln", "succeed/package/multiInclude_midB.mln", "succeed/package/multiInclude_shared.mln"], "R1", 21),
