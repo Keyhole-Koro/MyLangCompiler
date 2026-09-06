@@ -1,19 +1,19 @@
 import { Slice, slice_init, slice_at }
-    from "../../../../../system/MyKernel/src/lib/slice.mln";
+    from "../../../../MyStdLib/slice.mln";
 import { Vec, vec_init, vec_push, vec_pop }
-    from "../../../../../system/MyKernel/src/lib/vec.mln";
+    from "../../../../MyStdLib/vec.mln";
 import { Arena, arena_init, arena_alloc }
-    from "../../../../../system/MyKernel/src/lib/arena.mln";
+    from "../../../../MyStdLib/arena.mln";
 import { RingBuffer, ring_init, ring_push, ring_pop }
-    from "../../../../../system/MyKernel/src/lib/ringbuf.mln";
+    from "../../../../MyStdLib/ringbuf.mln";
 import { IntrusiveList, intrusive_list_init, intrusive_push_front, intrusive_pop_front }
-    from "../../../../../system/MyKernel/src/lib/intrusive_list.mln";
+    from "../../../../MyStdLib/intrusive_list.mln";
 import { Option, option_take }
-    from "../../../../../system/MyKernel/src/lib/option.mln";
+    from "../../../../MyStdLib/option.mln";
 import { Result, result_take_err }
-    from "../../../../../system/MyKernel/src/lib/result.mln";
+    from "../../../../MyStdLib/result.mln";
 import { HashMap, hashmap_init, hashmap_put, hashmap_get }
-    from "../../../../../system/MyKernel/src/lib/hashmap.mln";
+    from "../../../../MyStdLib/hashmap.mln";
 
 struct Node {
     i32 value;
