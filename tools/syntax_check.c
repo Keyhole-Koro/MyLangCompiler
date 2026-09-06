@@ -323,14 +323,23 @@ static size_t named_pointer_cast_end(Token **tokens, size_t token_count, size_t 
 
 /* The editor grammar deliberately omits expression-level braces: adding a
  * recursive `IDENTIFIER { name: expr }` production makes its canonical LR(1)
- * table prohibitively large.  A named struct literal is nevertheless fully
+ * table's build time prohibitive (60s+ even before this addition; measured
+ * 90s+ with it). A named struct literal is nevertheless fully
  * self-delimiting, so collapse a well-formed token span to one expression
  * token for the lightweight checker.  The compiler remains the authority for
- * type/member validation and code generation. */
-static size_t named_struct_literal_end(Token **tokens, size_t token_count, size_t start) {
+ * type/member validation and code generation.
+ *
+ * Collapsing loses the grammar's own tagging for everything in the span, so
+ * this assigns the two roles that production would have (the type name,
+ * each field name) directly, rather than leaving the whole span an
+ * unclassified blob that falls back to the editor's generic token color. */
+static size_t named_struct_literal_end(Token **tokens, size_t token_count, size_t start,
+                                       int *source_roles, int type_role, int property_role) {
     if (start + 2 >= token_count || tokens[start]->kind != IDENTIFIER ||
         tokens[start + 1]->kind != L_BRACE)
         return token_count;
+
+    if (source_roles && type_role) source_roles[start] = type_role;
 
     size_t i = start + 2;
     if (tokens[i]->kind == R_BRACE) return i;
@@ -338,6 +347,7 @@ static size_t named_struct_literal_end(Token **tokens, size_t token_count, size_
         if (tokens[i]->kind != IDENTIFIER || i + 1 >= token_count ||
             tokens[i + 1]->kind != COLON)
             return token_count;
+        if (source_roles && property_role) source_roles[i] = property_role;
         i += 2;
         size_t value_start = i;
         int paren_depth = 0, bracket_depth = 0, brace_depth = 0;
@@ -434,7 +444,8 @@ static int check_tokens(
     const int *token_map,
     Token *tokens
 ) {
-    (void)grammar;
+    int type_role = syntax_label_id(grammar, "type");
+    int property_role = syntax_label_id(grammar, "property");
     if (!tokens) {
         printf("{\"status\":\"error\",\"diagnostics\":[{\"line\":0,\"character\":0,\"endCharacter\":1,\"message\":\"Failed to read source file.\"}]}\n");
         return 0;
@@ -479,7 +490,8 @@ static int check_tokens(
     int generic_depth = 0;
     for (size_t i = 0; i < source_count; i++) {
         Token *t = source_tokens[i];
-        size_t struct_literal_end = named_struct_literal_end(source_tokens, source_count, i);
+        size_t struct_literal_end = named_struct_literal_end(source_tokens, source_count, i,
+                                                             source_roles, type_role, property_role);
         if (struct_literal_end != source_count) {
             // A number is an unambiguous primary expression in the grammar.
             // Keep the first source token as the diagnostic anchor.
