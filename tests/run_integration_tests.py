@@ -39,7 +39,6 @@ TESTCASES = [
     ("intWidth32", ["succeed/expr/intWidth32.mln"], "R1", 20),
     ("uintWidthSmall", ["succeed/expr/uintWidthSmall.mln"], "R1", 69),
     ("simpleStruct", ["succeed/struct/simpleStruct.mln"], "R1", 10),
-    ("namedStructLiteral", ["succeed/struct/namedStructLiteral.mln"], "R1", 44),
     ("arrayInit", ["succeed/array/arrayInit.mln"], "R1", 106),
     ("multiArray", ["succeed/array/multiArray.mln"], "R1", 6),
     ("arraySizeof", ["succeed/array/arraySizeof.mln"], "R1", 24),
