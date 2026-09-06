@@ -24,6 +24,32 @@ void parser_context_reset(ParserContext *context) {
         context->symbols.generic_templates.count = 0;
     }
 
+    /* Normally already emptied by instantiate_generics(), which moves each
+     * declaration into program->block.stmts (the program owns it from
+     * there); this only catches a context that never reached that pass
+     * (e.g. a parse error abort), so nothing here has been moved yet. */
+    if (context->symbols.imported_plain_types.declarations) {
+        for (int i = 0; i < context->symbols.imported_plain_types.count; i++) {
+            free_ast(context->symbols.imported_plain_types.declarations[i]);
+        }
+        free(context->symbols.imported_plain_types.declarations);
+        context->symbols.imported_plain_types.declarations = NULL;
+        context->symbols.imported_plain_types.count = 0;
+    }
+
+    /* Normally already emptied by module_loader.c's transfer to
+     * Module->exported_payload_enums; this only catches a context that
+     * never reached that transfer (parsed directly via parse_program(), or
+     * a parse error abort). */
+    if (context->symbols.exported_payload_enums.declarations) {
+        for (int i = 0; i < context->symbols.exported_payload_enums.count; i++) {
+            free_ast(context->symbols.exported_payload_enums.declarations[i]);
+        }
+        free(context->symbols.exported_payload_enums.declarations);
+        context->symbols.exported_payload_enums.declarations = NULL;
+        context->symbols.exported_payload_enums.count = 0;
+    }
+
     if (context->symbols.functions.funcs) {
         free(context->symbols.functions.funcs);
         context->symbols.functions.funcs = NULL;

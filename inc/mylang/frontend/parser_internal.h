@@ -90,6 +90,7 @@ char **parse_type_params(ParserContext *context, Token **cur, int *out_count, in
 ASTNode **parse_type_args(ParserContext *context, Token **cur, int *out_count);
 void instantiate_generics(ParserContext *context, ASTNode *program);
 void load_imported_generic_templates(ParserContext *context, ASTNode *import_node, const char *source_path);
+void load_imported_plain_types(ParserContext *context, ASTNode *import_node, const char *source_path);
 ASTNode *parse_import(ParserContext *context, Token **cur);
 ASTNode *parse_toplevel(ParserContext *context, Token **cur);
 ASTNode *parse_program_syntax(ParserContext *context, Token **cur);

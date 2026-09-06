@@ -50,6 +50,18 @@ typedef struct ParserSymbolState {
     FunctionTable functions;
     TypeTable types;
     GenericTemplateTable generic_templates;
+    /* Plain (non-generic) struct/enum declarations pulled in by `import
+     * {Name} from "..."` from another file (parser_import_generics.c). Not
+     * generic templates themselves -- just staged here, the same way a
+     * generic template is, until instantiate_generics() splices them into
+     * this file's own program->block.stmts so codegen sees them exactly as
+     * if they had been declared locally. */
+    GenericTemplateTable imported_plain_types;
+    /* A clone of each exported payload enum's declaration, taken at parse
+     * time before instantiate_generics() lowers the real one (left in
+     * program->block.stmts) into its backing struct -- see
+     * exported_payload_enums on Module and load_imported_plain_types(). */
+    GenericTemplateTable exported_payload_enums;
     EnumConstant *enum_constants;
     int enum_constant_count;
 } ParserSymbolState;
@@ -112,6 +124,12 @@ ASTNode *find_generic_type_template(ParserContext *context, const char *name);
 ASTNode *find_generic_function_template(ParserContext *context, const char *name);
 ASTNode *generic_template_at(ParserContext *context, int index);
 int generic_template_count(ParserContext *context);
+void add_imported_plain_type(ParserContext *context, ASTNode *declaration);
+ASTNode *imported_plain_type_at(ParserContext *context, int index);
+int imported_plain_type_count(ParserContext *context);
+void add_exported_payload_enum(ParserContext *context, ASTNode *declaration);
+ASTNode *exported_payload_enum_at(ParserContext *context, int index);
+int exported_payload_enum_count(ParserContext *context);
 void add_structdef(ParserContext *context, char *name, ASTNode **members, int member_count);
 StructDef *find_structdef(ParserContext *context, const char *name);
 void add_enum_constant(ParserContext *context, const char *name, long value);

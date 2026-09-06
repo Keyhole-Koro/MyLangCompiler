@@ -1,0 +1,28 @@
+package lib;
+
+import { Result } from "/home/kiho/Workspaces/MyComputer/toolchain/MyStdLib/result.mln";
+
+// A data-carrying (payload) enum, exported and non-generic -- an "error
+// type" whose variants can each carry their own data, the way an exception
+// class hierarchy would. See cross_module_payload_enum_main.mln for what
+// this guards: matching on it, including nested inside another payload
+// enum's arm, from a file that only imports the declaration.
+export enum FsError {
+    NotFound(char*),
+    BadFd(i32),
+}
+
+export Result<i32, FsError> make(i32 flag) {
+    if (flag == 0) {
+        FsError cause = NotFound("missing.txt");
+        Result<i32, FsError> err = Err(cause);
+        return err;
+    }
+    if (flag == 1) {
+        FsError cause = BadFd(99);
+        Result<i32, FsError> err = Err(cause);
+        return err;
+    }
+    Result<i32, FsError> ok = Ok(flag * 10);
+    return ok;
+}

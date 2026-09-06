@@ -1,0 +1,30 @@
+package lib;
+
+// Library half of the cross-module payload-enum-return regression test (see
+// cross_module_result_main.mln). A module loaded only for cross-file symbol
+// resolution (ModuleLoader) used to skip generic specialization, so this
+// function's declared `Result<i32, i32>` return type stayed the bare generic
+// name instead of the mangled struct name a caller's own local of the same
+// type is registered under -- the caller's codegen then couldn't tell this
+// call returns an aggregate, and silently truncated it to one word instead
+// of using the hidden out-pointer convention this function actually compiles
+// to.
+//
+// The package name above has to match the alias main.mln imports it under
+// ("lib") for `lib.make(...)` to parse as a qualified call at all -- an
+// unrelated, pre-existing quirk of how the parser recognizes a qualified
+// call as a payload-enum-returning initializer, not something this fixture
+// is about.
+enum Result<T, E> {
+    Ok(T),
+    Err(E),
+}
+
+export Result<i32, i32> make(i32 flag) {
+    if (flag == 0) {
+        Result<i32, i32> err = Err(9);
+        return err;
+    }
+    Result<i32, i32> ok = Ok(flag * 10);
+    return ok;
+}
