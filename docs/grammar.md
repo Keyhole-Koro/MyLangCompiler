@@ -43,7 +43,8 @@ MyLang uses a package-based module system.
 
 ### Types and Enumerations
 - `struct_decl` -> `struct IDENTIFIER? { var_decl* } IDENTIFIER? ;` | `struct IDENTIFIER type_params { var_decl* } ;`
-- `enum_decl` -> `enum IDENTIFIER { IDENTIFIER ( = NUMBER )? ( , IDENTIFIER ( = NUMBER )? )* ,? } ;`
+- `enum_decl` -> `enum IDENTIFIER type_params? { enum_variant ( , enum_variant )* ,? } ;`
+- `enum_variant` -> `IDENTIFIER` | `IDENTIFIER ( type )` | `IDENTIFIER = NUMBER`
 - `typedef_stmt` -> `typedef type IDENTIFIER ;` | `typedef struct ... IDENTIFIER ;`
 
 ## 4. Type System
@@ -92,6 +93,7 @@ Expressions are listed in order of decreasing precedence.
 | 15 | `( expr )`, literals, `IDENTIFIER`, `case`, lambdas | Primary expressions |
 
 ### Special Expressions
-- **Case Expression**: `case expr of { ( (key | _) -> expr ; )* }`
+- **Case Expression**: `case expr of { ( pattern -> expr ; )* }`
+- **Case Pattern**: `_` | literal | `IDENTIFIER` | `IDENTIFIER ( IDENTIFIER | _ )`
 - **Function Literal (Lambda)**: `( param_list ) block` or `( param_list ) => block`
 - **Statement Expression**: `( block )`
