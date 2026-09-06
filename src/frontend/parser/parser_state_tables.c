@@ -101,6 +101,40 @@ int generic_template_count(ParserContext *context) {
     return context->symbols.generic_templates.count;
 }
 
+void add_imported_plain_type(ParserContext *context, ASTNode *declaration) {
+    context->symbols.imported_plain_types.declarations = realloc(
+        context->symbols.imported_plain_types.declarations,
+        sizeof(ASTNode *) * (context->symbols.imported_plain_types.count + 1)
+    );
+    context->symbols.imported_plain_types.declarations[context->symbols.imported_plain_types.count++] = declaration;
+}
+
+ASTNode *imported_plain_type_at(ParserContext *context, int index) {
+    if (index < 0 || index >= context->symbols.imported_plain_types.count) return NULL;
+    return context->symbols.imported_plain_types.declarations[index];
+}
+
+int imported_plain_type_count(ParserContext *context) {
+    return context->symbols.imported_plain_types.count;
+}
+
+void add_exported_payload_enum(ParserContext *context, ASTNode *declaration) {
+    context->symbols.exported_payload_enums.declarations = realloc(
+        context->symbols.exported_payload_enums.declarations,
+        sizeof(ASTNode *) * (context->symbols.exported_payload_enums.count + 1)
+    );
+    context->symbols.exported_payload_enums.declarations[context->symbols.exported_payload_enums.count++] = declaration;
+}
+
+ASTNode *exported_payload_enum_at(ParserContext *context, int index) {
+    if (index < 0 || index >= context->symbols.exported_payload_enums.count) return NULL;
+    return context->symbols.exported_payload_enums.declarations[index];
+}
+
+int exported_payload_enum_count(ParserContext *context) {
+    return context->symbols.exported_payload_enums.count;
+}
+
 void add_structdef(ParserContext *context, char *name, ASTNode **members, int member_count) {
     StructDef *def = malloc(sizeof(StructDef));
     def->name = strdup(name);

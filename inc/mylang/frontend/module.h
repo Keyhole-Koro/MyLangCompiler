@@ -57,6 +57,11 @@ typedef struct ModuleSymbol {
  * - package_name: owned string (package identifier if declared, otherwise NULL)
  * - program: owned ASTNode (the AST_BLOCK from parse_program_syntax)
  * - generic_templates: owned array of ASTNodes (generic templates not stored in program block)
+ * - exported_payload_enums: owned array of ASTNodes -- a clone of each
+ *   exported payload enum's declaration, taken before instantiate_generics()
+ *   lowers the one actually left in `program` into its backing struct (which
+ *   erases the variant table an importer's own lowering pass needs; see
+ *   load_imported_plain_types() in parser_import_generics.c).
  * - symbols: owned array of ModuleSymbol structs
  * - All owned memory is freed when the enclosing ModuleGraph is destroyed.
  */
@@ -66,6 +71,8 @@ typedef struct Module {
     ASTNode *program;
     ASTNode **generic_templates;
     int generic_template_count;
+    ASTNode **exported_payload_enums;
+    int exported_payload_enum_count;
     ModuleSymbol *symbols;
     int symbol_count;
     int symbol_capacity;

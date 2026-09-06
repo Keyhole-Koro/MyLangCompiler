@@ -33,6 +33,7 @@ static ASTNode *make_import_node_with_templates(ParserContext *context, char *pa
         parse_error(context, "failed to load imported MyLang module", context->token_head);
     }
     load_imported_generic_templates(context, node, path);
+    load_imported_plain_types(context, node, path);
     return node;
 }
 
@@ -139,6 +140,17 @@ ASTNode* parse_toplevel(ParserContext *context, Token **cur) {
             add_generic_template(context, declaration);
             return NULL;
         }
+        /* A plain (non-generic) struct never reaches the branch above, so
+         * `export struct Foo {...};` was otherwise parsed same as an
+         * unexported one -- new_struct() defaults is_exported to 0 and
+         * nothing else here ever set it from `want_export`. This only ever
+         * mattered for cross-file visibility (module_loader.c's
+         * collect_module_symbols reads it), so a single-file compile never
+         * showed the gap. */
+        if (declaration && declaration->type == AST_STRUCT) {
+            declaration->struct_stmt.is_exported = want_export;
+            if (want_export) declaration->struct_stmt.package = strdup(context->module.current_package);
+        }
         return declaration;
     }
     if ((*cur)->kind == ENUM) {
@@ -148,6 +160,28 @@ ASTNode* parse_toplevel(ParserContext *context, Token **cur) {
             if (want_export) declaration->enum_stmt.package = strdup(context->module.current_package);
             add_generic_template(context, declaration);
             return NULL;
+        }
+        /* Same gap as the plain-struct case above. Cross-file lookup of a
+         * plain enum by name (collect_module_symbols) happens to hardcode
+         * is_exported=1 regardless, so this only actually mattered once a
+         * payload enum's *lowered struct* (parser_instantiate.c's
+         * lower_payload_enum, which does read this flag) needed to cross a
+         * file boundary. */
+        if (declaration) {
+            declaration->enum_stmt.is_exported = want_export;
+            if (want_export) declaration->enum_stmt.package = strdup(context->module.current_package);
+            /* instantiate_generics() (parser_instantiate.c) replaces a
+             * payload enum's own AST_ENUM node with its lowered struct once
+             * this file reaches that pass -- fine for this file's own
+             * codegen, but it also erases the variant table (name -> tag,
+             * has-payload) an *importer's* own lowering pass needs to
+             * rewrite its own `Variant(x) -> ...` case arms and
+             * constructions. Stash a clone now, before that happens, so
+             * load_imported_plain_types() has the original to hand an
+             * importer instead of the lowered struct. */
+            if (want_export && declaration->enum_stmt.has_payloads) {
+                add_exported_payload_enum(context, ast_clone(declaration));
+            }
         }
         return declaration;
     }

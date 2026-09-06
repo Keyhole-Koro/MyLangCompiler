@@ -224,6 +224,16 @@ Module *module_loader_load(ModuleLoader *loader, const char *importer_path, cons
         ctx.symbols.generic_templates.count = 0;
     }
 
+    /* Same transfer, for the pre-lowering clone of each exported payload
+     * enum staged during parsing (see add_exported_payload_enum() and its
+     * call site in parser_toplevel.c). */
+    if (ctx.symbols.exported_payload_enums.count > 0) {
+        module->exported_payload_enum_count = ctx.symbols.exported_payload_enums.count;
+        module->exported_payload_enums = ctx.symbols.exported_payload_enums.declarations;
+        ctx.symbols.exported_payload_enums.declarations = NULL;
+        ctx.symbols.exported_payload_enums.count = 0;
+    }
+
     /* Collect symbol declarations and exports */
     collect_module_symbols(module, &ctx);
 

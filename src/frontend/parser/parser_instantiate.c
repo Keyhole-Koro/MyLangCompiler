@@ -173,6 +173,16 @@ static ASTNode *lower_payload_enum(ASTNode *node) {
     result->col = node->col;
     result->end_line = node->end_line;
     result->end_col = node->end_col;
+    /* new_struct() defaults is_exported/package to "not exported" -- carry
+     * the enum's own flags over instead, so an `export enum` with payloads
+     * is still exported once lowered to its backing struct. Within a single
+     * file this never showed: only cross-file lookups (an importer asking
+     * whether this struct's declaration is exported) ever read it. Move
+     * `package` rather than copy it; it's about to be freed with the rest
+     * of `node`. */
+    result->struct_stmt.is_exported = node->enum_stmt.is_exported;
+    result->struct_stmt.package = node->enum_stmt.package;
+    node->enum_stmt.package = NULL;
     free_ast(node);
     return result;
 }
@@ -270,7 +280,32 @@ static void order_struct(ParserContext *context, ASTNode *program, int index,
     ordered[(*count)++] = node;
 }
 
+/* Splice every plain struct/enum staged by load_imported_plain_types() into
+ * program->block.stmts, before anything below walks it: unlike a generic
+ * template's concrete instantiation (spliced in further down, once a use is
+ * found), a plain type has no per-use specialization to wait for -- it's
+ * already the concrete declaration -- so it goes in unconditionally, early
+ * enough that the generic-use walk, the payload-enum lowering, and (if
+ * triggered) the struct reordering below all see it as if it had been
+ * declared locally. */
+static void splice_imported_plain_types(ParserContext *context, ASTNode *program) {
+    int count = imported_plain_type_count(context);
+    if (count == 0) return;
+    int old_count = program->block.count;
+    program->block.count += count;
+    program->block.stmts = realloc(program->block.stmts, sizeof(ASTNode *) * program->block.count);
+    for (int i = 0; i < count; i++) {
+        program->block.stmts[old_count + i] = imported_plain_type_at(context, i);
+    }
+    /* Ownership of each declaration just moved into program->block.stmts;
+     * only the staging array itself is ours to free. */
+    free(context->symbols.imported_plain_types.declarations);
+    context->symbols.imported_plain_types.declarations = NULL;
+    context->symbols.imported_plain_types.count = 0;
+}
+
 void instantiate_generics(ParserContext *context, ASTNode *program) {
+    splice_imported_plain_types(context, program);
     Instantiation ctx = {.parser_context = context, .program = program};
     for (int i = 0; i < program->block.count; i++) {
         ASTNode *node = program->block.stmts[i];

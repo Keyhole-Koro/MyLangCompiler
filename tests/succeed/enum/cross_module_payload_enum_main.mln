@@ -1,0 +1,30 @@
+// See cross_module_payload_enum_lib.mln for what this guards against: a
+// payload enum's own declaration is lowered (enum -> tagged struct) as part
+// of compiling the file that declares it, which must not be the copy an
+// importer's own lowering pass works from, or `Variant(x) -> ...` case arms
+// written in *this* file have no variant table left to resolve against.
+import lib from "cross_module_payload_enum_lib.mln";
+import { FsError } from "cross_module_payload_enum_lib.mln";
+import { Result } from "/home/kiho/Workspaces/MyComputer/toolchain/MyStdLib/result.mln";
+
+i32 main() {
+    Result<i32, FsError> a = lib.make(5);
+    i32 va = case a of {
+        Ok(v) -> v;
+        Err(e) -> case e of { NotFound(p) -> -1; BadFd(fd) -> -2; };
+    }; // 50
+
+    Result<i32, FsError> b = lib.make(1);
+    i32 vb = case b of {
+        Ok(v) -> v;
+        Err(e) -> case e of { NotFound(p) -> -1; BadFd(fd) -> 1000 + fd; };
+    }; // 1099
+
+    Result<i32, FsError> c = lib.make(0);
+    i32 vc = case c of {
+        Ok(v) -> v;
+        Err(e) -> case e of { NotFound(p) -> 7; BadFd(fd) -> -3; };
+    }; // 7
+
+    return va + vb + vc; // 1156
+}
