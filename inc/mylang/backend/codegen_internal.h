@@ -211,7 +211,8 @@ int is_comparison_op(TokenKind op);
 
 void ensure_data_section(CompilerContext *cc);
 void emit_zero_bytes(StringBuilder *sb, int count);
-void emit_global_init(StringBuilder *sb, ASTNode *init_expr, int expected_bytes, int elem_bytes);
+void emit_global_init(CompilerContext *cc, StringBuilder *sb, ASTNode *init_expr,
+                      int expected_bytes, int elem_bytes);
 void emit_global_decl(CompilerContext *cc, ASTNode *var_decl);
 
 void emit_load_from_addr(StringBuilder *sb, const char *target_reg, const char *addr_reg, int is_byte);
@@ -231,6 +232,10 @@ void gen_expr_binop(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const
 void gen_call(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char *target_reg, char **params, int param_count, char **locals, int local_count);
 void gen_call_sret(CompilerContext *cc, ASTNode *node, StringBuilder *sb, char **params, int param_count, char **locals, int local_count);
 void gen_assign(CompilerContext *cc, ASTNode *node, StringBuilder *sb, char **params, int param_count, char **locals, int local_count, const char *target_reg);
+void gen_struct_literal_into_addr(CompilerContext *cc, ASTNode *literal,
+                                  StringBuilder *sb, const char *dest_addr_reg,
+                                  char **params, int param_count,
+                                  char **locals, int local_count);
 
 // -- Aggregate (struct/array) by-value calling convention (MLC-015) --
 // Bytes occupied by `type_ast` when passed/returned as a whole aggregate, or

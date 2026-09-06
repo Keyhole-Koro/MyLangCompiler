@@ -89,6 +89,14 @@ ASTNode *new_init_list(ASTNode **elems, int count) {
     return node;
 }
 
+ASTNode *new_struct_init_list(char *type_name, char **field_names,
+                              ASTNode **elems, int count) {
+    ASTNode *node = new_init_list(elems, count);
+    node->init_list.struct_type_name = strdup(type_name);
+    node->init_list.field_names = field_names;
+    return node;
+}
+
 ASTNode *new_stmt_expr(ASTNode *block) {
     ASTNode *node = calloc(1, sizeof(ASTNode));
     node->type = AST_STMT_EXPR;

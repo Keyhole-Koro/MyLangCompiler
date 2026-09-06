@@ -99,8 +99,17 @@ int fprint_ast_expr_node(FILE *out, ASTNode *node, int indent) {
         fprint_ast(out, node->arrow_access.lhs, indent + 1);
         return 1;
     case AST_INIT_LIST:
-        fprint_indent(out, indent); fprintf(out, "InitList:\n");
-        for (int i = 0; i < node->init_list.count; i++) fprint_ast(out, node->init_list.elements[i], indent + 1);
+        fprint_indent(out, indent);
+        fprintf(out, "%s:\n", node->init_list.struct_type_name ? node->init_list.struct_type_name : "InitList");
+        for (int i = 0; i < node->init_list.count; i++) {
+            if (node->init_list.field_names) {
+                fprint_indent(out, indent + 1);
+                fprintf(out, "%s:\n", node->init_list.field_names[i]);
+                fprint_ast(out, node->init_list.elements[i], indent + 2);
+            } else {
+                fprint_ast(out, node->init_list.elements[i], indent + 1);
+            }
+        }
         return 1;
     default:
         return 0;

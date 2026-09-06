@@ -321,6 +321,48 @@ static size_t named_pointer_cast_end(Token **tokens, size_t token_count, size_t 
         ? index + 1 : token_count;
 }
 
+/* The editor grammar deliberately omits expression-level braces: adding a
+ * recursive `IDENTIFIER { name: expr }` production makes its canonical LR(1)
+ * table prohibitively large.  A named struct literal is nevertheless fully
+ * self-delimiting, so collapse a well-formed token span to one expression
+ * token for the lightweight checker.  The compiler remains the authority for
+ * type/member validation and code generation. */
+static size_t named_struct_literal_end(Token **tokens, size_t token_count, size_t start) {
+    if (start + 2 >= token_count || tokens[start]->kind != IDENTIFIER ||
+        tokens[start + 1]->kind != L_BRACE)
+        return token_count;
+
+    size_t i = start + 2;
+    if (tokens[i]->kind == R_BRACE) return i;
+    while (i < token_count) {
+        if (tokens[i]->kind != IDENTIFIER || i + 1 >= token_count ||
+            tokens[i + 1]->kind != COLON)
+            return token_count;
+        i += 2;
+        size_t value_start = i;
+        int paren_depth = 0, bracket_depth = 0, brace_depth = 0;
+        for (; i < token_count; i++) {
+            TokenKind kind = tokens[i]->kind;
+            if (kind == L_PARENTHESES) paren_depth++;
+            else if (kind == R_PARENTHESES) { if (paren_depth > 0) paren_depth--; }
+            else if (kind == L_BRACKET) bracket_depth++;
+            else if (kind == R_BRACKET) { if (bracket_depth > 0) bracket_depth--; }
+            else if (kind == L_BRACE) brace_depth++;
+            else if (kind == R_BRACE) {
+                if (brace_depth > 0) { brace_depth--; continue; }
+                if (paren_depth == 0 && bracket_depth == 0) break;
+            }
+            if (kind == COMMA && paren_depth == 0 && bracket_depth == 0 && brace_depth == 0)
+                break;
+        }
+        if (i == value_start || i >= token_count) return token_count;
+        if (tokens[i]->kind == R_BRACE) return i;
+        if (tokens[i]->kind != COMMA || ++i >= token_count) return token_count;
+        if (tokens[i]->kind == R_BRACE) return i; /* trailing comma */
+    }
+    return token_count;
+}
+
 static AngleKind *classify_generic_angles(Token **tokens, size_t token_count) {
     AngleKind *angles = calloc(token_count ? token_count : 1, sizeof(AngleKind));
     const char **generic_names = NULL;
@@ -437,6 +479,16 @@ static int check_tokens(
     int generic_depth = 0;
     for (size_t i = 0; i < source_count; i++) {
         Token *t = source_tokens[i];
+        size_t struct_literal_end = named_struct_literal_end(source_tokens, source_count, i);
+        if (struct_literal_end != source_count) {
+            // A number is an unambiguous primary expression in the grammar.
+            // Keep the first source token as the diagnostic anchor.
+            token_ids[token_count] = token_map[NUMBER];
+            token_refs[token_count] = t;
+            token_source_indices[token_count++] = i;
+            i = struct_literal_end;
+            continue;
+        }
         size_t cast_end = named_pointer_cast_end(source_tokens, source_count, i);
         if (cast_end != source_count) {
             i = cast_end;

@@ -79,6 +79,14 @@ CASES = [
         status="ok",
     ),
     SyntaxCase(
+        name="named_struct_literal_ok",
+        source=(
+            "typedef struct { i32 x; i32 y; } Point;\n"
+            "i32 main() { Point p = Point { y: 2, x: 1, }; return p.x + p.y; }\n"
+        ),
+        status="ok",
+    ),
+    SyntaxCase(
         name="postfix_increment_identifier_role",
         source="void main() { mut i32 i = 0; i++; }\n",
         status="ok",

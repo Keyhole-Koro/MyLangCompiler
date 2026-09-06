@@ -253,6 +253,11 @@ struct ASTNode {
         struct {
             ASTNode **elements;
             int count;
+            // Set only for a Go-style named struct literal, e.g.
+            // `Point { x: 1, y: 2 }`.  Plain `{1, 2}` initializers leave
+            // these NULL and retain their array-initializer semantics.
+            char *struct_type_name;
+            char **field_names;
         } init_list;
         struct {
             ASTNode *expr;

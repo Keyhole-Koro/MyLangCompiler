@@ -1,0 +1,6 @@
+typedef struct { i32 x; } Point;
+
+i32 main() {
+    Point p = Point { y: 1 };
+    return 0;
+}

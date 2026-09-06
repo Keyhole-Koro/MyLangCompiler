@@ -131,11 +131,15 @@ void rewrite_node(ParserContext *context, ASTNode *node, char **scope, int scope
     case AST_STMT_EXPR:
         rewrite_node(context, node->stmt_expr.block, scope, scope_count);
         break;
+    case AST_INIT_LIST:
+        for (int i = 0; i < node->init_list.count; i++) {
+            rewrite_node(context, node->init_list.elements[i], scope, scope_count);
+        }
+        break;
     case AST_IMPORT:
     case AST_STRING_LITERAL:
     case AST_CHAR_LITERAL:
     case AST_SIZEOF:
-    case AST_INIT_LIST:
     case AST_TYPE:
     case AST_TYPE_ARRAY:
     case AST_STRUCT:

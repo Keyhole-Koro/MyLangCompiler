@@ -33,10 +33,54 @@ static ASTNode *parse_case_primary(ParserContext *context, Token **cur) {
     return new_case_expr(target, cases, count, default_expr);
 }
 
+// Parses `TypeName { field: value, ... }`.  It intentionally shares the
+// existing AST_INIT_LIST representation with aggregate initializers; the
+// optional type/field metadata distinguishes this named form from `{...}`.
+static ASTNode *parse_struct_literal(ParserContext *context, Token **cur,
+                                     Token *type_tok) {
+    char **field_names = NULL;
+    ASTNode **values = NULL;
+    int count = 0;
+
+    if (!expect(cur, L_BRACE))
+        parse_error(context, "expected '{' after struct type", *cur);
+
+    while ((*cur)->kind != R_BRACE && (*cur)->kind != EOT) {
+        if ((*cur)->kind != IDENTIFIER)
+            parse_error(context, "expected field name in struct literal", *cur);
+        char *field_name = strdup((*cur)->value);
+        *cur = (*cur)->next;
+        if (!expect(cur, COLON))
+            parse_error(context, "expected ':' after struct literal field name", *cur);
+
+        ASTNode *value = parse_expr(context, cur);
+        field_names = realloc(field_names, sizeof(char *) * (count + 1));
+        values = realloc(values, sizeof(ASTNode *) * (count + 1));
+        field_names[count] = field_name;
+        values[count++] = value;
+
+        if ((*cur)->kind != COMMA) break;
+        *cur = (*cur)->next;
+        if ((*cur)->kind == R_BRACE) break; // trailing comma
+    }
+
+    Token *end_tok = *cur;
+    if (!expect(cur, R_BRACE))
+        parse_error(context, "expected '}' after struct literal", *cur);
+    ASTNode *node = new_struct_init_list(type_tok->value, field_names, values, count);
+    set_node_loc_from_tokens(node, type_tok, NULL);
+    set_node_end_from_token(node, end_tok);
+    return node;
+}
+
 static ASTNode *parse_identifier_primary(ParserContext *context, Token **cur) {
     Token *tok = *cur;
     char *name = tok->value;
     *cur = (*cur)->next;
+
+    if ((*cur)->kind == L_BRACE) {
+        return parse_struct_literal(context, cur, tok);
+    }
 
     ASTNode **type_args = NULL;
     int type_arg_count = 0;

@@ -16,6 +16,7 @@ PASS_CASES = {
     "genericDeclarations": "succeed/semantic/genericDeclarations.mln",
     "phase1_simpleFunc": "succeed/semantic/phase1_simpleFunc.mln",
     "phase1_simpleStruct": "succeed/semantic/phase1_simpleStruct.mln",
+    "namedStructLiteral": "succeed/struct/namedStructLiteral.mln",
     "phase1_testTernary": "succeed/semantic/phase1_testTernary.mln",
     "phase1_testStmtExpr": "succeed/semantic/phase1_testStmtExpr.mln",
     "phase2_refBorrow": "succeed/semantic/phase2_refBorrow.mln",
@@ -84,6 +85,16 @@ FAIL_CASES = {
     "structMemberTypeMismatch_fail": (
         "fail/semantic/structMemberTypeMismatch_fail.mln",
         "assignment type mismatch: expected i32",
+        None,
+    ),
+    "structLiteralUnknownField_fail": (
+        "fail/semantic/structLiteralUnknownField_fail.mln",
+        "'Point' has no member named 'y'",
+        None,
+    ),
+    "structLiteralFieldType_fail": (
+        "fail/semantic/structLiteralFieldType_fail.mln",
+        "struct literal field type mismatch: expected i32",
         None,
     ),
     "payloadEnumBadPosition_fail": (

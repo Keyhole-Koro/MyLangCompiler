@@ -172,7 +172,12 @@ ASTNode *ast_clone(const ASTNode *src) {
     case AST_STRING_LITERAL: STR(string_literal.value); break;
     case AST_MEMBER_ACCESS: STR(member_access.member); break;
     case AST_ARROW_ACCESS: STR(arrow_access.member); break;
-    case AST_INIT_LIST: ARRAY(init_list.elements, init_list.count); break;
+    case AST_INIT_LIST:
+        ARRAY(init_list.elements, init_list.count);
+        STR(init_list.struct_type_name);
+        if (src->init_list.field_names)
+            STRINGS(init_list.field_names, init_list.count);
+        break;
     case AST_IMPORT: STR(import_stmt.path); STRINGS(import_stmt.symbols, import_stmt.symbol_count); break;
     default: break;
     }

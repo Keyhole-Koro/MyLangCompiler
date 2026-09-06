@@ -179,6 +179,10 @@ void free_ast(ASTNode *node) {
             for (int i = 0; i < node->init_list.count; i++)
                 free_ast(node->init_list.elements[i]);
             free(node->init_list.elements);
+            free(node->init_list.struct_type_name);
+            for (int i = 0; i < node->init_list.count; i++)
+                free(node->init_list.field_names ? node->init_list.field_names[i] : NULL);
+            free(node->init_list.field_names);
             break;
         case AST_SIZEOF:
             free_ast(node->sizeof_expr.expr);

@@ -47,9 +47,39 @@ static void emit_scalar_bytes(StringBuilder *sb, long val, int width) {
     }
 }
 
-void emit_global_init(StringBuilder *sb, ASTNode *init_expr, int expected_bytes, int elem_bytes) {
+void emit_global_init(CompilerContext *cc, StringBuilder *sb, ASTNode *init_expr,
+                      int expected_bytes, int elem_bytes) {
     if (!init_expr) {
         emit_zero_bytes(sb, expected_bytes);
+        return;
+    }
+
+    if (init_expr->type == AST_INIT_LIST && init_expr->init_list.struct_type_name) {
+        const StructInfo *si = find_struct(cc, init_expr->init_list.struct_type_name);
+        if (!si) {
+            fprintf(stderr, "Codegen error: unknown struct '%s' in global literal\n",
+                    init_expr->init_list.struct_type_name);
+            exit(1);
+        }
+        // Data directives must be emitted in memory order, not source order.
+        // Unspecified members receive the normal zero value.
+        for (int m = 0; m < si->member_count; m++) {
+            const MemberInfo *member = &si->members[m];
+            if (member->total_size_bytes > SLOT_SIZE) {
+                fprintf(stderr,
+                        "Codegen error: aggregate field '%s' in a global struct literal is not supported\n",
+                        member->name);
+                exit(1);
+            }
+            ASTNode *value = NULL;
+            for (int i = 0; i < init_expr->init_list.count; i++) {
+                if (strcmp(init_expr->init_list.field_names[i], member->name) == 0) {
+                    value = init_expr->init_list.elements[i];
+                    break;
+                }
+            }
+            emit_scalar_bytes(sb, eval_const_expr(value), member->total_size_bytes);
+        }
         return;
     }
 
@@ -118,7 +148,7 @@ void emit_global_decl(CompilerContext *cc, ASTNode *var_decl) {
 
     sb_append(&cg_data_sb, "%s:\n", var_decl->var_decl.name ? var_decl->var_decl.name : "");
     if (var_decl->var_decl.init) {
-        emit_global_init(&cg_data_sb, var_decl->var_decl.init, bytes, elem_bytes);
+        emit_global_init(cc, &cg_data_sb, var_decl->var_decl.init, bytes, elem_bytes);
     } else {
         emit_zero_bytes(&cg_data_sb, bytes);
     }

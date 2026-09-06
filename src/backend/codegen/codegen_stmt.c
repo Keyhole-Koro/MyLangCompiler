@@ -65,6 +65,60 @@ static void gen_array_init(CompilerContext *cc, ASTNode *node, StringBuilder *sb
     }
 }
 
+void gen_struct_literal_into_addr(CompilerContext *cc, ASTNode *literal,
+                                  StringBuilder *sb, const char *dest_addr_reg,
+                                  char **params, int param_count,
+                                  char **locals, int local_count) {
+    if (!literal || literal->type != AST_INIT_LIST ||
+        !literal->init_list.struct_type_name) {
+        fprintf(stderr, "Codegen error: expected named struct literal\n");
+        exit(1);
+    }
+    const StructInfo *si = find_struct(cc, literal->init_list.struct_type_name);
+    if (!si) {
+        fprintf(stderr, "Codegen error: unknown struct '%s' in literal\n",
+                literal->init_list.struct_type_name);
+        exit(1);
+    }
+
+    // Named literals follow Go's zero-value rule for fields not supplied.
+    sb_append(sb, "  ; zero struct literal destination\n");
+    sb_append(sb, "  movi r1, 0\n");
+    for (int offset = 0; offset < si->size_bytes; offset += SLOT_SIZE) {
+        int width = si->size_bytes - offset;
+        if (width > SLOT_SIZE) width = SLOT_SIZE;
+        if (offset == 0) {
+            emit_store_width_to_addr(sb, dest_addr_reg, "r1", width);
+        } else {
+            sb_append(sb, "  mov r2, %s\n", dest_addr_reg);
+            sb_append(sb, "  addis r2, %d\n", offset);
+            emit_store_width_to_addr(sb, "r2", "r1", width);
+        }
+    }
+
+    for (int i = 0; i < literal->init_list.count; i++) {
+        const char *field_name = literal->init_list.field_names[i];
+        const MemberInfo *member = find_member_info(cc, si->type_name, field_name);
+        if (!member || member->total_size_bytes > SLOT_SIZE) {
+            fprintf(stderr, "Codegen error: unsupported struct literal field '%s'\n",
+                    field_name ? field_name : "");
+            exit(1);
+        }
+        // gen_expr uses r3 as scratch, so retain the destination on the stack.
+        sb_append(sb, "  push %s\n", dest_addr_reg);
+        gen_expr(cc, literal->init_list.elements[i], sb, "r1",
+                 params, param_count, locals, local_count);
+        sb_append(sb, "  pop %s\n", dest_addr_reg);
+        if (member->offset == 0) {
+            emit_store_width_to_addr(sb, dest_addr_reg, "r1", member->total_size_bytes);
+        } else {
+            sb_append(sb, "  mov r2, %s\n", dest_addr_reg);
+            sb_append(sb, "  addis r2, %d\n", member->offset);
+            emit_store_width_to_addr(sb, "r2", "r1", member->total_size_bytes);
+        }
+    }
+}
+
 void gen_stmt(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
               char **params, int param_count,
               char **locals, int local_count)
@@ -88,6 +142,12 @@ void gen_stmt_internal(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
             if (vtype && vtype->type == AST_TYPE_ARRAY &&
                 (node->var_decl.init->type == AST_INIT_LIST || node->var_decl.init->type == AST_STRING_LITERAL)) {
                 gen_array_init(cc, node, sb, params, param_count, locals, local_count);
+            } else if (node->var_decl.init->type == AST_INIT_LIST &&
+                       node->var_decl.init->init_list.struct_type_name) {
+                emit_addr_of_var(cc, sb, node->var_decl.name, "r3",
+                                 params, param_count, locals, local_count);
+                gen_struct_literal_into_addr(cc, node->var_decl.init, sb, "r3",
+                                             params, param_count, locals, local_count);
             } else if (call_returns_aggregate(cc, node->var_decl.init)) {
                 // `T y = callee(args);` where callee returns a struct or array
                 // by value: y's own slot (just reserved by this declaration)

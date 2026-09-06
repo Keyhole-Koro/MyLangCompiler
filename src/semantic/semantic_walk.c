@@ -981,6 +981,10 @@ static int semantic_infer_expr_type(SemanticContext *ctx, ASTNode *expr, Semanti
         if (!sig || !sig->has_return_type) return 0;
         *out = sig->return_type;
         return 1;
+    case AST_INIT_LIST:
+        if (!expr->init_list.struct_type_name) return 0;
+        semantic_typeinfo_make_scalar(out, expr->init_list.struct_type_name);
+        return 1;
     default:
         return 0;
     }
@@ -1065,6 +1069,47 @@ static void check_condition_type(SemanticContext *ctx, ASTNode *cond) {
 static void semantic_walk_expr(SemanticContext *ctx, ASTNode *node, ExprContext expr_ctx);
 static void semantic_walk_stmt(SemanticContext *ctx, ASTNode *node);
 static void semantic_check_type_exists(SemanticContext *ctx, ASTNode *type_node);
+
+static void check_struct_literal(SemanticContext *ctx, ASTNode *node) {
+    if (!ctx || !node || node->type != AST_INIT_LIST ||
+        !node->init_list.struct_type_name) return;
+
+    const char *type_name = node->init_list.struct_type_name;
+    if (!semantic_struct_is_known(ctx, type_name)) {
+        semantic_error_at(ctx, semantic_location_from_ast(node),
+                          "unknown struct type '%s' in literal", type_name);
+        return;
+    }
+
+    for (int i = 0; i < node->init_list.count; i++) {
+        const char *field_name = node->init_list.field_names
+            ? node->init_list.field_names[i] : NULL;
+        const SemanticStructMember *member =
+            semantic_find_struct_member(ctx, type_name, field_name);
+        if (!member) {
+            semantic_error_at(ctx, semantic_location_from_ast(node->init_list.elements[i]),
+                              "'%s' has no member named '%s'", type_name,
+                              field_name ? field_name : "");
+            continue;
+        }
+        for (int j = 0; j < i; j++) {
+            if (strcmp(node->init_list.field_names[j], field_name) == 0) {
+                semantic_error_at(ctx, semantic_location_from_ast(node->init_list.elements[i]),
+                                  "struct literal for '%s' sets '%s' more than once",
+                                  type_name, field_name);
+                break;
+            }
+        }
+        SemanticTypeInfo actual;
+        if (semantic_infer_expr_type(ctx, node->init_list.elements[i], &actual) &&
+            !semantic_typeinfo_compatible(ctx, &member->type, &actual)) {
+            semantic_report_type_mismatch(ctx,
+                                          semantic_location_from_ast(node->init_list.elements[i]),
+                                          SEMCODE_ASSIGNMENT_TYPE_MISMATCH,
+                                          "struct literal field", &member->type, &actual);
+        }
+    }
+}
 
 static void check_call_signature(SemanticContext *ctx, ASTNode *node) {
     SemanticFunctionSig *sig;
@@ -1232,6 +1277,7 @@ static void semantic_walk_expr(SemanticContext *ctx, ASTNode *node, ExprContext 
         for (int i = 0; i < node->init_list.count; i++) {
             semantic_walk_expr(ctx, node->init_list.elements[i], EXPRCTX_READ);
         }
+        check_struct_literal(ctx, node);
         break;
     case AST_SIZEOF:
         semantic_walk_expr(ctx, node->sizeof_expr.expr, EXPRCTX_READ);

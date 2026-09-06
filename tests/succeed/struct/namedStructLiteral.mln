@@ -1,0 +1,20 @@
+// Go-style named struct literals initialize only the named fields; every
+// omitted field gets its zero value.
+typedef struct { i32 x; i32 y; i32 z; } Point;
+
+Point origin = Point { y: 3, x: 1 };
+
+i32 local_initializer() {
+    Point p = Point { y: 20, x: 10 };
+    return p.x + p.y + p.z; // 30
+}
+
+i32 whole_struct_assignment() {
+    Point p;
+    p = Point { z: 7, x: 3 };
+    return p.x + p.y + p.z; // 10
+}
+
+i32 main() {
+    return local_initializer() + whole_struct_assignment() + origin.x + origin.y; // 44
+}

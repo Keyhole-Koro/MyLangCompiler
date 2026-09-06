@@ -25,6 +25,16 @@ void gen_assign(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
         fprintf(stderr, "Codegen error: assignment to const lvalue is not allowed\n");
         exit(1);
     }
+    if (node->assign.right->type == AST_INIT_LIST &&
+        node->assign.right->init_list.struct_type_name) {
+        gen_lvalue_addr(cc, node->assign.left, sb, "r3",
+                        params, param_count, locals, local_count);
+        gen_struct_literal_into_addr(cc, node->assign.right, sb, "r3",
+                                     params, param_count, locals, local_count);
+        if (target_reg && strcmp(target_reg, "r3") != 0)
+            sb_append(sb, "  mov %s, r3\n", target_reg);
+        return;
+    }
     int total = aggregate_assign_size(cc, node->assign.left);
     if (total > 0) {
         if (call_returns_aggregate(cc, node->assign.right)) {
@@ -81,4 +91,3 @@ void gen_assign(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
         sb_append(sb, "  mov %s, r1\n", target_reg);
     }
 }
-
