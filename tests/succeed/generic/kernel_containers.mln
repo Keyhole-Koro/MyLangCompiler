@@ -8,9 +8,9 @@ import { RingBuffer, ring_init, ring_push, ring_pop }
     from "../../../../../system/MyKernel/src/lib/ringbuf.mln";
 import { IntrusiveList, intrusive_list_init, intrusive_push_front, intrusive_pop_front }
     from "../../../../../system/MyKernel/src/lib/intrusive_list.mln";
-import { Option, option_some, option_take }
+import { Option, option_take }
     from "../../../../../system/MyKernel/src/lib/option.mln";
-import { Result, result_err, result_take_err }
+import { Result, result_take_err }
     from "../../../../../system/MyKernel/src/lib/result.mln";
 import { HashMap, hashmap_init, hashmap_put, hashmap_get }
     from "../../../../../system/MyKernel/src/lib/hashmap.mln";
@@ -46,13 +46,11 @@ i32 main() {
     i32 ring_value = 0;
     ring_pop<i32>(&ring, &ring_value);
 
-    Option<i32> option;
-    option_some<i32>(&option, 2);
+    Option<i32> option = Some(2);
     i32 option_value = 0;
     option_take<i32>(&option, &option_value);
 
-    Result<i32, i32> result;
-    result_err<i32, i32>(&result, 7);
+    Result<i32, i32> result = Err(7);
     i32 error = 0;
     result_take_err<i32, i32>(&result, &error);
 
