@@ -36,3 +36,4 @@ mlc
 test
 mylang-syntax-check
 mylang-syntax-check.table
+mylang-syntax-check-lsp.table
