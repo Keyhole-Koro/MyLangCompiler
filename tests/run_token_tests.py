@@ -54,6 +54,14 @@ CASES = [
         roles={"x": "property", "bar": "property"},
     ),
     TokenCase(
+        name="qualified_call_on_import_is_namespace_and_function",
+        source=(
+            'import mmu from "mmu.mln";\n'
+            "i32 main() { mmu.map_page(1, 2); return 0; }\n"
+        ),
+        roles={"mmu": "namespace", "map_page": "function"},
+    ),
+    TokenCase(
         name="package_is_namespace",
         source="package gfx;\n",
         roles={"gfx": "namespace"},
