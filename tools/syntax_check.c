@@ -373,6 +373,61 @@ static size_t named_struct_literal_end(Token **tokens, size_t token_count, size_
     return token_count;
 }
 
+/* `mmu.map_page(...)` -- a qualified call, this codebase's dominant style for
+ * calling into another module (import mmu; ... mmu.map_page(...)) -- parses
+ * through the grammar's *general* member-access production
+ * (`postfixExpr DOT IDENTIFIER@property`) followed by the general call
+ * production, since nothing in the grammar can tell "mmu" is a module
+ * without a resolver. `@function:single` on the call production then only
+ * fires for a single-token callee, so a qualified call's own callee span
+ * (`mmu.map_page`, 3 tokens) never gets the "function" role either. The net
+ * effect: every piece of a qualified call except its punctuation comes back
+ * as "variable"/"property", indistinguishable by color from everything else
+ * -- an editor with only a handful of theme rules for those two ends up
+ * rendering the whole call one color. A dedicated grammar production could
+ * fix this instead, but every attempt so far the same shape (an
+ * 'IDENTIFIER' start, not the postfixExpr the general path already reduces
+ * to) has widened the same shift/reduce ambiguity and lost the
+ * already-working plain member access (`p.a;`) as a casualty.
+ *
+ * So this reassigns roles after the fact instead of during parsing, and only
+ * for a call whose leftmost identifier names a plain (non-`{...}`) import in
+ * this same file -- `import mmu;` / `import mmu from "...";`. A bare
+ * `IDENTIFIER '.' IDENTIFIER '('` whose left side isn't one of those --
+ * `obj.bar()`, a value's own method/field call -- is left as the grammar
+ * tagged it ("property"), matching how the rest of a member access already
+ * reads. Purely cosmetic either way -- it never changes what token_ids feeds
+ * the parser, so it can't affect diagnostics or introduce a new ambiguity
+ * the way a grammar change would. */
+static void tag_qualified_calls(Token **tokens, size_t token_count, int *source_roles,
+                                int namespace_role, int function_role) {
+    if (!source_roles || (!namespace_role && !function_role)) return;
+
+    const char **namespaces = NULL;
+    size_t namespace_count = 0;
+    for (size_t i = 0; i + 1 < token_count; i++) {
+        if (tokens[i]->kind != IMPORT || tokens[i + 1]->kind != IDENTIFIER) continue;
+        size_t after = i + 2;
+        if (after < token_count && tokens[after]->kind == SEMICOLON) {
+            generic_name_add(&namespaces, &namespace_count, tokens[i + 1]->value);
+        } else if (after + 2 < token_count && tokens[after]->kind == FROM &&
+                   tokens[after + 1]->kind == STRING_LITERAL && tokens[after + 2]->kind == SEMICOLON) {
+            generic_name_add(&namespaces, &namespace_count, tokens[i + 1]->value);
+        }
+    }
+    if (namespace_count == 0) return;
+
+    for (size_t i = 0; i + 3 < token_count; i++) {
+        if (tokens[i]->kind != IDENTIFIER || tokens[i + 1]->kind != DOT ||
+            tokens[i + 2]->kind != IDENTIFIER || tokens[i + 3]->kind != L_PARENTHESES)
+            continue;
+        if (!generic_name_contains(namespaces, namespace_count, tokens[i]->value)) continue;
+        if (namespace_role) source_roles[i] = namespace_role;
+        if (function_role) source_roles[i + 2] = function_role;
+    }
+    free((void *)namespaces);
+}
+
 static AngleKind *classify_generic_angles(Token **tokens, size_t token_count) {
     AngleKind *angles = calloc(token_count ? token_count : 1, sizeof(AngleKind));
     const char **generic_names = NULL;
@@ -446,6 +501,8 @@ static int check_tokens(
 ) {
     int type_role = syntax_label_id(grammar, "type");
     int property_role = syntax_label_id(grammar, "property");
+    int namespace_role = syntax_label_id(grammar, "namespace");
+    int function_role = syntax_label_id(grammar, "function");
     if (!tokens) {
         printf("{\"status\":\"error\",\"diagnostics\":[{\"line\":0,\"character\":0,\"endCharacter\":1,\"message\":\"Failed to read source file.\"}]}\n");
         return 0;
@@ -526,6 +583,7 @@ static int check_tokens(
     for (size_t i = 0; i < token_count; i++) {
         if (roles[i] != 0) source_roles[token_source_indices[i]] = roles[i];
     }
+    tag_qualified_calls(source_tokens, source_count, source_roles, namespace_role, function_role);
 
     printf("{\"status\":");
     print_json_string(result.status == SYNTAX_OK ? "ok" : result.status == SYNTAX_INCOMPLETE ? "incomplete" : "error");
