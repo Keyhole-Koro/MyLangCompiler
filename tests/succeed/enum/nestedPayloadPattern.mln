@@ -1,0 +1,49 @@
+enum MmuError {
+    AllocFailed,
+    NoFreeSlot,
+    WrongType(i32),
+}
+
+enum Result<T, E> {
+    Ok(T),
+    Err(E),
+}
+
+Result<i32, MmuError> create_page_directory(i32 mode) {
+    if (mode == 0) {
+        MmuError cause = AllocFailed;
+        Result<i32, MmuError> err = Err(cause);
+        return err;
+    }
+    if (mode == 1) {
+        MmuError cause = NoFreeSlot;
+        Result<i32, MmuError> err = Err(cause);
+        return err;
+    }
+    if (mode == 2) {
+        MmuError cause = WrongType(7);
+        Result<i32, MmuError> err = Err(cause);
+        return err;
+    }
+    return Ok(123);
+}
+
+i32 handle(i32 mode) {
+    Result<i32, MmuError> pd_res = create_page_directory(mode);
+    i32 pd = case pd_res of {
+        Ok(d) -> d;
+        Err(AllocFailed) -> -1;
+        Err(NoFreeSlot)  -> -2;
+        Err(WrongType(t)) -> 0 - 100 - t;
+    };
+    return pd;
+}
+
+i32 main() {
+    i32 total = 0;
+    total = total + handle(3); // Ok(123) -> 123
+    total = total + handle(0); // AllocFailed -> -1
+    total = total + handle(1); // NoFreeSlot -> -2
+    total = total + handle(2); // WrongType(7) -> -107
+    return total; // 123 - 1 - 2 - 107 == 13
+}

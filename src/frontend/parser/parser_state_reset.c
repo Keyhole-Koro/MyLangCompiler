@@ -102,6 +102,8 @@ void parser_context_reset(ParserContext *context) {
     }
     context->lowering.hoisted_function_count = 0;
     context->lowering.function_literal_counter = 0;
+    context->lowering.payload_ret_counter = 0;
+    context->lowering.payload_case_counter = 0;
 
     if (context->symbols.enum_constants) {
         for (int i = 0; i < context->symbols.enum_constant_count; i++) {

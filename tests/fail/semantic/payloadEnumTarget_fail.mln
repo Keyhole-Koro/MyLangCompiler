@@ -1,14 +1,15 @@
 // A binding names the matched value again for each occurrence, so the match
-// target has to be something repeatable. A call is not.
+// target has to be something repeatable. A call to a known function is
+// hoisted into a temporary automatically (see hoistCaseTarget.mln), but a
+// ternary is not a call and stays unresolved: there is no single function
+// return type to hoist it as.
 enum Result<T, E> { Ok(T), Err(E) }
 
-Result<i32, char> make() {
-    Result<i32, char> r = Ok(1);
-    return r;
-}
-
 i32 main() {
-    return case make() of {
+    Result<i32, char> a = Ok(1);
+    Result<i32, char> b = Ok(2);
+    i32 flag = 1;
+    return case (flag != 0 ? a : b) of {
         Ok(v)  -> v;
         Err(c) -> 0;
     };

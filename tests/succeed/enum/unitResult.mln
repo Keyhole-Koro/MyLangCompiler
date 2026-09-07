@@ -1,0 +1,17 @@
+enum MmuError { AllocFailed, NoFreeSlot }
+enum Result<T, E> { Ok(T), Err(E) }
+
+Result<_, MmuError> map_page(i32 mode) {
+    if (mode == 0) {
+        return Err(AllocFailed);
+    }
+    return Ok(_);
+}
+
+i32 main() {
+    Result<_, MmuError> a = map_page(1);
+    Result<_, MmuError> b = map_page(0);
+    i32 x = case a of { Ok(_) -> 1; Err(e) -> 0; };
+    i32 y = case b of { Ok(_) -> 1; Err(e) -> 0; };
+    return x * 10 + y; // 10
+}

@@ -1,0 +1,24 @@
+// `Err(AllocFailed) -> ...` matches a specific inner variant (see
+// nestedPayloadPattern.mln); `Err(e) -> ...` binds the whole payload, which
+// already covers every case the nested pattern could narrow down. Mixing
+// the two for the same outer tag is ambiguous, in either order.
+// A payload-carrying variant is what makes this a payload enum at all --
+// see has_payload in parser_type.c -- so WrongType has to be here even
+// though this test never uses it.
+enum MmuError { AllocFailed, NoFreeSlot, WrongType(i32) }
+enum Result<T, E> { Ok(T), Err(E) }
+
+Result<i32, MmuError> make() {
+    MmuError cause = AllocFailed;
+    Result<i32, MmuError> err = Err(cause);
+    return err;
+}
+
+i32 main() {
+    Result<i32, MmuError> r = make();
+    return case r of {
+        Ok(d)  -> d;
+        Err(AllocFailed) -> -1;
+        Err(e) -> 0;
+    };
+}

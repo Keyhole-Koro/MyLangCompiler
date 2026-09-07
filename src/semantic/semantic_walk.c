@@ -701,6 +701,7 @@ static void use_identifier(SemanticContext *ctx, ASTNode *node, ExprContext expr
     ASTNode *ident = semantic_as_identifier(node);
 
     if (!ctx || !ident) return;
+    if (strcmp(ident->identifier.name, "_") == 0) return; /* not a real binding -- see semantic_infer_identifier_type */
     if (semantic_find_enum_value(ctx, ident->identifier.name, NULL)) {
         if (expr_ctx == EXPRCTX_WRITE) {
             semantic_error_at(ctx, semantic_location_from_ast(node),
@@ -794,6 +795,18 @@ static int semantic_infer_identifier_type(SemanticContext *ctx, ASTNode *expr, S
     long enum_value;
 
     if (!ctx || !expr || expr->type != AST_IDENTIFIER || !out) return 0;
+    if (strcmp(expr->identifier.name, "_") == 0) {
+        /* `_` is never a real binding -- the lexer reserves it (UNDERSCORE),
+         * so nothing can ever declare one -- but it is a legitimate value of
+         * its own type, itself spelled `_` (parser_lookahead.c's is_type).
+         * Inferring that unconditionally, rather than only inside some
+         * "unit-typed" context, is what makes it reject everywhere else:
+         * semantic_typeinfo_compatible below still has to find a matching
+         * declared type before this is accepted anywhere, and only `_`
+         * itself matches `_`. */
+        semantic_typeinfo_make_scalar(out, "_");
+        return 1;
+    }
     if (semantic_find_enum_value(ctx, expr->identifier.name, &enum_value)) {
         (void)enum_value;
         semantic_typeinfo_make_scalar(out, "i32");
@@ -1576,6 +1589,7 @@ static void semantic_check_type_exists(SemanticContext *ctx, ASTNode *type_node)
     }
 
     if (strcmp(base_type, "rest") == 0) return; // For variadic params
+    if (strcmp(base_type, "_") == 0) return; // A generic argument for a payload nothing reads; see semantic_infer_identifier_type
 
     semantic_error_at(ctx, semantic_location_from_ast(type_node), "unknown type '%s'", base_type);
 }

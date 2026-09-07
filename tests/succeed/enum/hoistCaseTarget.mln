@@ -1,0 +1,65 @@
+// `case` requires a repeatable target (a variable or a field of one) because
+// the match expands into two separate reads of it -- see payloadResult.mln.
+// A direct call to a known function is not repeatable, but its *result* can
+// be made so: the compiler hoists the call into a synthesized temporary
+// declared just ahead of the statement, `T __mlg_case_targetN = f(...);`,
+// and matches on that instead, so the call itself still runs exactly once.
+//
+//     i32 frame = case alloc_page() of {
+//         Ok(f)  -> f;
+//         Err(e) -> ({ return Err(e); });
+//     };
+//
+// becomes, in effect:
+//
+//     Result<i32, i32> __mlg_case_target0 = alloc_page();
+//     i32 frame = case __mlg_case_target0 of { ... };
+
+enum Result<T, E> {
+    Ok(T),
+    Err(E),
+}
+
+i32 g_calls = 0;
+
+Result<i32, i32> alloc_page() {
+    g_calls = g_calls + 1;
+    return Ok(42);
+}
+
+Result<i32, i32> alloc_page_fail() {
+    g_calls = g_calls + 1;
+    return Err(-1);
+}
+
+// A hoisted call target that fails takes the propagate-error-up path from
+// inside a nested block expression -- the same shape return-hoisting
+// (payloadResultReturn.mln) exists for.
+Result<i32, i32> checked_alloc(i32 should_fail) {
+    if (should_fail != 0) {
+        i32 frame = case alloc_page_fail() of {
+            Ok(f)  -> f;
+            Err(e) -> ({
+                return Err(e);
+            });
+        };
+        return Ok(frame);
+    }
+    i32 frame = case alloc_page() of {
+        Ok(f)  -> f;
+        Err(e) -> ({
+            return Err(e);
+        });
+    };
+    return Ok(frame);
+}
+
+i32 main() {
+    Result<i32, i32> ok = checked_alloc(0);
+    Result<i32, i32> err = checked_alloc(1);
+
+    i32 total = case ok of { Ok(v) -> v; Err(e) -> 0 - 1000 + e; };   // 42
+    total = total + case err of { Ok(v) -> 0; Err(e) -> e; };        // + (-1)
+
+    return total + g_calls; // 42 - 1 + 2 == 43
+}

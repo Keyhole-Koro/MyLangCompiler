@@ -1,0 +1,23 @@
+// Two different payload enums declaring a same-named, same-tagged variant
+// (both 'NoError' at tag 0) is exactly the case a bare reference cannot
+// tell apart -- see qualifiedVariantName.mln, which resolves it with
+// 'EnumName::NoError' instead. Written bare, it stays an error even though
+// the tags happen to coincide.
+enum MmuError {
+    NoError,
+    AllocFailed,
+    UnalignedAddress(i32),
+}
+
+enum LoaderError {
+    NoError,
+    BadMagic(i32),
+}
+
+MmuError map_page() {
+    return NoError;
+}
+
+i32 main() {
+    return 0;
+}

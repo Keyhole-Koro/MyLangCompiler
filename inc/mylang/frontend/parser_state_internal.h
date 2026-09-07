@@ -89,6 +89,8 @@ typedef struct ParserLoweringState {
     int function_literal_counter;
     int dom_node_counter;
     ASTNode *dom_program;
+    int payload_ret_counter;
+    int payload_case_counter;
 } ParserLoweringState;
 
 /* One complete parser session. Nested module parsing switches the active

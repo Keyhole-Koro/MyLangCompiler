@@ -1,0 +1,9 @@
+// `_` is a legitimate value only of its own type (see unitResult.mln:
+// `Result<_, E>` / `Ok(_)`), not a general-purpose placeholder: assigning it
+// to an i32-declared variable is a type mismatch like any other, not the
+// "undefined identifier" it would have been before `_` had a type of its
+// own to infer.
+i32 main() {
+    i32 x = _;
+    return x;
+}

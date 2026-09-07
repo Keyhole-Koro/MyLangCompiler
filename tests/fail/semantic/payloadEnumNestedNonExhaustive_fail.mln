@@ -1,0 +1,22 @@
+// `Err(AllocFailed) -> ...; Err(NoFreeSlot) -> ...;` desugars into one `Err`
+// arm holding a synthesized `case <payload> of { AllocFailed -> ...;
+// NoFreeSlot -> ...; }` (see nestedPayloadPattern.mln) -- and that
+// synthesized case is checked for exhaustiveness exactly like any other:
+// leaving out WrongType here must still be reported.
+enum MmuError { AllocFailed, NoFreeSlot, WrongType(i32) }
+enum Result<T, E> { Ok(T), Err(E) }
+
+Result<i32, MmuError> make() {
+    MmuError cause = AllocFailed;
+    Result<i32, MmuError> err = Err(cause);
+    return err;
+}
+
+i32 main() {
+    Result<i32, MmuError> r = make();
+    return case r of {
+        Ok(d)  -> d;
+        Err(AllocFailed) -> -1;
+        Err(NoFreeSlot)  -> -2;
+    };
+}
