@@ -1,0 +1,1 @@
+T first<T>(T a[2]) { T copy[2]; copy[0] = (T)a[0]; return copy[0]; } i32 main() { i32 a[2] = {4, 5}; return first<i32>(a); }

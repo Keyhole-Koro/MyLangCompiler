@@ -1,0 +1,1 @@
+export mut i32 global_counter = 0;

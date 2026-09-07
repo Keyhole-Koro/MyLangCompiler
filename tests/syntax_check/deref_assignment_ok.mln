@@ -1,0 +1,1 @@
+void write_word(i32 addr, i32 value) { i32 *p = (i32 *)addr; *p = value; }

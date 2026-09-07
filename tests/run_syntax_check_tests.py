@@ -8,23 +8,27 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SYNTAX_CHECK_PATH = REPO_ROOT / "mylang-syntax-check"
+CASES_DIR = REPO_ROOT / "tests" / "syntax_check"
 
 
 @dataclass
 class SyntaxCase:
     name: str
-    source: str
     status: str
     message: str | None = None
     line: int | None = None
     character: int | None = None
     token_roles: dict[int, str] | None = None
 
+    @property
+    def source(self) -> str:
+        """The .mln fixture this case feeds to the tool, from tests/syntax_check/<name>.mln."""
+        return (CASES_DIR / f"{self.name}.mln").read_text()
+
 
 CASES = [
     SyntaxCase(
         name="missing_initializer_expression",
-        source="i32 main() { i32 x = ; }\n",
         status="error",
         message="Expected expression before ';'.",
         line=0,
@@ -32,7 +36,6 @@ CASES = [
     ),
     SyntaxCase(
         name="missing_if_condition",
-        source="i32 main() { if () return; }\n",
         status="error",
         message="Expected expression before ')'.",
         line=0,
@@ -40,125 +43,90 @@ CASES = [
     ),
     SyntaxCase(
         name="expression_precedence_ok",
-        source="i32 main() { x = 1 + 2 * 3; }\n",
         status="ok",
     ),
     SyntaxCase(
         name="parenthesized_binary_after_identifier_star_ok",
-        source="i32 main() { i32 addr = base + (y * width + x) * 4; }\n",
         status="ok",
     ),
     SyntaxCase(
         name="nested_if_else_ok",
-        source="i32 main() { if (x) if (y) return; else return; }\n",
         status="ok",
     ),
     SyntaxCase(
         name="primitive_cast_ok",
-        source="i32 main() { buffer[pos] = (char)('0' + (value % 10)); }\n",
         status="ok",
     ),
     SyntaxCase(
         name="hex_number_ok",
-        source="i32 main() { i32 mask = 0xff; return mask & 0x0f; }\n",
         status="ok",
     ),
     SyntaxCase(
         name="binary_number_ok",
-        source="i32 main() { i32 flags = 0b1010; return flags | 0b0101; }\n",
         status="ok",
     ),
     SyntaxCase(
         name="deref_assignment_ok",
-        source="void write_word(i32 addr, i32 value) { i32 *p = (i32 *)addr; *p = value; }\n",
         status="ok",
     ),
     SyntaxCase(
         name="named_pointer_cast_ok",
-        source="i32 main() { Node *p = (Node *)0; return 0; }\n",
         status="ok",
     ),
     SyntaxCase(
         name="named_struct_literal_ok",
-        source=(
-            "typedef struct { i32 x; i32 y; } Point;\n"
-            "i32 main() { Point p = Point { y: 2, x: 1, }; return p.x + p.y; }\n"
-        ),
         status="ok",
     ),
     SyntaxCase(
         name="postfix_increment_identifier_role",
-        source="void main() { mut i32 i = 0; i++; }\n",
         status="ok",
         token_roles={1: "function", 7: "variable", 11: "variable"},
     ),
     SyntaxCase(
         name="function_call_identifier_role",
-        source="void main() { foo(); }\n",
         status="ok",
         token_roles={1: "function", 5: "function"},
     ),
     SyntaxCase(
         name="arrow_function_literal_ok",
-        source="i32 main() { i32 f = (i32 x) => { return x + 1; }; return f(1); }\n",
         status="ok",
     ),
     SyntaxCase(
         name="empty_arrow_function_literal_ok",
-        source="i32 main() { i32 f = () => { return 1; }; return f(); }\n",
         status="ok",
     ),
     SyntaxCase(
         name="export_function_ok",
-        source="export i32 add(i32 a, i32 b) { return a + b; }\n",
         status="ok",
     ),
     SyntaxCase(
         name="export_mut_global_ok",
-        source="export mut i32 global_counter = 0;\n",
         status="ok",
     ),
     SyntaxCase(
         name="export_typedef_struct_ok",
-        source="export typedef struct { i32 x; i32 y; } Point;\n",
         status="ok",
     ),
     SyntaxCase(
         name="enum_without_semicolon_ok",
-        source="enum TaskState { TASK_RUNNABLE = 0, TASK_SLEEPING = 1, TASK_EMPTY = 2 }\ni32 task_state[256];\n",
         status="ok",
     ),
     SyntaxCase(
         name="generic_declarations_and_call_ok",
-        source=(
-            "T max<T>(T a, T b) { return a; }\n"
-            "i32 main() { return max<i32>(1, 2); }\n"
-        ),
         status="ok",
         token_roles={0: "type", 1: "function", 23: "function"},
     ),
     SyntaxCase(
         name="nested_generic_type_ok",
-        source=(
-            "struct Pair<T> { T value; };\n"
-            "struct Wrapper<T> { T value; };\n"
-            "Wrapper<Pair<i32>> value;\n"
-        ),
         status="ok",
     ),
     SyntaxCase(
         name="imported_generic_containers_ok",
-        source=(
-            'import { Vec, vec_init, vec_push } from "generics/vec.mln";\n'
-            'i32 main() { i32 storage[4]; Vec<i32> values; '
-            'vec_init<i32>(&values, &storage[0], 4); vec_push<i32>(&values, 7); return 0; }\n'
-        ),
         status="ok",
         token_roles={12: "function", 22: "type", 28: "function"},
     ),
     SyntaxCase(
         name="generic_angles_preserve_relational_and_shift_ok",
-        source="i32 main() { i32 x = a < b > c; return x >> 1; }\n",
         status="ok",
     ),
 ]

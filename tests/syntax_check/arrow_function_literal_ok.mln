@@ -1,0 +1,1 @@
+i32 main() { i32 f = (i32 x) => { return x + 1; }; return f(1); }

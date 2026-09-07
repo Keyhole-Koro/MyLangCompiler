@@ -1,0 +1,1 @@
+T *id<T>(T *p) { return p; } i32 main() { return id<ref i32>(0); }

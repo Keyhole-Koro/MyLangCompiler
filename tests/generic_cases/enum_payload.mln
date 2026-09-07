@@ -1,0 +1,1 @@
+enum Color { RED, GREEN }; struct Box<T> { T x; }; i32 main() { Box<Color> box; box.x = GREEN; return box.x; }

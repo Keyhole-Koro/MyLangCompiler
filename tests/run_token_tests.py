@@ -20,12 +20,12 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SYNTAX_CHECK_PATH = REPO_ROOT / "mylang-syntax-check"
+CASES_DIR = REPO_ROOT / "tests" / "token"
 
 
 @dataclass
 class TokenCase:
     name: str
-    source: str
     # text -> required role for some token slicing to that text
     roles: dict = field(default_factory=dict)
     # literal lexemes that must each appear as exactly one full token slice
@@ -36,97 +36,94 @@ class TokenCase:
     symbols: dict = field(default_factory=dict)   # text -> required outline kind
     not_symbols: list = field(default_factory=list)  # texts that must NOT be symbols
 
+    @property
+    def source(self) -> str:
+        """The .mln fixture this case feeds to the tool, from tests/token/<name>.mln."""
+        return (CASES_DIR / f"{self.name}.mln").read_text()
+
 
 CASES = [
     TokenCase(
         name="function_def_and_params",
-        source="i32 add(i32 a, Point b) { return a + b; }\n",
         roles={"add": "function", "a": "parameter", "b": "parameter", "Point": "type"},
     ),
     TokenCase(
         name="simple_call_is_function",
-        source="i32 main() { return foo(b); }\n",
         roles={"main": "function", "foo": "function"},
     ),
     TokenCase(
         name="member_access_is_property_not_call",
-        source="i32 main() { return a.x + obj.bar(); }\n",
         roles={"x": "property", "bar": "property"},
     ),
     TokenCase(
         name="qualified_call_on_import_is_namespace_and_function",
-        source=(
-            'import mmu from "mmu.mln";\n'
-            "i32 main() { mmu.map_page(1, 2); return 0; }\n"
-        ),
         roles={"mmu": "namespace", "map_page": "function"},
     ),
     TokenCase(
         name="package_is_namespace",
-        source="package gfx;\n",
         roles={"gfx": "namespace"},
     ),
     TokenCase(
         name="struct_and_typedef",
-        source="struct Point { i32 x; };\ntypedef i32 MyInt;\n",
         roles={"Point": "struct", "MyInt": "type"},
     ),
     TokenCase(
-        name="enum_name_is_struct",
-        source="enum Color { RED, GREEN };\n",
-        roles={"Color": "struct"},
+        name="enum_name_is_enum",
+        roles={"Color": "enum"},
+    ),
+    TokenCase(
+        name="result_generic_qualified_case",
+        roles={
+            "Result": "result", "MmuError": "enum", "Ok": "resultVariant",
+            "Err": "resultVariant", "AllocFailed": "enumMember",
+        },
+        status="ok",
+    ),
+    TokenCase(
+        name="case_statement_expression",
+        status="ok",
     ),
     TokenCase(
         name="import_is_namespace",
-        source='import math from "m";\n',
         roles={"math": "namespace"},
     ),
     TokenCase(
         name="func_proto_is_function",
-        source="extern i32 puts(i32 c);\n",
         roles={"puts": "function", "c": "parameter"},
     ),
     TokenCase(
         name="typedef_struct_alias_is_struct",
-        source="typedef struct { i32 x; } Vec;\n",
         roles={"Vec": "struct"},
     ),
     TokenCase(
         name="mut_param_is_parameter",
-        source="i32 f(mut i32 a) { return a; }\n",
         roles={"a": "parameter"},
     ),
     TokenCase(
         # i8 is not a lexer keyword; it gets `type` from the grammar (baseType).
         name="user_and_alias_types_via_grammar",
-        source="i8 a = 0; Point p = mk();\n",
         roles={"i8": "type", "Point": "type", "mk": "function"},
     ),
     TokenCase(
         name="hex_number_source_width",
-        source="i32 x = 0xFF;\n",
         widths=["0xFF"],
     ),
     TokenCase(
         name="string_escape_source_width",
-        source='char s = "hi\\n";\n',
         widths=['"hi\\n"'],
     ),
     TokenCase(
         name="binary_and_char_source_width",
-        source="i32 m() { i32 x = 0b1010; char c = 'x'; }\n",
         widths=["0b1010", "'x'"],
     ),
     TokenCase(
         name="char_escape_source_width",
-        source="char c = '\\n';\n",
         widths=["'\\n'"],
     ),
     TokenCase(
         # tokens must still be emitted when the parse fails (LSP needs the
         # lexical layer mid-edit).
         name="tokens_present_on_error",
-        source="i32 add(i32 a) { i32 x = ; }\n",
         status="error",
         min_tokens=5,
     ),
@@ -134,11 +131,6 @@ CASES = [
         # outline = top-level decls only; locals, struct fields and call sites
         # must not appear.
         name="symbols_top_level_only",
-        source=("i32 g = 0;\n"
-                "struct Point { i32 fx; };\n"
-                "enum Color { RED };\n"
-                "typedef i32 MyInt;\n"
-                "i32 add(i32 p) { i32 local = foo(p); return local; }\n"),
         symbols={"g": "variable", "Point": "struct", "Color": "enum",
                  "MyInt": "type", "add": "function"},
         not_symbols=["fx", "local", "foo", "p", "RED"],
