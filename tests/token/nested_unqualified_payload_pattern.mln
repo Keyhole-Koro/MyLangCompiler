@@ -1,0 +1,10 @@
+enum MmuError { AllocFailed, UnalignedAddress(i32) }
+enum Result<T, E> { Ok(T), Err(E) }
+
+i32 classify(Result<i32, MmuError> result) {
+    return case result of {
+        Err(UnalignedAddress(a)) -> a;
+        Err(AllocFailed) -> -1;
+        Ok(_) -> 0;
+    };
+}

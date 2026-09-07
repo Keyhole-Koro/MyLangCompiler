@@ -88,6 +88,18 @@ CASES = [
         status="ok",
     ),
     TokenCase(
+        # Regression: nested payload pattern where the inner variant is
+        # unqualified, e.g. `Err(UnalignedAddress(a))`.
+        name="nested_unqualified_payload_pattern",
+        roles={"MmuError": "enum", "UnalignedAddress": "enumMember", "a": "variable"},
+        status="ok",
+    ),
+    TokenCase(
+        # Regression: `_` used as a value expression, not just a pattern.
+        name="underscore_as_expression",
+        status="ok",
+    ),
+    TokenCase(
         name="import_is_namespace",
         roles={"math": "namespace"},
     ),

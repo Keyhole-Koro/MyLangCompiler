@@ -129,6 +129,21 @@ CASES = [
         name="generic_angles_preserve_relational_and_shift_ok",
         status="ok",
     ),
+    SyntaxCase(
+        # Regression: a payload pattern nested inside another pattern, where
+        # the inner variant is unqualified (`Err(UnalignedAddress(a))`, not
+        # `Err(MmuError::UnalignedAddress(a))`). See tools/MyKernel's
+        # mmu.mln/loader.mln for the real-world shape this covers.
+        name="nested_unqualified_payload_pattern_ok",
+        status="ok",
+    ),
+    SyntaxCase(
+        # Regression: `_` used as a value expression (e.g. `return Ok(_);`
+        # for a `Result<_, E>`-typed no-payload success), not just as a
+        # case-arm pattern.
+        name="underscore_as_value_ok",
+        status="ok",
+    ),
 ]
 
 
