@@ -321,6 +321,28 @@ static size_t named_pointer_cast_end(Token **tokens, size_t token_count, size_t 
         ? index + 1 : token_count;
 }
 
+/* A compound statement expression, `({ statement; ... })`, is a valid
+ * compiler expression.  Making `block` a direct LR primary causes the
+ * combined MyLang+MLX canonical LR(1) table to grow prohibitively, so the
+ * syntax checker collapses this self-delimiting expression to one ordinary
+ * primary instead.  Tokens remain in its response for editor highlighting. */
+static size_t statement_expression_end(Token **tokens, size_t token_count, size_t start) {
+    if (start + 3 >= token_count || tokens[start]->kind != L_PARENTHESES ||
+        tokens[start + 1]->kind != L_BRACE)
+        return token_count;
+
+    int brace_depth = 1;
+    for (size_t i = start + 2; i < token_count; i++) {
+        if (tokens[i]->kind == L_BRACE) {
+            brace_depth++;
+        } else if (tokens[i]->kind == R_BRACE && --brace_depth == 0) {
+            return i + 1 < token_count && tokens[i + 1]->kind == R_PARENTHESES
+                ? i + 1 : token_count;
+        }
+    }
+    return token_count;
+}
+
 /* The editor grammar deliberately omits expression-level braces: adding a
  * recursive `IDENTIFIER { name: expr }` production makes its canonical LR(1)
  * table's build time prohibitive (60s+ even before this addition; measured
@@ -428,6 +450,43 @@ static void tag_qualified_calls(Token **tokens, size_t token_count, int *source_
     free((void *)namespaces);
 }
 
+static void tag_enum_roles(Token **tokens, size_t token_count, int *source_roles,
+                           int enum_role, int enum_member_role,
+                           int result_role, int result_variant_role) {
+    if (!source_roles) return;
+
+    const char **enum_names = NULL;
+    size_t enum_name_count = 0;
+    int has_result = 0;
+
+    /* Enum names can be found without a resolver.  The pass below deliberately
+     * tags only names which were declared as enums in this file, keeping an
+     * ordinary local named `Result` or `Ok` on the normal variable path. */
+    for (size_t i = 0; i + 1 < token_count; i++) {
+        if (tokens[i]->kind != ENUM || tokens[i + 1]->kind != IDENTIFIER) continue;
+        generic_name_add(&enum_names, &enum_name_count, tokens[i + 1]->value);
+        if (strcmp(tokens[i + 1]->value, "Result") == 0) has_result = 1;
+    }
+
+    for (size_t i = 0; i < token_count; i++) {
+        if (tokens[i]->kind != IDENTIFIER) continue;
+        if (source_roles[i] == result_variant_role &&
+            (!has_result || (strcmp(tokens[i]->value, "Ok") != 0 &&
+                             strcmp(tokens[i]->value, "Err") != 0))) {
+            source_roles[i] = enum_member_role;
+        }
+        if (generic_name_contains(enum_names, enum_name_count, tokens[i]->value)) {
+            source_roles[i] = strcmp(tokens[i]->value, "Result") == 0
+                ? result_role : enum_role;
+        }
+        if (has_result && (strcmp(tokens[i]->value, "Ok") == 0 ||
+                           strcmp(tokens[i]->value, "Err") == 0)) {
+            source_roles[i] = result_variant_role;
+        }
+    }
+    free((void *)enum_names);
+}
+
 static AngleKind *classify_generic_angles(Token **tokens, size_t token_count) {
     AngleKind *angles = calloc(token_count ? token_count : 1, sizeof(AngleKind));
     const char **generic_names = NULL;
@@ -458,9 +517,11 @@ static AngleKind *classify_generic_angles(Token **tokens, size_t token_count) {
         size_t close_index = 0;
         if (!find_angle_close(tokens, token_count, i + 1, &close_index)) continue;
         TokenKind next_kind = close_index + 1 < token_count ? tokens[close_index + 1]->kind : EOT;
-        int is_struct_declaration = i > 0 && tokens[i - 1]->kind == STRUCT && next_kind == L_BRACE;
+        int is_type_declaration = i > 0 &&
+            (tokens[i - 1]->kind == STRUCT || tokens[i - 1]->kind == ENUM) &&
+            next_kind == L_BRACE;
         int is_function_declaration = brace_depth == 0 && next_kind == L_PARENTHESES;
-        if (!is_struct_declaration && !is_function_declaration) continue;
+        if (!is_type_declaration && !is_function_declaration) continue;
 
         generic_name_add(&generic_names, &generic_name_count, tokens[i]->value);
         mark_generic_span(tokens, angles, i + 1, close_index);
@@ -503,6 +564,10 @@ static int check_tokens(
     int property_role = syntax_label_id(grammar, "property");
     int namespace_role = syntax_label_id(grammar, "namespace");
     int function_role = syntax_label_id(grammar, "function");
+    int enum_role = syntax_label_id(grammar, "enum");
+    int enum_member_role = syntax_label_id(grammar, "enumMember");
+    int result_role = syntax_label_id(grammar, "result");
+    int result_variant_role = syntax_label_id(grammar, "resultVariant");
     if (!tokens) {
         printf("{\"status\":\"error\",\"diagnostics\":[{\"line\":0,\"character\":0,\"endCharacter\":1,\"message\":\"Failed to read source file.\"}]}\n");
         return 0;
@@ -547,6 +612,16 @@ static int check_tokens(
     int generic_depth = 0;
     for (size_t i = 0; i < source_count; i++) {
         Token *t = source_tokens[i];
+        size_t statement_expr_end = statement_expression_end(source_tokens, source_count, i);
+        if (statement_expr_end != source_count) {
+            // A number is an unambiguous primary expression in the grammar.
+            // Keep the opening paren as the diagnostic anchor.
+            token_ids[token_count] = token_map[NUMBER];
+            token_refs[token_count] = t;
+            token_source_indices[token_count++] = i;
+            i = statement_expr_end;
+            continue;
+        }
         size_t struct_literal_end = named_struct_literal_end(source_tokens, source_count, i,
                                                              source_roles, type_role, property_role);
         if (struct_literal_end != source_count) {
@@ -583,6 +658,8 @@ static int check_tokens(
     for (size_t i = 0; i < token_count; i++) {
         if (roles[i] != 0) source_roles[token_source_indices[i]] = roles[i];
     }
+    tag_enum_roles(source_tokens, source_count, source_roles, enum_role, enum_member_role,
+                   result_role, result_variant_role);
     tag_qualified_calls(source_tokens, source_count, source_roles, namespace_role, function_role);
 
     printf("{\"status\":");

@@ -93,6 +93,7 @@ typedef enum {
     DOT,           // .
     QUESTION,      // ?
     COLON,         // :
+    COLONCOLON,    // ::
     VERTICAL_BAR,  // |
     CARET,         // ^
     HASH,          // #

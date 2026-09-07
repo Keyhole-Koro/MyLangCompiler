@@ -84,6 +84,10 @@ CASES = [
         status="ok",
     ),
     TokenCase(
+        name="nested_qualified_payload_pattern",
+        status="ok",
+    ),
+    TokenCase(
         name="import_is_namespace",
         roles={"math": "namespace"},
     ),
