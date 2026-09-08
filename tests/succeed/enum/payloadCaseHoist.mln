@@ -1,0 +1,36 @@
+// A payload-enum case may target a direct call.  The lowerer must evaluate the
+// call once into a generated local, then lower nested error patterns against
+// that local's payload field.
+
+enum Error {
+    Missing,
+    BadFd(i32),
+}
+
+enum Result<T, E> {
+    Ok(T),
+    Err(E),
+}
+
+Result<i32, Error> make_result(i32 mode) {
+    if (mode == 0) {
+        return Err(Error::Missing);
+    }
+    if (mode == 1) {
+        return Err(Error::BadFd(7));
+    }
+    return Ok(9);
+}
+
+i32 decode(i32 mode) {
+    return case make_result(mode) of {
+        Ok(value) -> value;
+        Err(Error::Missing) -> 1;
+        Err(Error::BadFd(fd)) -> fd;
+        Err(other) -> 0 - 100 - other.__tag;
+    };
+}
+
+i32 main() {
+    return decode(0) * 100 + decode(1) * 10 + decode(2); // 179
+}

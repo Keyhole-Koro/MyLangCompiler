@@ -1,0 +1,53 @@
+// Scope-qualified enum variants must work both as an ordinary enum value and
+// as a unit variant nested inside a Result payload construction.
+
+enum SyscallError {
+    NoProcess,
+    BadFd,
+}
+
+enum FsError {
+    Disabled,
+    BadFd(i32),
+}
+
+enum Result<T, E> {
+    Ok(T),
+    Err(E),
+}
+
+Result<i32, SyscallError> syscall_result(i32 fd) {
+    if (fd < 0) {
+        return Err(SyscallError::BadFd);
+    }
+    return Err(SyscallError::NoProcess);
+}
+
+Result<i32, FsError> fs_result() {
+    return Err(FsError::Disabled);
+}
+
+i32 syscall_code(Result<i32, SyscallError> result) {
+    return case result of {
+        Ok(value) -> value;
+        // SyscallError is a plain numeric enum, so its payload can be used
+        // directly after Result has selected Err.
+        Err(error) -> error;
+    };
+}
+
+i32 fs_code(Result<i32, FsError> result) {
+    return case result of {
+        Ok(value) -> value;
+        Err(error) -> case error of {
+            FsError::Disabled -> 7;
+            FsError::BadFd(fd) -> fd;
+        };
+    };
+}
+
+i32 main() {
+    Result<i32, SyscallError> syscall = syscall_result(-1);
+    Result<i32, FsError> fs = fs_result();
+    return syscall_code(syscall) * 10 + fs_code(fs); // 17
+}

@@ -24,45 +24,36 @@ ASTNode *parse_postfix(ParserContext *context, Token **cur) {
                 node = new_member_access(node, member_name);
             }
         } else if ((*cur)->kind == COLONCOLON) {
-            /* `EnumName::Variant` -- collapses to a single identifier named
-             * "EnumName::Variant", literal colons included, the same way a
-             * package-qualified call collapses to "pkg_func" just above.
-             * Nothing else in the language gives `::` a meaning, so this
-             * collapses unconditionally rather than checking `node` against
-             * a registry first (parser_payload_enum.c's find_variant, and
-             * numeric enums' own EnumConstant lookup, resolve the qualifier
-             * once every enum in the program is known, not while parsing one
-             * file's tokens left to right); whichever of those it does not
-             * resolve to fails the same way any other undefined name would.
-             * Followed by `(args)`, the L_PARENTHESES branch below turns
-             * this into a call exactly as it would an unqualified name. */
+            /* Preserve enum qualification as one name.  Payload-enum lowering
+             * resolves it after every enum declaration is available, whereas
+             * a numeric enum can be resolved here from its constant table. */
+            if (node->type != AST_IDENTIFIER)
+                parse_error(context, "'::' must follow a plain name", *cur);
+
+            int line = node->line;
+            int col = node->col;
             *cur = (*cur)->next;
             if ((*cur)->kind != IDENTIFIER)
                 parse_error(context, "expected identifier after '::'", *cur);
-            if (node->type != AST_IDENTIFIER)
-                parse_error(context, "'::' must follow a plain name", *cur);
-            char *member_name = (*cur)->value;
+
+            Token *member_tok = *cur;
+            char qualified[256];
+            snprintf(qualified, sizeof(qualified), "%s::%s", node->identifier.name,
+                     member_tok->value);
             *cur = (*cur)->next;
-            char buf[256];
-            snprintf(buf, sizeof(buf), "%s::%s", node->identifier.name, member_name);
             free_ast(node);
 
-            /* A numeric enum's members are constants substituted at parse
-             * time (parse_identifier_primary) -- which already ran, on just
-             * "EnumName", before "::Member" was even in view. Registered
-             * under this same qualified spelling (parser_type.c), so the
-             * lookup this collapse just missed happens here instead. A
-             * payload enum's variant is not resolved until every enum in the
-             * program has been seen (parser_payload_enum.c), so it stays a
-             * qualified identifier/call for that pass to resolve later. */
-            long enum_val;
-            if (find_enum_constant(context, buf, &enum_val)) {
-                char num[32];
-                snprintf(num, sizeof(num), "%ld", enum_val);
-                node = new_number(num);
+            long enum_value;
+            if (find_enum_constant(context, qualified, &enum_value)) {
+                char text[32];
+                snprintf(text, sizeof(text), "%ld", enum_value);
+                node = new_number(text);
             } else {
-                node = new_identifier(buf);
+                node = new_identifier(qualified);
             }
+            node->line = line;
+            node->col = col;
+            set_node_end_from_token(node, member_tok);
         } else if ((*cur)->kind == ARROW) {
             if (!token_is_name((*cur)->next)) break;
             if (context->control.stop_at_arrow) {

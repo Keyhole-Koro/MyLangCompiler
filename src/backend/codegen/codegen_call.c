@@ -135,16 +135,30 @@ static void gen_indirect_call(CompilerContext *cc, ASTNode *node, StringBuilder 
 // The one word an argument contributes is either its value (gen_expr) or, for
 // a struct/array parameter, the address of the caller's own copy (MLC-015):
 // gen_lvalue_addr, the same address computation aggregate assignment and a
-// hidden-pointer return already use. Passing anything that isn't addressable
-// that way (a call result, an arithmetic expression) is a codegen error
-// rather than the one-word truncation this used to silently produce.
-static void gen_arg_word(CompilerContext *cc, ASTNode *arg, StringBuilder *sb, const char *target_reg,
-                         char **params, int param_count, char **locals, int local_count,
-                         int is_aggregate, const char *callee_name, int arg_index)
+// hidden-pointer return already use. A direct aggregate-returning call is the
+// one non-lvalue form that is safe: materialize it in a short-lived stack slot
+// and return the slot address. The caller reclaims the returned byte count
+// once its enclosing call has completed.
+static int gen_arg_word(CompilerContext *cc, ASTNode *arg, StringBuilder *sb, const char *target_reg,
+                        char **params, int param_count, char **locals, int local_count,
+                        int is_aggregate, const char *callee_name, int arg_index)
 {
     if (!is_aggregate) {
         gen_expr(cc, arg, sb, target_reg, params, param_count, locals, local_count);
-        return;
+        return 0;
+    }
+
+    const FunctionSig *result_sig = call_returns_aggregate(cc, arg);
+    if (result_sig) {
+        int temp_bytes = ((result_sig->ret_size_bytes + SLOT_SIZE - 1) / SLOT_SIZE) * SLOT_SIZE;
+        sb_append(sb, "  ; temporary storage for aggregate call argument\n");
+        sb_append(sb, "  addis sp, -%d\n", temp_bytes);
+        sb_append(sb, "  mov r1, sp\n");
+        sb_append(sb, "  push r1\n");
+        gen_call_sret(cc, arg, sb, params, param_count, locals, local_count);
+        if (strcmp(target_reg, "sp") != 0)
+            sb_append(sb, "  mov %s, sp\n", target_reg);
+        return temp_bytes;
     }
     if (!is_addressable_expr(arg)) {
         fprintf(stderr,
@@ -155,6 +169,18 @@ static void gen_arg_word(CompilerContext *cc, ASTNode *arg, StringBuilder *sb, c
         exit(1);
     }
     gen_lvalue_addr(cc, arg, sb, target_reg, params, param_count, locals, local_count);
+    return 0;
+}
+
+static int has_direct_aggregate_return_argument(CompilerContext *cc, ASTNode *node,
+                                                 const FunctionSig *sig) {
+    if (!node || !sig) return 0;
+    for (int i = 0; i < node->call.arg_count; i++) {
+        if (sig->param_is_aggregate && i < sig->param_count &&
+            sig->param_is_aggregate[i] && call_returns_aggregate(cc, node->call.args[i]))
+            return 1;
+    }
+    return 0;
 }
 
 // True when sig says argument index i is a by-value struct or array.
@@ -178,6 +204,18 @@ void gen_call(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char 
 
     const FunctionSig *sig = find_func_sig(cc, node->call.name);
     int argc = node->call.arg_count;
+
+    /* A temporary result must stay at the top of the caller's stack until
+     * the enclosing call returns. Stack arguments and variadic tails occupy
+     * that same area, so those combinations need a frame-resident temporary
+     * rather than this compact lowering. No system source currently needs
+     * that wider form; diagnose it rather than misplacing an argument. */
+    if (has_direct_aggregate_return_argument(cc, node, sig) &&
+        (argc > 3 || (sig && sig->is_variadic))) {
+        fprintf(stderr,
+                "Codegen error: direct aggregate call results can only be passed to a non-variadic call with at most three arguments; bind it to a variable first\n");
+        exit(1);
+    }
 
     if (sig && sig->is_variadic) {
         int fixed = sig->fixed_param_count;
@@ -255,10 +293,12 @@ void gen_call(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char 
     // argument may involve a nested call that clobbers the argument registers,
     // so earlier results must not be left sitting in those registers.
     int reg_argc = argc < 3 ? argc : 3;
+    int aggregate_temp_bytes = 0;
     for (int i = 0; i < reg_argc; i++)
     {
-        gen_arg_word(cc, node->call.args[i], sb, "r1", params, param_count, locals, local_count,
-                    sig_arg_is_aggregate(sig, i), node->call.name, i);
+        aggregate_temp_bytes += gen_arg_word(cc, node->call.args[i], sb, "r1", params, param_count,
+                                             locals, local_count, sig_arg_is_aggregate(sig, i),
+                                             node->call.name, i);
         sb_append(sb, "  push r1\n");
     }
     for (int i = reg_argc - 1; i >= 0; i--)
@@ -267,6 +307,12 @@ void gen_call(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char 
     }
 
     sb_append(sb, "  call %s\n", node->call.name);
+
+    if (aggregate_temp_bytes > 0)
+    {
+        sb_append(sb, "  ; release aggregate call argument storage\n");
+        sb_append(sb, "  addis sp, %d\n", aggregate_temp_bytes);
+    }
 
     if (stack_args > 0)
     {

@@ -198,19 +198,9 @@ ASTNode *parse_primary(ParserContext *context, Token **cur) {
         return parse_identifier_primary(context, cur);
     }
     if ((*cur)->kind == UNDERSCORE) {
-        /* `_` as a payload pattern's bind position (`Ok(_) -> ...`) says
-         * "give this variant's payload no name, because nothing here reads
-         * it" -- the same thing a plain bind does when it goes unused, just
-         * without a name to draw the eye. It reuses AST_IDENTIFIER rather
-         * than a dedicated node: rewrite_payload_case already treats any
-         * identifier as a bind name and substitutes every occurrence of it
-         * in the arm, and since the lexer reserves "_" as this keyword (the
-         * identifier scanner never produces it, see lexer.c's keyword
-         * table), no real binding can ever collide with it, and there is
-         * nothing else to teach that substitution about. Anywhere other
-         * than a bind position, `_` is simply a reference to an identifier
-         * that can never have been declared, so it surfaces the same way
-         * any other one would: as an undefined-identifier error. */
+        /* `_` is the sole value of the unit type.  In a payload pattern it
+         * discards the binding; elsewhere semantic checking accepts it only
+         * where the declared type is also `_`. */
         Token *tok = *cur;
         ASTNode *node = new_identifier("_");
         set_node_loc_from_tokens(node, tok, NULL);

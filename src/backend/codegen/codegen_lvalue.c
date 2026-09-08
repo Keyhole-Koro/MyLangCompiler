@@ -59,6 +59,10 @@ void emit_load_var(CompilerContext *cc, StringBuilder *sb, const char *name, con
             // fallback global. Use r3 as the address scratch (as every other
             // branch above does); r2 may hold a pending operand of an enclosing
             // binary expression and must not be clobbered here.
+            // A global absent from this translation unit's own declaration
+            // table belongs to an imported source package.  It still needs a
+            // linker import, just as an imported function does.
+            if (!find_global_info(cc, name)) note_import_func(cc, name);
             sb_append(sb, "  movi  r3, %s\n", name);
             emit_load_width_from_addr(sb, target_reg, "r3", scalar_var_width_bytes(cc, name));
         }
@@ -82,6 +86,7 @@ void emit_store_var(CompilerContext *cc, StringBuilder *sb, const char *name, co
     else
     {
         // fallback global
+        if (!find_global_info(cc, name)) note_import_func(cc, name);
         sb_append(sb, "  movi  r3, %s\n", name);
         emit_store_width_to_addr(sb, "r3", src_reg, scalar_var_width_bytes(cc, name));
     }
@@ -126,6 +131,7 @@ void emit_addr_of_var(CompilerContext *cc, StringBuilder *sb, const char *name, 
     }
     if (is_param == -1) {
         sb_append(sb, "  \n; address of global '%s'\n", name);
+        if (!find_global_info(cc, name)) note_import_func(cc, name);
         sb_append(sb, "  movi %s, %s\n", target_reg, name);
         return;
     }

@@ -224,13 +224,12 @@ ASTNode *parse_enum(ParserContext *context, Token **cur) {
         for (int i = 0; i < member_count; i++) {
             add_enum_constant(context, members[i]->enum_member.name,
                               members[i]->enum_member.resolved_value);
-            /* Also under "EnumName::Member" (parser_expr_postfix.c's
-             * COLONCOLON handling collapses a qualified reference to exactly
-             * this spelling), so two numeric enums can share a member name
-             * without one silently shadowing the other -- unlike the bare
-             * form above, which still does, unchanged. */
+            /* Qualified names do not shadow a same-named member of another
+             * numeric enum.  parser_expr_postfix.c looks up this exact form
+             * after it has consumed `EnumName::Member`. */
             char qualified[256];
-            snprintf(qualified, sizeof(qualified), "%s::%s", name, members[i]->enum_member.name);
+            snprintf(qualified, sizeof(qualified), "%s::%s", name,
+                     members[i]->enum_member.name);
             add_enum_constant(context, qualified, members[i]->enum_member.resolved_value);
         }
 
