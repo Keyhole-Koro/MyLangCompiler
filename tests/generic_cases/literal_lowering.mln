@@ -1,0 +1,1 @@
+T run<T>(T x) { T f = (i32 y) => { return y + 1; }; return f(x); } i32 main() { return run<i32>(4); }

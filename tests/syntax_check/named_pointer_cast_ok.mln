@@ -1,0 +1,1 @@
+i32 main() { Node *p = (Node *)0; return 0; }

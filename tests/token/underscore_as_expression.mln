@@ -1,0 +1,5 @@
+enum Result<T, E> { Ok(T), Err(E) }
+
+Result<i32, i32> noop() {
+    return Ok(_);
+}

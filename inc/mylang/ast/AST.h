@@ -149,7 +149,7 @@ struct ASTNode {
             int case_count;
             ASTNode *default_expr;
         } case_expr;
-        struct { 
+        struct {
             ASTNode *ret_type;
             char *name;
             ASTNode **params;
@@ -160,8 +160,16 @@ struct ASTNode {
             bool is_variadic;
             char **type_params;
             int type_param_count;
+            /* Non-NULL only for a method (`void (ref User u) display()`):
+             * the receiver's base type name. The receiver itself already
+             * lives in params[0] by the time parsing finishes -- this field
+             * exists only so a method can still be told apart from a plain
+             * function taking the same first parameter, for diagnostics and
+             * the method table (parser_state_tables.c's add_method /
+             * find_method). */
+            char *recv_type_name;
         } fundef;
-        struct { 
+        struct {
             ASTNode *type;
             char *name;
             int is_mut;
@@ -173,6 +181,15 @@ struct ASTNode {
             int type_arg_count;
             ASTNode **args;
             int arg_count;
+            /* Non-NULL only between parsing `recv.method(args)` and
+             * resolve_method_calls() (parser_method_resolve.c) rewriting it
+             * into an ordinary call: `name` still holds the bare method name,
+             * and `recv` the receiver expression, which resolution moves into
+             * args[0] (inserting `&`/`&mut`/`*` as the declared receiver
+             * needs) before renaming `name` to the mangled method and
+             * clearing this field. No later pass should ever see it set --
+             * parser_check.c's ensure_no_unresolved_method_calls() checks. */
+            ASTNode *recv;
         } call;
         struct {
             char *tag;

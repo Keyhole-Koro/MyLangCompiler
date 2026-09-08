@@ -1,0 +1,2 @@
+T max<T>(T a, T b) { return a; }
+i32 main() { return max<i32>(1, 2); }

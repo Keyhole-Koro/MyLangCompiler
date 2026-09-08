@@ -1,0 +1,1 @@
+i32 grow<T>(i32 n) { return grow<T *>(n); } i32 main() { return grow<i32>(0); }

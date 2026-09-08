@@ -1,0 +1,8 @@
+enum Result<T, E> { Ok(T), Err(E) }
+Result<i32, i32> noop() {
+  return Ok(_);
+}
+i32 main() {
+  Result<i32, i32> r = noop();
+  return case r of { Ok(_) -> 0; Err(e) -> e; };
+}

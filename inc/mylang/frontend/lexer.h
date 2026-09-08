@@ -81,6 +81,14 @@ typedef enum {
     PACKAGE,  // package
     FROM,     // from
     REST,     // rest
+    /* `test` is reserved so a top-level test declaration -- `test("name", {...},
+     * () => {...});` -- stays distinguishable from a method definition, whose
+     * return type may itself be a user type: `User (ref Config c) build()`.
+     * Both would otherwise start `IDENTIFIER (` and one token of lookahead
+     * cannot separate them. It still reads as a plain name wherever a namespace
+     * is expected (`package test;`, `test.pass()`), so existing sources compile
+     * unchanged. */
+    TEST,     // test
 
     L_PARENTHESES, // (
     R_PARENTHESES, // )
@@ -93,6 +101,7 @@ typedef enum {
     DOT,           // .
     QUESTION,      // ?
     COLON,         // :
+    COLONCOLON,    // ::
     VERTICAL_BAR,  // |
     CARET,         // ^
     HASH,          // #

@@ -1,0 +1,10 @@
+enum LoaderError { InvalidHeader(i32), ProcSlotFull }
+enum Result<T, E> { Ok(T), Err(E) }
+
+i32 classify(Result<i32, LoaderError> result) {
+    return case result of {
+        Err(LoaderError::InvalidHeader(version)) -> version;
+        Err(LoaderError::ProcSlotFull) -> -1;
+        Ok(_) -> 0;
+    };
+}

@@ -106,6 +106,7 @@ void free_ast(ASTNode *node) {
                 case AST_FUNDEF:            if (node->fundef.ret_type) free_ast(node->fundef.ret_type);
             free(node->fundef.name);
             free(node->fundef.package);
+            free(node->fundef.recv_type_name);
             for (int i = 0; i < node->fundef.type_param_count; i++)
                 free(node->fundef.type_params[i]);
             free(node->fundef.type_params);
@@ -122,6 +123,9 @@ void free_ast(ASTNode *node) {
             for (int i = 0; i < node->call.arg_count; i++)
                 free_ast(node->call.args[i]);
             free(node->call.args);
+            /* Only ever non-NULL between parsing and resolve_method_calls();
+             * kept alive here too in case a parse error aborts in between. */
+            if (node->call.recv) free_ast(node->call.recv);
             break;
         case AST_PARAM:
             if (node->param.type) free_ast(node->param.type);

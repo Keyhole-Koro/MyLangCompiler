@@ -1,0 +1,1 @@
+struct Box<T> { T x; }; Box<i32> box; i32 main() { box.x = 7; return box.x; }

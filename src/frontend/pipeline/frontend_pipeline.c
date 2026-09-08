@@ -34,6 +34,13 @@ static void lower_program(ParserContext *context, ASTNode *program) {
     append_hoisted_functions(context, program);
     ensure_no_fun_literals(program);
 
+    /* Every method in the file is in the method table by now (parsing has
+     * finished), so `recv.method(args)` call sites can be rewritten into
+     * ordinary calls -- see parser_method_resolve.c. Semantic analysis and
+     * codegen never learn methods exist. */
+    resolve_method_calls(context, program);
+    ensure_no_unresolved_method_calls(program);
+
     rewrite_node(context, program, scope, 0);
 }
 

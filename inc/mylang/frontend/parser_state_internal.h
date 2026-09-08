@@ -45,10 +45,29 @@ typedef struct EnumConstant {
     long value;
 } EnumConstant;
 
+/* One `type (recv) name(...)` declaration, keyed by the receiver's base type
+ * name and the method's own (unmangled) name. `mangled` is what `fundef.name`
+ * was rewritten to (`<Type>__<name>`) and what a resolved call site ends up
+ * calling; `fundef` is the same node already reachable through the ordinary
+ * function table -- this table exists only to look a method up by
+ * (type, name) instead of by its mangled name. */
+typedef struct MethodDef {
+    char *type_name;
+    char *method_name;
+    char *mangled;
+    ASTNode *fundef;
+} MethodDef;
+
+typedef struct MethodTable {
+    MethodDef **methods;
+    int count;
+} MethodTable;
+
 typedef struct ParserSymbolState {
     StructTable structs;
     FunctionTable functions;
     TypeTable types;
+    MethodTable methods;
     GenericTemplateTable generic_templates;
     /* Plain (non-generic) struct/enum declarations pulled in by `import
      * {Name} from "..."` from another file (parser_import_generics.c). Not
@@ -132,6 +151,8 @@ ASTNode *exported_payload_enum_at(ParserContext *context, int index);
 int exported_payload_enum_count(ParserContext *context);
 void add_structdef(ParserContext *context, char *name, ASTNode **members, int member_count);
 StructDef *find_structdef(ParserContext *context, const char *name);
+void add_method(ParserContext *context, const char *type_name, const char *method_name, const char *mangled, ASTNode *fn);
+const MethodDef *find_method(ParserContext *context, const char *type_name, const char *method_name);
 void add_enum_constant(ParserContext *context, const char *name, long value);
 int find_enum_constant(ParserContext *context, const char *name, long *out_value);
 void parser_reset(void);

@@ -1,0 +1,5 @@
+import { twice, Pair } from "generic_library.mln";
+i32 main() {
+    Pair<i32> pair; pair.first = twice<i32>(6);
+    pair.second = 1; return pair.first + pair.second;
+}

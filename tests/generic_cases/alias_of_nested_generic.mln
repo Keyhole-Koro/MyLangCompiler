@@ -1,0 +1,1 @@
+struct Box<T> { T x; }; typedef Box<i32> IntBox; struct Wrapper<T> { T x; }; i32 main() { Wrapper<IntBox> box; box.x.x = 7; return box.x.x; }

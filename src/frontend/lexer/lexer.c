@@ -50,6 +50,7 @@ static void unescape_string_literal_inplace(char *s) {
 StringTokenKindMap operators[] = {
     {"==", EQ}, {"!=", NEQ}, {"<=", LTE}, {">=", GTE}, {"&&", LAND}, {"||", LOR},
     {"<<", LSH}, {">>", RSH}, {"++", INC}, {"--", DEC}, {"=>", FAT_ARROW}, {"*", ASTARISK}, {"->", ARROW},
+    {"::", COLONCOLON},
     {"+", ADD}, {"-", SUB}, {"/", DIV}, {"%", MOD}, {"=", ASSIGN},
     {"(", L_PARENTHESES}, {")", R_PARENTHESES}, {";", SEMICOLON}, {",", COMMA},
     {"{", L_BRACE}, {"}", R_BRACE}, {"[", L_BRACKET}, {"]", R_BRACKET},
@@ -68,7 +69,8 @@ StringTokenKindMap reservedWords[] = {
     {"yield", YIELD}, {"unchecked", UNCHECKED},
     {"of", OF}, {"_", UNDERSCORE},
     {"typedef", TYPEDEF}, {"struct", STRUCT}, {"union", UNION}, {"enum", ENUM},
-    {"import", IMPORT}, {"from", FROM}, {"export", EXPORT}, {"package", PACKAGE}, {"rest", REST}
+    {"import", IMPORT}, {"from", FROM}, {"export", EXPORT}, {"package", PACKAGE}, {"rest", REST},
+    {"test", TEST}
 };
 
 char *tokenkind2str(TokenKind kind) {
@@ -105,6 +107,7 @@ char *tokenkind2str(TokenKind kind) {
         case NOT: return "NOT";
         case QUESTION: return "QUESTION";
         case COLON: return "COLON";
+        case COLONCOLON: return "COLONCOLON";
         case BITOR: return "BITOR";
         case BITXOR: return "BITXOR";
         case BITNOT: return "BITNOT";
@@ -152,6 +155,7 @@ char *tokenkind2str(TokenKind kind) {
         case IMPORT: return "IMPORT";
         case FROM: return "FROM";
         case REST: return "REST";
+        case TEST: return "TEST";
         case EXPORT: return "EXPORT";
         case PACKAGE: return "PACKAGE";
 

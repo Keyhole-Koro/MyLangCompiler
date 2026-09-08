@@ -194,7 +194,7 @@ ASTNode *parse_primary(ParserContext *context, Token **cur) {
     if ((*cur)->kind == CASE) {
         return parse_case_primary(context, cur);
     }
-    if ((*cur)->kind == IDENTIFIER) {
+    if (token_is_name(*cur)) {
         return parse_identifier_primary(context, cur);
     }
     if ((*cur)->kind == MLX_TAG_OPEN) {

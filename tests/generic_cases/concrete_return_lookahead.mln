@@ -1,0 +1,1 @@
+struct Box<T> { T x; }; Box<i32> *pass(Box<i32> *p) { return p; } i32 main() { Box<i32> x; return 0; }

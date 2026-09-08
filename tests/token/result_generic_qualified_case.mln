@@ -1,0 +1,10 @@
+enum MmuError { AllocFailed, NoFreeSlot }
+enum Result<T, E> { Ok(T), Err(E) }
+Result<i32, MmuError> f(i32 x) {
+  if (x == 0) { return Err(MmuError::AllocFailed); }
+  return Ok(x);
+}
+i32 main() {
+  Result<i32, MmuError> r = f(0);
+  return case r of { Ok(v) -> v; Err(MmuError::AllocFailed) -> -1; Err(NoFreeSlot) -> -2; };
+}
