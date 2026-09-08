@@ -91,7 +91,8 @@ void ast_visit_children(ASTNode *n, void (*visit)(ASTNode **, void *), void *ctx
     case AST_PARAM: CHILD(param.type); break;
     case AST_CALL:
         CHILDREN(call.type_args, call.type_arg_count);
-        CHILDREN(call.args, call.arg_count); break;
+        CHILDREN(call.args, call.arg_count);
+        CHILD(call.recv); break;
     case AST_DOM_ELEMENT:
         for (int i = 0; i < n->dom_element.prop_count; i++) CHILD(dom_element.props[i].value);
         CHILDREN(dom_element.children, dom_element.child_count); break;
@@ -148,7 +149,8 @@ ASTNode *ast_clone(const ASTNode *src) {
     case AST_FUN_LITERAL: ARRAY(fun_literal.params, fun_literal.param_count); break;
     case AST_CASE: ARRAY(case_expr.cases, case_expr.case_count); break;
     case AST_FUNDEF:
-        STR(fundef.name); STR(fundef.package); ARRAY(fundef.params, fundef.param_count);
+        STR(fundef.name); STR(fundef.package); STR(fundef.recv_type_name);
+        ARRAY(fundef.params, fundef.param_count);
         STRINGS(fundef.type_params, fundef.type_param_count); break;
     case AST_PARAM: STR(param.name); break;
     case AST_CALL:

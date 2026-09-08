@@ -50,6 +50,45 @@ int looks_like_function(ParserContext *context, Token *cur) {
     return t && t->kind == IDENTIFIER && t->next && t->next->kind == L_PARENTHESES;
 }
 
+// Look ahead to see if the current tokens form a method: `type (recv)
+// name(...)`. The receiver parenthesis is what tells a method's return type
+// apart from a plain function's name -- `void display()` has an IDENTIFIER
+// right after the type, `void (ref User u) display()` has '('.
+int looks_like_method(ParserContext *context, Token *cur) {
+    Token *t = cur;
+    while (t && (t->kind == CONST || t->kind == REF || t->kind == MUT)) {
+        t = t->next;
+    }
+    if (!t || !is_type(context, t->kind, t)) return 0;
+    t = t->next; // past base type
+    if (t && t->kind == LT) {
+        int depth = 1;
+        t = t->next;
+        while (t && depth > 0) {
+            if (t->kind == LT) depth++;
+            else if (t->kind == GT) depth--;
+            else if (t->kind == RSH) depth -= 2;
+            t = t->next;
+        }
+        if (depth != 0) return 0;
+    }
+    while (t && t->kind == ASTARISK) t = t->next;
+    if (!t || t->kind != L_PARENTHESES) return 0;
+
+    // Skip the receiver's own parentheses (its contents are just one `param`,
+    // validated for real by parse_param() once we commit to this branch).
+    t = t->next;
+    int depth = 1;
+    while (t && depth > 0) {
+        if (t->kind == L_PARENTHESES) depth++;
+        else if (t->kind == R_PARENTHESES) depth--;
+        t = t->next;
+    }
+    if (depth != 0) return 0;
+
+    return t && t->kind == IDENTIFIER && t->next && t->next->kind == L_PARENTHESES;
+}
+
 Token *generic_function_type_params_start(ParserContext *context, Token *cur) {
     Token *t = cur;
     while (t && (t->kind == CONST || t->kind == REF || t->kind == MUT)) t = t->next;

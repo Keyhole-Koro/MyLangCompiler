@@ -112,7 +112,11 @@ int fprint_ast_decl_node(FILE *out, ASTNode *node, int indent) {
         }
         return 1;
     case AST_FUNDEF:
-        fprint_indent(out, indent); fprintf(out, "Function:  %s\n", node->fundef.name);
+        fprint_indent(out, indent);
+        if (node->fundef.recv_type_name)
+            fprintf(out, "Method:  %s (receiver: %s)\n", node->fundef.name, node->fundef.recv_type_name);
+        else
+            fprintf(out, "Function:  %s\n", node->fundef.name);
         for (int i = 0; i < node->fundef.type_param_count; i++) {
             fprint_indent(out, indent); fprintf(out, "  TypeParam: %s\n", node->fundef.type_params[i]);
         }
