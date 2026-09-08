@@ -245,7 +245,10 @@ void _gen_expr(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char
         break;
 
     case AST_IDENTIFIER:
-        if (find_enum_value(cc, node->identifier.name)) {
+        if (strcmp(node->identifier.name, "_") == 0) {
+            /* `_` has one representation: a zero word. */
+            emit_load_const(cc, sb, target_reg, 0);
+        } else if (find_enum_value(cc, node->identifier.name)) {
             emit_load_const(cc, sb, target_reg, find_enum_value(cc, node->identifier.name)->value);
         } else if (find_func_sig(cc, node->identifier.name)) {
             note_import_func(cc, node->identifier.name);

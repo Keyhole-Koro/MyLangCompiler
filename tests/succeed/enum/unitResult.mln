@@ -1,0 +1,21 @@
+// `_` is the type and sole value for a Result success payload that callers do
+// not need.  It is commonly used by kernel operations that only report an
+// error or successful completion.
+
+enum MmuError { AllocFailed, NoFreeSlot }
+enum Result<T, E> { Ok(T), Err(E) }
+
+Result<_, MmuError> map_page(i32 mode) {
+    if (mode == 0) {
+        return Err(AllocFailed);
+    }
+    return Ok(_);
+}
+
+i32 main() {
+    Result<_, MmuError> ok = map_page(1);
+    Result<_, MmuError> err = map_page(0);
+    i32 success = case ok of { Ok(_) -> 1; Err(e) -> 0; };
+    i32 failure = case err of { Ok(_) -> 1; Err(e) -> 0; };
+    return success * 10 + failure; // 10
+}

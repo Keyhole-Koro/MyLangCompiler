@@ -23,6 +23,37 @@ ASTNode *parse_postfix(ParserContext *context, Token **cur) {
             } else {
                 node = new_member_access(node, member_name);
             }
+        } else if ((*cur)->kind == COLONCOLON) {
+            /* Preserve enum qualification as one name.  Payload-enum lowering
+             * resolves it after every enum declaration is available, whereas
+             * a numeric enum can be resolved here from its constant table. */
+            if (node->type != AST_IDENTIFIER)
+                parse_error(context, "'::' must follow a plain name", *cur);
+
+            int line = node->line;
+            int col = node->col;
+            *cur = (*cur)->next;
+            if ((*cur)->kind != IDENTIFIER)
+                parse_error(context, "expected identifier after '::'", *cur);
+
+            Token *member_tok = *cur;
+            char qualified[256];
+            snprintf(qualified, sizeof(qualified), "%s::%s", node->identifier.name,
+                     member_tok->value);
+            *cur = (*cur)->next;
+            free_ast(node);
+
+            long enum_value;
+            if (find_enum_constant(context, qualified, &enum_value)) {
+                char text[32];
+                snprintf(text, sizeof(text), "%ld", enum_value);
+                node = new_number(text);
+            } else {
+                node = new_identifier(qualified);
+            }
+            node->line = line;
+            node->col = col;
+            set_node_end_from_token(node, member_tok);
         } else if ((*cur)->kind == ARROW) {
             if (!token_is_name((*cur)->next)) break;
             if (context->control.stop_at_arrow) {

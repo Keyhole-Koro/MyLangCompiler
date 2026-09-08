@@ -197,6 +197,16 @@ ASTNode *parse_primary(ParserContext *context, Token **cur) {
     if (token_is_name(*cur)) {
         return parse_identifier_primary(context, cur);
     }
+    if ((*cur)->kind == UNDERSCORE) {
+        /* `_` is the sole value of the unit type.  In a payload pattern it
+         * discards the binding; elsewhere semantic checking accepts it only
+         * where the declared type is also `_`. */
+        Token *tok = *cur;
+        ASTNode *node = new_identifier("_");
+        set_node_loc_from_tokens(node, tok, NULL);
+        *cur = (*cur)->next;
+        return node;
+    }
     if ((*cur)->kind == MLX_TAG_OPEN) {
         return parse_dom_element(context, cur);
     }

@@ -221,9 +221,17 @@ ASTNode *parse_enum(ParserContext *context, Token **cur) {
      * matched by name, and its tag belongs to the layout rather than the
      * surrounding scope. */
     if (!has_payload)
-        for (int i = 0; i < member_count; i++)
+        for (int i = 0; i < member_count; i++) {
             add_enum_constant(context, members[i]->enum_member.name,
                               members[i]->enum_member.resolved_value);
+            /* Qualified names do not shadow a same-named member of another
+             * numeric enum.  parser_expr_postfix.c looks up this exact form
+             * after it has consumed `EnumName::Member`. */
+            char qualified[256];
+            snprintf(qualified, sizeof(qualified), "%s::%s", name,
+                     members[i]->enum_member.name);
+            add_enum_constant(context, qualified, members[i]->enum_member.resolved_value);
+        }
 
     if (type_param_count == 0) add_typename(context, name);
     ASTNode *node = new_enum(name, members, member_count);

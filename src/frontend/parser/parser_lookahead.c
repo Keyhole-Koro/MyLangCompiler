@@ -14,6 +14,9 @@ int is_type(ParserContext *context, TokenKind kind, Token *cur) {
         kind == BOOL
     ) return 1;
     if (kind == IDENTIFIER && is_user_typename(context, cur->value)) return 1;
+    /* `_` is the unit type used as a generic argument when a payload has no
+     * useful value, e.g. `Result<_, FsError>`. */
+    if (kind == UNDERSCORE) return 1;
     return 0;
 }
 

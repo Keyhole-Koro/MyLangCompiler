@@ -33,6 +33,11 @@ PASS_CASES = {
     "phase_enumAutoValues": "succeed/semantic/phase_enumAutoValues.mln",
     "phase_enumExplicitBase": "succeed/semantic/phase_enumExplicitBase.mln",
     "phase_enumMultipleTypes": "succeed/semantic/phase_enumMultipleTypes.mln",
+    "qualifiedEnumVariant": "succeed/enum/qualifiedEnumVariant.mln",
+    "payloadCaseHoist": "succeed/enum/payloadCaseHoist.mln",
+    "unitResult": "succeed/enum/unitResult.mln",
+    "byvalReturnDirectCall": "succeed/struct/byval/directCallReturn.mln",
+    "byvalArgumentDirectCall": "succeed/struct/byval/directCallArgument.mln",
     "dom_localFunctionWins": "succeed/dom/localFunctionWins.dom.mln",
 }
 
@@ -47,16 +52,6 @@ WARN_CASES = {
 }
 
 FAIL_CASES = {
-    "byvalArgNonAddressable_fail": (
-        "fail/struct/byvalArgNonAddressable_fail.mln",
-        "takes a struct or array by value, and only a variable, a field of one, or a dereference can be passed that way",
-        None,
-    ),
-    "byvalReturnNonAddressable_fail": (
-        "fail/struct/byvalReturnNonAddressable_fail.mln",
-        "returning a struct or array from a non-lvalue is not supported yet",
-        None,
-    ),
     "byvalVariadicReturn_fail": (
         "fail/struct/byvalVariadicReturn_fail.mln",
         "cannot both be variadic and return a struct or array by value",
@@ -105,11 +100,6 @@ FAIL_CASES = {
     "payloadEnumArity_fail": (
         "fail/semantic/payloadEnumArity_fail.mln",
         "carries one payload, but 2 were given",
-        None,
-    ),
-    "payloadEnumTarget_fail": (
-        "fail/semantic/payloadEnumTarget_fail.mln",
-        "can only be matched on a variable or a field of one",
         None,
     ),
     "genericTypeArgCountMismatch_fail": (
