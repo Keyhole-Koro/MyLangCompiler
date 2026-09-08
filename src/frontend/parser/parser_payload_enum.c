@@ -198,6 +198,20 @@ static char *tag_text(long tag) {
     return strdup(buf);
 }
 
+/* A payload argument written as `_` (parse_primary parses it as an
+ * identifier named "_", shared with how a case pattern discards a binding)
+ * has no declared symbol to read back at codegen -- give it one here,
+ * resolving to the same zero a bare `_` would compare equal to. Any other
+ * argument is used as written. */
+static int is_underscore(ASTNode *node) {
+    return node && node->type == AST_IDENTIFIER && node->identifier.name &&
+           strcmp(node->identifier.name, "_") == 0;
+}
+
+static ASTNode *payload_value(ASTNode *arg) {
+    return is_underscore(arg) ? new_number("0") : ast_clone(arg);
+}
+
 /* `dest.__tag = tag;` then `dest.<variant> = payload;` -- the two statements a
  * construction becomes. `dest` is cloned per statement because each owns its
  * copy. */
@@ -218,7 +232,7 @@ static void build_construction(VariantTable *table, ASTNode *dest, ASTNode *use,
     }
     check_single_payload(table, use);
     *out_payload = new_expr_stmt(new_assign(new_member_access(ast_clone(dest), variant->variant),
-                                            ast_clone(use->call.args[0])));
+                                            payload_value(use->call.args[0])));
 }
 
 /* `return Ok(5);` has the same problem as `T r = Ok(5);` -- there is nowhere

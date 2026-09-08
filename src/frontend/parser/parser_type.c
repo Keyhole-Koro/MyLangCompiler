@@ -296,6 +296,25 @@ ASTNode *parse_type(ParserContext *context, Token **cur) {
         }
     }
 
+    if ((*cur)->kind == UNDERSCORE) {
+        /* `_` in a type-argument position stands for "no meaningful value",
+         * e.g. `Result<_, FsError>` for an operation with nothing to report
+         * on success. It specializes to `i32`, whose zero value is what `_`
+         * as an expression (parse_primary) evaluates to. */
+        Token *tok = *cur;
+        *cur = (*cur)->next;
+        ASTNode *base_type = new_identifier("i32");
+        int pointer_level = 0;
+        while ((*cur)->kind == ASTARISK) {
+            pointer_level++;
+            *cur = (*cur)->next;
+        }
+        ASTNode *node = new_type_node(base_type, pointer_level, modifiers, ref_kind);
+        node->line = tok->line;
+        node->col = tok->col;
+        return node;
+    }
+
     if (!is_type(context, (*cur)->kind, *cur))
         parse_error(context, "expected base type", *cur);
 

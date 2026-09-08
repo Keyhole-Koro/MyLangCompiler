@@ -209,6 +209,23 @@ ASTNode *parse_primary(ParserContext *context, Token **cur) {
     if ((*cur)->kind == CASE) {
         return parse_case_primary(context, cur);
     }
+    if ((*cur)->kind == UNDERSCORE) {
+        /* `_` as a value, e.g. `Ok(_)`, is the placeholder for "nothing
+         * meaningful" -- pairs with `_` in a type-argument position
+         * (parse_type), which settles on `i32`. Kept as an identifier named
+         * "_" rather than resolved to a number here: the same `Ok(_)` shape
+         * is also how a case arm discards a payload it does not bind
+         * (`Ok(_) -> ...;`), and parser_payload_enum.c's pattern handling
+         * already accepts any identifier as a binding name -- "_" included,
+         * substituting nothing since nothing in the arm can reference it.
+         * Where `_` needs an actual runtime value instead (constructing a
+         * payload), parser_payload_enum.c resolves this identifier to 0. */
+        Token *tok = *cur;
+        ASTNode *node = new_identifier("_");
+        set_node_loc_from_tokens(node, tok, NULL);
+        *cur = (*cur)->next;
+        return node;
+    }
     if (token_is_name(*cur)) {
         return parse_identifier_primary(context, cur);
     }
