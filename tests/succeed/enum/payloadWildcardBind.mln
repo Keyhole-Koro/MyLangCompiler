@@ -1,0 +1,28 @@
+// `_` in a payload pattern's bind position (`Ok(_)`) says the payload is
+// never read -- the same thing an unused `Ok(v)` already means, just without
+// a name to draw the eye. The lexer reserves "_" (see UNDERSCORE in
+// lexer.c), so it can never collide with a real bind name; substituting it
+// into the arm body is a no-op because nothing in the arm can spell it.
+
+enum Result<T, E> {
+    Ok(T),
+    Err(E),
+}
+
+Result<i32, i32> f(i32 x) {
+    if (x == 0) { return Err(-1); }
+    return Ok(x);
+}
+
+i32 classify(Result<i32, i32> r) {
+    return case r of {
+        Ok(_)  -> 1;
+        Err(_) -> 0;
+    };
+}
+
+i32 main() {
+    Result<i32, i32> ok = f(5);
+    Result<i32, i32> err = f(0);
+    return classify(ok) * 10 + classify(err); // 1*10 + 0 == 10
+}

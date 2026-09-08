@@ -245,7 +245,13 @@ void _gen_expr(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char
         break;
 
     case AST_IDENTIFIER:
-        if (find_enum_value(cc, node->identifier.name)) {
+        if (strcmp(node->identifier.name, "_") == 0) {
+            /* The one value of its own type (parser_lookahead.c's is_type,
+             * semantic_walk.c's semantic_infer_identifier_type) -- there is
+             * no real binding to load, so its representation is simply 0,
+             * the same as any other word-sized field nothing ever reads. */
+            emit_load_const(cc, sb, target_reg, 0);
+        } else if (find_enum_value(cc, node->identifier.name)) {
             emit_load_const(cc, sb, target_reg, find_enum_value(cc, node->identifier.name)->value);
         } else if (find_func_sig(cc, node->identifier.name)) {
             note_import_func(cc, node->identifier.name);

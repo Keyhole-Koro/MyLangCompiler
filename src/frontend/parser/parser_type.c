@@ -221,9 +221,18 @@ ASTNode *parse_enum(ParserContext *context, Token **cur) {
      * matched by name, and its tag belongs to the layout rather than the
      * surrounding scope. */
     if (!has_payload)
-        for (int i = 0; i < member_count; i++)
+        for (int i = 0; i < member_count; i++) {
             add_enum_constant(context, members[i]->enum_member.name,
                               members[i]->enum_member.resolved_value);
+            /* Also under "EnumName::Member" (parser_expr_postfix.c's
+             * COLONCOLON handling collapses a qualified reference to exactly
+             * this spelling), so two numeric enums can share a member name
+             * without one silently shadowing the other -- unlike the bare
+             * form above, which still does, unchanged. */
+            char qualified[256];
+            snprintf(qualified, sizeof(qualified), "%s::%s", name, members[i]->enum_member.name);
+            add_enum_constant(context, qualified, members[i]->enum_member.resolved_value);
+        }
 
     if (type_param_count == 0) add_typename(context, name);
     ASTNode *node = new_enum(name, members, member_count);

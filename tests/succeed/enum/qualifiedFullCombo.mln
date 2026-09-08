@@ -1,0 +1,47 @@
+enum MmuError {
+    AllocFailed,
+    NoFreeSlot,
+    WrongType(i32),
+}
+
+enum LoaderError {
+    OutOfMemory,
+    BadMagic(i32),
+}
+
+enum Result<T, E> { Ok(T), Err(E) }
+
+Result<i32, MmuError> alloc_page(i32 mode) {
+    if (mode == 0) { return Err(MmuError::AllocFailed); }
+    if (mode == 1) { return Err(MmuError::NoFreeSlot); }
+    if (mode == 2) { MmuError cause = WrongType(7); return Err(cause); }
+    return Ok(42);
+}
+
+Result<i32, LoaderError> map_page(i32 mode) {
+    i32 frame = case alloc_page(mode) of {
+        Ok(f) -> f;
+        Err(MmuError::AllocFailed) -> ({ return Err(LoaderError::OutOfMemory); });
+        Err(MmuError::NoFreeSlot)  -> ({ return Err(LoaderError::OutOfMemory); });
+        Err(WrongType(t)) -> 0 - 1000 - t;
+    };
+    return Ok(frame);
+}
+
+i32 classify(Result<i32, LoaderError> r) {
+    return case r of {
+        Ok(v) -> v;
+        Err(LoaderError::OutOfMemory) -> -1;
+        Err(LoaderError::BadMagic(m)) -> 0 - 2000 - m;
+    };
+}
+
+i32 main() {
+    Result<i32, LoaderError> a = map_page(3); // Ok(42)
+    Result<i32, LoaderError> b = map_page(0); // Err(OutOfMemory) via nested Alloc
+    Result<i32, LoaderError> c = map_page(2); // WrongType(7) -> -1007 wrapped Ok
+    return classify(a) * 1000000 + classify(b) * 1000 + classify(c);
+    // classify(a) = 42
+    // classify(b) = -1 (OutOfMemory)
+    // classify(c): map_page returns Ok(-1007) since WrongType path returns a value not an error
+}

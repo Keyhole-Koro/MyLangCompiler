@@ -1,0 +1,41 @@
+enum MmuError {
+    NoError,
+    AllocFailed,
+    UnalignedAddress(i32),
+}
+
+enum LoaderError {
+    NoError,
+    BadMagic(i32),
+}
+
+MmuError map_page() {
+    return MmuError::NoError;
+}
+
+LoaderError spawn() {
+    return LoaderError::NoError;
+}
+
+i32 classify_mmu(MmuError e) {
+    return case e of {
+        MmuError::NoError -> 0;
+        AllocFailed -> -1;
+        UnalignedAddress(a) -> 0 - 100 - a;
+    };
+}
+
+i32 classify_loader(LoaderError e) {
+    return case e of {
+        LoaderError::NoError -> 0;
+        BadMagic(m) -> 0 - 200 - m;
+    };
+}
+
+i32 main() {
+    MmuError m = map_page();
+    LoaderError l = spawn();
+    i32 a = classify_mmu(m);
+    i32 b = classify_loader(l);
+    return a + b;
+}

@@ -1,0 +1,34 @@
+// A payload enum construction may also be the whole expression of a
+// `return`, not just the right-hand side of an assignment or an initialiser:
+// there is still a destination to store into, it is just synthesized from
+// the function's declared return type rather than named in the source. See
+// payloadResult.mln for the assignment/initialiser forms this builds on.
+
+enum Result<T, E> {
+    Ok(T),
+    Err(E),
+}
+
+Result<i32, i32> divide(i32 a, i32 b) {
+    if (b == 0) {
+        return Err(-1);
+    }
+    return Ok(a / b);
+}
+
+i32 unwrap_or(Result<i32, i32> r, i32 fallback) {
+    return case r of {
+        Ok(v)  -> v;
+        Err(e) -> fallback + e;
+    };
+}
+
+i32 main() {
+    Result<i32, i32> ok = divide(10, 2);
+    Result<i32, i32> err = divide(10, 0);
+
+    i32 total = 0;
+    total = total + unwrap_or(ok, 0);   // 5
+    total = total + unwrap_or(err, 0);  // 0 + -1 == -1
+    return total;
+}

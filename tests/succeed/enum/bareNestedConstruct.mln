@@ -1,0 +1,11 @@
+enum LoaderError { OutOfMemory, BadMagic(i32) }
+enum Result<T, E> { Ok(T), Err(E) }
+
+Result<i32, LoaderError> f() {
+    return Err(OutOfMemory);
+}
+
+i32 main() {
+    Result<i32, LoaderError> r = f();
+    return case r of { Ok(v) -> v; Err(OutOfMemory) -> -1; Err(BadMagic(m)) -> m; };
+}

@@ -1,0 +1,14 @@
+// `Ok(_)` only type-checks when Ok's own declared field type is `_`
+// (`Result<_, E>`, as in unitResult.mln); this one declares `Result<i32,
+// MmuError>`, so the field is i32 and `_` -- typed `_`, not i32 -- is
+// rejected the same way any other type mismatch would be.
+enum MmuError { AllocFailed }
+enum Result<T, E> { Ok(T), Err(E) }
+
+Result<i32, MmuError> f() {
+    return Ok(_);
+}
+
+i32 main() {
+    return 0;
+}
