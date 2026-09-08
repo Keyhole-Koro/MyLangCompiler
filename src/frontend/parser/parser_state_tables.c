@@ -151,6 +151,28 @@ StructDef *find_structdef(ParserContext *context, const char *name) {
     return NULL;
 }
 
+void add_method(ParserContext *context, const char *type_name, const char *method_name, const char *mangled, ASTNode *fn) {
+    if (find_method(context, type_name, method_name)) {
+        fprintf(stderr, "duplicate method '%s' on type '%s'\n", method_name, type_name);
+        exit(1);
+    }
+    MethodDef *def = malloc(sizeof(MethodDef));
+    def->type_name = strdup(type_name);
+    def->method_name = strdup(method_name);
+    def->mangled = strdup(mangled);
+    def->fundef = fn;
+    context->symbols.methods.methods = realloc(context->symbols.methods.methods, sizeof(MethodDef*) * (context->symbols.methods.count + 1));
+    context->symbols.methods.methods[context->symbols.methods.count++] = def;
+}
+
+const MethodDef *find_method(ParserContext *context, const char *type_name, const char *method_name) {
+    for (int i = 0; i < context->symbols.methods.count; i++) {
+        MethodDef *def = context->symbols.methods.methods[i];
+        if (strcmp(def->type_name, type_name) == 0 && strcmp(def->method_name, method_name) == 0) return def;
+    }
+    return NULL;
+}
+
 void add_enum_constant(ParserContext *context, const char *name, long value) {
     context->symbols.enum_constants = realloc(context->symbols.enum_constants, sizeof(EnumConstant) * (context->symbols.enum_constant_count + 1));
     context->symbols.enum_constants[context->symbols.enum_constant_count].name = strdup(name);

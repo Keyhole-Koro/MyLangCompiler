@@ -31,11 +31,46 @@ MyLang uses a package-based module system.
 ## 3. Declarations and Definitions
 
 ### Functions
-- `fundef` -> `type IDENTIFIER type_params? ( param_list ) ( block | ; )`
+- `fundef` -> `type receiver? IDENTIFIER type_params? ( param_list ) ( block | ; )`
+- `receiver` -> `( param )`
 - `type_params` -> `< IDENTIFIER ( , IDENTIFIER )* >`
 - `param_list` -> `( param ( , param )* ( , rest_param )? )?`
 - `param` -> `mut? type IDENTIFIER ( [ NUMBER? ] )*`
 - `rest_param` -> `rest IDENTIFIER`
+
+A `fundef` carrying a `receiver` is a **method** on the receiver's base type:
+
+```mylang
+void (ref User u)      display()          { ... }
+void (ref mut User u)  rename(char* n)    { ... }
+i32  (User* u)         raw_id()           { ... }
+User (User u)          into_admin()       { ... }   // value receiver: a move
+```
+
+The receiver is one `param`, never a list, so its spelling is exactly a
+parameter's: `mut`, `ref`, `ref mut`, pointer, and array suffixes all read the
+same as they do in `param_list`. Lowering prepends it to the parameter list, so
+a method is an ordinary function from the AST onward and the ownership rules
+apply to the receiver unchanged -- notably, **a value receiver moves**, which is
+why `ref` / `ref mut` are the usual forms.
+
+Methods are called with `.` on any receiver expression, and `->` also works on a
+pointer. The address-of / dereference needed to match the declared receiver is
+inserted during resolution, so `u.display()` reads the same whether `display`
+takes `User`, `ref User`, or `User*`.
+
+### `test` is reserved
+
+`test` is a keyword, which is what keeps a top-level test declaration
+(`test("name", { ... }, () => { ... });`, see MLT-002) separable from a method
+whose return type is itself a user type (`User (ref Config c) build()`). Both
+would otherwise start `IDENTIFIER (`, and the LR(1) grammar the LSP builds from
+this specification has only one token of lookahead.
+
+It still reads as a plain name wherever a namespace is expected -- `package
+test;`, `import test from "..."`, `test.pass()` -- so no existing source needed
+to change. What it can no longer be is a variable, function, field, or type
+name.
 
 ### Variables
 - `var_decl` -> `mut? type IDENTIFIER ( [ NUMBER? ] )* ( = ( expr | init_list ) )? ;`

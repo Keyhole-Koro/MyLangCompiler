@@ -1,0 +1,1 @@
+i32 main() { i32 mask = 0xff; return mask & 0x0f; }

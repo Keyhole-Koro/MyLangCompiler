@@ -12,7 +12,7 @@ ASTNode *parse_postfix(ParserContext *context, Token **cur) {
             node = new_unary(POST_DEC, node);
         } else if ((*cur)->kind == DOT) {
             *cur = (*cur)->next;
-            if ((*cur)->kind != IDENTIFIER)
+            if (!token_is_name(*cur))
                 parse_error(context, "expected identifier after '.'", *cur);
             char *member_name = (*cur)->value;
             *cur = (*cur)->next;
@@ -64,7 +64,7 @@ ASTNode *parse_postfix(ParserContext *context, Token **cur) {
                 node = new_identifier(buf);
             }
         } else if ((*cur)->kind == ARROW) {
-            if (!(*cur)->next || (*cur)->next->kind != IDENTIFIER) break;
+            if (!token_is_name((*cur)->next)) break;
             if (context->control.stop_at_arrow) {
                 /* Inside a case key, `->` is ambiguous after a bare name: it
                  * reads as an access in `addr->val -> 100` and as the arm arrow
@@ -82,12 +82,15 @@ ASTNode *parse_postfix(ParserContext *context, Token **cur) {
                 }
             }
             *cur = (*cur)->next;
-            if ((*cur)->kind != IDENTIFIER)
+            if (!token_is_name(*cur))
                 parse_error(context, "expected identifier after '->'", *cur);
             char *member_name = (*cur)->value;
             *cur = (*cur)->next;
             node = new_arrow_access(node, member_name);
-        } else if ((*cur)->kind == L_PARENTHESES && node->type == AST_IDENTIFIER) {
+        } else if ((*cur)->kind == L_PARENTHESES &&
+                   (node->type == AST_IDENTIFIER ||
+                    node->type == AST_MEMBER_ACCESS ||
+                    node->type == AST_ARROW_ACCESS)) {
             int line = node->line;
             int col = node->col;
             *cur = (*cur)->next;
@@ -107,7 +110,26 @@ ASTNode *parse_postfix(ParserContext *context, Token **cur) {
             }
             if (!expect(cur, R_PARENTHESES))
                 parse_error(context, "expected ')' after args", *cur);
-            node = new_call(node->identifier.name, args, arg_count);
+            if (node->type == AST_IDENTIFIER) {
+                node = new_call(node->identifier.name, args, arg_count);
+            } else {
+                /* `recv.method(args)` / `recv->method(args)`: leave the call
+                 * unresolved (bare method name, `recv` set) for
+                 * resolve_method_calls() to mangle once every method
+                 * declared in this file is known. `.` and `->` are treated
+                 * identically here -- which conversion the declared receiver
+                 * needs (none, `&`, `&mut`, or `*`) is decided from `recv`'s
+                 * static type during resolution, not from which token got us
+                 * here. */
+                int is_member = node->type == AST_MEMBER_ACCESS;
+                ASTNode *recv = is_member ? node->member_access.lhs : node->arrow_access.lhs;
+                char *method_name = is_member ? node->member_access.member : node->arrow_access.member;
+                ASTNode *call = new_call(method_name, args, arg_count);
+                call->call.recv = recv;
+                free(method_name);
+                free(node);
+                node = call;
+            }
             node->line = line;
             node->col = col;
         } else {

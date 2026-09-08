@@ -18,4 +18,13 @@ void lower_alias_free_all(FunAlias *aliases, int count);
 void lower_fun_literals_block(ParserContext *context, ASTNode *block, const char *func_prefix, FunAlias *aliases, int alias_count);
 void ensure_no_fun_literals(ASTNode *node);
 
+/* Rewrites every `recv.method(args)` / `recv->method(args)` call in the
+ * program into an ordinary call to `<ReceiverType>__method`, with `recv`
+ * (auto-ref'd/deref'd as the method's declared receiver needs) moved into
+ * args[0]. Must run once every method in the file has been parsed and added
+ * to the method table (parser_state_tables.c's add_method) -- i.e. after
+ * parsing completes, from frontend_pipeline.c's lower_program(). */
+void resolve_method_calls(ParserContext *context, ASTNode *program);
+void ensure_no_unresolved_method_calls(ASTNode *node);
+
 #endif

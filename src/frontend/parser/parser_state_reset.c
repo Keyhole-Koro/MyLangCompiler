@@ -77,6 +77,22 @@ void parser_context_reset(ParserContext *context) {
         context->symbols.structs.count = 0;
     }
 
+    if (context->symbols.methods.methods) {
+        for (int i = 0; i < context->symbols.methods.count; i++) {
+            MethodDef *def = context->symbols.methods.methods[i];
+            if (!def) continue;
+            /* def->fundef is not owned here -- it's reachable (and freed)
+             * through context->symbols.functions or the program AST. */
+            free(def->type_name);
+            free(def->method_name);
+            free(def->mangled);
+            free(def);
+        }
+        free(context->symbols.methods.methods);
+        context->symbols.methods.methods = NULL;
+        context->symbols.methods.count = 0;
+    }
+
     if (context->module.exports) {
         for (int i = 0; i < context->module.export_count; i++) {
             free(context->module.exports[i].orig);

@@ -1,0 +1,8 @@
+enum Result<T, E> { Ok(T), Err(E) }
+Result<i32, i32> map(Result<i32, i32> pt_res) {
+  i32 pt_base = case pt_res of {
+    Ok(pt) -> pt;
+    Err(e) -> ({ return Err(e); });
+  };
+  return Ok(pt_base);
+}

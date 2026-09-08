@@ -1,0 +1,5 @@
+i32 g = 0;
+struct Point { i32 fx; };
+enum Color { RED };
+typedef i32 MyInt;
+i32 add(i32 p) { i32 local = foo(p); return local; }

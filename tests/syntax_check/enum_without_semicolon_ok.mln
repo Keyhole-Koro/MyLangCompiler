@@ -1,0 +1,2 @@
+enum TaskState { TASK_RUNNABLE = 0, TASK_SLEEPING = 1, TASK_EMPTY = 2 }
+i32 task_state[256];

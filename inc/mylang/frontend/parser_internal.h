@@ -13,6 +13,14 @@
 
 typedef struct FunAlias FunAlias;
 
+/* `test` is reserved only so a top-level test declaration stays distinguishable
+ * from a method definition (see TEST in lexer.h). Everywhere a plain name is
+ * expected -- a package name, an import namespace, an expression -- it is still
+ * just a name, and its token carries "test" as its value like any identifier. */
+static inline int token_is_name(const Token *tok) {
+    return tok && (tok->kind == IDENTIFIER || tok->kind == TEST);
+}
+
 static inline void set_node_loc_from_tokens(ASTNode *node, Token *primary, Token *fallback) {
     Token *tok = primary ? primary : fallback;
     if (!node) return;
@@ -49,6 +57,7 @@ int looks_like_function(ParserContext *context, Token *cur);
 int looks_like_generic_function(ParserContext *context, Token *cur);
 Token *generic_function_type_params_start(ParserContext *context, Token *cur);
 int looks_like_fun_literal(ParserContext *context, Token *cur);
+int looks_like_method(ParserContext *context, Token *cur);
 
 ASTNode *parse_base_type(ParserContext *context, Token **cur);
 void parse_struct_members(ParserContext *context, Token **cur, ASTNode ***members, int *member_count);
@@ -85,6 +94,7 @@ ASTNode *parse_variable_declaration(ParserContext *context, Token **cur, int nee
 ASTNode *parse_variable_assignment(ParserContext *context, Token **cur);
 ASTNode *parse_stmt(ParserContext *context, Token **cur);
 ASTNode *parse_fundef(ParserContext *context, Token **cur);
+ASTNode *parse_method(ParserContext *context, Token **cur);
 ASTNode *parse_generic_fundef(ParserContext *context, Token **cur);
 char **parse_type_params(ParserContext *context, Token **cur, int *out_count, int add_to_scope);
 ASTNode **parse_type_args(ParserContext *context, Token **cur, int *out_count);

@@ -1,0 +1,2 @@
+struct Point { i32 x; };
+typedef i32 MyInt;

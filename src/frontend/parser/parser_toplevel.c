@@ -40,7 +40,7 @@ static ASTNode *make_import_node_with_templates(ParserContext *context, char *pa
 ASTNode *parse_import(ParserContext *context, Token **cur) {
     if (!expect(cur, IMPORT)) parse_error(context, "expected 'import'", *cur);
 
-    if ((*cur)->kind == IDENTIFIER && (*cur)->next && (*cur)->next->kind == SEMICOLON) {
+    if (token_is_name(*cur) && (*cur)->next && (*cur)->next->kind == SEMICOLON) {
         context->module.imported_packages = realloc(context->module.imported_packages, sizeof(char*) * (context->module.imported_package_count + 1));
         context->module.imported_packages[context->module.imported_package_count++] = strdup((*cur)->value);
         if (context->is_root_module) {
@@ -51,7 +51,7 @@ ASTNode *parse_import(ParserContext *context, Token **cur) {
         return NULL;
     }
 
-    if ((*cur)->kind == IDENTIFIER && (*cur)->next && (*cur)->next->kind == FROM) {
+    if (token_is_name(*cur) && (*cur)->next && (*cur)->next->kind == FROM) {
         char *ident = strdup((*cur)->value);
         *cur = (*cur)->next;
 
@@ -87,7 +87,7 @@ ASTNode *parse_import(ParserContext *context, Token **cur) {
 
     if ((*cur)->kind != R_BRACE) {
         while (1) {
-            if ((*cur)->kind != IDENTIFIER) parse_error(context, "expected identifier in import list", *cur);
+            if (!token_is_name(*cur)) parse_error(context, "expected identifier in import list", *cur);
             symbols = realloc(symbols, sizeof(char*) * (count + 1));
             symbols[count++] = strdup((*cur)->value);
             *cur = (*cur)->next;
@@ -114,7 +114,7 @@ ASTNode *parse_import(ParserContext *context, Token **cur) {
 ASTNode* parse_toplevel(ParserContext *context, Token **cur) {
     if ((*cur)->kind == PACKAGE) {
         *cur = (*cur)->next;
-        if ((*cur)->kind != IDENTIFIER) parse_error(context, "expected package name", *cur);
+        if (!token_is_name(*cur)) parse_error(context, "expected package name", *cur);
         set_current_package(context, (*cur)->value);
         *cur = (*cur)->next;
         if (!expect(cur, SEMICOLON)) parse_error(context, "expected ';' after package name", *cur);
@@ -196,6 +196,21 @@ ASTNode* parse_toplevel(ParserContext *context, Token **cur) {
         parse_error(context, "generic function must declare type parameters", *cur);
     }
     if (is_type(context, (*cur)->kind, *cur)) {
+        if (looks_like_method(context, *cur)) {
+            ASTNode *fn = parse_method(context, cur);
+            /* Unlike a plain exported function, an exported method is not
+             * mangled with the package prefix or added to the export table:
+             * it is never called by a bare name (only ever `.method()`), so
+             * there is no name for an importer to look up. Cross-package
+             * method calls are unimplemented (see docs/grammar.md's method
+             * section); `is_exported`/`package` are set anyway for parity
+             * with parse_fundef and any later cross-file work. */
+            if (fn && want_export) {
+                fn->fundef.is_exported = 1;
+                fn->fundef.package = strdup(context->module.current_package);
+            }
+            return fn;
+        }
         if (looks_like_function(context, *cur)) {
             ASTNode *fn = parse_fundef(context, cur);
             if (fn && want_export) {

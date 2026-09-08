@@ -1,0 +1,10 @@
+enum MmuError { AllocFailed, UnalignedAddress(i32) }
+enum Result<T, E> { Ok(T), Err(E) }
+Result<i32, MmuError> alloc(i32 x) {
+  if (x == 0) { return Err(UnalignedAddress(x)); }
+  return Ok(x);
+}
+i32 main() {
+  Result<i32, MmuError> r = alloc(0);
+  return case r of { Ok(v) -> v; Err(UnalignedAddress(a)) -> a; Err(AllocFailed) -> -1; };
+}

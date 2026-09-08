@@ -1,0 +1,2 @@
+import mmu from "mmu.mln";
+i32 main() { mmu.map_page(1, 2); return 0; }

@@ -1,0 +1,6 @@
+struct Same<T> { T x; }; T Same<T>(T x) { return x; }
+i32 main() {
+    Same<i32> box; i32 a = 3;
+    i32 *p = Same<i32 *>(&a); const i32 *q = Same<const i32 *>(&a);
+    return Same<i32>(1) + Same<i32>(2) + Same<char>((char)3);
+}

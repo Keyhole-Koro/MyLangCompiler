@@ -1,0 +1,1 @@
+T bad<T>(T x) { return "bad"; } i32 main() { return bad<i32>(1); }
