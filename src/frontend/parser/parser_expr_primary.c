@@ -78,6 +78,21 @@ static ASTNode *parse_identifier_primary(ParserContext *context, Token **cur) {
     char *name = tok->value;
     *cur = (*cur)->next;
 
+    /* `EnumType::Variant` qualifies a payload-enum variant by the enum that
+     * declares it. parser_payload_enum.c resolves a variant by name alone
+     * (flagging an ambiguous name at its use site if more than one payload
+     * enum declares it), so the qualifier carries no information the rest of
+     * the parser needs -- it is dropped here, and `EnumType::Variant` reads
+     * from this point on exactly as the bare `Variant` already does. */
+    if ((*cur)->kind == COLONCOLON) {
+        *cur = (*cur)->next;
+        if (!token_is_name(*cur))
+            parse_error(context, "expected identifier after '::'", *cur);
+        tok = *cur;
+        name = tok->value;
+        *cur = (*cur)->next;
+    }
+
     if ((*cur)->kind == L_BRACE) {
         return parse_struct_literal(context, cur, tok);
     }

@@ -51,6 +51,8 @@ typedef struct {
     VariantTag *items;
     int count;
     ParserContext *context;
+    ASTNode *current_ret_type; /* enclosing function's return type, for `return Ok(x);` */
+    int tmp_count;              /* uniquifies every temporary this pass introduces */
 } VariantTable;
 
 static VariantTag *find_variant(VariantTable *table, const char *name) {
@@ -217,6 +219,69 @@ static void build_construction(VariantTable *table, ASTNode *dest, ASTNode *use,
     check_single_payload(table, use);
     *out_payload = new_expr_stmt(new_assign(new_member_access(ast_clone(dest), variant->variant),
                                             ast_clone(use->call.args[0])));
+}
+
+/* `return Ok(5);` has the same problem as `T r = Ok(5);` -- there is nowhere
+ * to build the struct except into a destination variable -- except a return
+ * statement is not one. Give it one: declare a hidden temporary of the
+ * function's own return type, build the variant into that, then return it.
+ * Requires the enclosing function's return type, tracked by the caller
+ * (`current_ret_type`) as it walks into and out of each function body. */
+static ASTNode *build_return_temp(VariantTable *table, ASTNode *use,
+                                  ASTNode **out_decl, ASTNode **out_tag, ASTNode **out_payload) {
+    char name[32];
+    snprintf(name, sizeof(name), "__mlg_ret%d", table->tmp_count++);
+
+    check_variant_belongs(table, table->current_ret_type, variant_use(table, use), use);
+
+    ASTNode *decl = new_var_decl(ast_clone(table->current_ret_type), name, NULL);
+    decl->line = use->line;
+    decl->col = use->col;
+
+    ASTNode *dest = new_identifier(name);
+    build_construction(table, dest, use, out_tag, out_payload);
+    free_ast(dest);
+
+    *out_decl = decl;
+    return new_return(new_identifier(name));
+}
+
+/* A variant's payload can itself be a variant of another payload enum, e.g.
+ * `Err(Disabled)` where `Disabled` is a plain member of the mixed enum
+ * `FsError`. There is no struct literal here, only a destination to build
+ * into -- same problem `build_return_temp` above solves for `return`, one
+ * level further in. Hoist it into a temporary of its own enum type, append
+ * that temporary's construction to `*out`/`*count`, and rewrite `*arg_slot`
+ * in place to reference it, so the outer construction sees a plain
+ * identifier where the nested one used to be. A no-op when the argument
+ * is not itself a variant. */
+static void hoist_nested_variant_arg(VariantTable *table, ASTNode **arg_slot,
+                                     ASTNode ***out, int *count) {
+    ASTNode *arg = *arg_slot;
+    VariantTag *variant = variant_use(table, arg);
+    if (!variant) return;
+
+    char name[32];
+    snprintf(name, sizeof(name), "__mlg_arg%d", table->tmp_count++);
+
+    ASTNode *type = new_type_node(new_identifier((char *)variant->enum_name), 0, 0, REFKIND_NONE);
+    ASTNode *decl = new_var_decl(type, name, NULL);
+    decl->line = arg->line;
+    decl->col = arg->col;
+
+    ASTNode *dest = new_identifier(name);
+    ASTNode *tag_store = NULL;
+    ASTNode *payload_store = NULL;
+    build_construction(table, dest, arg, &tag_store, &payload_store);
+    free_ast(dest);
+
+    *out = realloc(*out, sizeof(ASTNode *) * (*count + 3));
+    (*out)[(*count)++] = decl;
+    (*out)[(*count)++] = tag_store;
+    if (payload_store) (*out)[(*count)++] = payload_store;
+
+    free_ast(arg);
+    *arg_slot = new_identifier(name);
 }
 
 typedef struct {
@@ -391,6 +456,32 @@ static void rewrite_payload_block(VariantTable *table, ASTNode *block) {
 
     for (int i = 0; i < block->block.count; i++) {
         ASTNode *stmt = block->block.stmts[i];
+
+        if (stmt && stmt->type == AST_RETURN && table->current_ret_type &&
+            variant_use(table, stmt->ret.expr)) {
+            /* `return Ok(5);` -- build into a hidden temporary of the
+             * function's return type, then return that instead. */
+            ASTNode *use = stmt->ret.expr;
+            if (use->type == AST_CALL && use->call.arg_count == 1) {
+                rewrite_payload_node(&use->call.args[0], table);
+                hoist_nested_variant_arg(table, &use->call.args[0], &out, &count);
+            }
+
+            ASTNode *decl = NULL;
+            ASTNode *tag_store = NULL;
+            ASTNode *payload_store = NULL;
+            ASTNode *new_ret = build_return_temp(table, use, &decl, &tag_store, &payload_store);
+
+            out = realloc(out, sizeof(ASTNode *) * (count + 4));
+            out[count++] = decl;
+            out[count++] = tag_store;
+            if (payload_store) out[count++] = payload_store;
+            out[count++] = new_ret;
+
+            free_ast(stmt); /* the old return, its Ok(5)/Err(5) included */
+            continue;
+        }
+
         ASTNode *dest = NULL;
         ASTNode *call = NULL;
 
@@ -423,8 +514,10 @@ static void rewrite_payload_block(VariantTable *table, ASTNode *block) {
         if (stmt->type == AST_VAR_DECL)
             check_variant_belongs(table, stmt->var_decl.var_type, variant_use(table, call), call);
 
-        if (call->type == AST_CALL && call->call.arg_count == 1)
+        if (call->type == AST_CALL && call->call.arg_count == 1) {
             rewrite_payload_node(&call->call.args[0], table);
+            hoist_nested_variant_arg(table, &call->call.args[0], &out, &count);
+        }
 
         ASTNode *tag_store = NULL;
         ASTNode *payload_store = NULL;
@@ -455,6 +548,21 @@ static void rewrite_payload_node(ASTNode **slot, void *user_data) {
     ASTNode *node = *slot;
     if (!node) return;
     VariantTable *table = user_data;
+
+    /* Track the innermost enclosing function's return type so a `return`
+     * found by rewrite_payload_block() below knows what to build into.
+     * Saved/restored around the body rather than passed as a parameter,
+     * because ast_visit_children() only ever passes this one `user_data`
+     * pointer through the whole tree. */
+    if (node->type == AST_FUNDEF || node->type == AST_FUN_LITERAL) {
+        ASTNode *saved_ret_type = table->current_ret_type;
+        table->current_ret_type = node->type == AST_FUNDEF
+                                       ? node->fundef.ret_type
+                                       : node->fun_literal.ret_type;
+        ast_visit_children(node, rewrite_payload_node, user_data);
+        table->current_ret_type = saved_ret_type;
+        return;
+    }
 
     if (node->type == AST_BLOCK) {
         rewrite_payload_block(table, node);
@@ -489,7 +597,7 @@ static void rewrite_payload_node(ASTNode **slot, void *user_data) {
  * and its variants carry final tags, and before the declarations themselves are
  * lowered to structs. */
 void lower_payload_enum_uses(ParserContext *context, ASTNode *program) {
-    VariantTable table = {NULL, 0, context};
+    VariantTable table = {NULL, 0, context, NULL, 0};
     collect_variants(&table, program);
     if (table.count == 0) return;
 
