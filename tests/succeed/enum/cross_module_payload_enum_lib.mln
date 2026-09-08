@@ -1,6 +1,6 @@
 package lib;
 
-import { Result } from "/home/kiho/Workspaces/MyComputer/toolchain/MyStdLib/result.mln";
+import { Result } from "../../../../MyStdLib/result.mln";
 
 // A data-carrying (payload) enum, exported and non-generic -- an "error
 // type" whose variants can each carry their own data, the way an exception

@@ -5,7 +5,7 @@
 // written in *this* file have no variant table left to resolve against.
 import lib from "cross_module_payload_enum_lib.mln";
 import { FsError } from "cross_module_payload_enum_lib.mln";
-import { Result } from "/home/kiho/Workspaces/MyComputer/toolchain/MyStdLib/result.mln";
+import { Result } from "../../../../MyStdLib/result.mln";
 
 i32 main() {
     Result<i32, FsError> a = lib.make(5);
