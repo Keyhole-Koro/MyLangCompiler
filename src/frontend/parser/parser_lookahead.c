@@ -62,7 +62,12 @@ int looks_like_method(ParserContext *context, Token *cur) {
     while (t && (t->kind == CONST || t->kind == REF || t->kind == MUT)) {
         t = t->next;
     }
-    if (!t || !is_type(context, t->kind, t)) return 0;
+    /* A receiver-bound generic method may use its receiver's formal type
+     * parameter as the return type (`T (ref Box<T> self) get()`).  `T` is
+     * deliberately not in the ordinary type table yet, so accept an
+     * identifier here and let parse_method establish the short-lived scope
+     * before parsing it for real. */
+    if (!t || !(is_type(context, t->kind, t) || t->kind == IDENTIFIER)) return 0;
     t = t->next; // past base type
     if (t && t->kind == LT) {
         int depth = 1;

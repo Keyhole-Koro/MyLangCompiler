@@ -195,22 +195,25 @@ ASTNode* parse_toplevel(ParserContext *context, Token **cur) {
         }
         parse_error(context, "generic function must declare type parameters", *cur);
     }
-    if (is_type(context, (*cur)->kind, *cur)) {
-        if (looks_like_method(context, *cur)) {
-            ASTNode *fn = parse_method(context, cur);
-            /* Unlike a plain exported function, an exported method is not
-             * mangled with the package prefix or added to the export table:
-             * it is never called by a bare name (only ever `.method()`), so
-             * there is no name for an importer to look up. Cross-package
-             * method calls are unimplemented (see docs/grammar.md's method
-             * section); `is_exported`/`package` are set anyway for parity
-             * with parse_fundef and any later cross-file work. */
-            if (fn && want_export) {
-                fn->fundef.is_exported = 1;
-                fn->fundef.package = strdup(context->module.current_package);
-            }
-            return fn;
+    /* Test a method before requiring the leading token to be an already-known
+     * type.  Receiver-bound generic methods can start with their own formal
+     * parameter, e.g. `T (ref Box<T> self) get()`. */
+    if (looks_like_method(context, *cur)) {
+        ASTNode *fn = parse_method(context, cur);
+        /* Unlike a plain exported function, an exported method is not
+         * mangled with the package prefix or added to the export table:
+         * it is never called by a bare name (only ever `.method()`), so
+         * there is no name for an importer to look up. Cross-package
+         * method calls are unimplemented (see docs/grammar.md's method
+         * section); `is_exported`/`package` are set anyway for parity
+         * with parse_fundef and any later cross-file work. */
+        if (fn && want_export) {
+            fn->fundef.is_exported = 1;
+            fn->fundef.package = strdup(context->module.current_package);
         }
+        return fn;
+    }
+    if (is_type(context, (*cur)->kind, *cur)) {
         if (looks_like_function(context, *cur)) {
             ASTNode *fn = parse_fundef(context, cur);
             if (fn && want_export) {

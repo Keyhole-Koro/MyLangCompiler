@@ -63,11 +63,27 @@ typedef struct MethodTable {
     int count;
 } MethodTable;
 
+/* A method declared on a generic receiver, such as
+ * `T (ref Box<T> box) get()`.  It remains a template until `Box<T>` is
+ * concretized; only then do we generate and register the ordinary MethodDef
+ * that method-call lowering consumes. */
+typedef struct GenericMethodDef {
+    char *receiver_template_name;
+    char *method_name;
+    ASTNode *fundef;
+} GenericMethodDef;
+
+typedef struct GenericMethodTable {
+    GenericMethodDef **methods;
+    int count;
+} GenericMethodTable;
+
 typedef struct ParserSymbolState {
     StructTable structs;
     FunctionTable functions;
     TypeTable types;
     MethodTable methods;
+    GenericMethodTable generic_methods;
     GenericTemplateTable generic_templates;
     /* Plain (non-generic) struct/enum declarations pulled in by `import
      * {Name} from "..."` from another file (parser_import_generics.c). Not
@@ -155,6 +171,10 @@ void add_structdef(ParserContext *context, char *name, ASTNode **members, int me
 StructDef *find_structdef(ParserContext *context, const char *name);
 void add_method(ParserContext *context, const char *type_name, const char *method_name, const char *mangled, ASTNode *fn);
 const MethodDef *find_method(ParserContext *context, const char *type_name, const char *method_name);
+void add_generic_method(ParserContext *context, const char *receiver_template_name,
+                        const char *method_name, ASTNode *fn);
+GenericMethodDef *generic_method_at(ParserContext *context, int index);
+int generic_method_count(ParserContext *context);
 void add_enum_constant(ParserContext *context, const char *name, long value);
 int find_enum_constant(ParserContext *context, const char *name, long *out_value);
 void parser_reset(void);

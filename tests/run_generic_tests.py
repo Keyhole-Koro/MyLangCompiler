@@ -30,6 +30,7 @@ CASES = [
     ("global_struct", None),
     ("enum_payload", None),
     ("alias_of_nested_generic", None),
+    ("generic_receiver_method", None),
 ]
 
 

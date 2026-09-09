@@ -59,6 +59,20 @@ pointer. The address-of / dereference needed to match the declared receiver is
 inserted during resolution, so `u.display()` reads the same whether `display`
 takes `User`, `ref User`, or `User*`.
 
+A generic receiver binds the method's type parameters directly from its own
+type arguments. The formal names need not match those used by the struct:
+
+```mylang
+struct Box<T> { T value; };
+
+U (ref Box<U> box) get() { return box.value; }
+```
+
+When `Box<i32>` is used, the compiler specializes both the struct and this
+method, then resolves `box.get()` to the concrete method. Receiver-bound type
+arguments must currently be distinct identifiers; method-level type parameters
+cannot be combined with a generic receiver yet.
+
 ### `test` is reserved
 
 `test` is a keyword, which is what keeps a top-level test declaration

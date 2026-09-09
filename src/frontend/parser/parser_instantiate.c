@@ -27,6 +27,11 @@ typedef struct {
 
 static void concrete_node(ASTNode **slot, void *user_data);
 
+static void append_instance(Instantiation *ctx, char *name, ASTNode *declaration) {
+    ctx->instances = realloc(ctx->instances, sizeof(Instance) * (ctx->count + 1));
+    ctx->instances[ctx->count++] = (Instance){name, declaration};
+}
+
 static void generic_error(ParserContext *context, ASTNode *node, const char *message) {
     Token location = {0};
     location.line = node ? node->line : 0;
@@ -72,6 +77,49 @@ static void append_type_key(ParserContext *context, StringBuilder *key, ASTNode 
     const char *name = arg->type_node.base_type->identifier.name;
     sb_append(key, "_p%d_r%d_m%d_n%zu_%s", arg->type_node.pointer_level,
               arg->type_node.ref_kind, arg->type_node.type_modifiers, strlen(name), name);
+}
+
+static void instantiate_receiver_methods(Instantiation *ctx, const char *template_name,
+                                         const char *concrete_type_name,
+                                         ASTNode **args, int count) {
+    ParserContext *context = ctx->parser_context;
+    for (int i = 0; i < generic_method_count(context); i++) {
+        GenericMethodDef *entry = generic_method_at(context, i);
+        if (strcmp(entry->receiver_template_name, template_name) != 0) continue;
+        if (entry->fundef->fundef.type_param_count != count)
+            generic_error(context, entry->fundef,
+                          "generic method receiver type argument count mismatch");
+
+        ASTNode *method = ast_clone(entry->fundef);
+        Substitution sub = {
+            /* The receiver binds the method's own formal names.  They need
+             * not spell the struct template's names the same way: a valid
+             * `T (ref Box<U> self) get()` is just as generic as `Box<T>`. */
+            context, entry->fundef->fundef.type_params, args, count,
+        };
+        substitute(&method, &sub);
+        for (int p = 0; p < method->fundef.type_param_count; p++)
+            free(method->fundef.type_params[p]);
+        free(method->fundef.type_params);
+        method->fundef.type_params = NULL;
+        method->fundef.type_param_count = 0;
+
+        StringBuilder mangled;
+        sb_init(&mangled);
+        sb_append(&mangled, "%s__%s", concrete_type_name, entry->method_name);
+        free(method->fundef.name);
+        method->fundef.name = strdup(mangled.buf);
+        free(method->fundef.recv_type_name);
+        method->fundef.recv_type_name = strdup(concrete_type_name);
+
+        /* Publish before walking the body.  This mirrors ordinary generic
+         * functions and lets recursive uses share one concrete declaration. */
+        append_instance(ctx, mangled.buf, method);
+        concrete_node(&method, ctx);
+        add_function(context, method);
+        add_method(context, concrete_type_name, entry->method_name,
+                   method->fundef.name, method);
+    }
 }
 
 static const char *instantiate(Instantiation *ctx, ASTNode *use, const char *name,
@@ -135,12 +183,12 @@ static const char *instantiate(Instantiation *ctx, ASTNode *use, const char *nam
         decl->struct_stmt.is_exported = 0;
     }
     /* Publish before visiting the body to close same-type recursion. */
-    ctx->instances = realloc(ctx->instances, sizeof(Instance) * (ctx->count + 1));
-    ctx->instances[ctx->count++] = (Instance){concrete_name, decl};
+    append_instance(ctx, concrete_name, decl);
     ctx->depth++;
     concrete_node(&decl, ctx);
     ctx->depth--;
     if (is_function) add_function(context, decl);
+    else if (!is_enum) instantiate_receiver_methods(ctx, name, concrete_name, args, count);
     return concrete_name;
 }
 

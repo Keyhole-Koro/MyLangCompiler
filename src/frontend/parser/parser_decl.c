@@ -127,6 +127,72 @@ static const char *receiver_base_type_name(ASTNode *type_node) {
     return NULL;
 }
 
+/* Before parsing a method, discover a receiver written as `Box<T, E>`.  Its
+ * type arguments are declaration-site parameters, not ordinary in-scope
+ * types, so they must be visible while parsing both the return type and body.
+ * We intentionally keep this v1 form simple: each argument is a distinct
+ * identifier.  That is exactly the receiver-bound form needed by
+ * `Mock<Args, Ret>` and avoids inventing a second, competing generic-method
+ * syntax. */
+static char **receiver_bound_type_params(Token *cur, int *out_count) {
+    Token *t = cur;
+    while (t && (t->kind == CONST || t->kind == REF || t->kind == MUT)) t = t->next;
+    if (!t) return NULL;
+    t = t->next; /* return type's base token */
+    if (t && t->kind == LT) {
+        int depth = 1;
+        t = t->next;
+        while (t && depth > 0) {
+            if (t->kind == LT) depth++;
+            else if (t->kind == GT) depth--;
+            else if (t->kind == RSH) depth -= 2;
+            t = t->next;
+        }
+    }
+    while (t && t->kind == ASTARISK) t = t->next;
+    if (!t || t->kind != L_PARENTHESES) return NULL;
+
+    t = t->next;
+    while (t && (t->kind == CONST || t->kind == REF || t->kind == MUT)) t = t->next;
+    if (!t || t->kind != IDENTIFIER || !t->next || t->next->kind != LT) return NULL;
+    t = t->next->next;
+
+    char **params = NULL;
+    int count = 0;
+    while (t && t->kind == IDENTIFIER) {
+        for (int i = 0; i < count; i++) {
+            if (strcmp(params[i], t->value) == 0) {
+                for (int j = 0; j < count; j++) free(params[j]);
+                free(params);
+                return NULL;
+            }
+        }
+        params = realloc(params, sizeof(char *) * (count + 1));
+        params[count++] = strdup(t->value);
+        t = t->next;
+        if (t && t->kind == COMMA) {
+            t = t->next;
+            continue;
+        }
+        break;
+    }
+    if (count == 0 || !t || t->kind != GT) goto invalid;
+    t = t->next;
+    if (!t || t->kind != IDENTIFIER) goto invalid; /* receiver variable */
+    t = t->next;
+    if (!t || t->kind != R_PARENTHESES) goto invalid;
+    t = t->next;
+    if (!t || t->kind != IDENTIFIER || !t->next || t->next->kind != L_PARENTHESES) goto invalid;
+
+    *out_count = count;
+    return params;
+
+invalid:
+    for (int i = 0; i < count; i++) free(params[i]);
+    free(params);
+    return NULL;
+}
+
 // Parses `type (recv) name(...) (block | ;)` -- a method. The receiver is
 // exactly one `param` (see recv in docs/grammar.md), prepended to the
 // parameter list so a method is an ordinary function everywhere past this
@@ -137,6 +203,11 @@ static const char *receiver_base_type_name(ASTNode *type_node) {
 // frontend_pipeline.c's lower_program()).
 ASTNode *parse_method(ParserContext *context, Token **cur) {
     Token *start = *cur;
+    int type_param_count = 0;
+    char **type_params = receiver_bound_type_params(*cur, &type_param_count);
+    int type_scope_mark = typename_scope_mark(context);
+    for (int i = 0; i < type_param_count; i++) add_typename(context, type_params[i]);
+
     ASTNode *ret_type = parse_type(context, cur);
 
     if (!expect(cur, L_PARENTHESES)) parse_error(context, "expected '(' for method receiver", *cur);
@@ -145,18 +216,16 @@ ASTNode *parse_method(ParserContext *context, Token **cur) {
 
     const char *recv_type = receiver_base_type_name(recv->param.type);
     if (!recv_type) parse_error(context, "method receiver must name a type", start);
-    if (recv->param.type->type_node.base_type->type == AST_TYPE_GENERIC) {
-        parse_error(context, "methods on a generic type are not yet supported", start);
-    }
+    int generic_receiver = recv->param.type->type_node.base_type->type == AST_TYPE_GENERIC;
 
     if ((*cur)->kind != IDENTIFIER) parse_error(context, "expected method name", *cur);
     Token *name_tok = *cur;
     char *method_name = name_tok->value;
     *cur = (*cur)->next;
 
-    char **type_params = NULL;
-    int type_param_count = 0;
     if ((*cur)->kind == LT) {
+        if (generic_receiver)
+            parse_error(context, "generic receiver methods cannot declare additional type parameters", *cur);
         type_params = parse_type_params(context, cur, &type_param_count, 0);
     }
     if (!expect(cur, L_PARENTHESES)) parse_error(context, "expected '(' after method name", *cur);
@@ -189,6 +258,13 @@ ASTNode *parse_method(ParserContext *context, Token **cur) {
     fndef->fundef.type_param_count = type_param_count;
     fndef->fundef.recv_type_name = strdup(recv_type);
     set_node_loc_from_tokens(fndef, start, name_tok);
+    restore_typenames(context, type_scope_mark);
+    if (generic_receiver) {
+        if (type_param_count == 0)
+            parse_error(context, "generic receiver methods require receiver-bound type parameters", start);
+        add_generic_method(context, recv_type, method_name, fndef);
+        return NULL;
+    }
     if (type_param_count == 0) {
         add_function(context, fndef);
         add_method(context, recv_type, method_name, mangled, fndef);

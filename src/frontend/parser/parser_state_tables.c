@@ -173,6 +173,36 @@ const MethodDef *find_method(ParserContext *context, const char *type_name, cons
     return NULL;
 }
 
+void add_generic_method(ParserContext *context, const char *receiver_template_name,
+                        const char *method_name, ASTNode *fn) {
+    for (int i = 0; i < context->symbols.generic_methods.count; i++) {
+        GenericMethodDef *existing = context->symbols.generic_methods.methods[i];
+        if (strcmp(existing->receiver_template_name, receiver_template_name) == 0 &&
+            strcmp(existing->method_name, method_name) == 0) {
+            fprintf(stderr, "duplicate generic method '%s' on type '%s'\n",
+                    method_name, receiver_template_name);
+            exit(1);
+        }
+    }
+    GenericMethodDef *def = calloc(1, sizeof(GenericMethodDef));
+    def->receiver_template_name = strdup(receiver_template_name);
+    def->method_name = strdup(method_name);
+    def->fundef = fn;
+    context->symbols.generic_methods.methods = realloc(
+        context->symbols.generic_methods.methods,
+        sizeof(GenericMethodDef *) * (context->symbols.generic_methods.count + 1));
+    context->symbols.generic_methods.methods[context->symbols.generic_methods.count++] = def;
+}
+
+GenericMethodDef *generic_method_at(ParserContext *context, int index) {
+    if (index < 0 || index >= context->symbols.generic_methods.count) return NULL;
+    return context->symbols.generic_methods.methods[index];
+}
+
+int generic_method_count(ParserContext *context) {
+    return context->symbols.generic_methods.count;
+}
+
 void add_enum_constant(ParserContext *context, const char *name, long value) {
     context->symbols.enum_constants = realloc(context->symbols.enum_constants, sizeof(EnumConstant) * (context->symbols.enum_constant_count + 1));
     context->symbols.enum_constants[context->symbols.enum_constant_count].name = strdup(name);

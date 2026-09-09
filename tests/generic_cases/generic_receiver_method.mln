@@ -1,0 +1,13 @@
+struct Box<T> {
+    T value;
+};
+
+U (ref Box<U> self) get() {
+    return self.value;
+}
+
+i32 main() {
+    Box<i32> box;
+    box.value = 42;
+    return box.get();
+}

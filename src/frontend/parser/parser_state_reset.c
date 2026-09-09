@@ -93,6 +93,20 @@ void parser_context_reset(ParserContext *context) {
         context->symbols.methods.count = 0;
     }
 
+    if (context->symbols.generic_methods.methods) {
+        for (int i = 0; i < context->symbols.generic_methods.count; i++) {
+            GenericMethodDef *def = context->symbols.generic_methods.methods[i];
+            if (!def) continue;
+            free(def->receiver_template_name);
+            free(def->method_name);
+            free_ast(def->fundef);
+            free(def);
+        }
+        free(context->symbols.generic_methods.methods);
+        context->symbols.generic_methods.methods = NULL;
+        context->symbols.generic_methods.count = 0;
+    }
+
     if (context->module.exports) {
         for (int i = 0; i < context->module.export_count; i++) {
             free(context->module.exports[i].orig);
