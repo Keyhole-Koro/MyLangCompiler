@@ -69,6 +69,18 @@ void load_imported_generic_templates(ParserContext *context, ASTNode *import_nod
             add_typename(context, type_name);
         }
         add_generic_template(context, copy);
+
+        /* A generic receiver method is part of its receiver type's API, not
+         * an independently importable symbol.  Bring every associated method
+         * template over with an imported generic type; concrete methods are
+         * still generated only if this module uses that type. */
+        for (int j = 0; j < mod->generic_method_count; j++) {
+            ModuleGenericMethod *method = &mod->generic_methods[j];
+            if (!method->receiver_template_name ||
+                strcmp(method->receiver_template_name, name) != 0) continue;
+            add_generic_method(context, method->receiver_template_name,
+                               method->method_name, ast_clone(method->fundef));
+        }
         remove_import_symbol(import_node, name);
     }
 }

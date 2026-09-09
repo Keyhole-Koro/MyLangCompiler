@@ -31,6 +31,7 @@ CASES = [
     ("enum_payload", None),
     ("alias_of_nested_generic", None),
     ("generic_receiver_method", None),
+    ("generic_receiver_method_importer", None),
 ]
 
 
@@ -74,6 +75,14 @@ def run():
         assert "__mlg_f_" in generated, generated
         assert "import twice" not in generated, generated
         print("[PASS] imported exported generic templates")
+
+        imported_method = CASES_DIR / "generic_receiver_method_importer.mln"
+        assembly = temp / "generic_receiver_method_importer.s"
+        result = subprocess.run([str(ROOT / "mlc"), str(imported_method), str(assembly)],
+                                capture_output=True, text=True, timeout=10)
+        assert result.returncode == 0, result.stderr
+        assert "__get:" in assembly.read_text(), "imported generic method was not specialized"
+        print("[PASS] imported generic receiver methods")
 
 
 if __name__ == "__main__":

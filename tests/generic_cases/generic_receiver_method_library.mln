@@ -1,0 +1,7 @@
+export struct ImportedBox<T> {
+    T value;
+};
+
+U (ref ImportedBox<U> self) get() {
+    return self.value;
+}

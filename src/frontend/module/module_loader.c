@@ -224,6 +224,25 @@ Module *module_loader_load(ModuleLoader *loader, const char *importer_path, cons
         ctx.symbols.generic_templates.count = 0;
     }
 
+    /* Generic receiver methods are parser-owned templates too.  Move them
+     * into the module so an importer of the receiver type can specialize its
+     * methods in that importer's translation unit. */
+    if (ctx.symbols.generic_methods.count > 0) {
+        module->generic_method_count = ctx.symbols.generic_methods.count;
+        module->generic_methods = calloc((size_t)module->generic_method_count,
+                                         sizeof(ModuleGenericMethod));
+        for (int i = 0; i < module->generic_method_count; i++) {
+            GenericMethodDef *source = ctx.symbols.generic_methods.methods[i];
+            module->generic_methods[i].receiver_template_name = source->receiver_template_name;
+            module->generic_methods[i].method_name = source->method_name;
+            module->generic_methods[i].fundef = source->fundef;
+            free(source);
+        }
+        free(ctx.symbols.generic_methods.methods);
+        ctx.symbols.generic_methods.methods = NULL;
+        ctx.symbols.generic_methods.count = 0;
+    }
+
     /* Same transfer, for the pre-lowering clone of each exported payload
      * enum staged during parsing (see add_exported_payload_enum() and its
      * call site in parser_toplevel.c). */

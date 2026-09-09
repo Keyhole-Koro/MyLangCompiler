@@ -29,6 +29,16 @@ static void module_destroy(Module *module) {
         module->generic_templates = NULL;
         module->generic_template_count = 0;
     }
+    if (module->generic_methods) {
+        for (int i = 0; i < module->generic_method_count; i++) {
+            free(module->generic_methods[i].receiver_template_name);
+            free(module->generic_methods[i].method_name);
+            free_ast(module->generic_methods[i].fundef);
+        }
+        free(module->generic_methods);
+        module->generic_methods = NULL;
+        module->generic_method_count = 0;
+    }
     if (module->symbols) {
         for (int i = 0; i < module->symbol_count; i++) {
             free(module->symbols[i].source_name);

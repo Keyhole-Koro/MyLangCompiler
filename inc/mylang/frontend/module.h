@@ -49,6 +49,15 @@ typedef struct ModuleSymbol {
     int is_exported;
 } ModuleSymbol;
 
+/* Generic receiver methods are stored outside a module program just like
+ * generic type/function templates.  Importing their receiver type transfers
+ * a clone into the importer, where its concrete specializations are emitted. */
+typedef struct ModuleGenericMethod {
+    char *receiver_template_name;
+    char *method_name;
+    ASTNode *fundef;
+} ModuleGenericMethod;
+
 /*
  * Represents a parsed MyLang source module.
  *
@@ -57,6 +66,8 @@ typedef struct ModuleSymbol {
  * - package_name: owned string (package identifier if declared, otherwise NULL)
  * - program: owned ASTNode (the AST_BLOCK from parse_program_syntax)
  * - generic_templates: owned array of ASTNodes (generic templates not stored in program block)
+ * - generic_methods: owned receiver-method templates associated with generic
+ *   types, likewise not stored in program block.
  * - exported_payload_enums: owned array of ASTNodes -- a clone of each
  *   exported payload enum's declaration, taken before instantiate_generics()
  *   lowers the one actually left in `program` into its backing struct (which
@@ -71,6 +82,8 @@ typedef struct Module {
     ASTNode *program;
     ASTNode **generic_templates;
     int generic_template_count;
+    ModuleGenericMethod *generic_methods;
+    int generic_method_count;
     ASTNode **exported_payload_enums;
     int exported_payload_enum_count;
     ModuleSymbol *symbols;
