@@ -263,6 +263,12 @@ void collect_codegen_globals(CompilerContext *cc, ASTNode *root) {
     for (int i = 0; i < block->block.count; i++) {
         ASTNode *n = block->block.stmts[i];
         if (cg_as_var_decl(n)) {
+            /* `defined_funcs` is the backend's object-symbol export list,
+             * despite its historical name.  Exported globals belong in the
+             * same list so a package consumer can import `pkg.VALUE` just as
+             * it imports `pkg.function()`. */
+            if (n->var_decl.is_exported)
+                note_defined_func(cc, n->var_decl.name);
             cg_globals_info = (LocalInfo*)realloc(cg_globals_info, sizeof(LocalInfo) * (cg_globals_count + 1));
             cg_globals_info[cg_globals_count].name = n->var_decl.name;
             set_localinfo_from_type(cc, &cg_globals_info[cg_globals_count], n->var_decl.var_type);

@@ -201,6 +201,19 @@ void gen_stmt_internal(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
     case AST_RETURN:
         // A bare `return;` has no expression; only evaluate one when present.
         if (node->ret.expr && cc->sret_active) {
+            if (call_returns_aggregate(cc, node->ret.expr)) {
+                // `return callee(args);` can forward this function's hidden
+                // destination directly to another aggregate-returning call.
+                // There is no need to materialize a temporary only to copy it
+                // back out again.  gen_call_sret consumes the pushed address.
+                sb_append(sb, "  ; forward hidden out-pointer to aggregate return call\n");
+                sb_append(sb, "  mov   r3, bp\n");
+                sb_append(sb, "  addis r3, %d\n", cc->sret_offset);
+                sb_append(sb, "  load  r1, r3\n");
+                sb_append(sb, "  push  r1\n");
+                gen_call_sret(cc, node->ret.expr, sb, params, param_count,
+                              locals, local_count);
+            } else {
             // The value doesn't fit in r1; copy it through the hidden
             // out-pointer the caller supplied (stashed at sret_offset by
             // gen_func's prologue) instead. expr's address is computed first
@@ -221,6 +234,7 @@ void gen_stmt_internal(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
             sb_append(sb, "  load  r3, r3\n");
             sb_append(sb, "  pop   r2\n");
             emit_aggregate_copy(sb, "r3", "r2", cc->sret_size_bytes);
+            }
         } else if (node->ret.expr) {
             gen_expr(cc, node->ret.expr, sb, "r1", params, param_count, locals, local_count);
         }

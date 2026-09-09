@@ -1,0 +1,14 @@
+// An aggregate result can be forwarded directly to the caller's hidden
+// destination instead of being forced through a named local.
+typedef struct { i32 x; i32 y; } P;
+
+P make() { P r; r.x = 1; r.y = 2; return r; }
+
+P relay() {
+    return make();
+}
+
+i32 main() {
+    P p = relay();
+    return p.x + p.y;
+}

@@ -14,10 +14,8 @@ int is_type(ParserContext *context, TokenKind kind, Token *cur) {
         kind == BOOL
     ) return 1;
     if (kind == IDENTIFIER && is_user_typename(context, cur->value)) return 1;
-    /* `_` names the type of a payload that carries nothing worth typing,
-     * usable as a generic type argument (`Result<_, E>`) the same way any
-     * other type name is -- see semantic_infer_identifier_type, which is the
-     * only place its one value (also spelled `_`) is ever accepted. */
+    /* `_` is the unit type used as a generic argument when a payload has no
+     * useful value, e.g. `Result<_, FsError>`. */
     if (kind == UNDERSCORE) return 1;
     return 0;
 }
