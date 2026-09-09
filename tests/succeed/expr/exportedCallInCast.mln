@@ -1,0 +1,23 @@
+// Regression: rewrite_node() (parser_rewrite.c) rewrites a same-file call to
+// an exported function into its mangled name -- necessary because add_export()
+// (parser_toplevel.c) renames the function's own AST_FUNDEF.name in place,
+// after add_function() has already stored a pointer to that same node keyed
+// on the original bare name. Its switch had no AST_CAST case, so the rewrite
+// silently skipped any exported call wrapped in a cast, and semantic analysis
+// then rejected the untouched bare name as undefined.
+typedef struct { u16 h; } Node;
+
+export i32 scale() {
+    return 2;
+}
+
+void set_h(Node *n) {
+    n->h = (u16)(8 * scale());
+}
+
+i32 main() {
+    Node n;
+    n.h = 0;
+    set_h(&n);
+    return n.h;
+}

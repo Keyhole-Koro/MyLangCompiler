@@ -81,6 +81,21 @@ void rewrite_node(ParserContext *context, ASTNode *node, char **scope, int scope
     case AST_UNARY:
         rewrite_node(context, node->unary.operand, scope, scope_count);
         break;
+    case AST_CAST:
+        rewrite_node(context, node->cast.expr, scope, scope_count);
+        break;
+    case AST_BORROW:
+        rewrite_node(context, node->borrow.expr, scope, scope_count);
+        break;
+    case AST_BORROW_MUT:
+        rewrite_node(context, node->borrow_mut.expr, scope, scope_count);
+        break;
+    case AST_YIELD:
+        rewrite_node(context, node->yield_stmt.expr, scope, scope_count);
+        break;
+    case AST_UNCHECKED:
+        rewrite_node(context, node->unchecked_block.body, scope, scope_count);
+        break;
     case AST_TERNARY:
         rewrite_node(context, node->ternary.cond, scope, scope_count);
         rewrite_node(context, node->ternary.then_expr, scope, scope_count);
