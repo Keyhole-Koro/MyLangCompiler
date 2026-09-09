@@ -83,6 +83,39 @@ static ASTNode *find_member_type(ParserContext *ctx, const char *struct_name, co
 
 static void resolve_calls_node(ParserContext *context, MethodScope *scope, ASTNode *node);
 
+/* The public mock facade deliberately hides its generated TargetMock and
+ * TargetRule types. Package imports expose ordinary function signatures to
+ * codegen but do not copy non-generic receiver methods into this parser's
+ * method table. Resolve just this compiler-owned fluent surface directly. */
+static const char *mock_facade_method(const ASTNode *receiver, const char *method) {
+    if (!receiver || receiver->type != AST_CALL || !method) return NULL;
+    const char *callee = receiver->call.name;
+    if (!callee) return NULL;
+    if ((strcmp(callee, "mock_target") == 0 || strcmp(callee, "mock_spy") == 0) &&
+        strcmp(method, "when") == 0) return "TargetMock__when";
+    if ((strcmp(callee, "TargetMock__when") == 0 ||
+         strcmp(callee, "TargetRule__ret") == 0 ||
+         strcmp(callee, "TargetRule__then_ret") == 0) &&
+        strcmp(method, "ret") == 0) return "TargetRule__ret";
+    if ((strcmp(callee, "TargetMock__when") == 0 ||
+         strcmp(callee, "TargetRule__ret") == 0 ||
+         strcmp(callee, "TargetRule__then_ret") == 0) &&
+        strcmp(method, "then_ret") == 0) return "TargetRule__then_ret";
+    return NULL;
+}
+
+static void resolve_mock_facade_method(ASTNode *call, const char *mangled) {
+    ASTNode **new_args = malloc(sizeof(ASTNode *) * (call->call.arg_count + 1));
+    new_args[0] = call->call.recv;
+    for (int i = 0; i < call->call.arg_count; i++) new_args[i + 1] = call->call.args[i];
+    free(call->call.args);
+    call->call.args = new_args;
+    call->call.arg_count += 1;
+    free(call->call.name);
+    call->call.name = strdup(mangled);
+    call->call.recv = NULL;
+}
+
 static int infer_recv_shape(ParserContext *ctx, MethodScope *scope, ASTNode *expr, RecvShape *out) {
     if (!expr) return 0;
     switch (expr->type) {
@@ -185,6 +218,11 @@ static ASTNode *convert_receiver(ParserContext *ctx, ASTNode *call, ASTNode *rec
 }
 
 static void resolve_method_call(ParserContext *ctx, MethodScope *scope, ASTNode *call) {
+    const char *mock_mangled = mock_facade_method(call->call.recv, call->call.name);
+    if (mock_mangled) {
+        resolve_mock_facade_method(call, mock_mangled);
+        return;
+    }
     RecvShape actual;
     if (!infer_recv_shape(ctx, scope, call->call.recv, &actual)) {
         method_error(ctx, call, "cannot determine the type of this method call's receiver");

@@ -24,6 +24,8 @@ typedef struct {
     const char *output_path;
     const char **excludes;
     int exclude_count;
+    const char **call_redirects;
+    int call_redirect_count;
     int include_masm;
     int warnings_as_errors;
 } DriverOptions;

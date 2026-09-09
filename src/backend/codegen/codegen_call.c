@@ -189,6 +189,24 @@ static int sig_arg_is_aggregate(const FunctionSig *sig, int i)
     return sig && sig->param_is_aggregate && i < sig->param_count && sig->param_is_aggregate[i];
 }
 
+static const char *direct_call_target(const char *name)
+{
+    return codegen_redirect_call_target(name);
+}
+
+static void note_direct_call_import(CompilerContext *cc, const char *name)
+{
+    note_import_func(cc, direct_call_target(name));
+}
+
+/* The public mock facade is source-level sugar over this one variadic
+ * receiver method. Its signature is intentionally not a compiler builtin:
+ * TestKit remains an ordinary MyLang library. */
+static int is_mock_facade_when(const char *name)
+{
+    return name && strcmp(name, "TargetMock__when") == 0;
+}
+
 void gen_call(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char *target_reg,
               char **params, int param_count, char **locals, int local_count)
 {
@@ -217,8 +235,8 @@ void gen_call(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char 
         exit(1);
     }
 
-    if (sig && sig->is_variadic) {
-        int fixed = sig->fixed_param_count;
+    if ((sig && sig->is_variadic) || is_mock_facade_when(node->call.name)) {
+        int fixed = sig ? sig->fixed_param_count : 1;
         if (argc < fixed) {
             fprintf(stderr, "Codegen error at %d:%d: variadic call to '%s' is missing fixed arguments\n",
                     node->line, node->col, node->call.name);
@@ -229,7 +247,7 @@ void gen_call(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char 
         int rest_count = argc - fixed;
         int stack_args = fixed_stack_count + rest_count;
 
-        note_import_func(cc, node->call.name);
+        note_direct_call_import(cc, node->call.name);
 
         if (stack_args > 0) {
             sb_append(sb, "  ; push variadic stack arguments\n");
@@ -259,7 +277,7 @@ void gen_call(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char 
                         sig_arg_is_aggregate(sig, i), node->call.name, i);
         }
         sb_append(sb, "  movi r4, %d\n", rest_count);
-        sb_append(sb, "  call %s\n", node->call.name);
+        sb_append(sb, "  call %s\n", direct_call_target(node->call.name));
 
         if (stack_args > 0) {
             sb_append(sb, "  ; restore sp after variadic call\n");
@@ -271,7 +289,7 @@ void gen_call(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char 
         return;
     }
 
-    note_import_func(cc, node->call.name);
+    note_direct_call_import(cc, node->call.name);
     int stack_args = argc > 3 ? (argc - 3) : 0;
 
     if (stack_args > 0)
@@ -306,7 +324,7 @@ void gen_call(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char 
         sb_append(sb, "  pop %s\n", arg_regs[i]);
     }
 
-    sb_append(sb, "  call %s\n", node->call.name);
+    sb_append(sb, "  call %s\n", direct_call_target(node->call.name));
 
     if (aggregate_temp_bytes > 0)
     {
@@ -350,7 +368,7 @@ void gen_call_sret(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
 
     const FunctionSig *sig = find_func_sig(cc, node->call.name);
     int argc = node->call.arg_count;
-    note_import_func(cc, node->call.name);
+    note_direct_call_import(cc, node->call.name);
 
     int stack_args = argc > 3 ? (argc - 3) : 0;
     if (stack_args > 0)
@@ -388,7 +406,7 @@ void gen_call_sret(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
     if (stack_args > 0) sb_append(sb, "  addis r4, %d\n", stack_args * SLOT_SIZE);
     sb_append(sb, "  load r4, r4\n");
 
-    sb_append(sb, "  call %s\n", node->call.name);
+    sb_append(sb, "  call %s\n", direct_call_target(node->call.name));
 
     if (stack_args > 0)
     {

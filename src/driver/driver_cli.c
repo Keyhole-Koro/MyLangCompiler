@@ -9,6 +9,7 @@ void driver_print_usage(const char *prog) {
             "Options:\n"
             "  -exclude <path>   Exclude relative path or directory name (repeatable)\n"
             "  -entry <name>     Entry function name mapped to __START__ (default: main)\n"
+            "  --redirect-call <from>=<to>  Redirect direct calls (repeatable)\n"
             "  -masm             When compiling a directory, also copy .masm files\n"
             "  --Werror          Treat semantic warnings as errors\n",
             prog, prog);
@@ -18,6 +19,9 @@ void driver_options_dispose(DriverOptions *opts) {
     free((void *)opts->excludes);
     opts->excludes = NULL;
     opts->exclude_count = 0;
+    free((void *)opts->call_redirects);
+    opts->call_redirects = NULL;
+    opts->call_redirect_count = 0;
 }
 
 int driver_parse_args(int argc, char *argv[], DriverOptions *opts) {
@@ -29,6 +33,16 @@ int driver_parse_args(int argc, char *argv[], DriverOptions *opts) {
             opts->excludes[opts->exclude_count++] = argv[++i];
         } else if ((strcmp(argv[i], "-entry") == 0 || strcmp(argv[i], "--entry") == 0) && i + 1 < argc) {
             opts->entry_name = argv[++i];
+        } else if (strcmp(argv[i], "--redirect-call") == 0 && i + 1 < argc) {
+            const char *spec = argv[++i];
+            if (!strchr(spec, '=')) {
+                fprintf(stderr, "--redirect-call must be <from>=<to>\n");
+                return -1;
+            }
+            opts->call_redirects = (const char**)realloc(
+                    (void *)opts->call_redirects,
+                    sizeof(char*) * (opts->call_redirect_count + 1));
+            opts->call_redirects[opts->call_redirect_count++] = spec;
         } else if (strcmp(argv[i], "-masm") == 0 || strcmp(argv[i], "--masm") == 0) {
             opts->include_masm = 1;
         } else if (strcmp(argv[i], "--Werror") == 0 || strcmp(argv[i], "--warnings-as-errors") == 0) {

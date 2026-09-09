@@ -2,6 +2,8 @@
 
 static const char *g_entry_name = "main";
 static const char *g_source_path = NULL;
+static const char **g_call_redirects = NULL;
+static int g_call_redirect_count = 0;
 
 void codegen_set_entry(const char *name) {
     if (name && name[0]) {
@@ -13,6 +15,25 @@ void codegen_set_entry(const char *name) {
 
 void codegen_set_source_path(const char *path) {
     g_source_path = path;
+}
+
+void codegen_set_call_redirects(const char **redirects, int count) {
+    g_call_redirects = redirects;
+    g_call_redirect_count = count;
+}
+
+const char *codegen_redirect_call_target(const char *name) {
+    if (!name) return name;
+    for (int i = 0; i < g_call_redirect_count; i++) {
+        const char *spec = g_call_redirects[i];
+        const char *separator = spec ? strchr(spec, '=') : NULL;
+        if (!separator) continue;
+        size_t source_len = (size_t)(separator - spec);
+        if (strlen(name) == source_len && strncmp(name, spec, source_len) == 0 && separator[1]) {
+            return separator + 1;
+        }
+    }
+    return name;
 }
 
 int is_entry_name(const char *name) {

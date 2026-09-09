@@ -1123,6 +1123,13 @@ static void check_call_signature(SemanticContext *ctx, ASTNode *node) {
 
     if (!ctx || !node || node->type != AST_CALL || !node->call.name) return;
     if (semantic_is_builtin_call(node->call.name)) return;
+    // The parser lowers the public mock facade chain to these imported
+    // receiver-method symbols. Their declarations are carried by the module
+    // resolver for codegen, while semantic analysis intentionally treats the
+    // compiler-owned fluent surface as an intrinsic.
+    if (strcmp(node->call.name, "TargetMock__when") == 0 ||
+        strcmp(node->call.name, "TargetRule__ret") == 0 ||
+        strcmp(node->call.name, "TargetRule__then_ret") == 0) return;
 
     sig = find_function_sig(ctx, node->call.name);
     if (!sig) {
