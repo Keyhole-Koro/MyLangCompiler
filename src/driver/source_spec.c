@@ -73,12 +73,18 @@ MyLangSourceSpecResult mylang_source_spec_parse(const char *path) {
 
     bool saw_dom = false;
     bool saw_safe = false;
+    bool saw_test = false;
     bool semantic_phase = false;
 
     for (size_t i = 1; i < segment_count; ++i) {
         const char *modifier = segments[i];
         if (!modifier[0]) {
             fail(&result, "source filename contains an empty modifier", NULL);
+            return result;
+        }
+
+        if (saw_test) {
+            fail(&result, "test source modifier '%s' must be last", modifier);
             return result;
         }
 
@@ -101,6 +107,15 @@ MyLangSourceSpecResult mylang_source_spec_parse(const char *path) {
             saw_safe = true;
             semantic_phase = true;
             result.spec.safety = MYLANG_SAFETY_STRICT;
+        } else if (strcmp(modifier, "test") == 0) {
+            /* Test selection belongs to MyLangTester. MLC accepts the
+             * extension so a runner can compile the original test source
+             * without rewriting it, but it changes no language profile. */
+            if (saw_test) {
+                fail(&result, "duplicate source modifier '%s'", modifier);
+                return result;
+            }
+            saw_test = true;
         } else {
             fail(&result, "unknown source modifier '%s'", modifier);
             return result;

@@ -41,12 +41,15 @@ def main() -> None:
     expect_success("main.safe.mln", "syntax=core, safety=safe")
     expect_success("page.dom.mln", "syntax=dom, safety=default")
     expect_success("page.dom.safe.mln", "syntax=dom, safety=safe")
+    expect_success("serial.test.mln", "syntax=core, safety=default")
+    expect_success("page.dom.test.mln", "syntax=dom, safety=default")
 
     expect_failure("page.mlx", "expected a canonical .mln filename")
     expect_failure("page.web.mln", "unknown source modifier 'web'")
     expect_failure("page.dom.dom.mln", "duplicate source modifier 'dom'")
     expect_failure("page.safe.safe.mln", "duplicate source modifier 'safe'")
     expect_failure("page.safe.dom.mln", "must precede semantic policy modifiers")
+    expect_failure("page.test.dom.mln", "test source modifier 'dom' must be last")
     expect_failure("page..mln", "empty modifier")
     expect_failure(
         "page.mln",

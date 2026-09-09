@@ -10,17 +10,20 @@ main.mln
 main.safe.mln
 page.dom.mln
 page.dom.safe.mln
+serial_rx.test.mln
+page.dom.test.mln
 ```
 
 The canonical order is:
 
 ```text
-<name>.<syntax modifiers>.<semantic policy modifiers>.mln
+<name>.<syntax modifiers>.<semantic policy modifiers>.<test marker>.mln
 ```
 
 `dom` enables DOM expression syntax. `safe` selects the strict memory-safety
 profile. The two axes are independent, so DOM syntax can be compiled with or
-without the strict policy.
+without the strict policy. `test` is an optional final marker consumed by
+MyLangTester; it does not change the compiler profile.
 
 ## Rejected forms
 

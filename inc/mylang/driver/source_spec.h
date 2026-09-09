@@ -34,10 +34,14 @@ typedef struct {
  *   name.safe.mln
  *   name.dom.mln
  *   name.dom.safe.mln
+ *   name.test.mln
+ *   name.dom.test.mln
  *
  * Modifier order is canonical and enforced: syntax modifiers precede semantic
- * policy modifiers. Unknown and duplicate modifiers are rejected. The legacy
- * .mlx extension is intentionally unsupported.
+ * policy modifiers. The optional, final `test` modifier is accepted as a
+ * MyLangTester artifact marker and does not change MLC's language profile.
+ * Unknown and duplicate modifiers are rejected. The legacy .mlx extension is
+ * intentionally unsupported.
  */
 MyLangSourceSpecResult mylang_source_spec_parse(const char *path);
 
