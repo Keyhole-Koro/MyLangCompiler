@@ -102,6 +102,31 @@ FAIL_CASES = {
         "carries one payload, but 2 were given",
         None,
     ),
+    "payloadEnumTarget_fail": (
+        "fail/semantic/payloadEnumTarget_fail.mln",
+        "can only be matched on a variable or a field of one",
+        None,
+    ),
+    "payloadEnumBareAmbiguous_fail": (
+        "fail/semantic/payloadEnumBareAmbiguous_fail.mln",
+        "is declared by more than one payload enum; write '<EnumName>::NoError'",
+        None,
+    ),
+    "payloadEnumNestedNonExhaustive_fail": (
+        "fail/semantic/payloadEnumNestedNonExhaustive_fail.mln",
+        "this match does not cover one variant of 'MmuError': WrongType",
+        None,
+    ),
+    "unitWildcardValueOutsideUnit_fail": (
+        "fail/semantic/unitWildcardValueOutsideUnit_fail.mln",
+        "initializer type mismatch: expected i32, got _",
+        None,
+    ),
+    "unitWildcardWrongPayload_fail": (
+        "fail/semantic/unitWildcardWrongPayload_fail.mln",
+        "assignment type mismatch: expected i32, got _",
+        None,
+    ),
     "genericTypeArgCountMismatch_fail": (
         "fail/semantic/genericTypeArgCountMismatch_fail.mln",
         "error[E0501]: generic type 'Box' expects 1 type argument but got 2",
