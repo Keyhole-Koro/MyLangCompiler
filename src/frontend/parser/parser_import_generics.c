@@ -44,6 +44,79 @@ static void remove_import_symbol(ASTNode *node, const char *name) {
     }
 }
 
+typedef struct GenericImportClosure {
+    ParserContext *context;
+    Module *module;
+} GenericImportClosure;
+
+static void import_generic_template_closure(GenericImportClosure *closure, ASTNode *template);
+
+static void import_generic_dependency(ASTNode **slot, void *user_data) {
+    ASTNode *node = slot ? *slot : NULL;
+    GenericImportClosure *closure = user_data;
+    const char *name = NULL;
+    if (node && node->type == AST_TYPE_GENERIC) name = node->generic_type.name;
+    if (node && node->type == AST_CALL && node->call.type_arg_count) name = node->call.name;
+    if (name) {
+        for (int i = 0; i < closure->module->generic_template_count; i++) {
+            ASTNode *candidate = closure->module->generic_templates[i];
+            const char *candidate_name = template_name(candidate);
+            if (candidate_name && strcmp(candidate_name, name) == 0) {
+                import_generic_template_closure(closure, candidate);
+                break;
+            }
+        }
+    }
+    ast_visit_children(node, import_generic_dependency, closure);
+}
+
+static int generic_template_is_already_imported(ParserContext *context, ASTNode *template) {
+    const char *name = template_name(template);
+    if (template->type == AST_STRUCT || template->type == AST_ENUM)
+        return find_generic_type_template(context, name) != NULL;
+    return find_generic_function_template(context, name) != NULL;
+}
+
+static int generic_method_is_already_imported(ParserContext *context,
+                                              const char *receiver, const char *method) {
+    for (int i = 0; i < generic_method_count(context); i++) {
+        GenericMethodDef *candidate = generic_method_at(context, i);
+        if (strcmp(candidate->receiver_template_name, receiver) == 0 &&
+            strcmp(candidate->method_name, method) == 0) return 1;
+    }
+    return 0;
+}
+
+/* A public generic declaration is only useful if the importer also receives
+ * the generic declarations used in its fields, signatures and body.  Copy
+ * that closure here rather than requiring users to know implementation types
+ * such as Mock's Rule and CallHistory. */
+static void import_generic_template_closure(GenericImportClosure *closure, ASTNode *template) {
+    if (!template || !template_is_exported(template) ||
+        generic_template_is_already_imported(closure->context, template)) return;
+
+    ASTNode *copy = ast_clone(template);
+    /* Register before traversing methods/dependencies: a generic type is
+     * allowed to refer to itself through a pointer or a method signature. */
+    add_generic_template(closure->context, copy);
+    if (copy->type == AST_STRUCT || copy->type == AST_ENUM) {
+        const char *type_name = copy->type == AST_STRUCT
+            ? copy->struct_stmt.name : copy->enum_stmt.name;
+        add_typename(closure->context, type_name);
+        for (int i = 0; i < closure->module->generic_method_count; i++) {
+            ModuleGenericMethod *method = &closure->module->generic_methods[i];
+            if (!method->receiver_template_name ||
+                strcmp(method->receiver_template_name, type_name) != 0 ||
+                generic_method_is_already_imported(closure->context, type_name,
+                                                   method->method_name)) continue;
+            add_generic_method(closure->context, method->receiver_template_name,
+                               method->method_name, ast_clone(method->fundef));
+            ast_visit_children(method->fundef, import_generic_dependency, closure);
+        }
+    }
+    ast_visit_children(template, import_generic_dependency, closure);
+}
+
 void load_imported_generic_templates(ParserContext *context, ASTNode *import_node,
                                      const char *source_path) {
     if (!import_node || import_node->type != AST_IMPORT ||
@@ -62,25 +135,9 @@ void load_imported_generic_templates(ParserContext *context, ASTNode *import_nod
         if (!template_is_exported(template) || !import_requests_symbol(import_node, name))
             continue;
 
-        ASTNode *copy = ast_clone(template);
-        if (copy->type == AST_STRUCT || copy->type == AST_ENUM) {
-            const char *type_name = copy->type == AST_STRUCT
-                ? copy->struct_stmt.name : copy->enum_stmt.name;
-            add_typename(context, type_name);
-        }
-        add_generic_template(context, copy);
+        GenericImportClosure closure = {context, mod};
+        import_generic_template_closure(&closure, template);
 
-        /* A generic receiver method is part of its receiver type's API, not
-         * an independently importable symbol.  Bring every associated method
-         * template over with an imported generic type; concrete methods are
-         * still generated only if this module uses that type. */
-        for (int j = 0; j < mod->generic_method_count; j++) {
-            ModuleGenericMethod *method = &mod->generic_methods[j];
-            if (!method->receiver_template_name ||
-                strcmp(method->receiver_template_name, name) != 0) continue;
-            add_generic_method(context, method->receiver_template_name,
-                               method->method_name, ast_clone(method->fundef));
-        }
         remove_import_symbol(import_node, name);
     }
 }

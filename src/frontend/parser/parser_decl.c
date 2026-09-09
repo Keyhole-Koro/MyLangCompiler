@@ -178,6 +178,7 @@ static char **receiver_bound_type_params(Token *cur, int *out_count) {
     }
     if (count == 0 || !t || t->kind != GT) goto invalid;
     t = t->next;
+    while (t && t->kind == ASTARISK) t = t->next;
     if (!t || t->kind != IDENTIFIER) goto invalid; /* receiver variable */
     t = t->next;
     if (!t || t->kind != R_PARENTHESES) goto invalid;
