@@ -257,10 +257,12 @@ static int semantic_typeinfo_exact(const SemanticTypeInfo *left,
     return 1;
 }
 
-static ASTNode *mock_callback_target_expr(ASTNode *call) {
+static ASTNode *mock_rule_target_expr(ASTNode *call, const char *rule_name) {
     ASTNode *when;
     ASTNode *factory;
-    if (!call || call->type != AST_CALL || call->call.arg_count != 2) return NULL;
+    if (!call || call->type != AST_CALL || !rule_name ||
+        !call->call.name || strcmp(call->call.name, rule_name) != 0 ||
+        call->call.arg_count != 2) return NULL;
     when = call->call.args[0];
     if (!when || when->type != AST_CALL ||
         !when->call.name || strcmp(when->call.name, "TargetMock__when") != 0 ||
@@ -271,6 +273,37 @@ static ASTNode *mock_callback_target_expr(ASTNode *call) {
          strcmp(factory->call.name, "mock_spy") != 0) ||
         factory->call.arg_count != 1) return NULL;
     return factory->call.args[0];
+}
+
+static ASTNode *mock_callback_target_expr(ASTNode *call) {
+    return mock_rule_target_expr(call, "TargetRule__call");
+}
+
+static int mock_return_uses_hidden_buffer(SemanticContext *ctx,
+                                          const SemanticTypeInfo *type) {
+    if (!ctx || !type) return 0;
+    if (type->pointer_level > 0 || type->ref_kind != REFKIND_NONE) return 0;
+    if (type->is_array) return 1;
+    // Payload enums are lowered to a struct before semantic/codegen, so the
+    // struct table is also the authoritative answer for Result<T, E>.
+    return type->base_type && semantic_struct_is_known(ctx, type->base_type);
+}
+
+static void check_mock_stored_return(SemanticContext *ctx, ASTNode *call) {
+    ASTNode *target_expr;
+    SemanticFunctionSig *target;
+
+    if (!ctx || !call) return;
+    target_expr = mock_rule_target_expr(call, call->call.name);
+    if (!target_expr || target_expr->type != AST_IDENTIFIER) return;
+    target = find_function_sig(ctx, target_expr->identifier.name);
+    if (!target || !target->has_return_type ||
+        !mock_return_uses_hidden_buffer(ctx, &target->return_type)) return;
+
+    semantic_error_code_at(ctx, semantic_location_from_ast(call),
+                           SEMCODE_MOCK_AGGREGATE_STORED_RETURN,
+                           "mock .ret(...) cannot return aggregate target '%s'; use .call(fake)",
+                           target_expr->identifier.name);
 }
 
 static void check_mock_callback_signature(SemanticContext *ctx, ASTNode *call) {
@@ -1246,7 +1279,13 @@ static void check_call_signature(SemanticContext *ctx, ASTNode *node) {
     }
     if (strcmp(node->call.name, "TargetMock__when") == 0 ||
         strcmp(node->call.name, "TargetRule__ret") == 0 ||
-        strcmp(node->call.name, "TargetRule__then_ret") == 0) return;
+        strcmp(node->call.name, "TargetRule__then_ret") == 0) {
+        if (strcmp(node->call.name, "TargetRule__ret") == 0 ||
+            strcmp(node->call.name, "TargetRule__then_ret") == 0) {
+            check_mock_stored_return(ctx, node);
+        }
+        return;
+    }
 
     sig = find_function_sig(ctx, node->call.name);
     if (!sig) {
