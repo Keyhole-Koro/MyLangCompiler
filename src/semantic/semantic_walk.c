@@ -202,6 +202,26 @@ static void semantic_collect_function_sigs(SemanticContext *ctx, ASTNode *node) 
                     if (pkg) {
                         semantic_register_imported_package(ctx, pkg);
                     }
+                    /* Mock callback validation needs the concrete type of a
+                     * package target, not merely its callable symbol name. */
+                    for (int i = 0; i < mod->symbol_count; i++) {
+                        ModuleSymbol *sym = &mod->symbols[i];
+                        ASTNode *fn;
+                        if (sym->kind != SYMBOL_FUNCTION || !sym->source_name ||
+                            !sym->link_name ||
+                            !resolver_lookup_import_symbol(node, mod, sym->source_name)) {
+                            continue;
+                        }
+                        fn = sym->declaration;
+                        if (!fn || fn->type != AST_FUNDEF) continue;
+                        register_function_sig(ctx, sym->link_name,
+                                              fn->fundef.param_count,
+                                              fn->fundef.is_variadic ? 1 : 0,
+                                              0,
+                                              semantic_location_from_ast(node),
+                                              fn->fundef.ret_type,
+                                              fn->fundef.params);
+                    }
                 }
             }
         }
@@ -218,6 +238,99 @@ static void semantic_collect_function_sigs(SemanticContext *ctx, ASTNode *node) 
         break;
     default:
         break;
+    }
+}
+
+static int semantic_typeinfo_exact(const SemanticTypeInfo *left,
+                                   const SemanticTypeInfo *right) {
+    if (!left || !right || !left->base_type || !right->base_type ||
+        strcmp(left->base_type, right->base_type) != 0 ||
+        left->ref_kind != right->ref_kind ||
+        left->pointer_level != right->pointer_level ||
+        left->is_array != right->is_array ||
+        left->dims_count != right->dims_count) {
+        return 0;
+    }
+    for (int i = 0; i < left->dims_count; i++) {
+        if (left->dims[i] != right->dims[i]) return 0;
+    }
+    return 1;
+}
+
+static ASTNode *mock_callback_target_expr(ASTNode *call) {
+    ASTNode *when;
+    ASTNode *factory;
+    if (!call || call->type != AST_CALL || call->call.arg_count != 2) return NULL;
+    when = call->call.args[0];
+    if (!when || when->type != AST_CALL ||
+        !when->call.name || strcmp(when->call.name, "TargetMock__when") != 0 ||
+        when->call.arg_count < 1) return NULL;
+    factory = when->call.args[0];
+    if (!factory || factory->type != AST_CALL || !factory->call.name ||
+        (strcmp(factory->call.name, "mock_target") != 0 &&
+         strcmp(factory->call.name, "mock_spy") != 0) ||
+        factory->call.arg_count != 1) return NULL;
+    return factory->call.args[0];
+}
+
+static void check_mock_callback_signature(SemanticContext *ctx, ASTNode *call) {
+    ASTNode *target_expr;
+    ASTNode *fake_expr;
+    SemanticFunctionSig *target;
+    SemanticFunctionSig *fake;
+    const char *target_name;
+    const char *fake_name;
+
+    if (!ctx || !call) return;
+    target_expr = mock_callback_target_expr(call);
+    fake_expr = call->call.arg_count == 2 ? call->call.args[1] : NULL;
+    if (!target_expr || target_expr->type != AST_IDENTIFIER ||
+        !fake_expr || fake_expr->type != AST_IDENTIFIER) {
+        semantic_error_code_at(ctx, semantic_location_from_ast(call),
+                               SEMCODE_MOCK_CALLBACK_SIGNATURE_MISMATCH,
+                               "mock .call(...) requires a direct target and fake function name");
+        return;
+    }
+
+    target_name = target_expr->identifier.name;
+    fake_name = fake_expr->identifier.name;
+    target = find_function_sig(ctx, target_name);
+    fake = find_function_sig(ctx, fake_name);
+    if (!target || !fake || !target->has_return_type || !fake->has_return_type ||
+        !target->has_param_types || !fake->has_param_types) {
+        semantic_error_code_at(ctx, semantic_location_from_ast(fake_expr),
+                               SEMCODE_MOCK_CALLBACK_SIGNATURE_MISMATCH,
+                               "cannot determine the complete signature for mock target '%s' or fake '%s'",
+                               target_name ? target_name : "<target>",
+                               fake_name ? fake_name : "<fake>");
+        return;
+    }
+    if (target->is_variadic || fake->is_variadic) {
+        semantic_error_code_at(ctx, semantic_location_from_ast(fake_expr),
+                               SEMCODE_MOCK_CALLBACK_SIGNATURE_MISMATCH,
+                               "mock .call(...) does not support variadic target or fake functions");
+        return;
+    }
+    if (target->param_count != fake->param_count) {
+        semantic_error_code_at(ctx, semantic_location_from_ast(fake_expr),
+                               SEMCODE_MOCK_CALLBACK_SIGNATURE_MISMATCH,
+                               "mock fake '%s' has %d parameters but target '%s' has %d",
+                               fake_name, fake->param_count, target_name, target->param_count);
+        return;
+    }
+    for (int i = 0; i < target->param_count; i++) {
+        if (semantic_typeinfo_exact(&target->param_types[i], &fake->param_types[i])) continue;
+        semantic_error_code_at(ctx, semantic_location_from_ast(fake_expr),
+                               SEMCODE_MOCK_CALLBACK_SIGNATURE_MISMATCH,
+                               "mock fake '%s' parameter %d does not match target '%s'",
+                               fake_name, i + 1, target_name);
+        return;
+    }
+    if (!semantic_typeinfo_exact(&target->return_type, &fake->return_type)) {
+        semantic_error_code_at(ctx, semantic_location_from_ast(fake_expr),
+                               SEMCODE_MOCK_CALLBACK_SIGNATURE_MISMATCH,
+                               "mock fake '%s' return type does not match target '%s'",
+                               fake_name, target_name);
     }
 }
 
@@ -1127,10 +1240,13 @@ static void check_call_signature(SemanticContext *ctx, ASTNode *node) {
     // receiver-method symbols. Their declarations are carried by the module
     // resolver for codegen, while semantic analysis intentionally treats the
     // compiler-owned fluent surface as an intrinsic.
+    if (strcmp(node->call.name, "TargetRule__call") == 0) {
+        check_mock_callback_signature(ctx, node);
+        return;
+    }
     if (strcmp(node->call.name, "TargetMock__when") == 0 ||
         strcmp(node->call.name, "TargetRule__ret") == 0 ||
-        strcmp(node->call.name, "TargetRule__then_ret") == 0 ||
-        strcmp(node->call.name, "TargetRule__call") == 0) return;
+        strcmp(node->call.name, "TargetRule__then_ret") == 0) return;
 
     sig = find_function_sig(ctx, node->call.name);
     if (!sig) {
