@@ -95,12 +95,19 @@ static const char *mock_facade_method(const ASTNode *receiver, const char *metho
         strcmp(method, "when") == 0) return "TargetMock__when";
     if ((strcmp(callee, "TargetMock__when") == 0 ||
          strcmp(callee, "TargetRule__ret") == 0 ||
-         strcmp(callee, "TargetRule__then_ret") == 0) &&
+         strcmp(callee, "TargetRule__then_ret") == 0 ||
+         strcmp(callee, "TargetRule__call") == 0) &&
         strcmp(method, "ret") == 0) return "TargetRule__ret";
     if ((strcmp(callee, "TargetMock__when") == 0 ||
          strcmp(callee, "TargetRule__ret") == 0 ||
-         strcmp(callee, "TargetRule__then_ret") == 0) &&
+         strcmp(callee, "TargetRule__then_ret") == 0 ||
+         strcmp(callee, "TargetRule__call") == 0) &&
         strcmp(method, "then_ret") == 0) return "TargetRule__then_ret";
+    if ((strcmp(callee, "TargetMock__when") == 0 ||
+         strcmp(callee, "TargetRule__ret") == 0 ||
+         strcmp(callee, "TargetRule__then_ret") == 0 ||
+         strcmp(callee, "TargetRule__call") == 0) &&
+        strcmp(method, "call") == 0) return "TargetRule__call";
     return NULL;
 }
 

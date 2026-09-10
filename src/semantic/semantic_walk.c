@@ -1129,7 +1129,8 @@ static void check_call_signature(SemanticContext *ctx, ASTNode *node) {
     // compiler-owned fluent surface as an intrinsic.
     if (strcmp(node->call.name, "TargetMock__when") == 0 ||
         strcmp(node->call.name, "TargetRule__ret") == 0 ||
-        strcmp(node->call.name, "TargetRule__then_ret") == 0) return;
+        strcmp(node->call.name, "TargetRule__then_ret") == 0 ||
+        strcmp(node->call.name, "TargetRule__call") == 0) return;
 
     sig = find_function_sig(ctx, node->call.name);
     if (!sig) {
