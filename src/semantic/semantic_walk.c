@@ -285,8 +285,14 @@ static int mock_return_uses_hidden_buffer(SemanticContext *ctx,
     if (type->pointer_level > 0 || type->ref_kind != REFKIND_NONE) return 0;
     if (type->is_array) return 1;
     // Payload enums are lowered to a struct before semantic/codegen, so the
-    // struct table is also the authoritative answer for Result<T, E>.
-    return type->base_type && semantic_struct_is_known(ctx, type->base_type);
+    // struct table is also the authoritative answer for local Result<T, E>.
+    if (type->base_type && semantic_struct_is_known(ctx, type->base_type)) return 1;
+    // Imported function signatures do not copy every foreign struct layout
+    // into the semantic context. A non-builtin, non-enum value type there is
+    // nevertheless a by-value aggregate in the ABI (the common case is an
+    // imported Result<T, E>), so reject a stored word return conservatively.
+    return type->base_type && !semantic_is_builtin_type(type->base_type) &&
+           !semantic_enum_type_exists(ctx, type->base_type);
 }
 
 static void check_mock_stored_return(SemanticContext *ctx, ASTNode *call) {
@@ -297,13 +303,37 @@ static void check_mock_stored_return(SemanticContext *ctx, ASTNode *call) {
     target_expr = mock_rule_target_expr(call, call->call.name);
     if (!target_expr || target_expr->type != AST_IDENTIFIER) return;
     target = find_function_sig(ctx, target_expr->identifier.name);
-    if (!target || !target->has_return_type ||
-        !mock_return_uses_hidden_buffer(ctx, &target->return_type)) return;
+    if (!target || !target->has_return_type) return;
+    if (target->return_type.base_type &&
+        strcmp(target->return_type.base_type, "void") == 0 &&
+        target->return_type.pointer_level == 0) {
+        semantic_error_code_at(ctx, semantic_location_from_ast(call),
+                               SEMCODE_MOCK_ABI_LIMIT,
+                               "mock .ret(...) cannot configure void target '%s'; use .call(fake)",
+                               target_expr->identifier.name);
+        return;
+    }
+    if (!mock_return_uses_hidden_buffer(ctx, &target->return_type)) return;
 
     semantic_error_code_at(ctx, semantic_location_from_ast(call),
                            SEMCODE_MOCK_AGGREGATE_STORED_RETURN,
                            "mock .ret(...) cannot return aggregate target '%s'; use .call(fake)",
                            target_expr->identifier.name);
+}
+
+static void check_mock_abi_limit(SemanticContext *ctx, ASTNode *call) {
+    if (!ctx || !call || !call->call.name) return;
+    if (strcmp(call->call.name, "TargetMock__when") == 0 &&
+        call->call.arg_count - 1 > 6) {
+        semantic_error_code_at(ctx, semantic_location_from_ast(call),
+                               SEMCODE_MOCK_ABI_LIMIT,
+                               "mock .when(...) supports at most six arguments");
+    } else if (strcmp(call->call.name, "mock_call_original") == 0 &&
+               call->call.arg_count > 6) {
+        semantic_error_code_at(ctx, semantic_location_from_ast(call),
+                               SEMCODE_MOCK_ABI_LIMIT,
+                               "mock.call_original(...) supports at most six arguments");
+    }
 }
 
 static void check_mock_callback_signature(SemanticContext *ctx, ASTNode *call) {
@@ -533,6 +563,11 @@ static int expr_is_obviously_value(ASTNode *expr) {
     return expr != NULL;
 }
 
+static int is_mock_call_original_expr(ASTNode *expr) {
+    return expr && expr->type == AST_CALL && expr->call.name &&
+           strcmp(expr->call.name, "mock_call_original") == 0;
+}
+
 static void check_return_type(SemanticContext *ctx, ASTNode *return_node) {
     ASTNode *fn;
     SemanticTypeInfo expected;
@@ -558,6 +593,15 @@ static void check_return_type(SemanticContext *ctx, ASTNode *return_node) {
         semantic_error_code_at(ctx, semantic_location_from_ast(return_node),
                                SEMCODE_RETURN_TYPE_MISMATCH,
                                "function '%s' must return a value", fn->fundef.name);
+        return;
+    }
+
+    // `mock.call_original(...)` is a compiler-recognized forwarding form
+    // when it is returned directly from an aggregate fake. Its public facade
+    // declaration is word-returning for scalar targets, but codegen forwards
+    // this function's hidden result buffer to the active original target.
+    if (mock_return_uses_hidden_buffer(ctx, &expected) &&
+        is_mock_call_original_expr(return_node->ret.expr)) {
         return;
     }
 
@@ -1280,10 +1324,15 @@ static void check_call_signature(SemanticContext *ctx, ASTNode *node) {
     if (strcmp(node->call.name, "TargetMock__when") == 0 ||
         strcmp(node->call.name, "TargetRule__ret") == 0 ||
         strcmp(node->call.name, "TargetRule__then_ret") == 0) {
+        check_mock_abi_limit(ctx, node);
         if (strcmp(node->call.name, "TargetRule__ret") == 0 ||
             strcmp(node->call.name, "TargetRule__then_ret") == 0) {
             check_mock_stored_return(ctx, node);
         }
+        return;
+    }
+    if (strcmp(node->call.name, "mock_call_original") == 0) {
+        check_mock_abi_limit(ctx, node);
         return;
     }
 

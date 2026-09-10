@@ -38,6 +38,7 @@ Bands `E06xx` and above are unused and reserved for future categories.
 | `E0102` | Function call | Argument type mismatch | `function argument type mismatch: parameter 1 of 'add' expected i32, got char*` |
 | `E0103` | Function call | Mock fake signature mismatch | `mock fake 'fake_read' parameter 2 does not match target 'device_read'` |
 | `E0104` | Function call | Stored mock return used for an aggregate target | `mock .ret(...) cannot return aggregate target 'make_pair'; use .call(fake)` |
+| `E0105` | Function call | TestKit mock ABI limit exceeded | `mock .when(...) supports at most six arguments` |
 | `E0201` | Return | Return type mismatch | `function 'f' must return a value` / return type mismatch (expected / actual) |
 | `E0301` | Expression type | Assignment / initializer type mismatch | assignment or initializer expected / actual mismatch |
 | `E0302` | Expression type | Invalid binary operands | `invalid operands to '+': i32 and char*` |

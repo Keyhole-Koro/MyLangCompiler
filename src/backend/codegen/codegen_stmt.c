@@ -1,5 +1,64 @@
 #include "mylang/backend/codegen_internal.h"
 
+static int is_mock_call_original(ASTNode *node) {
+    return node && node->type == AST_CALL && node->call.name &&
+           strcmp(node->call.name, "mock_call_original") == 0;
+}
+
+// Forward the hidden result buffer of an aggregate fake to the original
+// intercepted function. `mock.call_original` is normally a variadic,
+// word-returning facade function, so routing this particular direct-return
+// form through it would overwrite r4 with a rest-count. Instead, load the
+// entry-managed original address and perform the ABI call here.
+static void gen_mock_call_original_sret(CompilerContext *cc, ASTNode *node,
+                                        StringBuilder *sb, char **params,
+                                        int param_count, char **locals,
+                                        int local_count) {
+    int argc = node->call.arg_count;
+    if (argc > 6) {
+        fprintf(stderr,
+                "Codegen error: aggregate mock.call_original supports at most six arguments\n");
+        exit(1);
+    }
+
+    int stack_args = argc > 3 ? argc - 3 : 0;
+    if (stack_args > 0) {
+        sb_append(sb, "  ; push stack arguments (aggregate mock.call_original)\n");
+        sb_append(sb, "  addis sp, -%d\n", stack_args * SLOT_SIZE);
+        for (int i = 3; i < argc; i++) {
+            gen_expr(cc, node->call.args[i], sb, "r1", params, param_count, locals, local_count);
+            sb_append(sb, "  mov r2, sp\n  addis r2, %d\n  store r2, r1\n",
+                      (i - 3) * SLOT_SIZE);
+        }
+    }
+
+    int reg_argc = argc < 3 ? argc : 3;
+    for (int i = 0; i < reg_argc; i++) {
+        gen_expr(cc, node->call.args[i], sb, "r1", params, param_count, locals, local_count);
+        sb_append(sb, "  push r1\n");
+    }
+    for (int i = reg_argc - 1; i >= 0; i--) {
+        sb_append(sb, "  pop %s\n", arg_regs[i]);
+    }
+
+    sb_append(sb, "  ; forward this fake's hidden out-pointer\n");
+    sb_append(sb, "  mov r3, bp\n  addis r3, %d\n  load r4, r3\n", cc->sret_offset);
+    note_import_func(cc, "mock_mock_active_target");
+    sb_append(sb, "  movi r2, mock_mock_active_target\n  load r2, r2\n");
+    int ret = next_label(cc);
+    int missing = next_label(cc);
+    const char *reason = intern_string_literal(cc, "mock.call_original.outside_fake");
+    note_import_func(cc, "assert_fail");
+    sb_append(sb, "  cmp r2, 0\n  jz mock_sret_original_missing_%d\n", missing);
+    sb_append(sb, "  movi lr, mock_sret_original_ret_%d\n  mov pc, r2\n", ret);
+    sb_append(sb, "mock_sret_original_ret_%d:\n", ret);
+    if (stack_args > 0) sb_append(sb, "  addis sp, %d\n", stack_args * SLOT_SIZE);
+    sb_append(sb, "  jmp mock_sret_original_done_%d\n", missing);
+    sb_append(sb, "mock_sret_original_missing_%d:\n", missing);
+    sb_append(sb, "  movi r5, %s\n  call assert_fail\n", reason);
+    sb_append(sb, "mock_sret_original_done_%d:\n", missing);
+}
+
 static void gen_array_init(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
                            char **params, int param_count,
                            char **locals, int local_count) {
@@ -201,7 +260,11 @@ void gen_stmt_internal(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
     case AST_RETURN:
         // A bare `return;` has no expression; only evaluate one when present.
         if (node->ret.expr && cc->sret_active) {
-            if (call_returns_aggregate(cc, node->ret.expr)) {
+            if (is_mock_call_original(node->ret.expr)) {
+                sb_append(sb, "  ; forward aggregate Spy fake to original\n");
+                gen_mock_call_original_sret(cc, node->ret.expr, sb, params,
+                                            param_count, locals, local_count);
+            } else if (call_returns_aggregate(cc, node->ret.expr)) {
                 // `return callee(args);` can forward this function's hidden
                 // destination directly to another aggregate-returning call.
                 // There is no need to materialize a temporary only to copy it
