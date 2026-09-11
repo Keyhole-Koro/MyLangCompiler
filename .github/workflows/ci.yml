@@ -29,6 +29,18 @@ jobs:
           repository: Keyhole-Koro/MySyntaxEngine
           path: toolchain/MySyntaxEngine
 
+      - name: Checkout MyLangTester
+        uses: actions/checkout@v4
+        with:
+          repository: Keyhole-Koro/MyLangTester
+          path: toolchain/MyLangTester
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
