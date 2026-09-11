@@ -368,6 +368,7 @@ static int is_repeatable_target(ASTNode *node) {
     if (!node) return 0;
     switch (node->type) {
     case AST_IDENTIFIER:
+    case AST_NUMBER:
         return 1;
     case AST_MEMBER_ACCESS:
         return is_repeatable_target(node->member_access.lhs);
@@ -376,6 +377,12 @@ static int is_repeatable_target(ASTNode *node) {
     case AST_UNARY:
         /* Dereferencing a name reads it again and nothing more. */
         return node->unary.op == ASTARISK && is_repeatable_target(node->unary.operand);
+    case AST_BINARY:
+        /* Array subscripting (which is syntactic sugar for *(a + i)) is repeatable 
+         * if both the base pointer and the index are repeatable. */
+        return (node->binary.op == ADD || node->binary.op == SUB) &&
+               is_repeatable_target(node->binary.left) &&
+               is_repeatable_target(node->binary.right);
     default:
         return 0;
     }
