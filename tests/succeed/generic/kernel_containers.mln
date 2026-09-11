@@ -1,19 +1,19 @@
 import { Slice, slice_init, slice_at }
-    from "../../../../MyStdLib/slice.mln";
+    from "../../../../MyStdLib/memory/slice.mln";
 import { Vec, vec_init, vec_push, vec_pop }
     from "../../../../MyStdLib/vec.mln";
 import { Arena, arena_init, arena_alloc }
-    from "../../../../MyStdLib/arena.mln";
+    from "../../../../MyStdLib/memory/arena.mln";
 import { RingBuffer, ring_init, ring_push, ring_pop }
-    from "../../../../MyStdLib/ringbuf.mln";
+    from "../../../../MyStdLib/collections/ringbuf.mln";
 import { IntrusiveList, intrusive_list_init, intrusive_push_front, intrusive_pop_front }
-    from "../../../../MyStdLib/intrusive_list.mln";
+    from "../../../../MyStdLib/collections/intrusive_list.mln";
 import { Option, option_take }
     from "../../../../MyStdLib/option.mln";
 import { Result, result_take_err }
     from "../../../../MyStdLib/result.mln";
 import { HashMap, hashmap_init, hashmap_put, hashmap_get }
-    from "../../../../MyStdLib/hashmap.mln";
+    from "../../../../MyStdLib/collections/hashmap.mln";
 
 struct Node {
     i32 value;
