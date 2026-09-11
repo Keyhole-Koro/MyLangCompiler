@@ -177,9 +177,23 @@ static ASTNode *parse_identifier_primary(ParserContext *context, Token **cur) {
 }
 
 ASTNode *parse_primary(ParserContext *context, Token **cur) {
-    if ((*cur)->kind == NUMBER) {
+if ((*cur)->kind == NUMBER) {
         Token *tok = *cur;
         ASTNode *node = new_number((*cur)->value);
+        set_node_loc_from_tokens(node, tok, NULL);
+        *cur = (*cur)->next;
+        return node;
+    }
+    if ((*cur)->kind == TRUE_LITERAL) {
+        Token *tok = *cur;
+        ASTNode *node = new_number("1"); // Use 1 for true for now (compatible with i32 and bool)
+        set_node_loc_from_tokens(node, tok, NULL);
+        *cur = (*cur)->next;
+        return node;
+    }
+    if ((*cur)->kind == FALSE_LITERAL) {
+        Token *tok = *cur;
+        ASTNode *node = new_number("0"); // Use 0 for false
         set_node_loc_from_tokens(node, tok, NULL);
         *cur = (*cur)->next;
         return node;

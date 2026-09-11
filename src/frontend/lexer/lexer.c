@@ -59,7 +59,7 @@ StringTokenKindMap operators[] = {
 };
 
 StringTokenKindMap reservedWords[] = {
-    {"sizeof", SIZEOF}, {"bool", BOOL}, {"u8", U8}, {"u16", U16}, {"i32", I32}, {"u32", U32}, {"char", CHAR}, {"float", FLOAT},
+    {"sizeof", SIZEOF}, {"bool", BOOL}, {"true", TRUE_LITERAL}, {"false", FALSE_LITERAL}, {"u8", U8}, {"u16", U16}, {"i32", I32}, {"u32", U32}, {"char", CHAR}, {"float", FLOAT},
     {"double", DOUBLE}, {"void", VOID}, {"long", LONG}, {"short", SHORT},
     {"const", CONST}, {"static", STATIC}, {"mut", MUT}, {"ref", REF},
     {"extern", EXTERN}, {"auto", AUTO}, {"register", REGISTER},
@@ -116,6 +116,8 @@ char *tokenkind2str(TokenKind kind) {
 
         case SIZEOF: return "SIZEOF";
         case BOOL: return "BOOL";
+    case TRUE_LITERAL: return "TRUE_LITERAL";
+    case FALSE_LITERAL: return "FALSE_LITERAL";
         case U8: return "U8";
         case U16: return "U16";
         case I32: return "I32";
@@ -377,8 +379,10 @@ Token *lexer_next_token(LexerContext *ctx) {
                     Token *t = createTokenSingle(MLX_CLOSE_TAG_OPEN, "</", ctx->line, ctx->col, 2);
                     advance_pos(ctx->ptr, 2, &ctx->line, &ctx->col);
                     ctx->ptr += 2;
+                    // The element's own TEXT mode ends here: replace it with
+                    // the closing tag, whose '>' then pops back to the parent.
                     ctx->depth--;
-                    ctx->mode_stack[ctx->depth++] = MODE_MLX_TAG;
+                    ctx->mode_stack[ctx->depth++] = MODE_MLX_CLOSE_TAG;
                     ctx->mlx_tag_depth--;
                     ctx->last_token_kind = MLX_CLOSE_TAG_OPEN;
                     free(buffer);
@@ -410,6 +414,24 @@ Token *lexer_next_token(LexerContext *ctx) {
             advance_pos(ctx->ptr, 1, &ctx->line, &ctx->col);
             ctx->ptr++;
             continue;
+        }
+
+        if (current_mode == MODE_MLX_CLOSE_TAG) {
+            if (*ctx->ptr == '>') {
+                Token *t = createTokenSingle(MLX_TAG_CLOSE, ">", ctx->line, ctx->col, 1);
+                advance_pos(ctx->ptr, 1, &ctx->line, &ctx->col);
+                ctx->ptr += 1;
+                // Pop the closing tag. What is underneath is the parent
+                // element's TEXT mode, or DEFAULT for the outermost element,
+                // so nothing is pushed. (Pushing TEXT here, as an opening
+                // tag's '>' does, left one stale TEXT entry per nested
+                // closing tag and turned the rest of the file into MLX_TEXT
+                // once elements nested three deep.)
+                ctx->depth--;
+                ctx->last_token_kind = MLX_TAG_CLOSE;
+                free(buffer);
+                return t;
+            }
         }
 
         if (current_mode == MODE_MLX_TAG) {
@@ -451,7 +473,7 @@ Token *lexer_next_token(LexerContext *ctx) {
             advance_pos(ctx->ptr, 1, &ctx->line, &ctx->col);
             ctx->ptr += 1;
             // If we are in DEFAULT and parent is MLX, pop DEFAULT
-            if (ctx->depth > 1 && (ctx->mode_stack[ctx->depth - 2] == MODE_MLX_TAG || ctx->mode_stack[ctx->depth - 2] == MODE_MLX_TEXT)) {
+            if (ctx->depth > 1 && (ctx->mode_stack[ctx->depth - 2] == MODE_MLX_TAG || ctx->mode_stack[ctx->depth - 2] == MODE_MLX_CLOSE_TAG || ctx->mode_stack[ctx->depth - 2] == MODE_MLX_TEXT)) {
                 ctx->depth--;
             }
             ctx->last_token_kind = R_BRACE;

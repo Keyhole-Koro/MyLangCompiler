@@ -1060,7 +1060,7 @@ static int semantic_infer_binary_type(SemanticContext *ctx, ASTNode *expr, Seman
     if (!semantic_infer_expr_type(ctx, expr->binary.right, &right)) return 0;
 
     if (semantic_binary_is_comparison(expr->binary.op) || semantic_binary_is_logical(expr->binary.op)) {
-        semantic_typeinfo_make_scalar(out, "i32");
+        semantic_typeinfo_make_scalar(out, "bool");
         return 1;
     }
 

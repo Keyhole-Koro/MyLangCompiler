@@ -38,6 +38,8 @@ typedef enum {
     FAT_ARROW, // =>
 
     BOOL,     // bool
+    TRUE_LITERAL,  // true
+    FALSE_LITERAL, // false
     U8,       // u8
     U16,      // u16
     I32,      // i32
@@ -134,8 +136,9 @@ struct Token{
 
 typedef enum {
     MODE_DEFAULT,
-    MODE_MLX_TAG,
-    MODE_MLX_TEXT
+    MODE_MLX_TAG,       // inside '<Name prop=... >' or '<Name ... />'
+    MODE_MLX_CLOSE_TAG, // inside '</Name>'
+    MODE_MLX_TEXT       // between an element's '>' and its '</'
 } LexerMode;
 
 typedef struct {
