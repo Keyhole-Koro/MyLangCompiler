@@ -6,6 +6,7 @@ SYNTAX_ENGINE_SRC = $(shell find $(SYNTAX_ENGINE_DIR)/src/lr1 -name '*.c' | sort
 SRC = $(shell find src -name '*.c' | sort)
 MYCC = mlc
 SYNTAX_CHECK = mylang-syntax-check
+MYTEST = ../MyLangTester/build/mytest
 
 .PHONY: all syntax-check test test-component test-all test-e2e test-integration test-semantic test-generics \
 	test-source-profiles test-syntax-check test-tokens debug-mycc clean
@@ -18,14 +19,17 @@ mlc: $(SRC)
 syntax-check: tools/syntax_check.c src/frontend/lexer/lexer.c src/support/utils.c $(SYNTAX_ENGINE_SRC)
 	$(CC) $(CFLAGS) $(SYNTAX_ENGINE_INC) -o $(SYNTAX_CHECK) $^
 
-# Compiler-local C/Python test suites were retired in favor of MyLangTestKit
-# and the repository-level system suites.  Keep the historical entry points
-# as build checks so callers (including qa/tests/test-all.py) remain valid.
-test: mlc syntax-check
+# Compiler fixtures are executed by MyLangTester. They remain here as .mln
+# inputs, while the test protocol lives in the shared Java runner.
+test: test-component
 
-test-component: test
+test-component: mlc syntax-check
+	$(MAKE) -C ../MyLangTester all
+	$(MYTEST) --compiler tests
 
 test-e2e: mlc
+	$(MAKE) -C ../MyLangTester all
+	$(MYTEST) --compiler-e2e tests
 
 test-integration: test-e2e
 test-semantic test-generics test-source-profiles test-syntax-check test-tokens: test-component
