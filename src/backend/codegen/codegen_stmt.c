@@ -41,15 +41,20 @@ static void gen_mock_call_original_sret(CompilerContext *cc, ASTNode *node,
         sb_append(sb, "  pop %s\n", arg_regs[i]);
     }
 
-    sb_append(sb, "  ; forward this fake's hidden out-pointer\n");
-    sb_append(sb, "  mov r3, bp\n  addis r3, %d\n  load r4, r3\n", cc->sret_offset);
-    note_import_func(cc, "mock_mock_active_target");
-    sb_append(sb, "  movi r2, mock_mock_active_target\n  load r2, r2\n");
+    // The context accessor is an ordinary call and may clobber the original
+    // target's register arguments. Preserve them while resolving its dynamic
+    // address; stack-passed arguments stay below these temporary saves.
+    note_import_func(cc, "mock_current_target");
+    sb_append(sb, "  push r5\n  push r6\n  push r7\n");
+    sb_append(sb, "  call mock_current_target\n  mov r2, r1\n");
+    sb_append(sb, "  pop r7\n  pop r6\n  pop r5\n");
     int ret = next_label(cc);
     int missing = next_label(cc);
     const char *reason = intern_string_literal(cc, "mock.call_original.outside_fake");
     note_import_func(cc, "assert_fail");
     sb_append(sb, "  cmp r2, 0\n  jz mock_sret_original_missing_%d\n", missing);
+    sb_append(sb, "  ; forward this fake's hidden out-pointer\n");
+    sb_append(sb, "  mov r3, bp\n  addis r3, %d\n  load r4, r3\n", cc->sret_offset);
     sb_append(sb, "  movi lr, mock_sret_original_ret_%d\n  mov pc, r2\n", ret);
     sb_append(sb, "mock_sret_original_ret_%d:\n", ret);
     if (stack_args > 0) sb_append(sb, "  addis sp, %d\n", stack_args * SLOT_SIZE);
