@@ -96,7 +96,10 @@ typedef struct {
     int enum_value_count;
     SemanticEnumValue enum_values[512];
     int function_sig_count;
-    SemanticFunctionSig function_sigs[256];
+    /* Own + imported functions of one module. dom.mln alone imports graphics,
+     * theme, debug, heap, serial and scheduler, which together with its own
+     * functions passed 256 (MYOS-014). */
+    SemanticFunctionSig function_sigs[512];
     int user_type_count;
     const char *user_types[256];
     /* Struct layouts, so a member access can be given a type. Without them
