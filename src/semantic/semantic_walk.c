@@ -1778,6 +1778,45 @@ static int semantic_struct_is_known(SemanticContext *ctx, const char *struct_nam
     return 0;
 }
 
+/* An imported struct/typedef is registered under its link name (e.g.
+ * "a_Thing" for `import a from "a.mln"` using `a.Thing`), matching how a
+ * qualified type reference gets rewritten -- mirrors the AST_IMPORT handling
+ * in semantic_collect_function_sigs() above, but for type declarations
+ * instead of function signatures. Without this, `pkg.Type` was never a known
+ * struct: semantic_infer_expr_type() silently declined to type a `->`/`.`
+ * access through it (see semantic_struct_is_known()), instead of reporting
+ * anything a caller could act on.
+ */
+static void semantic_collect_imported_user_types(SemanticContext *ctx, ASTNode *node) {
+    if (!node->import_stmt.path || !module_loader_is_mylang_source(node->import_stmt.path)) return;
+    FrontendSession *session = ctx->session;
+    if (!session || !session->loader) return;
+    Module *mod = module_loader_load(session->loader, ctx->filename, node->import_stmt.path);
+    if (!mod) return;
+
+    for (int i = 0; i < mod->symbol_count; i++) {
+        ModuleSymbol *sym = &mod->symbols[i];
+        if ((sym->kind != SYMBOL_STRUCT && sym->kind != SYMBOL_TYPEDEF) ||
+            !sym->source_name || !sym->link_name ||
+            !resolver_lookup_import_symbol(node, mod, sym->source_name)) {
+            continue;
+        }
+        ASTNode *decl = sym->declaration;
+        if (!decl) continue;
+        if (decl->type == AST_STRUCT) {
+            semantic_register_user_type(ctx, sym->link_name);
+            semantic_register_struct_layout(ctx, sym->link_name, decl->struct_stmt.members,
+                                            decl->struct_stmt.member_count);
+        } else if (decl->type == AST_TYPEDEF_STRUCT) {
+            semantic_register_user_type(ctx, sym->link_name);
+            semantic_register_struct_layout(ctx, sym->link_name, decl->typedef_struct.members,
+                                            decl->typedef_struct.member_count);
+        } else if (decl->type == AST_TYPEDEF) {
+            semantic_register_user_type(ctx, sym->link_name);
+        }
+    }
+}
+
 static void semantic_collect_user_types(SemanticContext *ctx, ASTNode *node) {
     if (!ctx || !node) return;
     if (node->type == AST_BLOCK) {
@@ -1795,6 +1834,8 @@ static void semantic_collect_user_types(SemanticContext *ctx, ASTNode *node) {
                                         node->typedef_struct.member_count);
     } else if (node->type == AST_TYPEDEF && node->typedef_stmt.alias) {
         semantic_register_user_type(ctx, node->typedef_stmt.alias);
+    } else if (node->type == AST_IMPORT) {
+        semantic_collect_imported_user_types(ctx, node);
     }
 }
 
