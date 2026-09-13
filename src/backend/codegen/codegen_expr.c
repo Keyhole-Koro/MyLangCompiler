@@ -153,13 +153,16 @@ void _gen_expr(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char
         for (int i = 0; i < node->case_expr.case_count; i++) {
             sb_append(sb, "b_case_%d:\n", case_lbls[i]);
             sb_append(sb, "  pop r1\n");
-            gen_expr(cc, node->case_expr.cases[i].expr, sb, target_reg, params, param_count, locals, local_count);
+            if (!node->case_expr.cases[i].is_noop)
+                gen_expr(cc, node->case_expr.cases[i].expr, sb, target_reg, params, param_count, locals, local_count);
             sb_append(sb, "  jmp b_case_end_%d\n", lbl_end);
         }
         free(case_lbls);
 
         sb_append(sb, "b_default_%d:\n", lbl_default);
-        if (node->case_expr.default_expr) {
+        if (node->case_expr.default_is_noop) {
+            // Statement-only no-op arm: deliberately leave the target alone.
+        } else if (node->case_expr.default_expr) {
             gen_expr(cc, node->case_expr.default_expr, sb, target_reg, params, param_count, locals, local_count);
         } else {
             sb_append(sb, "  movi %s, 0\n", target_reg);

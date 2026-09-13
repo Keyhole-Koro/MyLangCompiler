@@ -69,11 +69,19 @@ int fprint_ast_expr_node(FILE *out, ASTNode *node, int indent) {
             fprint_indent(out, indent); fprintf(out, "  Case:\n");
             fprint_ast(out, node->case_expr.cases[i].key, indent + 3);
             fprint_indent(out, indent); fprintf(out, "  =>\n");
-            fprint_ast(out, node->case_expr.cases[i].expr, indent + 3);
+            if (node->case_expr.cases[i].is_noop) {
+                fprint_indent(out, indent + 3); fprintf(out, "Noop\n");
+            } else {
+                fprint_ast(out, node->case_expr.cases[i].expr, indent + 3);
+            }
         }
-        if (node->case_expr.default_expr) {
+        if (node->case_expr.default_expr || node->case_expr.default_is_noop) {
             fprint_indent(out, indent); fprintf(out, "  Default:\n");
-            fprint_ast(out, node->case_expr.default_expr, indent + 2);
+            if (node->case_expr.default_is_noop) {
+                fprint_indent(out, indent + 2); fprintf(out, "Noop\n");
+            } else {
+                fprint_ast(out, node->case_expr.default_expr, indent + 2);
+            }
         }
         return 1;
     case AST_CALL:

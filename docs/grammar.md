@@ -142,5 +142,10 @@ Expressions are listed in order of decreasing precedence.
 
 ### Special Expressions
 - **Case Expression**: `case expr of { ( (key | _) -> expr ; )* }`
+  - A branch may use `-> _` as a no-op only when the whole `case` is used as
+    a statement.  It cannot provide a value to an assignment, initializer, or
+    `return`.
+  - A statement-expression branch may calculate its value with `yield`, e.g.
+    `Ok(v) -> ({ i32 adjusted = v + 1; yield adjusted; });`.
 - **Function Literal (Lambda)**: `( param_list ) block` or `( param_list ) => block`
 - **Statement Expression**: `( block )`

@@ -52,7 +52,8 @@ ASTNode *new_yield(ASTNode *expr);
 ASTNode *new_block(ASTNode **stmts, int count);
 ASTNode *new_unchecked_block(ASTNode *body);
 ASTNode *new_stmt_expr(ASTNode *block);
-ASTNode *new_case_expr(ASTNode *target, CaseItem *cases, int case_count, ASTNode *default_expr);
+ASTNode *new_case_expr(ASTNode *target, CaseItem *cases, int case_count,
+                       ASTNode *default_expr, int default_is_noop);
 ASTNode *new_call(char *name, ASTNode **args, int arg_count);
 ASTNode *new_generic_call(char *name, ASTNode **type_args, int type_arg_count, ASTNode **args, int arg_count);
 ASTNode *new_dom_element(char *tag, DomProp *props, int prop_count, ASTNode **children, int child_count);

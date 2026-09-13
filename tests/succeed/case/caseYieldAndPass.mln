@@ -1,0 +1,32 @@
+enum Result {
+    Ok(i32),
+    Err(i32),
+}
+
+i32 main() {
+    Result selected = Ok(40);
+    i32 hoge = case selected of {
+        Ok(value) -> ({
+            i32 foo = value + 2;
+            yield foo;
+        });
+        Err(_) -> ({ yield 0; });
+    };
+
+    Result ignored = Err(1);
+    i32 marker = 3;
+    case ignored of {
+        Ok(_)  -> marker = 99;
+        Err(_) -> _;
+    };
+    case ignored of {
+        Ok(_) -> marker = 99;
+        _     -> _;
+    };
+    case 7 of {
+        1 -> marker = 99;
+        _ -> _;
+    };
+
+    return hoge + marker;
+}

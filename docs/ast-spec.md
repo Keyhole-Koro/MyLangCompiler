@@ -82,6 +82,8 @@ Nodes are represented by the `ASTNode` struct, which contains a union of specifi
 - `case_expr.cases`: `CaseItem*` (Array of key-expression pairs)
 - `case_expr.case_count`: `int`
 - `case_expr.default_expr`: `ASTNode*` (Optional)
+- `CaseItem.is_noop` / `case_expr.default_is_noop`: marks a statement-only
+  `-> _` no-op arm.
 
 ### AST_STMT_EXPR (`( { ... } )`)
 - `stmt_expr.block`: `ASTNode*` (A block node)

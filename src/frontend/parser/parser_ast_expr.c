@@ -105,13 +105,15 @@ ASTNode *new_stmt_expr(ASTNode *block) {
     return node;
 }
 
-ASTNode *new_case_expr(ASTNode *target, CaseItem *cases, int case_count, ASTNode *default_expr) {
+ASTNode *new_case_expr(ASTNode *target, CaseItem *cases, int case_count,
+                       ASTNode *default_expr, int default_is_noop) {
     ASTNode *node = calloc(1, sizeof(ASTNode));
     node->type = AST_CASE;
     node->case_expr.target = target;
     node->case_expr.cases = cases;
     node->case_expr.case_count = case_count;
     node->case_expr.default_expr = default_expr;
+    node->case_expr.default_is_noop = default_is_noop;
     set_node_range_from_children(node, target, default_expr ? default_expr : target);
     return node;
 }

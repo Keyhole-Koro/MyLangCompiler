@@ -1398,12 +1398,31 @@ static void check_call_signature(SemanticContext *ctx, ASTNode *node) {
     }
 }
 
-static void walk_case_items(SemanticContext *ctx, ASTNode *node) {
+static void walk_case_items(SemanticContext *ctx, ASTNode *node, int allow_noop) {
     for (int i = 0; i < node->case_expr.case_count; i++) {
         semantic_walk_expr(ctx, node->case_expr.cases[i].key, EXPRCTX_READ);
-        semantic_walk_expr(ctx, node->case_expr.cases[i].expr, EXPRCTX_READ);
+        if (node->case_expr.cases[i].is_noop) {
+            if (!allow_noop) {
+                semantic_error_at(ctx, semantic_location_from_ast(node),
+                                  "a `-> _` case arm is only valid when the case is used as a statement");
+            }
+        } else {
+            semantic_walk_expr(ctx, node->case_expr.cases[i].expr, EXPRCTX_READ);
+        }
     }
-    semantic_walk_expr(ctx, node->case_expr.default_expr, EXPRCTX_READ);
+    if (node->case_expr.default_is_noop) {
+        if (!allow_noop) {
+            semantic_error_at(ctx, semantic_location_from_ast(node),
+                              "a `-> _` case arm is only valid when the case is used as a statement");
+        }
+    } else {
+        semantic_walk_expr(ctx, node->case_expr.default_expr, EXPRCTX_READ);
+    }
+}
+
+static void semantic_walk_case(SemanticContext *ctx, ASTNode *node, int allow_noop) {
+    semantic_walk_expr(ctx, node->case_expr.target, EXPRCTX_READ);
+    walk_case_items(ctx, node, allow_noop);
 }
 
 static void walk_params(SemanticContext *ctx, ASTNode **params, int param_count) {
@@ -1506,8 +1525,7 @@ static void semantic_walk_expr(SemanticContext *ctx, ASTNode *node, ExprContext 
         semantic_walk_expr(ctx, node->ternary.else_expr, EXPRCTX_READ);
         break;
     case AST_CASE:
-        semantic_walk_expr(ctx, node->case_expr.target, EXPRCTX_READ);
-        walk_case_items(ctx, node);
+        semantic_walk_case(ctx, node, 0);
         break;
     case AST_STMT_EXPR:
         semantic_walk_stmt(ctx, node->stmt_expr.block);
@@ -1563,8 +1581,10 @@ static void semantic_walk_stmt(SemanticContext *ctx, ASTNode *node) {
     case AST_INIT_LIST:
     case AST_SIZEOF:
     case AST_TERNARY:
-    case AST_CASE:
         semantic_walk_expr(ctx, node, EXPRCTX_READ);
+        break;
+    case AST_CASE:
+        semantic_walk_case(ctx, node, 1);
         break;
     case AST_TYPE:
         semantic_check_type_exists(ctx, node);
@@ -1583,7 +1603,11 @@ static void semantic_walk_stmt(SemanticContext *ctx, ASTNode *node) {
         register_borrow_binding(ctx, node);
         break;
     case AST_EXPR_STMT:
-        semantic_walk_expr(ctx, node->expr_stmt.expr, EXPRCTX_READ);
+        if (node->expr_stmt.expr && node->expr_stmt.expr->type == AST_CASE) {
+            semantic_walk_case(ctx, node->expr_stmt.expr, 1);
+        } else {
+            semantic_walk_expr(ctx, node->expr_stmt.expr, EXPRCTX_READ);
+        }
         break;
     case AST_IF:
     {

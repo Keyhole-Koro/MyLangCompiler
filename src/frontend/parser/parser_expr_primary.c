@@ -11,26 +11,42 @@ static ASTNode *parse_case_primary(ParserContext *context, Token **cur) {
     CaseItem *cases = NULL;
     int count = 0;
     ASTNode *default_expr = NULL;
+    int default_is_noop = 0;
+    int has_default = 0;
 
     while ((*cur)->kind != R_BRACE && (*cur)->kind != EOT) {
         if ((*cur)->kind == UNDERSCORE) {
             *cur = (*cur)->next;
             if (!expect(cur, ARROW)) parse_error(context, "expected '->' after _", *cur);
-            if (default_expr) parse_error(context, "duplicate default case", *cur);
-            default_expr = parse_expr(context, cur);
+            if (has_default) parse_error(context, "duplicate default case", *cur);
+            has_default = 1;
+            if ((*cur)->kind == UNDERSCORE) {
+                *cur = (*cur)->next;
+                default_is_noop = 1;
+            } else {
+                default_expr = parse_expr(context, cur);
+            }
         } else {
             ASTNode *key = parse_expr_until_arrow(context, cur);
             if (!expect(cur, ARROW)) parse_error(context, "expected '->' after case key", *cur);
-            ASTNode *expr = parse_expr(context, cur);
+            ASTNode *expr = NULL;
+            int is_noop = 0;
+            if ((*cur)->kind == UNDERSCORE) {
+                *cur = (*cur)->next;
+                is_noop = 1;
+            } else {
+                expr = parse_expr(context, cur);
+            }
             cases = realloc(cases, sizeof(CaseItem) * (count + 1));
             cases[count].key = key;
             cases[count].expr = expr;
+            cases[count].is_noop = is_noop;
             count++;
         }
         if (!expect(cur, SEMICOLON)) parse_error(context, "expected ';' after case expression", *cur);
     }
     if (!expect(cur, R_BRACE)) parse_error(context, "expected '}'", *cur);
-    return new_case_expr(target, cases, count, default_expr);
+    return new_case_expr(target, cases, count, default_expr, default_is_noop);
 }
 
 // Parses `TypeName { field: value, ... }`.  It intentionally shares the

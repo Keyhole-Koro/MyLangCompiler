@@ -1,0 +1,13 @@
+enum Result {
+    Ok(i32),
+    Err(i32),
+}
+
+i32 main() {
+    Result result = Err(1);
+    i32 value = case result of {
+        Ok(v)  -> v;
+        Err(_) -> _;
+    };
+    return value;
+}

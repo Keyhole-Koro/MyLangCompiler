@@ -71,6 +71,9 @@ typedef struct ASTNode ASTNode;
 typedef struct {
     ASTNode *key;
     ASTNode *expr;
+    // `pattern -> _` is a statement-only no-op arm.  Keep it distinct from
+    // an absent expression so a wildcard no-op default can still be tracked.
+    int is_noop;
 } CaseItem;
 
 // One `name="text"` / `name={expr}` property on a DOM element.
@@ -148,6 +151,7 @@ struct ASTNode {
             CaseItem *cases;
             int case_count;
             ASTNode *default_expr;
+            int default_is_noop;
         } case_expr;
         struct {
             ASTNode *ret_type;

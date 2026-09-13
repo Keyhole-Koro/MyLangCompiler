@@ -543,12 +543,14 @@ static ASTNode *new_case_node(ASTNode *target) {
     return node;
 }
 
-static void append_case_item(ASTNode *case_node, ASTNode *key, ASTNode *expr) {
+static void append_case_item(ASTNode *case_node, ASTNode *key, ASTNode *expr,
+                             int is_noop) {
     int count = case_node->case_expr.case_count;
     case_node->case_expr.cases = realloc(case_node->case_expr.cases,
                                          sizeof(CaseItem) * (size_t)(count + 1));
     case_node->case_expr.cases[count].key = key;
     case_node->case_expr.cases[count].expr = expr;
+    case_node->case_expr.cases[count].is_noop = is_noop;
     case_node->case_expr.case_count = count + 1;
 }
 
@@ -603,13 +605,16 @@ static void merge_nested_patterns(VariantTable *table, ASTNode *node) {
                 if (!bound || bound->type != AST_IDENTIFIER)
                     payload_error(table->context, key,
                                   "a variant pattern binds its payload to a name");
-                if (inner_cases[existing]->case_expr.default_expr)
+                if (inner_cases[existing]->case_expr.default_expr ||
+                    inner_cases[existing]->case_expr.default_is_noop)
                     payload_error(table->context, key,
                                   "a variant is matched more than once by a fallback binding");
                 Binding fallback = {bound->identifier.name,
                                     inner_cases[existing]->case_expr.target};
-                substitute_identifier(&original[i].expr, &fallback);
+                if (!original[i].is_noop)
+                    substitute_identifier(&original[i].expr, &fallback);
                 inner_cases[existing]->case_expr.default_expr = original[i].expr;
+                inner_cases[existing]->case_expr.default_is_noop = original[i].is_noop;
                 free_ast(key);
                 continue;
             }
@@ -620,7 +625,8 @@ static void merge_nested_patterns(VariantTable *table, ASTNode *node) {
                          "write the nested patterns before its fallback binding", variant->variant);
                 payload_error(table->context, key, message);
             }
-            append_case_item(inner_cases[existing], bound, original[i].expr);
+            append_case_item(inner_cases[existing], bound, original[i].expr,
+                             original[i].is_noop);
             key->call.args[0] = NULL;
             free_ast(key);
             continue;
@@ -641,12 +647,12 @@ static void merge_nested_patterns(VariantTable *table, ASTNode *node) {
         inner->col = key->col;
         inner->end_line = key->end_line;
         inner->end_col = key->end_col;
-        append_case_item(inner, bound, original[i].expr);
+        append_case_item(inner, bound, original[i].expr, original[i].is_noop);
         key->call.args[0] = new_identifier(name);
 
         out = realloc(out, sizeof(CaseItem) * (size_t)(out_count + 1));
         inner_cases = realloc(inner_cases, sizeof(ASTNode *) * (size_t)(out_count + 1));
-        out[out_count] = (CaseItem){key, inner};
+        out[out_count] = (CaseItem){key, inner, 0};
         inner_cases[out_count++] = inner;
     }
 
@@ -751,7 +757,7 @@ static void rewrite_payload_case(VariantTable *table, ASTNode *node) {
     /* Without a `_` arm the case yields zero for an unmatched tag, which is a
      * silently wrong answer rather than a missing one. Require the arms to
      * account for every variant instead. */
-    if (!node->case_expr.default_expr && enum_name)
+    if (!node->case_expr.default_expr && !node->case_expr.default_is_noop && enum_name)
         report_missing_arms(table, node, enum_name, covered, covered_count);
 
     free(covered);
