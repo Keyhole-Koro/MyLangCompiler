@@ -239,6 +239,8 @@ struct ASTNode {
             ASTNode **members;
             int member_count;
             char *typedef_name;
+            int is_exported;
+            char *package;
         } typedef_struct;
         struct {
             char *name;

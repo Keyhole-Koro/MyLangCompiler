@@ -65,6 +65,7 @@ nestedCaseArrow|10|succeed/case/nestedCaseArrow.mln
 caseYieldAndPass|45|succeed/case/caseYieldAndPass.mln
 packageSample|20|succeed/package/pkg_main.mln,succeed/package/pkg_math.mln
 pkgVariadic|133|succeed/package/pkgVariadic_main.mln,succeed/package/pkgVariadic_lib.mln
+importedTypedefStruct|43|succeed/package/importedTypedefStruct_main.mln,succeed/package/importedTypedefStruct_helper.mln
 functionLiteral|10|succeed/function/functionLiteral.mln
 arrowFunctionLiteral|13|succeed/function/arrowFunctionLiteral.mln
 localFunctionLiteral|10|succeed/function/localFunctionLiteral.mln

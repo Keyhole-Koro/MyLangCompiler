@@ -164,7 +164,7 @@ ASTNode *ast_clone(const ASTNode *src) {
         STRINGS(struct_stmt.type_params, struct_stmt.type_param_count); break;
     case AST_STRUCT_MEMBER: STR(struct_member.type); STR(struct_member.name); break;
     case AST_TYPEDEF_STRUCT:
-        STR(typedef_struct.struct_name); STR(typedef_struct.typedef_name);
+        STR(typedef_struct.struct_name); STR(typedef_struct.typedef_name); STR(typedef_struct.package);
         ARRAY(typedef_struct.members, typedef_struct.member_count); break;
     case AST_ENUM:
         STR(enum_stmt.name); STR(enum_stmt.package); ARRAY(enum_stmt.members, enum_stmt.member_count);

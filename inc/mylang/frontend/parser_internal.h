@@ -63,7 +63,7 @@ ASTNode *parse_base_type(ParserContext *context, Token **cur);
 void parse_struct_members(ParserContext *context, Token **cur, ASTNode ***members, int *member_count);
 ASTNode *parse_struct(ParserContext *context, Token **cur);
 ASTNode *parse_enum(ParserContext *context, Token **cur);
-ASTNode *parse_typedef(ParserContext *context, Token **cur);
+ASTNode *parse_typedef(ParserContext *context, Token **cur, int want_export);
 ASTNode *parse_type(ParserContext *context, Token **cur);
 ASTNode *parse_primary(ParserContext *context, Token **cur);
 ASTNode *parse_postfix(ParserContext *context, Token **cur);

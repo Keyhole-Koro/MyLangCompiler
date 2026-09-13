@@ -247,7 +247,7 @@ ASTNode *parse_enum(ParserContext *context, Token **cur) {
     return node;
 }
 
-ASTNode *parse_typedef(ParserContext *context, Token **cur) {
+ASTNode *parse_typedef(ParserContext *context, Token **cur, int want_export) {
     if (!expect(cur, TYPEDEF)) parse_error(context, "expected 'typedef'", *cur);
 
     if ((*cur)->kind == STRUCT) {
@@ -268,6 +268,10 @@ ASTNode *parse_typedef(ParserContext *context, Token **cur) {
             parse_error(context, "expected ';' after typedef", *cur);
         add_typename(context, typedef_name);
         ASTNode *node = new_typedef_struct(struct_name ? struct_name : "", members, member_count, typedef_name);
+        /* Cross-file visibility (module_loader.c's collect_module_symbols)
+         * reads this, the same as struct_stmt.is_exported/package above. */
+        node->typedef_struct.is_exported = want_export;
+        if (want_export) node->typedef_struct.package = strdup(context->module.current_package);
         free(struct_name);
         free(typedef_name);
         return node;

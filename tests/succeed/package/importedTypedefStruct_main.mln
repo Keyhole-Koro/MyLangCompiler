@@ -1,0 +1,13 @@
+// An imported `export typedef struct {...} Name;` must be usable as a
+// pointer type (`Name *t = ...;`) once it is pulled in with a named import,
+// the same as a plain `struct`/`enum` already was -- regression coverage for
+// MLC-003 (collect_module_symbols/load_imported_plain_types previously had
+// no AST_TYPEDEF_STRUCT case at all, so `Thing` never became a known type
+// name and `Thing *t = ...;` silently parsed as a multiply-assign instead).
+import helper from "importedTypedefStruct_helper.mln";
+import { Thing } from "importedTypedefStruct_helper.mln";
+
+i32 main() {
+    Thing *t = helper.get_thing(0);
+    return t->x + t->state; // 42 + 1
+}

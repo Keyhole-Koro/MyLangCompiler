@@ -171,7 +171,11 @@ void load_imported_plain_types(ParserContext *context, ASTNode *import_node,
 
     for (int i = 0; i < mod->symbol_count; i++) {
         ModuleSymbol *sym = &mod->symbols[i];
-        if (sym->kind != SYMBOL_STRUCT && sym->kind != SYMBOL_ENUM) continue;
+        /* SYMBOL_TYPEDEF covers both a plain alias (`typedef i32 Id;`, not
+         * handled below -- its declaration is AST_TYPEDEF, not a struct) and
+         * `export typedef struct {...} Name;` (AST_TYPEDEF_STRUCT), which is
+         * the common case (see e.g. dom.mln's Node). */
+        if (sym->kind != SYMBOL_STRUCT && sym->kind != SYMBOL_ENUM && sym->kind != SYMBOL_TYPEDEF) continue;
         if (!sym->is_exported || !sym->source_name) continue;
         if (!import_requests_symbol(import_node, sym->source_name)) continue;
 

@@ -1,0 +1,14 @@
+package helper;
+
+export typedef struct {
+    u16 x;
+    u16 state;
+} Thing;
+
+Thing g_things[4];
+
+export Thing* get_thing(i32 id) {
+    g_things[id].x = 42;
+    g_things[id].state = 1;
+    return &g_things[id];
+}

@@ -155,6 +155,7 @@ void free_ast(ASTNode *node) {
                 free_ast(node->typedef_struct.members[i]);
             free(node->typedef_struct.members);
             free(node->typedef_struct.typedef_name);
+            free(node->typedef_struct.package);
             break;
         case AST_ENUM:
             free(node->enum_stmt.name);
