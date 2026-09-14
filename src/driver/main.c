@@ -15,6 +15,8 @@ static int run_directory_mode(const DriverOptions *opts) {
         .excludes = opts->excludes,
         .exclude_count = opts->exclude_count,
         .include_masm = opts->include_masm,
+        .dump_tokens = opts->dump_tokens,
+        .dump_ast = opts->dump_ast,
         .compiled_count = 0,
         .copied_count = 0,
     };
@@ -33,7 +35,8 @@ static int run_single_file_mode(const DriverOptions *opts) {
         fprintf(stderr, "Input path does not exist: %s\n", opts->input_path);
         return 1;
     }
-    return compile_one(opts->input_path, opts->output_path);
+    return compile_one(opts->input_path, opts->output_path,
+                       opts->dump_tokens, opts->dump_ast);
 }
 
 int main(int argc, char *argv[]) {

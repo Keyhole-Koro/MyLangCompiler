@@ -33,7 +33,8 @@ static void destroy_compile_session(FrontendSession *session) {
     frontend_session_destroy(session);
 }
 
-int compile_one(const char *input_path, const char *output_path) {
+int compile_one(const char *input_path, const char *output_path,
+                int dump_tokens_to_stdout, int dump_ast_to_stdout) {
     MyLangSourceSpecResult source = mylang_source_spec_parse(input_path);
     if (!source.ok) {
         fprintf(stderr, "Invalid MyLang source filename: %s\n", source.error);
@@ -73,12 +74,15 @@ int compile_one(const char *input_path, const char *output_path) {
     semantic_set_filename(input_path);
     semantic_set_safety_profile(semantic_profile_for_source(source.spec.safety));
 
-    dump_tokens(stdout, tokens);
+    if (dump_tokens_to_stdout) dump_tokens(stdout, tokens);
+    /* Keep stdout progress/debug output ordered before parser diagnostics on
+       stderr when both streams are captured by a build runner. */
+    fflush(stdout);
 
     Token *cur = tokens;
     ASTNode *root = parse_program(&cur);
 
-    print_ast(root, 0);
+    if (dump_ast_to_stdout) print_ast(root, 0);
     printf("AST parsing completed.\n");
 
     int success = semantic_check_with_session(root, session);

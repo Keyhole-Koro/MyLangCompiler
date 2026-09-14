@@ -11,6 +11,8 @@ void driver_print_usage(const char *prog) {
             "  -entry <name>     Entry function name mapped to __START__ (default: main)\n"
             "  --redirect-call <from>=<to>  Redirect direct calls (repeatable)\n"
             "  -masm             When compiling a directory, also copy .masm files\n"
+            "  --dump-tokens     Print lexer tokens to stdout\n"
+            "  --dump-ast        Print the parsed AST to stdout\n"
             "  --Werror          Treat semantic warnings as errors\n",
             prog, prog);
 }
@@ -45,6 +47,10 @@ int driver_parse_args(int argc, char *argv[], DriverOptions *opts) {
             opts->call_redirects[opts->call_redirect_count++] = spec;
         } else if (strcmp(argv[i], "-masm") == 0 || strcmp(argv[i], "--masm") == 0) {
             opts->include_masm = 1;
+        } else if (strcmp(argv[i], "--dump-tokens") == 0) {
+            opts->dump_tokens = 1;
+        } else if (strcmp(argv[i], "--dump-ast") == 0) {
+            opts->dump_ast = 1;
         } else if (strcmp(argv[i], "--Werror") == 0 || strcmp(argv[i], "--warnings-as-errors") == 0) {
             opts->warnings_as_errors = 1;
         } else if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {

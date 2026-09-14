@@ -186,3 +186,10 @@ Common validation commands:
 make -C toolchain/MyLangCompiler clean all
 python3 qa/mlc-test.py
 ```
+
+## Driver Output
+
+`mlc` keeps its normal terminal output to phase progress and diagnostics. A
+successful compile still writes `<output>_tokens.txt` and `<output>_ast.txt`
+beside the generated assembly for later inspection. Use `--dump-tokens` or
+`--dump-ast` when the corresponding debug dump is also needed on stdout.
