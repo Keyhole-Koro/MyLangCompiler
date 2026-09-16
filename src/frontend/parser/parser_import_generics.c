@@ -210,6 +210,18 @@ void load_imported_plain_types(ParserContext *context, ASTNode *import_node,
         ASTNode *copy = ast_clone(preserved ? preserved : sym->declaration);
         add_typename(context, sym->source_name);
         add_imported_plain_type(context, copy);
+        if (copy->type == AST_ENUM && !copy->enum_stmt.has_payloads) {
+            for (int k = 0; k < copy->enum_stmt.member_count; k++) {
+                ASTNode *m = copy->enum_stmt.members[k];
+                if (m && m->type == AST_ENUM_MEMBER) {
+                    char qualified[256];
+                    snprintf(qualified, sizeof(qualified), "%s::%s",
+                             copy->enum_stmt.name, m->enum_member.name);
+                    add_enum_constant(context, qualified, m->enum_member.resolved_value);
+                    add_enum_constant(context, m->enum_member.name, m->enum_member.resolved_value);
+                }
+            }
+        }
         remove_import_symbol(import_node, sym->source_name);
     }
 }
