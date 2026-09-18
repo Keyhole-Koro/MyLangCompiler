@@ -1549,6 +1549,7 @@ static void semantic_walk_expr(SemanticContext *ctx, ASTNode *node, ExprContext 
     case AST_ENUM:
     case AST_ENUM_MEMBER:
     case AST_IMPORT:
+    case AST_ANNOTATION:
     case AST_DO_WHILE:
     case AST_UNCHECKED:
     case AST_YIELD:
@@ -1713,6 +1714,7 @@ static void semantic_walk_stmt(SemanticContext *ctx, ASTNode *node) {
     case AST_CONTINUE:
         break;
     case AST_IMPORT:
+    case AST_ANNOTATION:
         break;
     case AST_DO_WHILE:
         semantic_walk_stmt(ctx, node->do_while_stmt.body);

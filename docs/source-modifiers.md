@@ -100,7 +100,7 @@ Two properties are handled by the compiler rather than the callee:
   with that method) or a local function with fewer than three parameters,
   the compiler substitutes a generated trampoline, so handlers can be written
   as `void (Counter *c) click(i32 id)` or `void on_click(i32 id)`. See
-  grammar.md, "Attributes and applications". Any other value is passed
+  grammar.md, "Attributes and annotations". Any other value is passed
   through unchanged.
 
 ```text

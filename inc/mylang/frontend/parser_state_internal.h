@@ -78,11 +78,17 @@ typedef struct GenericMethodTable {
     int count;
 } GenericMethodTable;
 
+typedef struct AnnotationTable {
+    ASTNode **decls;
+    int count;
+} AnnotationTable;
+
 typedef struct ParserSymbolState {
     StructTable structs;
     FunctionTable functions;
     TypeTable types;
     MethodTable methods;
+    AnnotationTable annotations;
     GenericMethodTable generic_methods;
     GenericTemplateTable generic_templates;
     /* Plain (non-generic) struct/enum declarations pulled in by `import
@@ -171,6 +177,9 @@ int exported_payload_enum_count(ParserContext *context);
 void add_structdef(ParserContext *context, char *name, ASTNode **members, int member_count);
 StructDef *find_structdef(ParserContext *context, const char *name);
 void add_method(ParserContext *context, const char *type_name, const char *method_name, const char *mangled, ASTNode *fn);
+/* Annotation declarations of this file (AST_ANNOTATION nodes, borrowed). */
+void add_annotation(ParserContext *context, ASTNode *decl);
+ASTNode *find_local_annotation(ParserContext *context, const char *name);
 const MethodDef *find_method(ParserContext *context, const char *type_name, const char *method_name);
 void add_generic_method(ParserContext *context, const char *receiver_template_name,
                         const char *method_name, ASTNode *fn);

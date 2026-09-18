@@ -1,5 +1,5 @@
 #include "mylang/frontend/parser_dom_internal.h"
-#include "mylang/frontend/parser_app_internal.h"
+#include "mylang/frontend/parser_annot_internal.h"
 #include "mylang/frontend/parser_ast_internal.h"
 
 #include <stdarg.h>

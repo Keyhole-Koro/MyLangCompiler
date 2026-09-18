@@ -1,0 +1,5 @@
+import { timer } from "../../support/app/annotations.mln";
+struct Plain { i32 v; };
+@timer(100)
+void (Plain *p) tick() { }
+i32 main() { return 0; }

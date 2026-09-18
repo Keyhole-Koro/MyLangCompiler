@@ -1,6 +1,6 @@
 #include "mylang/frontend/parser_internal.h"
 #include "mylang/frontend/parser_dom_internal.h"
-#include "mylang/frontend/parser_app_internal.h"
+#include "mylang/frontend/parser_annot_internal.h"
 #include "mylang/frontend/parser_rewrite_internal.h"
 #include "mylang/frontend/module.h"
 
@@ -26,10 +26,10 @@ static void lower_program(ParserContext *context, ASTNode *program) {
 
     instantiate_generics(context, program);
 
-    /* `@app` structs and their attributed methods become descriptor tables
-     * and trampolines (parser_lower_app.c) before DOM lowering, which reuses
-     * the same trampolines for markup handlers. */
-    lower_app_program(context, program);
+    /* `@name` uses are checked against their `annotation` declarations and
+     * the templates expanded (parser_lower_annot.c) before DOM lowering,
+     * which reuses the same handler trampolines for markup handlers. */
+    lower_annotations(context, program);
 
     dom_lowering_reset(context);
     dom_lowering_set_program(context, program);

@@ -182,6 +182,80 @@ ASTNode* parse_toplevel(ParserContext *context, Token **cur) {
     return decl;
 }
 
+/* `annotation name(params) on struct T [of other] [requires method m, ...]`
+ * followed by `;` (a marker) or a raw template body. The parser only
+ * records the declaration; parser_lower_annot.c checks uses against it and
+ * expands the template. */
+static ASTNode *parse_annotation(ParserContext *context, Token **cur, int want_export) {
+    Token *start = *cur;
+    *cur = (*cur)->next; /* `annotation` */
+    if (!token_is_name(*cur)) parse_error(context, "expected annotation name", *cur);
+    ASTNode *node = calloc(1, sizeof(ASTNode));
+    node->type = AST_ANNOTATION;
+    node->annotation.name = strdup((*cur)->value);
+    node->annotation.target_var = strdup("T");
+    set_node_loc_from_tokens(node, start, *cur);
+    *cur = (*cur)->next;
+
+    if ((*cur)->kind == L_PARENTHESES) {
+        *cur = (*cur)->next;
+        bool variadic = false;
+        if ((*cur)->kind != R_PARENTHESES) {
+            node->annotation.params = parse_param_list(context, cur, &node->annotation.param_count, &variadic);
+            if (variadic) parse_error(context, "an annotation cannot take a rest parameter", *cur);
+        }
+        if (!expect(cur, R_PARENTHESES)) parse_error(context, "expected ')' after annotation parameters", *cur);
+    }
+
+    if (!(token_is_name(*cur) && strcmp((*cur)->value, "on") == 0))
+        parse_error(context, "expected 'on struct', 'on method' or 'on function' after the annotation's parameters", *cur);
+    *cur = (*cur)->next;
+    if ((*cur)->kind == STRUCT) node->annotation.target = ANNOT_ON_STRUCT;
+    else if (token_is_name(*cur) && strcmp((*cur)->value, "method") == 0) node->annotation.target = ANNOT_ON_METHOD;
+    else if (token_is_name(*cur) && strcmp((*cur)->value, "function") == 0) node->annotation.target = ANNOT_ON_FUNCTION;
+    else parse_error(context, "expected 'struct', 'method' or 'function' after 'on'", *cur);
+    *cur = (*cur)->next;
+    if (token_is_name(*cur) && strcmp((*cur)->value, "of") != 0 && strcmp((*cur)->value, "requires") != 0 &&
+        (*cur)->kind != OF) {
+        free(node->annotation.target_var);
+        node->annotation.target_var = strdup((*cur)->value);
+        *cur = (*cur)->next;
+    }
+    if ((*cur)->kind == OF) {
+        *cur = (*cur)->next;
+        if (!token_is_name(*cur)) parse_error(context, "expected an annotation name after 'of'", *cur);
+        node->annotation.of_annotation = strdup((*cur)->value);
+        *cur = (*cur)->next;
+    }
+    if (token_is_name(*cur) && strcmp((*cur)->value, "requires") == 0) {
+        *cur = (*cur)->next;
+        while (1) {
+            if (!(token_is_name(*cur) && strcmp((*cur)->value, "method") == 0))
+                parse_error(context, "expected 'method <name>' after 'requires'", *cur);
+            *cur = (*cur)->next;
+            if (!token_is_name(*cur)) parse_error(context, "expected a method name after 'requires method'", *cur);
+            node->annotation.requires = realloc(node->annotation.requires, sizeof(char *) * (node->annotation.require_count + 1));
+            node->annotation.requires[node->annotation.require_count++] = strdup((*cur)->value);
+            *cur = (*cur)->next;
+            if ((*cur)->kind == COMMA) { *cur = (*cur)->next; continue; }
+            break;
+        }
+    }
+    if ((*cur)->kind == SEMICOLON) {
+        *cur = (*cur)->next;
+    } else if ((*cur)->kind == TEMPLATE_BODY) {
+        node->annotation.template = strdup((*cur)->value);
+        node->annotation.template_line = (*cur)->line;
+        *cur = (*cur)->next;
+    } else {
+        parse_error(context, "expected ';' or a '{ template }' to end the annotation declaration", *cur);
+    }
+    node->annotation.is_exported = want_export;
+    if (want_export) node->annotation.package = strdup(context->module.current_package);
+    add_annotation(context, node);
+    return node;
+}
+
 static ASTNode *parse_toplevel_decl(ParserContext *context, Token **cur) {
     if ((*cur)->kind == PACKAGE) {
         *cur = (*cur)->next;
@@ -202,6 +276,7 @@ static ASTNode *parse_toplevel_decl(ParserContext *context, Token **cur) {
     }
 
     if ((*cur)->kind == IMPORT) return parse_import(context, cur);
+    if ((*cur)->kind == ANNOTATION) return parse_annotation(context, cur, want_export);
     if ((*cur)->kind == TYPEDEF) return parse_typedef(context, cur, want_export);
     if ((*cur)->kind == STRUCT) {
         ASTNode *declaration = parse_struct(context, cur);

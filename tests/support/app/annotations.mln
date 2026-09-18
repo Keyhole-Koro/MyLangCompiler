@@ -1,0 +1,97 @@
+package annotations;
+
+// The annotations an application is written with, and what they expand to.
+//
+//     import { app, timer, key, open, on_close } from ".../annotations.mln";
+//
+//     @app struct Counter { i32 clicks = 0; i32 label; };
+//     i32 (Counter *c) view() { return <Window ...>...</Window>; }
+//     @timer(100) void (Counter *c) poll() { ... }
+//
+// The compiler knows nothing about apps. It checks each use against the
+// declaration below (target, arguments, `requires`) and expands @app's
+// template into ordinary MyLang declarations that app.mln reads at boot. The
+// template's `@` directives are the compiler's reflection surface -- @T,
+// @name(T), @arg(p), @each over @fields / @methods, @tramp(m), @i -- and
+// nothing else: templates read the declaration, they do not compute.
+//
+// Everything the framework relies on is therefore in this file and app.mln:
+// the descriptor table an @app struct becomes, in i32 words:
+//
+//   [0] name (char*)        [1] flags (1 = single instance)   [2] sizeof(T)
+//   [3] init  void(self)    [4] view  i32(self) -> window id
+//   [5] open  handler|0     [6] on_close handler|0            [7] task handler|0
+//   [8] timer count N       [9] key count M
+//   [10 ..] N x (interval, handler), then M x (key spec char*, handler)
+//
+// where every handler is `void (i32 owner, i32 id, i32 arg)` -- the shape
+// @tramp(m) produces from a method `(T *self) m()`, `m(i32 id)` or
+// `m(i32 id, i32 arg)`. `owner` is the instance app.mln allocated. Key specs
+// ("Ctrl+S") are kept as text and parsed by app.mln when the app is mounted.
+
+// An application: a struct the framework can allocate, mount and route
+// events to. `single`: launching it again focuses the running instance.
+// `name`: the launcher label, defaulting to the struct's name.
+export annotation app(bool single = false, char *name = "")
+    on struct T
+    requires method view
+{
+    // Field initializers, applied to the zeroed instance before view().
+    void __app_@{T}_init(i32 self) {
+        @T *p = (@T*)self;
+        @each(f in @fields(T) where init) { p->@f = @f.init; }
+    }
+
+    i32 __app_@{T}_view(i32 self) { @T *p = (@T*)self; return p->view(); }
+
+    // @open gets the path in `arg`, unlike the generic (id, arg) shape.
+    @each(m in @methods(T, open)) {
+        void __app_@{T}_open_tramp(i32 owner, i32 id, i32 arg) { @T *p = (@T*)owner; p->@m((char*)arg); }
+    }
+
+    i32 __app_@{T}_table[64];
+
+    export i32* __app_@{T}_desc() {
+        i32 *t = &__app_@{T}_table[0];
+        @T probe;
+        t[0] = (i32)@arg(name);
+        char *label = (char*)t[0];
+        if (label[0] == 0) { t[0] = (i32)@name(T); }
+        t[1] = @arg(single);
+        t[2] = sizeof(probe);
+        t[3] = __app_@{T}_init;
+        t[4] = __app_@{T}_view;
+        t[5] = 0;
+        @each(m in @methods(T, open)) { t[5] = __app_@{T}_open_tramp; }
+        t[6] = 0;
+        @each(m in @methods(T, on_close)) { t[6] = @tramp(m); }
+        t[7] = 0;
+        @each(m in @methods(T, task)) { t[7] = @tramp(m); }
+        t[8] = @count(@methods(T, timer));
+        t[9] = @count(@methods(T, key));
+        i32 w = 10;
+        @each(m in @methods(T, timer)) { t[w] = @m.args[0]; t[w + 1] = @tramp(m); w = w + 2; }
+        @each(m in @methods(T, key)) { t[w] = (i32)@m.args[0]; t[w + 1] = @tramp(m); w = w + 2; }
+        return t;
+    }
+}
+
+// Called every `ms` milliseconds while an instance is mounted; one timer
+// per instance. `()` or `(i32 id)`.
+export annotation timer(i32 ms) on method of app;
+
+// A window-level shortcut, active while the app's window is: "Ctrl+S",
+// "Shift+Enter", "F5", "Enter" (modifiers Ctrl, Shift, Alt). `()`, `(i32 id)`
+// or `(i32 id, i32 arg)` with arg = code | mods << 16.
+export annotation key(char *combo) on method of app;
+
+// Receives a path handed over by ui.open(); for a `single` app the running
+// instance gets it. Exactly `(char *path)`.
+export annotation open on method of app;
+
+// The user closed the window. Runs before the framework frees the instance
+// and everything it owns. `()` or `(i32 id)`.
+export annotation on_close on method of app;
+
+// Reserved: a scheduler task per instance. Not started by app.mln yet.
+export annotation task on method of app;

@@ -24,6 +24,7 @@ char *astType2str(ASTNodeType type) {
         case AST_FUN_LITERAL: return "AST_FUN_LITERAL";
         case AST_FUNDEF: return "AST_FUNDEF";
         case AST_PARAM: return "AST_PARAM";
+        case AST_ANNOTATION: return "AST_ANNOTATION";
         case AST_CALL: return "AST_CALL";
         case AST_WHILE: return "AST_WHILE";
         case AST_FOR: return "AST_FOR";
@@ -99,6 +100,7 @@ void ast_visit_children(ASTNode *n, void (*visit)(ASTNode **, void *), void *ctx
     case AST_DOM_ELEMENT:
         for (int i = 0; i < n->dom_element.prop_count; i++) CHILD(dom_element.props[i].value);
         CHILDREN(dom_element.children, dom_element.child_count); break;
+    case AST_ANNOTATION: CHILDREN(annotation.params, annotation.param_count); break;
     case AST_WHILE: CHILD(while_stmt.cond); CHILD(while_stmt.body); break;
     case AST_DO_WHILE: CHILD(do_while_stmt.cond); CHILD(do_while_stmt.body); break;
     case AST_FOR:
@@ -193,6 +195,11 @@ ASTNode *ast_clone(const ASTNode *src) {
             STRINGS(init_list.field_names, init_list.count);
         break;
     case AST_IMPORT: STR(import_stmt.path); STRINGS(import_stmt.symbols, import_stmt.symbol_count); break;
+    case AST_ANNOTATION:
+        STR(annotation.name); STR(annotation.target_var); STR(annotation.of_annotation);
+        STR(annotation.template); STR(annotation.package);
+        ARRAY(annotation.params, annotation.param_count);
+        STRINGS(annotation.requires, annotation.require_count); break;
     default: break;
     }
 #undef STR

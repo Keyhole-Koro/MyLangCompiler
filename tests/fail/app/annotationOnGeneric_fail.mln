@@ -1,0 +1,4 @@
+import { app } from "../../support/app/annotations.mln";
+@app
+struct Box<T> { T v; };
+i32 main() { return 0; }

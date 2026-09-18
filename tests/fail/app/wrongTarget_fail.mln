@@ -1,6 +1,5 @@
-@app
+import { app, timer } from "../../support/app/annotations.mln";
+@timer(100)
 struct Thing { i32 v; };
 i32 (Thing *t) view() { return 0; }
-@key("Hyper+S")
-void (Thing *t) save() { }
 i32 main() { return 0; }

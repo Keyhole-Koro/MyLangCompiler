@@ -1,0 +1,10 @@
+export annotation app(bool single = false, char *name = "")
+    on struct T
+    requires method view
+{
+    i32 __app_@{T}_view(i32 self) { @T *p = (@T*)self; return p->view(); }
+    @each(m in @methods(T, timer)) { i32 t_@i = @m.args[0]; }
+}
+
+export annotation timer(i32 ms) on method of app;
+annotation marker on function;

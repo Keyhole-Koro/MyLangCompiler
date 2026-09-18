@@ -51,6 +51,7 @@ typedef enum {
     // DOM syntax extension node. Only reachable in a .dom.mln source, and only
     // between parsing and DOM lowering; later passes never see one.
     AST_DOM_ELEMENT,
+    AST_ANNOTATION,
 } ASTNodeType;
 
 typedef enum {
@@ -67,6 +68,12 @@ typedef enum {
 } TypeModifier;
 
 typedef struct ASTNode ASTNode;
+
+typedef enum {
+    ANNOT_ON_STRUCT = 1,
+    ANNOT_ON_METHOD = 2,
+    ANNOT_ON_FUNCTION = 4,
+} AnnotationTarget;
 
 typedef struct {
     ASTNode *key;
@@ -227,6 +234,27 @@ struct ASTNode {
             ASTNode **children;
             int child_count;
         } dom_element;
+        /* `annotation name(params) on struct T requires method m { template }`
+         * -- declares an attribute. `target` is ANNOT_ON_*; `target_var` the
+         * name the template refers to the annotated declaration by (`T`);
+         * `of_annotation` restricts a method annotation to types carrying
+         * that annotation (`on method of app`); `requires` lists method names
+         * the annotated type must have; `template` is the raw body text or
+         * NULL for a marker. See parser_lower_annot.c. */
+        struct {
+            char *name;
+            ASTNode **params;
+            int param_count;
+            int target;
+            char *target_var;
+            char *of_annotation;
+            char **requires;
+            int require_count;
+            char *template;
+            int template_line;
+            int is_exported;
+            char *package;
+        } annotation;
         struct {
             ASTNode *cond;
             ASTNode *body;

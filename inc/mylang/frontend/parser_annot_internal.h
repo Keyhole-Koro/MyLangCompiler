@@ -1,12 +1,14 @@
-#ifndef MYLANG_FRONTEND_PARSER_APP_INTERNAL_H
-#define MYLANG_FRONTEND_PARSER_APP_INTERNAL_H
+#ifndef MYLANG_FRONTEND_PARSER_ANNOT_INTERNAL_H
+#define MYLANG_FRONTEND_PARSER_ANNOT_INTERNAL_H
 
 #include "mylang/frontend/parser_internal.h"
 
-/* Attribute lowering (`@app` and the method attributes that go with it) and
- * the handler trampolines shared with DOM lowering. See parser_lower_app.c. */
+/* Annotation lowering: resolves `@name` uses against `annotation`
+ * declarations (local or imported), checks them, expands their templates,
+ * and provides the handler trampolines DOM lowering shares. See
+ * parser_lower_annot.c. */
 
-void lower_app_program(ParserContext *context, ASTNode *program);
+void lower_annotations(ParserContext *context, ASTNode *program);
 
 /* Parses generated MyLang top-level source and appends its declarations to
  * `program`, registering functions/methods as the ordinary parser would. */
@@ -27,7 +29,7 @@ const char *ensure_method_trampoline(ParserContext *context, ASTNode *program,
 const char *ensure_function_trampoline(ParserContext *context, ASTNode *program,
                                        const char *function_name, int line, int col);
 
-/* Appends the defaults a positional call left out (see parser_lower_app.c). */
+/* Appends the defaults a positional call left out (see parser_lower_annot.c). */
 void fill_default_arguments(ParserContext *context, ASTNode *program);
 
 #endif

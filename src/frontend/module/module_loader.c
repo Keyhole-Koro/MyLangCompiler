@@ -103,6 +103,10 @@ static void collect_module_symbols(Module *module, ParserContext *ctx) {
                 const char *name = stmt->enum_stmt.name;
                 module_add_symbol(module, SYMBOL_ENUM, name, name,
                                   stmt, 1);
+            } else if (stmt->type == AST_ANNOTATION) {
+                const char *name = stmt->annotation.name;
+                module_add_symbol(module, SYMBOL_ANNOTATION, name, name,
+                                  stmt, stmt->annotation.is_exported);
             } else if (stmt->type == AST_VAR_DECL) {
                 const char *current_name = stmt->var_decl.name;
                 const char *orig = find_export_orig_by_mangled(ctx, current_name);

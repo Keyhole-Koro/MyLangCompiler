@@ -7,7 +7,7 @@ A program consists of a sequence of top-level declarations and definitions.
 
 - `program` -> `toplevel*`
 - `toplevel` -> 
-    - `attribute* ( struct_decl | fundef )` (see "Attributes and applications")
+    - `attribute* ( struct_decl | fundef )` and `annotation_decl` (see "Attributes and annotations")
     - `package_decl`
     - `import_stmt`
     - `export_decl`
@@ -108,61 +108,67 @@ The defaults of an imported function are read from its declaration, so
 they work across packages (`lib.scale(5)`). Rest parameters and generic
 calls take no defaults.
 
-### Attributes and applications
+### Attributes and annotations
 
 - `attribute` -> `@ IDENTIFIER ( ( attr_arg ( , attr_arg )* ) )?`
 - `attr_arg` -> `IDENTIFIER` | `literal` | `IDENTIFIER = literal`
 - `toplevel` -> `attribute* export? ( struct_decl | fundef )`
+- `annotation_decl` -> `export? annotation IDENTIFIER ( param_list? )? on ( struct | method | function ) IDENTIFIER? ( of IDENTIFIER )? ( requires method IDENTIFIER ( , method IDENTIFIER )* )? ( ; | { template } )`
 
-Attributes precede a top-level declaration. The parser only records them;
-`parser_lower_app.c` gives them meaning and rejects any it does not know,
-so a misspelled attribute is an error rather than silently ignored.
-
-`@app` marks a struct as an application for the OS framework. Its fields
-may carry literal initializers, its `view` method builds the window, and
-its other attributed methods hook the framework:
+The compiler carries no attribute vocabulary. Every `@name` must resolve
+to an `annotation` declaration -- in the same file, or exported by a module
+named in a symbol-list import -- and is checked against it: what it may be
+put on (`on struct` / `on method` / `on function`), its arguments against
+the declared parameters (keyed, positional, or a bare bool parameter's
+name as a flag: `@app(single)`), `of X` (a method annotation only on
+methods of a type carrying `@X`) and `requires method m` (the annotated
+type must have `m`, taking a pointer receiver). A misspelled or
+unimported annotation is an error, never silently ignored.
 
 ```mylang
-@app(single, name = "Editor")
-struct Editor { i32 area; i32 dirty = 0; };
+export annotation app(bool single = false, char *name = "")
+    on struct T
+    requires method view
+{
+    i32 __app_@{T}_view(i32 self) { @T *p = (@T*)self; return p->view(); }
+    @each(m in @methods(T, timer)) { ... @m.args[0] ... @tramp(m) ... }
+}
+export annotation timer(i32 ms) on method of app;
 
-i32  (Editor *e) view()             { return <Window ...>...</Window>; }
-@open     void (Editor *e) open(char *path)  { ... }   // ui.open(path) lands here
-@on_close void (Editor *e) closing()         { ... }   // the window was closed
-@timer(100) void (Editor *e) poll()          { ... }   // every 100 ms while mounted
-@key("Ctrl+S") void (Editor *e) save()       { ... }   // window-level shortcut
-@task     void (Editor *e) run()             { ... }   // a scheduler task per instance
+import { app, timer } from "annotations.mln";
+@app struct Counter { ... };
+@timer(100) void (Counter *c) poll() { ... }
 ```
 
-| attribute | on | arguments | method shape (after the receiver) |
-| --- | --- | --- | --- |
-| `@app` | struct | `single`; `name = "..."` | -- |
-| `@open` | method | -- | `(char *path)` |
-| `@on_close` | method | -- | `()` or `(i32 id)` |
-| `@timer` | method | period in ms | `()` or `(i32 id)` |
-| `@key` | method | `"Ctrl+S"`, `"Shift+Enter"`, `"F5"` (Ctrl, Shift, Alt) | `()`, `(i32 id)` or `(i32 id, i32 arg)` |
-| `@task` | method | -- | `()` |
+A declaration ending in `;` is a marker: it is checked and can be read by
+other templates through `@methods(T, name)`. A declaration with a body is
+a **template**: MyLang top-level source, copied through verbatim except for
+`@` directives, which read the annotated declaration. The expansion is
+parsed by the ordinary top-level parser, so generated code is
+method-resolved, checked and compiled like anything the author wrote.
 
-Every such method, and every method used as a DOM handler, takes a
-**pointer receiver** (`Editor *e`): the dispatcher identifies an instance by
-the i32 it was mounted with, and a `ref mut` receiver cannot be built from
-it. The compiler generates, per `@app` struct `T`:
+| directive | expands to |
+| --- | --- |
+| `@T`, `@{T}` | the annotated type's name (`T` as named by `on struct T`); braces splice inside an identifier, `__app_@{T}_init` |
+| `@name(T)` | the same as a string literal |
+| `@arg(p)` | annotation argument `p`, or its declared default, as a literal |
+| `@each(f in @fields(T) [where init]) { ... }` | the body once per field; `@f`, `@f.type`, `@f.init` |
+| `@each(m in @methods(T, annot)) { ... }` | once per method of `T` carrying `@annot`; `@m` (short name), `@m.mangled`, `@m.args[i]` (that annotation's i-th argument or its default) |
+| `@count(@fields(T))`, `@count(@methods(T, annot))` | the number of items |
+| `@i` | 0-based index inside the innermost `@each` |
+| `@tramp(m)` | the name of `void (i32 owner, i32 id, i32 arg)`, generated on first use, that casts `owner` to `T*` and calls `m` with `()`, `(id)` or `(id, arg)` by its arity |
+| `@@` | a literal `@` |
 
-- `void __app_T_init(i32 self)` -- writes the field initializers;
-- `i32 __app_T_view(i32 self)` -- calls `view`;
-- `void T__m__tramp(i32 owner, i32 id, i32 arg)` per handler method `m`,
-  which casts `owner` back to `T*` and calls `m` with `()`, `(id)` or
-  `(id, arg)` as its arity says (`@open` passes `(char*)arg`);
-- `export i32* __app_T_desc()` -- a descriptor table of i32 words the
-  framework reads: `[0]` name, `[1]` flags (1 = single), `[2]` size,
-  `[3]` init, `[4]` view, `[5]` open, `[6]` on_close, `[7]` task,
-  `[8]` timer count, `[9]` key count, then `(interval, handler)` pairs and
-  `(mods, code, handler)` triples.
+Templates read declarations; they do not compute (no arithmetic, no
+conditionals -- emit runtime code for that, `i32 w = 10; ... w = w + 2;`).
+`//` comments inside a template are copied as they are. `@tramp` is the one
+piece of meaning the compiler keeps: the handler calling convention is
+its business, so a method reached through it must take a pointer receiver
+(`T *self`). Names ending in `__tramp` are reserved for those trampolines.
 
-Names starting with `__app_` and ending in `__tramp` are reserved for this
-generated code. The generated declarations are parsed from MyLang source and
-go through method resolution, semantic checking and codegen like anything
-the author wrote.
+What `@app` and its companions mean -- the descriptor table, timers,
+shortcuts, window close -- is declared by the application framework in
+`system/MyAppFramework/src/annotations.mln`, not here.
 
 ### Variables
 - `var_decl` -> `mut? type IDENTIFIER ( [ NUMBER? ] )* ( = ( expr | init_list ) )? ;`

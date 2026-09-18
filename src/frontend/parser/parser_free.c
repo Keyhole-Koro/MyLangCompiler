@@ -142,6 +142,17 @@ void free_ast(ASTNode *node) {
              * kept alive here too in case a parse error aborts in between. */
             if (node->call.recv) free_ast(node->call.recv);
             break;
+        case AST_ANNOTATION:
+            free(node->annotation.name);
+            free(node->annotation.target_var);
+            free(node->annotation.of_annotation);
+            free(node->annotation.template);
+            free(node->annotation.package);
+            for (int i = 0; i < node->annotation.param_count; i++) free_ast(node->annotation.params[i]);
+            free(node->annotation.params);
+            for (int i = 0; i < node->annotation.require_count; i++) free(node->annotation.requires[i]);
+            free(node->annotation.requires);
+            break;
         case AST_PARAM:
             if (node->param.type) free_ast(node->param.type);
             if (node->param.default_value) free_ast(node->param.default_value);
