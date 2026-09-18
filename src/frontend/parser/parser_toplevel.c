@@ -111,7 +111,78 @@ ASTNode *parse_import(ParserContext *context, Token **cur) {
     return make_import_node_with_templates(context, path, symbols, count);
 }
 
+/* `@name`, `@name(arg, key = literal, ...)`. The parser only records
+ * attributes; what each one means (and which are legal) is decided by the
+ * lowering pass that consumes them, see parser_lower_app.c. */
+Attribute *parse_attributes(ParserContext *context, Token **cur, int *out_count) {
+    Attribute *attrs = NULL;
+    int count = 0;
+    while ((*cur)->kind == AT) {
+        Token *at = *cur;
+        *cur = (*cur)->next;
+        if (!token_is_name(*cur)) parse_error(context, "expected attribute name after '@'", *cur);
+        Attribute a = {0};
+        a.name = strdup((*cur)->value);
+        a.line = at->line;
+        a.col = at->col;
+        *cur = (*cur)->next;
+        if ((*cur)->kind == L_PARENTHESES) {
+            *cur = (*cur)->next;
+            while ((*cur)->kind != R_PARENTHESES) {
+                AttrArg arg = {0};
+                arg.line = (*cur)->line;
+                arg.col = (*cur)->col;
+                if (token_is_name(*cur) && (*cur)->next && (*cur)->next->kind == ASSIGN) {
+                    arg.name = strdup((*cur)->value);
+                    *cur = (*cur)->next->next;
+                    arg.value = parse_literal_value(context, cur);
+                    if (!arg.value) parse_error(context, "expected a literal after '=' in attribute argument", *cur);
+                } else if (token_is_name(*cur)) {
+                    arg.value = new_identifier((*cur)->value);
+                    set_node_loc_from_tokens(arg.value, *cur, NULL);
+                    *cur = (*cur)->next;
+                } else {
+                    arg.value = parse_literal_value(context, cur);
+                    if (!arg.value) parse_error(context, "expected an identifier or literal in attribute argument", *cur);
+                }
+                a.args = realloc(a.args, sizeof(AttrArg) * (a.arg_count + 1));
+                a.args[a.arg_count++] = arg;
+                if ((*cur)->kind == COMMA) {
+                    *cur = (*cur)->next;
+                    if ((*cur)->kind == R_PARENTHESES) parse_error(context, "trailing comma in attribute arguments", *cur);
+                    continue;
+                }
+                if ((*cur)->kind != R_PARENTHESES) parse_error(context, "expected ',' or ')' in attribute arguments", *cur);
+            }
+            *cur = (*cur)->next;
+        }
+        attrs = realloc(attrs, sizeof(Attribute) * (count + 1));
+        attrs[count++] = a;
+    }
+    *out_count = count;
+    return attrs;
+}
+
+static ASTNode *parse_toplevel_decl(ParserContext *context, Token **cur);
+
 ASTNode* parse_toplevel(ParserContext *context, Token **cur) {
+    if ((*cur)->kind != AT) return parse_toplevel_decl(context, cur);
+
+    int attr_count = 0;
+    Token *first = *cur;
+    Attribute *attrs = parse_attributes(context, cur, &attr_count);
+    ASTNode *decl = parse_toplevel_decl(context, cur);
+    if (!decl) {
+        /* Package/import lines and generic templates come back NULL; none of
+         * them can carry an attribute today. */
+        parse_error(context, "attributes may only precede a struct, function or method declaration", first);
+    }
+    decl->attrs = attrs;
+    decl->attr_count = attr_count;
+    return decl;
+}
+
+static ASTNode *parse_toplevel_decl(ParserContext *context, Token **cur) {
     if ((*cur)->kind == PACKAGE) {
         *cur = (*cur)->next;
         if (!token_is_name(*cur)) parse_error(context, "expected package name", *cur);

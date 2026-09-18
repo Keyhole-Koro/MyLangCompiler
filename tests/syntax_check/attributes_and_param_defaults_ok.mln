@@ -1,0 +1,14 @@
+@app(single, name = "Editor")
+struct Editor { i32 area; i32 count = 0; };
+
+@timer(100)
+void (Editor *e) poll() { }
+
+@key("Ctrl+S")
+@on_close
+void (Editor *e) save(i32 id, i32 arg) { }
+
+i32 Label(char *text, i32 x = 0, i32 y = -1, i32 bold = 0, char *name = "x") { return 0; }
+
+@open
+export void (Editor *e) open(char *path) { }

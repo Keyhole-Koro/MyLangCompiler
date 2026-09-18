@@ -1,0 +1,23 @@
+// `ref=` binds a node id into any lvalue; properties with defaults may be
+// left out; a plain local handler with fewer than three parameters is
+// wrapped in a trampoline with the (owner, id, arg) ABI.
+import dom from "../../support/app/dom.mln";
+
+i32 g_win = 0;
+i32 g_clicked = 0;
+void on_click(i32 id) { g_clicked = id; }
+
+i32 build() {
+    i32 label = 0;
+    return <Window ref={g_win} title="t">
+        <Label ref={label} text="hello" />
+        <Button text="ok" onClick={on_click} />
+    </Window>;
+}
+
+i32 main() {
+    i32 root = build();
+    i32 h = dom.last_click();
+    h(0, dom.last_id(), 0);
+    return root * 100 + g_win * 10 + g_clicked;   // 1*100 + 1*10 + 3 = 113
+}

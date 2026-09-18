@@ -1,0 +1,2 @@
+package lib;
+export i32 scale(i32 v, i32 by = 3, i32 plus = -1) { return v * by + plus; }

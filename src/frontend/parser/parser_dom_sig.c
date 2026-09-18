@@ -11,8 +11,10 @@ void dom_signature_free(DomSignature *sig) {
     if (!sig) return;
     for (int i = 0; i < sig->param_count; i++) free(sig->param_names[i]);
     free(sig->param_names);
+    free(sig->param_defaults);
     free(sig->call_name);
     sig->param_names = NULL;
+    sig->param_defaults = NULL;
     sig->param_count = 0;
     sig->call_name = NULL;
 }

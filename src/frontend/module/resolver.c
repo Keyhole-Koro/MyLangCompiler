@@ -118,12 +118,15 @@ void resolver_fill_dom_signature(const ASTNode *fundef_node, const char *call_na
 
     if (out->param_count > 0) {
         out->param_names = malloc(sizeof(char *) * out->param_count);
+        out->param_defaults = malloc(sizeof(ASTNode *) * out->param_count);
         for (int i = 0; i < out->param_count; i++) {
             ASTNode *p = fundef_node->fundef.params[i];
             const char *pname = (p && p->type == AST_PARAM && p->param.name) ? p->param.name : "";
             out->param_names[i] = strdup(pname);
+            out->param_defaults[i] = (p && p->type == AST_PARAM) ? p->param.default_value : NULL;
         }
     } else {
         out->param_names = NULL;
+        out->param_defaults = NULL;
     }
 }

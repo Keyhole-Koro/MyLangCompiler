@@ -1,5 +1,6 @@
 #include "mylang/frontend/parser_internal.h"
 #include "mylang/frontend/parser_dom_internal.h"
+#include "mylang/frontend/parser_app_internal.h"
 #include "mylang/frontend/parser_rewrite_internal.h"
 #include "mylang/frontend/module.h"
 
@@ -25,6 +26,11 @@ static void lower_program(ParserContext *context, ASTNode *program) {
 
     instantiate_generics(context, program);
 
+    /* `@app` structs and their attributed methods become descriptor tables
+     * and trampolines (parser_lower_app.c) before DOM lowering, which reuses
+     * the same trampolines for markup handlers. */
+    lower_app_program(context, program);
+
     dom_lowering_reset(context);
     dom_lowering_set_program(context, program);
     lower_dom_block(context, program);
@@ -42,6 +48,10 @@ static void lower_program(ParserContext *context, ASTNode *program) {
     ensure_no_unresolved_method_calls(program);
 
     rewrite_node(context, program, scope, 0);
+
+    /* Call names are final now, so `f(1)` against `void f(i32 a, i32 b = 2)`
+     * can be completed to `f(1, 2)`. */
+    fill_default_arguments(context, program);
 }
 
 ASTNode *parse_program(Token **cur) {

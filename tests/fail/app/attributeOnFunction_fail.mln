@@ -1,0 +1,3 @@
+@timer(50)
+void tick() { }
+i32 main() { return 0; }

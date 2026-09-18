@@ -107,6 +107,7 @@ typedef enum {
     VERTICAL_BAR,  // |
     CARET,         // ^
     HASH,          // #
+    AT,            // @ (attribute marker)
 
     NUMBER,        // number
     STRING_LITERAL, // "abc"

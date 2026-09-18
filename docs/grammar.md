@@ -7,6 +7,7 @@ A program consists of a sequence of top-level declarations and definitions.
 
 - `program` -> `toplevel*`
 - `toplevel` -> 
+    - `attribute* ( struct_decl | fundef )` (see "Attributes and applications")
     - `package_decl`
     - `import_stmt`
     - `export_decl`
@@ -85,6 +86,83 @@ It still reads as a plain name wherever a namespace is expected -- `package
 test;`, `import test from "..."`, `test.pass()` -- so no existing source needed
 to change. What it can no longer be is a variable, function, field, or type
 name.
+
+### Default parameters
+
+- `param` -> `mut? type IDENTIFIER ( [ NUMBER? ] )* ( = literal )?`
+- `literal` -> `-? NUMBER` | `STRING_LITERAL` | `CHAR_LITERAL` | `true` | `false`
+
+```mylang
+i32 Label(char *text, i32 x = 0, i32 y = 0, i32 color = 0, i32 bold = 0) { ... }
+
+Label("hi");            // Label("hi", 0, 0, 0, 0)
+Label("hi", 4, 8);      // Label("hi", 4, 8, 0, 0)
+<Label text="hi" bold={1} />   // any defaulted property may be left out
+```
+
+A positional call may leave out trailing parameters that have defaults; a
+DOM element may leave out any of them, since properties go by name. Only a
+literal is allowed as a default because the compiler clones it into each
+call site, which may be in another package where a name would not resolve.
+The defaults of an imported function are read from its declaration, so
+they work across packages (`lib.scale(5)`). Rest parameters and generic
+calls take no defaults.
+
+### Attributes and applications
+
+- `attribute` -> `@ IDENTIFIER ( ( attr_arg ( , attr_arg )* ) )?`
+- `attr_arg` -> `IDENTIFIER` | `literal` | `IDENTIFIER = literal`
+- `toplevel` -> `attribute* export? ( struct_decl | fundef )`
+
+Attributes precede a top-level declaration. The parser only records them;
+`parser_lower_app.c` gives them meaning and rejects any it does not know,
+so a misspelled attribute is an error rather than silently ignored.
+
+`@app` marks a struct as an application for the OS framework. Its fields
+may carry literal initializers, its `view` method builds the window, and
+its other attributed methods hook the framework:
+
+```mylang
+@app(single, name = "Editor")
+struct Editor { i32 area; i32 dirty = 0; };
+
+i32  (Editor *e) view()             { return <Window ...>...</Window>; }
+@open     void (Editor *e) open(char *path)  { ... }   // ui.open(path) lands here
+@on_close void (Editor *e) closing()         { ... }   // the window was closed
+@timer(100) void (Editor *e) poll()          { ... }   // every 100 ms while mounted
+@key("Ctrl+S") void (Editor *e) save()       { ... }   // window-level shortcut
+@task     void (Editor *e) run()             { ... }   // a scheduler task per instance
+```
+
+| attribute | on | arguments | method shape (after the receiver) |
+| --- | --- | --- | --- |
+| `@app` | struct | `single`; `name = "..."` | -- |
+| `@open` | method | -- | `(char *path)` |
+| `@on_close` | method | -- | `()` or `(i32 id)` |
+| `@timer` | method | period in ms | `()` or `(i32 id)` |
+| `@key` | method | `"Ctrl+S"`, `"Shift+Enter"`, `"F5"` (Ctrl, Shift, Alt) | `()`, `(i32 id)` or `(i32 id, i32 arg)` |
+| `@task` | method | -- | `()` |
+
+Every such method, and every method used as a DOM handler, takes a
+**pointer receiver** (`Editor *e`): the dispatcher identifies an instance by
+the i32 it was mounted with, and a `ref mut` receiver cannot be built from
+it. The compiler generates, per `@app` struct `T`:
+
+- `void __app_T_init(i32 self)` -- writes the field initializers;
+- `i32 __app_T_view(i32 self)` -- calls `view`;
+- `void T__m__tramp(i32 owner, i32 id, i32 arg)` per handler method `m`,
+  which casts `owner` back to `T*` and calls `m` with `()`, `(id)` or
+  `(id, arg)` as its arity says (`@open` passes `(char*)arg`);
+- `export i32* __app_T_desc()` -- a descriptor table of i32 words the
+  framework reads: `[0]` name, `[1]` flags (1 = single), `[2]` size,
+  `[3]` init, `[4]` view, `[5]` open, `[6]` on_close, `[7]` task,
+  `[8]` timer count, `[9]` key count, then `(interval, handler)` pairs and
+  `(mods, code, handler)` triples.
+
+Names starting with `__app_` and ending in `__tramp` are reserved for this
+generated code. The generated declarations are parsed from MyLang source and
+go through method resolution, semantic checking and codegen like anything
+the author wrote.
 
 ### Variables
 - `var_decl` -> `mut? type IDENTIFIER ( [ NUMBER? ] )* ( = ( expr | init_list ) )? ;`

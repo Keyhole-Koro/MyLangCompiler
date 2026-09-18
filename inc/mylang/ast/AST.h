@@ -84,12 +84,35 @@ typedef struct {
     int col;
 } DomProp;
 
+// One argument of an attribute: `@app(single, name = "Editor")` carries a
+// positional `single` (name NULL, value an identifier) and a keyed `name`.
+typedef struct {
+    char *name;      // NULL for a positional argument
+    ASTNode *value;  // identifier or literal
+    int line;
+    int col;
+} AttrArg;
+
+// One `@name(args)` attribute. Attributes attach to the top-level declaration
+// that follows them; the compiler consumes the ones it knows (see
+// parser_lower_app.c) and rejects the rest.
+typedef struct {
+    char *name;
+    AttrArg *args;
+    int arg_count;
+    int line;
+    int col;
+} Attribute;
+
 struct ASTNode {
     ASTNodeType type;
     int line;
     int col;
     int end_line;
     int end_col;
+    // Attributes written before this declaration; NULL/0 for everything else.
+    Attribute *attrs;
+    int attr_count;
     union {
         struct { char *value; } number;
         struct { char *name; } identifier;
@@ -178,6 +201,8 @@ struct ASTNode {
             char *name;
             int is_mut;
             int is_rest;
+            // `i32 x = 0`: a literal a call or DOM element may leave out.
+            ASTNode *default_value;
         } param;
         struct {
             char *name;

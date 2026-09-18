@@ -1,7 +1,22 @@
 #include "mylang/frontend/parser_internal.h"
 
+void free_attributes(Attribute *attrs, int count) {
+    for (int i = 0; i < count; i++) {
+        for (int j = 0; j < attrs[i].arg_count; j++) {
+            free(attrs[i].args[j].name);
+            free_ast(attrs[i].args[j].value);
+        }
+        free(attrs[i].args);
+        free(attrs[i].name);
+    }
+    free(attrs);
+}
+
 void free_ast(ASTNode *node) {
     if (!node) return;
+    free_attributes(node->attrs, node->attr_count);
+    node->attrs = NULL;
+    node->attr_count = 0;
     switch (node->type) {
         case AST_NUMBER:
             free(node->number.value);
@@ -129,6 +144,7 @@ void free_ast(ASTNode *node) {
             break;
         case AST_PARAM:
             if (node->param.type) free_ast(node->param.type);
+            if (node->param.default_value) free_ast(node->param.default_value);
             free(node->param.name);
             break;
         case AST_STRUCT:

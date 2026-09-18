@@ -84,4 +84,35 @@ Because tags are function names, adding an element means adding a function to
 the imported package, and an event handler is simply a parameter (`onClick`
 above). A tag with no matching function, a property with no matching parameter,
 and a parameter with no matching property are all compile errors reported
-against the callee's signature.
+against the callee's signature -- except that a parameter with a
+`= literal` default (see grammar.md, "Default parameters") may be left out,
+in which case the default is passed.
+
+Two properties are handled by the compiler rather than the callee:
+
+- `ref={lvalue}` stores the new node's id: `lvalue = __dom1;` follows the
+  create call. The lvalue is anything assignable -- a local, a global, or a
+  struct field such as `c->label`.
+- A *handler property* -- any parameter named `on` plus a capital letter
+  (`onClick`, `onChange`, `onTick`) -- takes a function with the dispatcher's
+  uniform ABI, `void (i32 owner, i32 id, i32 arg)`. When its value names a
+  method (`onClick={c->click}`, where `c` is a local or parameter of a type
+  with that method) or a local function with fewer than three parameters,
+  the compiler substitutes a generated trampoline, so handlers can be written
+  as `void (Counter *c) click(i32 id)` or `void on_click(i32 id)`. See
+  grammar.md, "Attributes and applications". Any other value is passed
+  through unchanged.
+
+```text
+i32 (Counter *c) view() {
+    return <Window ref={c->win} title="Counter" w={400}>
+        <Button text="Click me" onClick={c->click} />
+    </Window>;
+}
+
+i32 __dom0 = dom.Window("Counter", 0, 0, 400, 200);   // x, y, h defaulted
+c->win = __dom0;
+i32 __dom1 = dom.Button("Click me", 0, 0, 90, 34, Counter__click__tramp);
+dom.append_child(__dom0, __dom1);
+return __dom0;
+```

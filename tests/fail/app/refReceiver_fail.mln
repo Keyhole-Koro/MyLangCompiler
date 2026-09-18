@@ -1,0 +1,4 @@
+@app
+struct Thing { i32 v; };
+i32 (ref mut Thing t) view() { return 0; }
+i32 main() { return 0; }

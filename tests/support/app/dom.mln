@@ -1,0 +1,13 @@
+// Element vocabulary for the @app cases: defaults on every geometry
+// parameter, handler slots recorded so a case can call them back.
+package dom;
+i32 g_last_owner = 0;
+i32 g_last_click = 0;
+i32 g_last_id = 0;
+i32 g_next = 1;
+export void append_child(i32 p, i32 c) { }
+export i32 Window(char *title, i32 x = 0, i32 y = 0, i32 w = 320, i32 h = 200) { i32 id = g_next; g_next++; return id; }
+export i32 Button(char *text, i32 x = 0, i32 y = 0, i32 w = 90, i32 h = 34, i32 onClick = 0) { i32 id = g_next; g_next++; g_last_click = onClick; g_last_id = id; return id; }
+export i32 Label(char *text, i32 x = 0, i32 y = 0, i32 color = 0, i32 bold = 0) { i32 id = g_next; g_next++; return id; }
+export i32 last_click() { return g_last_click; }
+export i32 last_id() { return g_last_id; }

@@ -55,7 +55,7 @@ StringTokenKindMap operators[] = {
     {"(", L_PARENTHESES}, {")", R_PARENTHESES}, {";", SEMICOLON}, {",", COMMA},
     {"{", L_BRACE}, {"}", R_BRACE}, {"[", L_BRACKET}, {"]", R_BRACKET},
     {"<", LT}, {">", GT}, {".", DOT}, {"!", NOT}, {"?", QUESTION}, {":", COLON},
-    {"|", BITOR}, {"^", BITXOR}, {"~", BITNOT}, {"#", HASH}, {"&", AMPERSAND}
+    {"|", BITOR}, {"^", BITXOR}, {"~", BITNOT}, {"#", HASH}, {"@", AT}, {"&", AMPERSAND}
 };
 
 StringTokenKindMap reservedWords[] = {
@@ -112,6 +112,7 @@ char *tokenkind2str(TokenKind kind) {
         case BITXOR: return "BITXOR";
         case BITNOT: return "BITNOT";
         case HASH: return "HASH";
+        case AT: return "AT";
         case AMPERSAND: return "AMPERSAND";
 
         case SIZEOF: return "SIZEOF";

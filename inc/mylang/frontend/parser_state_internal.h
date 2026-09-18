@@ -124,6 +124,7 @@ typedef struct ParserLoweringState {
     int function_literal_counter;
     int dom_node_counter;
     ASTNode *dom_program;
+    ASTNode *dom_current_fn;   // function whose body is being DOM-lowered
     int payload_ret_counter;
     int payload_case_counter;
 } ParserLoweringState;

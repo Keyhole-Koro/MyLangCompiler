@@ -1,7 +1,9 @@
 #include "mylang/frontend/parser_dom_internal.h"
+#include "mylang/frontend/parser_app_internal.h"
 #include "mylang/frontend/parser_ast_internal.h"
 
 #include <stdarg.h>
+#include <ctype.h>
 
 /* Lowers AST_DOM_ELEMENT nodes into ordinary MyLang calls.
  *
@@ -20,12 +22,24 @@
  *     return __dom0;
  *
  * Properties are ordered by the callee's parameter names, so source order does
- * not matter and a misspelled property is reported against the signature. The
- * generated statements are hoisted ahead of the statement that contained the
- * element, which is replaced by the id of the tree's root node.
+ * not matter and a misspelled property is reported against the signature. A
+ * property left out takes the parameter's `= literal` default, if it has one.
+ * The generated statements are hoisted ahead of the statement that contained
+ * the element, which is replaced by the id of the tree's root node.
+ *
+ * Two properties are handled by the compiler rather than the callee:
+ *
+ *   - `ref={lvalue}` stores the new node's id: `lvalue = __dom0;` follows the
+ *     create call, so app code keeps ids without walking the tree afterwards.
+ *   - A handler property -- any parameter named `on` + a capital letter, such
+ *     as onClick -- whose value names a method (`onClick={c.click}`) or a
+ *     local function is replaced by a trampoline with the dispatcher's
+ *     uniform ABI, `void (i32 owner, i32 id, i32 arg)`; see
+ *     parser_lower_app.c. Any other value is passed through as written.
  */
 
 #define DOM_APPEND_CHILD "append_child"
+#define DOM_REF_PROP "ref"
 
 // Statements generated for one source statement, plus the id counter shared by
 // every element lowered into it.
@@ -46,6 +60,87 @@ static void dom_error(ParserContext *context, const ASTNode *node,
     va_end(ap);
     fprintf(stderr, "\n");
     exit(1);
+}
+
+static int is_handler_param(const char *name) {
+    return name && name[0] == 'o' && name[1] == 'n' && isupper((unsigned char)name[2]);
+}
+
+/* The base type name of a local or parameter named `name` in the function
+ * being lowered, or NULL. Parameters first, then any declaration inside the
+ * body -- MyLang has no shadowing across DOM-bearing statements worth
+ * modelling here. */
+static const char *base_type_name(ASTNode *type) {
+    if (!type || type->type != AST_TYPE || !type->type_node.base_type) return NULL;
+    ASTNode *base = type->type_node.base_type;
+    if (base->type == AST_IDENTIFIER) return base->identifier.name;
+    if (base->type == AST_TYPE_GENERIC) return base->generic_type.name;
+    return NULL;
+}
+
+static const char *find_decl_type_in(ASTNode *node, const char *name) {
+    if (!node) return NULL;
+    if (node->type == AST_VAR_DECL && node->var_decl.name && strcmp(node->var_decl.name, name) == 0) {
+        return base_type_name(node->var_decl.var_type);
+    }
+    const char *found = NULL;
+    switch (node->type) {
+    case AST_BLOCK:
+        for (int i = 0; i < node->block.count && !found; i++) found = find_decl_type_in(node->block.stmts[i], name);
+        break;
+    case AST_IF:
+        found = find_decl_type_in(node->if_stmt.then_stmt, name);
+        if (!found) found = find_decl_type_in(node->if_stmt.else_stmt, name);
+        break;
+    case AST_WHILE: found = find_decl_type_in(node->while_stmt.body, name); break;
+    case AST_DO_WHILE: found = find_decl_type_in(node->do_while_stmt.body, name); break;
+    case AST_FOR:
+        found = find_decl_type_in(node->for_stmt.init, name);
+        if (!found) found = find_decl_type_in(node->for_stmt.body, name);
+        break;
+    case AST_UNCHECKED: found = find_decl_type_in(node->unchecked_block.body, name); break;
+    case AST_STMT_EXPR: found = find_decl_type_in(node->stmt_expr.block, name); break;
+    default: break;
+    }
+    return found;
+}
+
+static const char *local_type_name(ParserContext *context, const char *name) {
+    ASTNode *fn = context->lowering.dom_current_fn;
+    if (!fn) return NULL;
+    for (int i = 0; i < fn->fundef.param_count; i++) {
+        ASTNode *p = fn->fundef.params[i];
+        if (p && p->type == AST_PARAM && p->param.name && strcmp(p->param.name, name) == 0) {
+            return base_type_name(p->param.type);
+        }
+    }
+    return find_decl_type_in(fn->fundef.body, name);
+}
+
+/* Replaces a handler property's value with a trampoline where one applies. */
+static ASTNode *lower_handler_value(ParserContext *context, ASTNode *el, const DomProp *prop, ASTNode *value) {
+    const char *tramp = NULL;
+    if (value->type == AST_MEMBER_ACCESS || value->type == AST_ARROW_ACCESS) {
+        ASTNode *lhs = value->type == AST_MEMBER_ACCESS ? value->member_access.lhs : value->arrow_access.lhs;
+        const char *member = value->type == AST_MEMBER_ACCESS ? value->member_access.member : value->arrow_access.member;
+        if (lhs && lhs->type == AST_IDENTIFIER) {
+            const char *type_name = local_type_name(context, lhs->identifier.name);
+            if (type_name && find_method(context, type_name, member)) {
+                tramp = ensure_method_trampoline(context, context->lowering.dom_program,
+                                                 type_name, member, prop->line, prop->col);
+            }
+        }
+    } else if (value->type == AST_IDENTIFIER) {
+        tramp = ensure_function_trampoline(context, context->lowering.dom_program,
+                                           value->identifier.name, prop->line, prop->col);
+    }
+    if (!tramp) return value;
+    (void)el;
+    ASTNode *ref = new_identifier((char *)tramp);
+    ref->line = value->line;
+    ref->col = value->col;
+    free_ast(value);
+    return ref;
 }
 
 static ASTNode *take_prop(ASTNode *el, const char *name) {
@@ -109,6 +204,7 @@ static char *emit_element(ParserContext *context, ASTNode *el, DomEmit *out) {
                 dom_error(context, el, p->line, p->col, "<%s> sets '%s' twice", tag, p->name);
             }
         }
+        if (strcmp(p->name, DOM_REF_PROP) == 0) continue;
         int matched = 0;
         for (int j = 0; j < sig.param_count; j++) {
             if (strcmp(sig.param_names[j], p->name) == 0) { matched = 1; break; }
@@ -123,10 +219,20 @@ static char *emit_element(ParserContext *context, ASTNode *el, DomEmit *out) {
     // order produces the same call.
     ASTNode **args = sig.param_count > 0 ? malloc(sizeof(ASTNode*) * sig.param_count) : NULL;
     for (int i = 0; i < sig.param_count; i++) {
+        const DomProp *prop = NULL;
+        for (int j = 0; j < el->dom_element.prop_count; j++) {
+            if (strcmp(el->dom_element.props[j].name, sig.param_names[i]) == 0) { prop = &el->dom_element.props[j]; break; }
+        }
         ASTNode *value = take_prop(el, sig.param_names[i]);
+        if (!value && sig.param_defaults && sig.param_defaults[i]) {
+            value = ast_clone(sig.param_defaults[i]);
+        }
         if (!value) {
             dom_error(context, el, 0, 0, "<%s> is missing property '%s'; '%s' takes it as a parameter",
                       tag, sig.param_names[i], sig.call_name);
+        }
+        if (prop && is_handler_param(sig.param_names[i])) {
+            value = lower_handler_value(context, el, prop, value);
         }
         args[i] = value;
     }
@@ -135,6 +241,14 @@ static char *emit_element(ParserContext *context, ASTNode *el, DomEmit *out) {
     snprintf(var, sizeof(var), "__dom%d", context->lowering.dom_node_counter++);
     emit_stmt(out, new_var_decl(i32_type(), var,
                                 dom_call(sig.call_name, args, sig.param_count, el)));
+
+    ASTNode *ref_target = take_prop(el, DOM_REF_PROP);
+    if (ref_target) {
+        ASTNode *assign = new_assign(ref_target, new_identifier(var));
+        assign->line = el->line;
+        assign->col = el->col;
+        emit_stmt(out, new_expr_stmt(assign));
+    }
 
     if (el->dom_element.child_count > 0) {
         DomSignature append_sig;
@@ -269,9 +383,13 @@ static void lower_nested_blocks(ParserContext *context, ASTNode *stmt) {
     case AST_BLOCK:
         lower_dom_block(context, stmt);
         break;
-    case AST_FUNDEF:
+    case AST_FUNDEF: {
+        ASTNode *outer = context->lowering.dom_current_fn;
+        context->lowering.dom_current_fn = stmt;
         lower_nested_blocks(context, stmt->fundef.body);
+        context->lowering.dom_current_fn = outer;
         break;
+    }
     case AST_FUN_LITERAL:
         lower_nested_blocks(context, stmt->fun_literal.body);
         break;
@@ -439,6 +557,7 @@ void ensure_no_dom_elements(ParserContext *context, ASTNode *node) {
 void dom_lowering_reset(ParserContext *context) {
     context->lowering.dom_node_counter = 0;
     context->lowering.dom_program = NULL;
+    context->lowering.dom_current_fn = NULL;
 }
 
 // The whole program is kept so element tags can be resolved against imports.

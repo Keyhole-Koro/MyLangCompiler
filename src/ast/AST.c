@@ -57,6 +57,9 @@ void ast_visit_children(ASTNode *n, void (*visit)(ASTNode **, void *), void *ctx
     if (!n) return;
 #define CHILD(field) visit(&n->field, ctx)
 #define CHILDREN(field, count) for (int i = 0; i < n->count; i++) CHILD(field[i])
+    for (int i = 0; i < n->attr_count; i++) {
+        for (int j = 0; j < n->attrs[i].arg_count; j++) CHILD(attrs[i].args[j].value);
+    }
     switch (n->type) {
     case AST_BINARY: CHILD(binary.left); CHILD(binary.right); break;
     case AST_ASSIGN: CHILD(assign.left); CHILD(assign.right); break;
@@ -88,7 +91,7 @@ void ast_visit_children(ASTNode *n, void (*visit)(ASTNode **, void *), void *ctx
     case AST_FUNDEF:
         CHILD(fundef.ret_type); CHILDREN(fundef.params, fundef.param_count);
         CHILD(fundef.body); break;
-    case AST_PARAM: CHILD(param.type); break;
+    case AST_PARAM: CHILD(param.type); CHILD(param.default_value); break;
     case AST_CALL:
         CHILDREN(call.type_args, call.type_arg_count);
         CHILDREN(call.args, call.arg_count);
@@ -136,6 +139,15 @@ static void clone_child(ASTNode **slot, void *unused) {
 ASTNode *ast_clone(const ASTNode *src) {
     if (!src) return NULL;
     ASTNode *n = copy_array(src, sizeof(*src));
+    if (src->attr_count > 0) {
+        n->attrs = copy_array(src->attrs, sizeof(*src->attrs) * src->attr_count);
+        for (int i = 0; i < src->attr_count; i++) {
+            n->attrs[i].name = copy_string(src->attrs[i].name);
+            n->attrs[i].args = copy_array(src->attrs[i].args, sizeof(*src->attrs[i].args) * src->attrs[i].arg_count);
+            for (int j = 0; j < src->attrs[i].arg_count; j++)
+                n->attrs[i].args[j].name = copy_string(src->attrs[i].args[j].name);
+        }
+    }
 #define STR(field) n->field = copy_string(src->field)
 #define ARRAY(field, count) n->field = copy_array(src->field, sizeof(*src->field) * src->count)
 #define STRINGS(field, count) do { ARRAY(field, count); for (int i = 0; i < src->count; i++) STR(field[i]); } while (0)

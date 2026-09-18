@@ -14,6 +14,9 @@ ASTNode *parse_dom_element(ParserContext *context, Token **cur);
 typedef struct {
     char *call_name;
     char **param_names;
+    // Per parameter: its `= literal` default, borrowed from the declaration
+    // (NULL when the parameter has none). Clone before use.
+    ASTNode **param_defaults;
     int param_count;
 } DomSignature;
 

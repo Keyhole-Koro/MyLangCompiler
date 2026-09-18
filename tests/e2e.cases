@@ -82,3 +82,6 @@ phase2_refMutParam|9|succeed/semantic/phase2_refMutParam.mln
 phase2_uncheckedNested|12|succeed/semantic/phase2_uncheckedNested.mln
 refImportLongLocals|49|succeed/semantic/refImportLongLocals_main.mln,succeed/semantic/refImportLongLocals_helper.mln
 phase_restParam|0|succeed/semantic/phase_restParam.mln
+appDescriptorTable|2171175|succeed/app/counter.dom.mln,support/app/dom.mln
+defaultArguments|62|succeed/function/defaultArgs.mln,support/app/lib.mln
+domRefAndDefaults|113|succeed/dom/refAndDefaults.dom.mln,support/app/dom.mln

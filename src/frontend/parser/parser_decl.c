@@ -42,7 +42,45 @@ ASTNode* parse_param(ParserContext *context, Token **cur) {
 
     ASTNode *param = new_param_mut(final_type, name, is_mut);
     set_node_loc_from_tokens(param, start, name_tok);
+
+    // `i32 x = 0`: a default a caller (or a DOM element) may leave out. Only
+    // a literal is allowed, because the value is cloned into every call site
+    // -- possibly in another package, where a name would not resolve.
+    if ((*cur)->kind == ASSIGN) {
+        *cur = (*cur)->next;
+        param->param.default_value = parse_literal_value(context, cur);
+        if (!param->param.default_value)
+            parse_error(context, "a parameter default must be a literal (number, string, char or bool)", *cur);
+    }
     return param;
+}
+
+// A literal: number, optionally negated, string, char, or bool. Returns NULL
+// (consuming nothing) when the next token is not one.
+ASTNode *parse_literal_value(ParserContext *context, Token **cur) {
+    (void)context;
+    Token *tok = *cur;
+    ASTNode *node = NULL;
+    if (tok->kind == SUB && tok->next && tok->next->kind == NUMBER) {
+        *cur = tok->next;
+        ASTNode *num = new_number((*cur)->value);
+        set_node_loc_from_tokens(num, *cur, NULL);
+        *cur = (*cur)->next;
+        node = new_unary(SUB, num);
+        set_node_loc_from_tokens(node, tok, NULL);
+        return node;
+    }
+    switch (tok->kind) {
+    case NUMBER: node = new_number(tok->value); break;
+    case TRUE_LITERAL: node = new_number("1"); break;
+    case FALSE_LITERAL: node = new_number("0"); break;
+    case STRING_LITERAL: node = new_string_literal(tok->value); break;
+    case CHAR_LITERAL: node = new_char_literal(tok->value); break;
+    default: return NULL;
+    }
+    set_node_loc_from_tokens(node, tok, NULL);
+    *cur = tok->next;
+    return node;
 }
 
 ASTNode** parse_param_list(ParserContext *context, Token **cur, int *out_count, bool *out_is_variadic) {
