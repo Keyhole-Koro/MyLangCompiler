@@ -99,6 +99,11 @@ typedef struct {
     int data_sb_inited;
     int label_counter;
     const char *return_label;
+    // The innermost enclosing loop's labels, so a `break`/`continue` reached
+    // through an expression -- `({ break; })` as a case arm -- still finds
+    // its loop: gen_stmt() has no labels of its own to pass down.
+    const char *loop_break_label;
+    const char *loop_continue_label;
     char **defined_funcs;
     int defined_func_count;
     char **imports;

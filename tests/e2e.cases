@@ -85,3 +85,4 @@ phase_restParam|0|succeed/semantic/phase_restParam.mln
 appDescriptorTable|2171175|succeed/app/counter.dom.mln,support/app/dom.mln
 defaultArguments|62|succeed/function/defaultArgs.mln,support/app/lib.mln
 domRefAndDefaults|113|succeed/dom/refAndDefaults.dom.mln,support/app/dom.mln
+breakInCaseArm|562|succeed/enum/breakInCaseArm.mln

@@ -228,11 +228,42 @@ void gen_stmt(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
                       NULL, NULL);
 }
 
+static void gen_stmt_labeled(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
+                             char **params, int param_count,
+                             char **locals, int local_count,
+                             const char *break_label,
+                             const char *continue_label);
+
 void gen_stmt_internal(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
                        char **params, int param_count,
                        char **locals, int local_count,
                        const char *break_label,
                        const char *continue_label)
+{
+    /* Loop bodies arrive with their labels; everything else (statement
+     * expressions inside case arms, ternaries, call arguments) arrives
+     * with none and takes the innermost loop's from the context. The arms
+     * of a case expression have already popped its target, so jumping out
+     * of one leaves the stack balanced. */
+    const char *saved_break = cc->loop_break_label;
+    const char *saved_continue = cc->loop_continue_label;
+    if (break_label) {
+        cc->loop_break_label = break_label;
+        cc->loop_continue_label = continue_label;
+    } else {
+        break_label = cc->loop_break_label;
+        continue_label = cc->loop_continue_label;
+    }
+    gen_stmt_labeled(cc, node, sb, params, param_count, locals, local_count, break_label, continue_label);
+    cc->loop_break_label = saved_break;
+    cc->loop_continue_label = saved_continue;
+}
+
+static void gen_stmt_labeled(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
+                             char **params, int param_count,
+                             char **locals, int local_count,
+                             const char *break_label,
+                             const char *continue_label)
 {
     switch (node->type)
     {
