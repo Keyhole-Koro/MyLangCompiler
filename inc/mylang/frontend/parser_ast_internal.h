@@ -39,7 +39,7 @@ ASTNode *new_member_access(ASTNode *lhs, char *member_name);
 ASTNode *new_arrow_access(ASTNode *lhs, char *member_name);
 ASTNode *new_struct_member(char *type, char *name);
 ASTNode *new_init_list(ASTNode **elems, int count);
-ASTNode *new_struct_init_list(char *type_name, char **field_names,
+ASTNode *new_struct_init_list(const char *type_name, char **field_names,
                               ASTNode **elems, int count);
 ASTNode *new_while(ASTNode *cond, ASTNode *body);
 ASTNode *new_do_while(ASTNode *cond, ASTNode *body);

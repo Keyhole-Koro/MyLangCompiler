@@ -876,6 +876,33 @@ static void rewrite_payload_block(VariantTable *table, ASTNode *block) {
     table->pending_hoist_count = outer_hoist_count;
 }
 
+/* Materialize a payload enum construction as its lowered tagged struct.  A
+ * struct-literal field is already a concrete aggregate destination, so unlike
+ * ordinary construction this form needs no temporary or sequence of stores.
+ * Recurse for payloads such as `Some(Other::None)`. */
+static ASTNode *make_payload_struct_literal(VariantTable *table, ASTNode *use) {
+    VariantTag *variant = variant_use(table, use);
+    check_unambiguous(table, variant, use);
+    if (variant->has_payload) check_single_payload(table, use);
+
+    int count = variant->has_payload ? 2 : 1;
+    char **field_names = malloc(sizeof(char *) * (size_t)count);
+    ASTNode **fields = malloc(sizeof(ASTNode *) * (size_t)count);
+    char *tag = tag_text(variant->tag);
+    field_names[0] = strdup("__tag");
+    fields[0] = new_number(tag);
+    free(tag);
+
+    if (variant->has_payload) {
+        field_names[1] = strdup(variant->variant);
+        ASTNode *payload = use->call.args[0];
+        fields[1] = variant_use(table, payload)
+            ? make_payload_struct_literal(table, payload)
+            : ast_clone(payload);
+    }
+    return new_struct_init_list(variant->enum_name, field_names, fields, count);
+}
+
 static void rewrite_payload_node(ASTNode **slot, void *user_data) {
     ASTNode *node = *slot;
     if (!node) return;
@@ -905,6 +932,23 @@ static void rewrite_payload_node(ASTNode **slot, void *user_data) {
         rewrite_payload_case(table, node);
         ast_visit_children(node, rewrite_payload_node, user_data);
         return;
+    }
+
+    /* A named struct literal supplies a concrete destination for each field,
+     * just like `Option<i32> value = None` does.  Rewrite a variant used as a
+     * field value to the enum's lowered struct literal, rather than requiring
+     * a source-level temporary.  This is deliberately handled before the
+     * ordinary child walk: bare unit variants such as `None` are identifiers
+     * and otherwise reach semantic analysis as undefined names. */
+    if (node->type == AST_INIT_LIST && node->init_list.struct_type_name) {
+        for (int i = 0; i < node->init_list.count; i++) {
+            ASTNode *value = node->init_list.elements[i];
+            VariantTag *variant = variant_use(table, value);
+            if (!variant) continue;
+            ASTNode *replacement = make_payload_struct_literal(table, value);
+            free_ast(value);
+            node->init_list.elements[i] = replacement;
+        }
     }
 
     ast_visit_children(node, rewrite_payload_node, user_data);

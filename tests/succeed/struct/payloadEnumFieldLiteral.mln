@@ -1,0 +1,27 @@
+// Payload-enum values can be initialized directly inside named struct
+// literals.  Both the unit (`None`) and carrying (`Some(value)`) forms use
+// the field's concrete Option<i32> type as their construction destination.
+enum Option<T> {
+    Some(T),
+    None,
+}
+
+struct Process {
+    i32 pid;
+    Option<i32> task_id;
+};
+
+i32 task_or(Process *process, i32 fallback) {
+    return case process->task_id of {
+        Some(value) -> value;
+        None -> fallback;
+    };
+}
+
+i32 main() {
+    Process unused = Process { pid: 1, task_id: None };
+    Process scheduled = Process { task_id: Some(42), pid: 2 };
+    Option<i32> reusable = Some(5);
+    Process copied = Process { task_id: reusable, pid: 3 };
+    return task_or(&unused, 10) + task_or(&scheduled, 0) + task_or(&copied, 0); // 57
+}

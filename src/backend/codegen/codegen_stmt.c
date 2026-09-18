@@ -163,11 +163,48 @@ void gen_struct_literal_into_addr(CompilerContext *cc, ASTNode *literal,
     for (int i = 0; i < literal->init_list.count; i++) {
         const char *field_name = literal->init_list.field_names[i];
         const MemberInfo *member = find_member_info(cc, si->type_name, field_name);
-        if (!member || member->total_size_bytes > SLOT_SIZE) {
+        if (!member) {
             fprintf(stderr, "Codegen error: unsupported struct literal field '%s'\n",
                     field_name ? field_name : "");
             exit(1);
         }
+
+        if (member->total_size_bytes > SLOT_SIZE) {
+            /* A nested named literal has its own destination: this member's
+             * address.  Its recursive initializer will zero and populate the
+             * complete aggregate, including any omitted fields. */
+            if (literal->init_list.elements[i]->type == AST_INIT_LIST &&
+                literal->init_list.elements[i]->init_list.struct_type_name) {
+                sb_append(sb, "  push %s\n", dest_addr_reg);
+                sb_append(sb, "  mov r3, %s\n", dest_addr_reg);
+                if (member->offset) sb_append(sb, "  addis r3, %d\n", member->offset);
+                gen_struct_literal_into_addr(cc, literal->init_list.elements[i], sb, "r3",
+                                             params, param_count, locals, local_count);
+                sb_append(sb, "  pop %s\n", dest_addr_reg);
+                continue;
+            }
+
+            /* An aggregate value stored in a struct literal is copied in
+             * full.  `gen_expr` would only load its first word. */
+            if (!is_addressable_expr(literal->init_list.elements[i])) {
+                fprintf(stderr,
+                        "Codegen error: aggregate struct literal field '%s' "
+                        "requires a named literal or an addressable value\n",
+                        field_name ? field_name : "");
+                exit(1);
+            }
+            sb_append(sb, "  push %s\n", dest_addr_reg);
+            // emit_aggregate_copy uses r1 as its load scratch, so retain the
+            // source address in a different register for the whole copy.
+            gen_lvalue_addr(cc, literal->init_list.elements[i], sb, "r5",
+                            params, param_count, locals, local_count);
+            sb_append(sb, "  pop %s\n", dest_addr_reg);
+            sb_append(sb, "  mov r2, %s\n", dest_addr_reg);
+            if (member->offset) sb_append(sb, "  addis r2, %d\n", member->offset);
+            emit_aggregate_copy(sb, "r2", "r5", member->total_size_bytes);
+            continue;
+        }
+
         // gen_expr uses r3 as scratch, so retain the destination on the stack.
         sb_append(sb, "  push %s\n", dest_addr_reg);
         gen_expr(cc, literal->init_list.elements[i], sb, "r1",

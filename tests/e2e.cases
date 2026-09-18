@@ -24,6 +24,7 @@ intWidth32|20|succeed/expr/intWidth32.mln
 uintWidthSmall|69|succeed/expr/uintWidthSmall.mln
 simpleStruct|10|succeed/struct/simpleStruct.mln
 namedStructLiteral|44|succeed/struct/namedStructLiteral.mln
+payloadEnumFieldLiteral|57|succeed/struct/payloadEnumFieldLiteral.mln
 arrayInit|106|succeed/array/arrayInit.mln
 multiArray|6|succeed/array/multiArray.mln
 arraySizeof|24|succeed/array/arraySizeof.mln
