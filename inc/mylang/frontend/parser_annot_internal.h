@@ -25,4 +25,9 @@ const char *ensure_function_trampoline(ParserContext *context, ASTNode *program,
 /* Appends the defaults a positional call left out (see parser_lower_annot.c). */
 void fill_default_arguments(ParserContext *context, ASTNode *program);
 
+/* The declaration a call by (post-rewrite) name resolves to: a function in
+ * this file, else an exported function of an imported module. NULL when
+ * unknown. Borrowed. */
+ASTNode *callee_declaration(ParserContext *context, ASTNode *program, const char *name);
+
 #endif

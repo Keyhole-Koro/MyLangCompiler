@@ -187,12 +187,33 @@ static void append_import_sigs_from_source(CompilerContext *cc, ASTNode *node) {
             if (!req_name) continue;
 
             ModuleSymbol *sym = resolver_lookup_import_symbol(node, mod, req_name);
-            if (!sym || sym->kind != SYMBOL_FUNCTION) continue;
+            if (!sym) continue;
 
-            ResolverFunctionInfo fn_info;
-            if (resolver_get_function_info(sym, &fn_info)) {
-                append_imported_func_sig(cc, sym->source_name, &fn_info);
-                resolver_free_function_info(&fn_info);
+            if (sym->kind == SYMBOL_FUNCTION) {
+                ResolverFunctionInfo fn_info;
+                if (resolver_get_function_info(sym, &fn_info)) {
+                    append_imported_func_sig(cc, sym->source_name, &fn_info);
+                    resolver_free_function_info(&fn_info);
+                }
+                continue;
+            }
+
+            /* An imported type brings its exported methods along (see
+             * import_type_methods() in the frontend): the calls have
+             * already been rewritten to `Type__method(&recv, ...)`, so
+             * register those signatures under their link names. */
+            if (sym->kind == SYMBOL_STRUCT || sym->kind == SYMBOL_TYPEDEF || sym->kind == SYMBOL_ENUM) {
+                for (int k = 0; k < mod->symbol_count; k++) {
+                    ModuleSymbol *m = &mod->symbols[k];
+                    if (!m->is_exported || m->kind != SYMBOL_FUNCTION || !m->declaration) continue;
+                    const char *recv = m->declaration->fundef.recv_type_name;
+                    if (!recv || strcmp(recv, req_name) != 0) continue;
+                    ResolverFunctionInfo fn_info;
+                    if (resolver_get_function_info(m, &fn_info)) {
+                        append_imported_func_sig(cc, m->link_name, &fn_info);
+                        resolver_free_function_info(&fn_info);
+                    }
+                }
             }
         }
     }
@@ -275,7 +296,7 @@ void collect_codegen_globals(CompilerContext *cc, ASTNode *root) {
             cg_globals_count++;
             if (n->var_decl.is_extern) {
                 // Storage lives in another object (or is synthesized by the
-                // linker, like __annotations_start): import the symbol.
+                // linker, like __sections): import the symbol.
                 note_import_func(cc, n->var_decl.name);
             } else {
                 emit_global_decl(cc, n);

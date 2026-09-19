@@ -16,6 +16,8 @@ typedef struct {
     Instance *instances;
     int count;
     int depth;
+    ASTNode **imported;   /* is_imported_instance structs already in program */
+    int imported_count;
 } Instantiation;
 
 typedef struct {
@@ -143,6 +145,14 @@ static const char *instantiate(Instantiation *ctx, ASTNode *use, const char *nam
         if (strcmp(ctx->instances[i].name, key.buf) == 0) {
             sb_free(&key);
             return ctx->instances[i].name;
+        }
+    }
+    /* The same instantiation may have arrived with an imported type whose
+     * field it is; one layout, one declaration. */
+    for (int i = 0; i < ctx->imported_count; i++) {
+        if (strcmp(ctx->imported[i]->struct_stmt.name, key.buf) == 0) {
+            sb_free(&key);
+            return ctx->imported[i]->struct_stmt.name;
         }
     }
     if (ctx->depth >= 64 || ctx->count >= 256 || key.len > 240)
@@ -357,10 +367,18 @@ void instantiate_generics(ParserContext *context, ASTNode *program) {
     Instantiation ctx = {.parser_context = context, .program = program};
     for (int i = 0; i < program->block.count; i++) {
         ASTNode *node = program->block.stmts[i];
+        if (node && node->type == AST_STRUCT && node->struct_stmt.is_imported_instance) {
+            ctx.imported = realloc(ctx.imported, sizeof(ASTNode *) * (ctx.imported_count + 1));
+            ctx.imported[ctx.imported_count++] = node;
+        }
+    }
+    for (int i = 0; i < program->block.count; i++) {
+        ASTNode *node = program->block.stmts[i];
         const char *name = struct_name(node);
         if (node->type == AST_FUNDEF) name = node->fundef.name;
         if (node->type == AST_VAR_DECL) name = node->var_decl.name;
-        if (name && strncmp(name, "__mlg_", 6) == 0)
+        if (name && strncmp(name, "__mlg_", 6) == 0 &&
+            !(node->type == AST_STRUCT && node->struct_stmt.is_imported_instance))
             generic_error(context, node,
                           "the __mlg_ prefix is reserved for generic instantiations");
         concrete_node(&program->block.stmts[i], &ctx);
@@ -398,4 +416,5 @@ void instantiate_generics(ParserContext *context, ASTNode *program) {
     }
     for (int i = 0; i < ctx.count; i++) free(ctx.instances[i].name);
     free(ctx.instances);
+    free(ctx.imported);
 }

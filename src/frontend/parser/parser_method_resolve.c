@@ -1,5 +1,6 @@
 #include "mylang/frontend/parser_rewrite_internal.h"
 #include "mylang/frontend/parser_ast_internal.h"
+#include "mylang/frontend/parser_annot_internal.h"
 #include <stdarg.h>
 
 /* Resolves `recv.method(args)` / `recv->method(args)` calls left by the
@@ -49,6 +50,10 @@ static void method_scope_free(MethodScope *scope) {
     free(scope->names);
     free(scope->types);
 }
+
+/* The program being resolved, for looking a call's declaration up among
+ * its imports (callee_declaration). Set by resolve_method_calls(). */
+static ASTNode *resolving_program;
 
 /* A receiver's static shape: base type name (borrowed from the type AST) plus
  * pointer level and ref kind. Arrays and modifiers don't matter for method
@@ -143,8 +148,10 @@ static int infer_recv_shape(ParserContext *ctx, MethodScope *scope, ASTNode *exp
         /* Reached only after any method call nested inside this one has
          * already been resolved (resolve_calls_node visits call.recv and
          * call.args before inspecting the call itself), so `.name` is always
-         * an ordinary function name here. */
-        ASTNode *fn = find_function(ctx, expr->call.name);
+         * an ordinary function name here -- local, or an imported module's
+         * (`annotations.named("app").on("Editor")`: `annotations_named`
+         * is declared in the imported file). */
+        ASTNode *fn = callee_declaration(ctx, resolving_program, expr->call.name);
         return fn && fn->type == AST_FUNDEF && shape_from_type_ast(fn->fundef.ret_type, out);
     }
     case AST_CAST:
@@ -393,6 +400,7 @@ static void resolve_calls_node(ParserContext *context, MethodScope *scope, ASTNo
 
 void resolve_method_calls(ParserContext *context, ASTNode *program) {
     if (!program || program->type != AST_BLOCK) return;
+    resolving_program = program;
 
     MethodScope global = {0};
     for (int i = 0; i < program->block.count; i++) {

@@ -1,0 +1,16 @@
+// Cross-package method calls: an imported struct type brings its exported
+// methods along, and `c.bump()` / `p->get()` resolve to the defining
+// module's `Counter__bump` / `Counter__get` -- the same rewrite a local
+// method gets, just linked across objects.
+import lib from "importedMethods_lib.mln";
+import { Counter } from "importedMethods_lib.mln";
+
+i32 main() {
+    Counter c = lib.lib_counter(5);
+    c.bump();
+    c.bump();
+    Counter *p = &c;
+    p->bump();
+    i32 chained = p->me()->get();  // 15
+    return c.get() + chained;      // 30
+}

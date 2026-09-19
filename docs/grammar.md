@@ -74,6 +74,35 @@ method, then resolves `box.get()` to the concrete method. Receiver-bound type
 arguments must currently be distinct identifiers; method-level type parameters
 cannot be combined with a generic receiver yet.
 
+#### Methods across packages
+
+An `export`ed method travels with its receiver type: importing the type is
+enough, there is no per-method import.
+
+```mylang
+// annotations.mln
+export struct Annotations { ... };
+export bool (Annotations *it) next() { ... }
+
+// app.mln
+import annotations from "annotations.mln";
+import { Annotations } from "annotations.mln";
+
+Annotations it = annotations.named("app");
+while (it.next()) { ... }                       // -> Annotations__next(&it)
+```
+
+`import { T }` registers a body-less prototype of every exported method of
+`T` (parser_import_generics.c, `import_type_methods`), which is all method
+resolution needs; the code stays in the defining module's object and links
+by the `T__method` label, which is never package-mangled. Along with `T`
+come the types its fields need -- other structs of the same module and the
+generic instantiations (`__mlg_s_...`) it already lowered -- so the layouts
+agree on both sides; an importer that instantiates the same generic reuses
+the copy. A method that is not `export`ed is invisible to importers. The
+receiver of a call whose result is a chained receiver (`pkg.make().next()`)
+is typed from the imported declaration too.
+
 ### `test` is reserved
 
 `test` is a keyword, which is what keeps a top-level test declaration
@@ -148,13 +177,14 @@ eight words per row:
 | 4 | number of annotation arguments |
 | 5..7 | the arguments: a number, a bool as 0/1, a string as `char*` |
 
-The linker gathers every object's chunk into `(address, size)` pairs
-between `__annotations_start` and `__annotations_end`; a reader declares
-`extern i32 __annotations_start[];` and walks them (for MyOS, the
-application framework's `meta.mln` at boot). No module lists the others
-and nothing is generated into the program's root: an object that carries a
-chunk is kept by the linker on that account alone. Whoever reads a row
-decides what it means and when.
+The linker lays every object's chunk out contiguously as one section,
+defines `__section_annotations` / `__section_annotations_size` and lists
+the section in its directory (`__sections`), which is how MyStdLib's
+`meta/annotations.mln` finds the table by name and hands it out as an
+iterator (`annotations.named("app")`, `it.next()`, `it.fn()`, ...). No
+module lists the others and nothing is generated into the program's root:
+an object that carries a chunk is kept by the linker on that account
+alone. Whoever reads a row decides what it means and when.
 
 The compiler checks that `a` resolves (a function in this file, or one
 exported by a module named in a symbol-list import), that its first
@@ -235,3 +265,7 @@ Expressions are listed in order of decreasing precedence.
     `Ok(v) -> ({ i32 adjusted = v + 1; yield adjusted; });`.
 - **Function Literal (Lambda)**: `( param_list ) block` or `( param_list ) => block`
 - **Statement Expression**: `( block )`
+- **`sizeof`**: `sizeof ( expr )` or `sizeof ( type )`. With a type -- a
+  primitive, a struct, or a generic parameter, which is a concrete type by
+  the time it is instantiated -- it is the size of the type itself
+  (`size / sizeof(T)` in `section.as_slice<T>`), with no value at hand.

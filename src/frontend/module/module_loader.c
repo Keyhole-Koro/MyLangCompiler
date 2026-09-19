@@ -1,4 +1,5 @@
 #include "mylang/frontend/module.h"
+#include "mylang/frontend/parser_rewrite_internal.h"
 #include "mylang/frontend/parser_internal.h"
 #include "mylang/frontend/parser_state_internal.h"
 
@@ -208,6 +209,23 @@ Module *module_loader_load(ModuleLoader *loader, const char *importer_path, cons
      * Running the same pass here keeps this module's own declarations in
      * sync with how its real compilation sees them. */
     instantiate_generics(&ctx, program);
+
+    /* An importer instantiates this module's generic templates in its own
+     * translation unit, from the clones handed over below. A template body
+     * that calls one of this module's exported functions (`start(name)` in
+     * section.mln's as_slice<T>) therefore has to carry the link name
+     * (`section_start`) the importer's object will import -- the same
+     * export rewrite lower_program() applies to a unit's own code, which
+     * this loader otherwise skips. Only exported names change; a private
+     * helper is out of a template's reach from another module regardless. */
+    for (int i = 0; i < ctx.symbols.generic_templates.count; i++) {
+        ASTNode *tpl = ctx.symbols.generic_templates.declarations[i];
+        if (tpl && tpl->type == AST_FUNDEF) rewrite_node(&ctx, tpl, NULL, 0);
+    }
+    for (int i = 0; i < ctx.symbols.generic_methods.count; i++) {
+        GenericMethodDef *gm = ctx.symbols.generic_methods.methods[i];
+        if (gm && gm->fundef) rewrite_node(&ctx, gm->fundef, NULL, 0);
+    }
 
     module->program = program; /* module owns program */
 

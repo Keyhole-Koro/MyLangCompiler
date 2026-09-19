@@ -1,6 +1,7 @@
 #include "mylang/frontend/parser_internal.h"
 #include "mylang/frontend/module.h"
 #include "mylang/frontend/resolver.h"
+#include "mylang/frontend/parser_ast_internal.h"
 
 static int import_requests_symbol(const ASTNode *node, const char *name) {
     if (!node || node->type != AST_IMPORT || !name) return 0;
@@ -157,6 +158,99 @@ void load_imported_generic_templates(ParserContext *context, ASTNode *import_nod
  * Unlike a generic template, a plain type has no per-use instantiation site
  * to specialize from -- it's already concrete -- so it's simply spliced in
  * unconditionally instead of being matched against uses in the program. */
+/* Makes the exported methods of an imported plain type callable here:
+ * `it.next()` on an imported `Annotations` must resolve, exactly like a
+ * local method, to a call of the defining module's `Annotations__next`.
+ *
+ * Methods travel with their receiver type -- `import { Annotations }` is
+ * enough; there is no per-method import -- and a method is only imported
+ * when it is `export`ed, like a plain function. What is registered is a
+ * body-less prototype (receiver + parameters + return type): that's all
+ * resolve_method_calls() needs to rewrite the call and take the receiver's
+ * address, and all infer_recv_shape() needs to chain `a.b().c()`. The code
+ * stays in the defining module's object; the linker joins them by the
+ * unmangled `Type__method` label every method is emitted under. */
+static void import_type_methods(ParserContext *context, Module *mod, const char *type_name) {
+    if (!mod->program || mod->program->type != AST_BLOCK) return;
+    size_t prefix_len = strlen(type_name);
+    for (int i = 0; i < mod->program->block.count; i++) {
+        ASTNode *fn = mod->program->block.stmts[i];
+        if (!fn || fn->type != AST_FUNDEF || !fn->fundef.is_exported) continue;
+        if (!fn->fundef.recv_type_name || strcmp(fn->fundef.recv_type_name, type_name) != 0) continue;
+        if (!fn->fundef.name || strncmp(fn->fundef.name, type_name, prefix_len) != 0 ||
+            strncmp(fn->fundef.name + prefix_len, "__", 2) != 0)
+            continue;
+        const char *method_name = fn->fundef.name + prefix_len + 2;
+        if (find_method(context, type_name, method_name)) continue;
+
+        ASTNode **params = NULL;
+        if (fn->fundef.param_count > 0) {
+            params = malloc(sizeof(ASTNode *) * fn->fundef.param_count);
+            for (int k = 0; k < fn->fundef.param_count; k++)
+                params[k] = ast_clone(fn->fundef.params[k]);
+        }
+        ASTNode *proto = new_fundef(ast_clone(fn->fundef.ret_type), fn->fundef.name,
+                                    params, fn->fundef.param_count, NULL, fn->fundef.is_variadic);
+        proto->fundef.recv_type_name = strdup(type_name);
+        proto->fundef.is_exported = 1;
+        add_function(context, proto);
+        add_method(context, type_name, method_name, fn->fundef.name, proto);
+    }
+}
+
+/* An imported type's fields may be of types this unit never named: another
+ * struct of the same module (`AnnotationRow *cur` in Annotations), or a
+ * generic instantiation the module already lowered to its `__mlg_s_...`
+ * struct (`Slice<AnnotationRow> rows`). The importer needs those layouts
+ * too, so they come along -- copied from the module's program, recursively
+ * and dependencies first (codegen sizes structs in declaration order), and
+ * marked so this unit's own instantiation of the same generic reuses the
+ * copy rather than declaring it twice. */
+static void import_member_types(ParserContext *context, Module *mod, ASTNode *decl) {
+    if (!decl || !mod->program || mod->program->type != AST_BLOCK) return;
+    ASTNode **members = NULL;
+    int member_count = 0;
+    if (decl->type == AST_STRUCT) {
+        members = decl->struct_stmt.members;
+        member_count = decl->struct_stmt.member_count;
+    } else if (decl->type == AST_TYPEDEF_STRUCT) {
+        members = decl->typedef_struct.members;
+        member_count = decl->typedef_struct.member_count;
+    } else {
+        return;
+    }
+    for (int i = 0; i < member_count; i++) {
+        ASTNode *m = members[i];
+        if (!m || m->type != AST_VAR_DECL || !m->var_decl.var_type) continue;
+        ASTNode *type = m->var_decl.var_type;
+        if (type->type != AST_TYPE || !type->type_node.base_type ||
+            type->type_node.base_type->type != AST_IDENTIFIER)
+            continue;
+        const char *type_name = type->type_node.base_type->identifier.name;
+        if (is_user_typename(context, type_name)) continue;
+
+        ASTNode *dep = NULL;
+        for (int k = 0; k < mod->program->block.count && !dep; k++) {
+            ASTNode *stmt = mod->program->block.stmts[k];
+            if (!stmt) continue;
+            if (stmt->type == AST_STRUCT && stmt->struct_stmt.name &&
+                strcmp(stmt->struct_stmt.name, type_name) == 0)
+                dep = stmt;
+            else if (stmt->type == AST_TYPEDEF_STRUCT && stmt->typedef_struct.typedef_name &&
+                     strcmp(stmt->typedef_struct.typedef_name, type_name) == 0)
+                dep = stmt;
+        }
+        if (!dep) continue; /* a primitive, or declared elsewhere */
+
+        ASTNode *copy = ast_clone(dep);
+        if (copy->type == AST_STRUCT && strncmp(type_name, "__mlg_", 6) == 0)
+            copy->struct_stmt.is_imported_instance = 1;
+        add_typename(context, type_name);            /* before recursing: closes cycles */
+        import_member_types(context, mod, copy);     /* its own fields' types first */
+        add_imported_plain_type(context, copy);
+    }
+}
+
 void load_imported_plain_types(ParserContext *context, ASTNode *import_node,
                                const char *source_path) {
     if (!import_node || import_node->type != AST_IMPORT ||
@@ -209,7 +303,12 @@ void load_imported_plain_types(ParserContext *context, ASTNode *import_node,
 
         ASTNode *copy = ast_clone(preserved ? preserved : sym->declaration);
         add_typename(context, sym->source_name);
+        /* Field types first: codegen lays structs out in declaration order,
+         * and a member whose struct isn't declared yet would be sized as a
+         * word. */
+        import_member_types(context, mod, copy);
         add_imported_plain_type(context, copy);
+        import_type_methods(context, mod, sym->source_name);
         if (copy->type == AST_ENUM && !copy->enum_stmt.has_payloads) {
             for (int k = 0; k < copy->enum_stmt.member_count; k++) {
                 ASTNode *m = copy->enum_stmt.members[k];

@@ -1,0 +1,33 @@
+package lib;
+
+// A type and its methods, defined here, used from another package.
+export struct Counter {
+    i32 value;
+    i32 step;
+};
+
+export Counter lib_counter(i32 step) {
+    Counter c;
+    c.value = 0;
+    c.step = step;
+    return c;
+}
+
+// Exported methods travel with the type: `import { Counter }` makes them
+// callable as `c.bump()` in the importer.
+export void (Counter *c) bump() {
+    c->value = c->value + c->step;
+}
+
+export i32 (Counter *c) get() {
+    return c->value;
+}
+
+export Counter *(Counter *c) me() {
+    return c;
+}
+
+// Not exported: invisible to importers.
+void (Counter *c) reset() {
+    c->value = 0;
+}

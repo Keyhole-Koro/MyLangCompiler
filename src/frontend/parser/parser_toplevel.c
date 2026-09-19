@@ -276,11 +276,11 @@ static ASTNode *parse_toplevel_decl(ParserContext *context, Token **cur) {
         ASTNode *fn = parse_method(context, cur);
         /* Unlike a plain exported function, an exported method is not
          * mangled with the package prefix or added to the export table:
-         * it is never called by a bare name (only ever `.method()`), so
-         * there is no name for an importer to look up. Cross-package
-         * method calls are unimplemented (see docs/grammar.md's method
-         * section); `is_exported`/`package` are set anyway for parity
-         * with parse_fundef and any later cross-file work. */
+         * it is never called by a bare name (only ever `.method()`), and
+         * its `Type__method` label is already unique per type. An importer
+         * of the receiver type gets the method through
+         * import_type_methods() (parser_import_generics.c), which is where
+         * `is_exported` matters. */
         if (fn && want_export) {
             fn->fundef.is_exported = 1;
             fn->fundef.package = strdup(context->module.current_package);

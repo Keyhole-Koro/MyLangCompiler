@@ -12,11 +12,11 @@
  * name (char*, "" for a plain function), sizeof that type (0 for a plain
  * function), the argument count, then three arguments -- a number, a bool
  * as 0/1, or a string as a char*. Symbol operands are filled in by the
- * linker (RELOC_WORD32); the linker also gathers every object's chunk into
- * an index between __annotations_start and __annotations_end, which is how
- * the framework finds the rows of every module (ObjectFormat.h,
- * CollectEntry). The label is local: the assembler makes it unique per
- * object. */
+ * linker (RELOC_WORD32); the linker also lays every object's chunk out
+ * contiguously as the `annotations` section and lists it in its section
+ * directory (`__sections`; ObjectFormat.h, CollectEntry), which is how
+ * MyStdLib's meta/annotations.mln finds the rows of every module. The
+ * label is local: the assembler makes it unique per object. */
 void emit_annotation_rows(CompilerContext *cc, StringBuilder *sb) {
     int count = annotation_row_count();
     if (count == 0) return;

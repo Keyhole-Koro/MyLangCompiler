@@ -89,6 +89,15 @@ void _gen_expr(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char
                 determined = 1;
             }
         }
+        /* `sizeof(Type)` (a generic parameter is a concrete type by now):
+         * the size of the type itself, no value needed. */
+        if (!determined && node->sizeof_expr.expr && node->sizeof_expr.expr->type == AST_TYPE) {
+            TypeInfo ti = {0};
+            if (typeinfo_from_type_ast(cc, node->sizeof_expr.expr, &ti)) {
+                sz = typeinfo_total_size_bytes(cc, &ti);
+                determined = 1;
+            }
+        }
         if (!determined) {
             TypeInfo ti = {0};
             if (infer_expr_type(cc, node->sizeof_expr.expr, &ti)) {

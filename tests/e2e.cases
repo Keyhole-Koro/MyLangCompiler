@@ -22,6 +22,7 @@ simpleChar|72|succeed/expr/simpleChar.mln
 stringEscape|10|succeed/expr/stringEscape.mln
 intWidth32|20|succeed/expr/intWidth32.mln
 uintWidthSmall|69|succeed/expr/uintWidthSmall.mln
+sizeofType|13244|succeed/expr/sizeofType.mln
 simpleStruct|10|succeed/struct/simpleStruct.mln
 namedStructLiteral|44|succeed/struct/namedStructLiteral.mln
 payloadEnumFieldLiteral|57|succeed/struct/payloadEnumFieldLiteral.mln
@@ -67,6 +68,7 @@ caseYieldAndPass|45|succeed/case/caseYieldAndPass.mln
 packageSample|20|succeed/package/pkg_main.mln,succeed/package/pkg_math.mln
 pkgVariadic|133|succeed/package/pkgVariadic_main.mln,succeed/package/pkgVariadic_lib.mln
 importedTypedefStruct|43|succeed/package/importedTypedefStruct_main.mln,succeed/package/importedTypedefStruct_helper.mln
+importedMethods|30|succeed/package/importedMethods_main.mln,succeed/package/importedMethods_lib.mln
 functionLiteral|10|succeed/function/functionLiteral.mln
 arrowFunctionLiteral|13|succeed/function/arrowFunctionLiteral.mln
 localFunctionLiteral|10|succeed/function/localFunctionLiteral.mln
@@ -82,7 +84,7 @@ phase2_refMutParam|9|succeed/semantic/phase2_refMutParam.mln
 phase2_uncheckedNested|12|succeed/semantic/phase2_uncheckedNested.mln
 refImportLongLocals|49|succeed/semantic/refImportLongLocals_main.mln,succeed/semantic/refImportLongLocals_helper.mln
 phase_restParam|0|succeed/semantic/phase_restParam.mln
-annotationTable|4422313|succeed/app/annotated.mln,support/app/counter.mln,support/app/annotations.mln
+annotationTable|4422313|succeed/app/annotated.mln,support/app/counter.mln,support/app/annotations.mln,../../MyStdLib/meta/annotations.mln,../../MyStdLib/memory/section.mln,../../MyStdLib/memory/slice.mln,../../MyStdLib/str.mln,../../MyStdLib/option.mln
 defaultArguments|62|succeed/function/defaultArgs.mln,support/app/lib.mln
 domRefAndDefaults|113|succeed/dom/refAndDefaults.dom.mln,support/app/dom.mln
 breakInCaseArm|562|succeed/enum/breakInCaseArm.mln

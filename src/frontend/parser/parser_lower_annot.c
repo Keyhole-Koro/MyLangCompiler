@@ -33,11 +33,11 @@
  *       .word s_0, Terminal__poll, s_1, 24, 1, 100, 0, 0
  *
  * eight words per row: name, fn, type, size, argc, arg0..arg2. The linker
- * gathers every object's chunk into an index between `__annotations_start`
- * and `__annotations_end` (MyLinker/inc/ObjectFormat.h, CollectEntry), so
- * whoever reads the rows -- for MyOS, the application framework at boot --
- * finds them all without any module listing them. What a row means is the
- * reader's business.
+ * lays every object's chunk out contiguously as the `annotations` section
+ * (MyLinker/inc/ObjectFormat.h, CollectEntry) and lists it in its section
+ * directory, so whoever reads the rows -- MyStdLib's meta/annotations.mln,
+ * for the application framework at boot -- finds them all without any
+ * module listing them. What a row means is the reader's business.
  *
  * Because the calling convention ignores extra arguments, a method
  * `(T *self, i32 id)` can be called through the DOM's uniform handler shape
@@ -379,7 +379,7 @@ void lower_annotations(ParserContext *context, ASTNode *program) {
  * this file, else an exported function of an imported module -- reached as
  * `pkg_name` through a package import or by bare name through a symbol-list
  * import. NULL when unknown (an indirect call through a variable, say). */
-static ASTNode *callee_declaration(ParserContext *context, ASTNode *program, const char *name) {
+ASTNode *callee_declaration(ParserContext *context, ASTNode *program, const char *name) {
     ASTNode *local = find_function(context, name);
     if (local && local->type == AST_FUNDEF) return local;
 

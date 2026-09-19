@@ -1,0 +1,9 @@
+// sizeof(Type) -- the type itself, no value needed. A generic parameter is
+// a concrete type by the time it is instantiated, so a generic can size its
+// element type: what section.as_slice<T> in MyStdLib relies on.
+struct Pair { i32 a; i32 b; i32 c; };
+i32 elem<T>() { return sizeof(T); }
+i32 main() {
+    i32 n = 7;
+    return sizeof(Pair) * 1000 + elem<Pair>() * 100 + elem<i32>() * 10 + sizeof(n);  // 12000+1200+40+4
+}

@@ -254,6 +254,11 @@ struct ASTNode {
             int type_param_count;
             int is_exported;
             char *package;
+            /* A generic instantiation (`__mlg_s_...`) copied in from an
+             * imported module because an imported type's field has that
+             * type; this unit's own instantiation of the same generic reuses
+             * it (parser_instantiate.c). */
+            int is_imported_instance;
         } struct_stmt;
         
         struct {

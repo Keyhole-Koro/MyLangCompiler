@@ -51,7 +51,11 @@ ASTNode *parse_unary(ParserContext *context, Token **cur) {
     if ((*cur)->kind == SIZEOF) {
         *cur = (*cur)->next;
         if (!expect(cur, L_PARENTHESES)) parse_error(context, "expected '(' after sizeof", *cur);
-        ASTNode *inner = parse_expr(context, cur);
+        /* `sizeof(Type)` -- a type name (including a generic parameter,
+         * substituted at instantiation) rather than a value. Anything that
+         * doesn't start like a type is an ordinary expression. */
+        ASTNode *inner = is_type(context, (*cur)->kind, *cur) ? parse_type(context, cur)
+                                                              : parse_expr(context, cur);
         if (!expect(cur, R_PARENTHESES)) parse_error(context, "expected ')' after sizeof expression", *cur);
         return new_sizeof(inner);
     }
