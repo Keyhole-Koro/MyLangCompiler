@@ -1,4 +1,0 @@
-import { app, timer, key, open, on_close } from "../../support/app/annotations.mln";
-@app
-struct Thing { i32 v; };
-i32 main() { return 0; }

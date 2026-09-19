@@ -1,6 +1,7 @@
-@app(single, name = "Editor")
 struct Editor { i32 area; i32 count = 0; };
 
+@app(single, name = "Editor")
+i32 (Editor *e) view() { return 0; }
 @timer(100)
 void (Editor *e) poll() { }
 

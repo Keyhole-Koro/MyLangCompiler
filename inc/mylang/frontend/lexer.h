@@ -108,8 +108,6 @@ typedef enum {
     CARET,         // ^
     HASH,          // #
     AT,            // @ (attribute marker)
-    ANNOTATION,    // annotation (declares an attribute)
-    TEMPLATE_BODY, // raw text of an annotation's template, braces excluded
 
     NUMBER,        // number
     STRING_LITERAL, // "abc"
@@ -154,9 +152,6 @@ typedef struct {
     int mlx_tag_depth;
     TokenKind last_token_kind;
     bool eot_returned;
-    // Set after `annotation`; the next top-level `{` then starts a raw
-    // template body (see TEMPLATE_BODY) instead of a block. Cleared by `;`.
-    bool pending_template;
 } LexerContext;
 
 LexerContext *lexer_context_create(char *input);

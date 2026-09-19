@@ -70,7 +70,7 @@ StringTokenKindMap reservedWords[] = {
     {"of", OF}, {"_", UNDERSCORE},
     {"typedef", TYPEDEF}, {"struct", STRUCT}, {"union", UNION}, {"enum", ENUM},
     {"import", IMPORT}, {"from", FROM}, {"export", EXPORT}, {"package", PACKAGE}, {"rest", REST},
-    {"test", TEST}, {"annotation", ANNOTATION}
+    {"test", TEST}
 };
 
 char *tokenkind2str(TokenKind kind) {
@@ -113,8 +113,6 @@ char *tokenkind2str(TokenKind kind) {
         case BITNOT: return "BITNOT";
         case HASH: return "HASH";
         case AT: return "AT";
-        case ANNOTATION: return "ANNOTATION";
-        case TEMPLATE_BODY: return "TEMPLATE_BODY";
         case AMPERSAND: return "AMPERSAND";
 
         case SIZEOF: return "SIZEOF";
@@ -344,7 +342,6 @@ LexerContext *lexer_context_create(char *input) {
     ctx->mlx_tag_depth = 0;
     ctx->last_token_kind = EOT;
     ctx->eot_returned = false;
-    ctx->pending_template = false;
     return ctx;
 }
 
@@ -471,41 +468,6 @@ Token *lexer_next_token(LexerContext *ctx) {
             }
         }
         
-        // `annotation name(...) on ... {` : everything up to the matching
-        // '}' is the template's raw text -- MyLang source with @directives
-        // -- handed over as one token for parser_lower_annot.c to expand.
-        if (*ctx->ptr == '{' && ctx->pending_template && current_mode == MODE_DEFAULT) {
-            ctx->pending_template = false;
-            int tok_line = ctx->line, tok_col = ctx->col;
-            char *start = ctx->ptr + 1;
-            char *p = start;
-            int depth = 1;
-            while (*p && depth > 0) {
-                if (*p == '"') {
-                    p++;
-                    while (*p && *p != '"') { if (*p == '\\' && p[1]) p++; p++; }
-                    if (*p) p++;
-                    continue;
-                }
-                if (*p == '/' && p[1] == '/') { while (*p && *p != '\n') p++; continue; }
-                if (*p == '{') depth++;
-                else if (*p == '}') { depth--; if (depth == 0) break; }
-                p++;
-            }
-            size_t len = (size_t)(p - start);
-            char *body = malloc(len + 1);
-            memcpy(body, start, len);
-            body[len] = '\0';
-            Token *t = createTokenSingle(TEMPLATE_BODY, body, tok_line, tok_col, (int)(len + 2));
-            free(body);
-            size_t consumed = (size_t)(p - ctx->ptr) + (*p == '}' ? 1 : 0);
-            advance_pos(ctx->ptr, consumed, &ctx->line, &ctx->col);
-            ctx->ptr += consumed;
-            ctx->last_token_kind = TEMPLATE_BODY;
-            free(buffer);
-            return t;
-        }
-
         // Handle closing brace transitioning back from DEFAULT
         if (*ctx->ptr == '}') {
             Token *t = createTokenSingle(R_BRACE, "}", ctx->line, ctx->col, 1);
@@ -538,7 +500,6 @@ Token *lexer_next_token(LexerContext *ctx) {
         }
 
         if (isOperator(ctx->ptr, &kind, buffer)) {
-            if (kind == SEMICOLON) ctx->pending_template = false;
             if (kind == LT && (ctx->last_token_kind == RETURN || ctx->last_token_kind == ASSIGN || ctx->last_token_kind == L_PARENTHESES || ctx->last_token_kind == FAT_ARROW || ctx->last_token_kind == COLON)) {
                 kind = MLX_TAG_OPEN;
                 ctx->mode_stack[ctx->depth++] = MODE_MLX_TAG;
@@ -557,7 +518,6 @@ Token *lexer_next_token(LexerContext *ctx) {
         if (isReservedWord(ctx->ptr, &kind, buffer)) {
             int tok_line = ctx->line, tok_col = ctx->col;
             size_t consumed = strlen(buffer);
-            if (kind == ANNOTATION) ctx->pending_template = true;
             Token *t = createTokenSingle(kind, buffer, tok_line, tok_col, (int)consumed);
             advance_pos(ctx->ptr, consumed, &ctx->line, &ctx->col);
             ctx->ptr += consumed;

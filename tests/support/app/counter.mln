@@ -1,0 +1,11 @@
+package counter;
+import { app, timer, key, mark } from "../../support/app/annotations.mln";
+struct Counter { i32 clicks; i32 step; char buf[8]; };
+@app(single, name = "Clicks")
+i32 (Counter *c) view() { c->step = 1; return 42; }
+@timer(100)
+void (Counter *c) poll() { c->clicks = c->clicks + 10; }
+@key("Ctrl+S")
+void (Counter *c) save(i32 id) { c->clicks = c->clicks + id; }
+@mark
+void helper() { }

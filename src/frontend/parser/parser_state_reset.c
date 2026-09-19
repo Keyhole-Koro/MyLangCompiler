@@ -77,9 +77,6 @@ void parser_context_reset(ParserContext *context) {
         context->symbols.structs.count = 0;
     }
 
-    free(context->symbols.annotations.decls);
-    context->symbols.annotations.decls = NULL;
-    context->symbols.annotations.count = 0;
     if (context->symbols.methods.methods) {
         for (int i = 0; i < context->symbols.methods.count; i++) {
             MethodDef *def = context->symbols.methods.methods[i];

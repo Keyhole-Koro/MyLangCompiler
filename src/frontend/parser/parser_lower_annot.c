@@ -7,49 +7,45 @@
 #include <stdarg.h>
 #include <ctype.h>
 
-/* Annotations: user-declared attributes and their compile-time templates.
+/* Annotations: `@a(args)` on a function or method is metadata.
  *
- * The compiler carries no attribute vocabulary. `@app`, `@timer` and friends
- * are declared in MyLang and imported like anything else:
+ * An annotation is declared as a function prototype whose first three
+ * parameters are fixed -- the annotated function, its receiver type's name
+ * and that type's size -- followed by the annotation's own arguments:
  *
- *     export annotation app(bool single = false, char *name = "")
- *         on struct T requires method view
- *     {
- *         i32 __app_@{T}_view(i32 self) { @T *p = (@T*)self; return p->view(); }
- *         ...
- *     }
- *     export annotation timer(i32 ms) on method of app;
+ *     // annotations.mln
+ *     export void timer(i32 fn, char *type, i32 size, i32 ms);
  *
+ *     // terminal.dom.mln
  *     import { app, timer } from "annotations.mln";
- *     @app struct Counter { ... };
+ *     @timer(100)
+ *     void (Terminal *t) poll() { ... }
  *
- * This pass resolves every attribute in the program to a declaration
- * (local first, then symbol-list imports), checks it -- target kind,
- * argument shapes against the declared parameters, `of` and `requires` --
- * and, for declarations with a body, expands the template into MyLang
- * source that goes through the ordinary top-level parser, so generated code
- * is method-resolved, semantically checked and compiled like anything the
- * author wrote.
+ * The compiler never calls `timer`. It checks the use against the
+ * declaration (resolvable: local or a symbol-list import; first parameters
+ * (i32, char*, i32); the written arguments matched to the rest by name,
+ * position or a bare bool parameter's name as a flag, defaults filling the
+ * gaps) and records one row per use in the module's generated table:
  *
- * The template is the declaration's raw body text. Everything is copied
- * through except `@` directives, which read the annotated declaration:
+ *     export i32* __annotations() -> [count, row0..., row1...]
+ *     row: [name char*, fn, type char*, size, argc, arg0, arg1, arg2]
  *
- *     @T, @{T}                 the annotated type's name (`T` is `on struct T`);
- *                              the braced form splices inside an identifier
- *     @name(T)                 the same as a string literal
- *     @arg(p)                  annotation argument `p` (or its default) as a literal
- *     @each(f in @fields(T) [where init]) { ... }   per field; @f, @f.type, @f.init
- *     @each(m in @methods(T, annot)) { ... }         per method carrying @annot;
- *                              @m, @m.mangled, @m.args[i] (that annotation's args)
- *     @count(@fields(T)) / @count(@methods(T, annot))
- *     @i                       0-based index inside the innermost @each
- *     @tramp(m)                a `void (i32 owner, i32 id, i32 arg)` function
- *                              calling method m (generated on first use)
- *     @@                       a literal '@'
+ * Whoever reads the table decides what "timer" means and when -- for MyOS,
+ * the application framework at boot (system/MyAppFramework/src/meta.mln).
+ * A module that declares
  *
- * The one piece of meaning left in the compiler is @tramp: the calling
- * convention is the compiler's. Templates read declarations; they do not
- * compute. Names ending in `__tramp` are reserved for generated trampolines.
+ *     extern i32* __annotations_table(i32 m);
+ *
+ * and reaches annotated modules through its imports receives its definition
+ * here: it hands back the table of the m-th such module (0 past the end),
+ * so the program's root collects every module's rows without a manifest.
+ * A module that reaches none (a reader like the framework's meta.mln) keeps
+ * the prototype and links against the root's definition.
+ *
+ * Because the calling convention ignores extra arguments, a method
+ * `(T *self, i32 id)` can be called through the DOM's uniform handler shape
+ * `(owner, id, arg)` directly -- a table entry is the real method, not a
+ * wrapper. A method reached this way must take a pointer receiver.
  */
 
 static void annot_error(ParserContext *context, int line, int col, const char *fmt, ...) {
@@ -86,16 +82,6 @@ static void src_appendf(Src *s, const char *fmt, ...) {
     vsnprintf(s->text + s->len, s->cap - s->len, fmt, ap2);
     va_end(ap2);
     s->len += (size_t)need;
-}
-
-static void src_append_n(Src *s, const char *text, size_t n) {
-    if (s->len + n + 1 > s->cap) {
-        s->cap = (s->len + n + 1) * 2;
-        s->text = realloc(s->text, s->cap);
-    }
-    memcpy(s->text + s->len, text, n);
-    s->len += n;
-    s->text[s->len] = 0;
 }
 
 // Appends `text` as a MyLang string literal, re-escaping what the lexer unescaped.
@@ -157,39 +143,24 @@ static const char *tramp_args(ParserContext *context, const ASTNode *fn, int par
     }
 }
 
-/* A method reached through the handler ABI must take a pointer receiver
- * (`T *self`): the dispatcher identifies the instance by an i32, and a
- * `ref mut T` cannot be built from one. */
+/* A method reached through the handler ABI is called with the instance's
+ * address as its first argument, so its receiver must be one that is an
+ * address underneath: a pointer (`T *self`) or a reference (`ref T`,
+ * `ref mut T`). A value receiver would be a move, which makes no sense for
+ * a callback invoked on a persistent instance. */
 static void require_pointer_receiver(ParserContext *context, const ASTNode *fn, int line, int col) {
     ASTNode *recv = fn->fundef.param_count > 0 ? fn->fundef.params[0] : NULL;
     ASTNode *type = recv && recv->type == AST_PARAM ? recv->param.type : NULL;
-    if (!type || type->type != AST_TYPE || type->type_node.pointer_level != 1 ||
-        type->type_node.ref_kind != REFKIND_NONE) {
+    int by_pointer = type && type->type == AST_TYPE && type->type_node.pointer_level == 1 &&
+                     type->type_node.ref_kind == REFKIND_NONE;
+    int by_ref = type && type->type == AST_TYPE && type->type_node.pointer_level == 0 &&
+                 type->type_node.ref_kind != REFKIND_NONE;
+    if (!by_pointer && !by_ref) {
         annot_error(context, line, col,
-                    "handler method '%s' must take a pointer receiver, `(%s *self)`",
-                    method_short_name(fn), fn->fundef.recv_type_name ? fn->fundef.recv_type_name : "T");
+                    "handler method '%s' must take its receiver by pointer or reference, `(%s *self)` or `(ref mut %s self)`",
+                    method_short_name(fn), fn->fundef.recv_type_name ? fn->fundef.recv_type_name : "T",
+                    fn->fundef.recv_type_name ? fn->fundef.recv_type_name : "T");
     }
-}
-
-const char *ensure_method_trampoline(ParserContext *context, ASTNode *program,
-                                     const char *type_name, const char *method_name,
-                                     int line, int col) {
-    const MethodDef *m = find_method(context, type_name, method_name);
-    if (!m) {
-        annot_error(context, line, col, "type '%s' has no method '%s'", type_name, method_name);
-    }
-    static char name[300];
-    snprintf(name, sizeof(name), "%s__tramp", m->mangled);
-    if (find_function(context, name)) return name;
-
-    require_pointer_receiver(context, m->fundef, line, col);
-    const char *args = tramp_args(context, m->fundef, m->fundef->fundef.param_count - 1, line, col);
-    Src src = {0};
-    src_appendf(&src, "void %s(i32 owner, i32 id, i32 arg) { %s *p = (%s*)owner; p->%s(%s); }\n",
-                name, type_name, type_name, method_name, args);
-    parse_generated_toplevels(context, program, src.text);
-    free(src.text);
-    return name;
 }
 
 const char *ensure_function_trampoline(ParserContext *context, ASTNode *program,
@@ -211,13 +182,15 @@ const char *ensure_function_trampoline(ParserContext *context, ASTNode *program,
     return name;
 }
 
-// --- resolving declarations ------------------------------------------------------
+// --- annotation calls -------------------------------------------------------------
 
-/* The declaration `@name` refers to: one in this file, else one exported by a
- * module named in a symbol-list import (`import { app } from "..."`). */
-static ASTNode *resolve_annotation(ParserContext *context, ASTNode *program, const char *name) {
-    ASTNode *local = find_local_annotation(context, name);
-    if (local) return local;
+/* The function `@name` refers to: one in this file, else one exported by a
+ * module named in a symbol-list import. `link_name` is what the generated
+ * call spells (the exported, package-mangled name for an import). */
+static ASTNode *resolve_annotation(ParserContext *context, ASTNode *program, const char *name,
+                                   const char **link_name) {
+    ASTNode *local = find_function(context, name);
+    if (local && local->type == AST_FUNDEF) { *link_name = local->fundef.name; return local; }
 
     FrontendSession *session = context->session;
     if (!session || !session->loader) return NULL;
@@ -229,31 +202,14 @@ static ASTNode *resolve_annotation(ParserContext *context, ASTNode *program, con
         Module *mod = module_loader_load(session->loader, context->module.filename, node->import_stmt.path);
         if (!mod || mod->state != MODULE_LOADED) continue;
         ModuleSymbol *sym = resolver_lookup_import_symbol(node, mod, name);
-        if (sym && sym->kind == SYMBOL_ANNOTATION && sym->declaration &&
-            sym->declaration->type == AST_ANNOTATION) {
+        if (sym && sym->kind == SYMBOL_FUNCTION && sym->declaration &&
+            sym->declaration->type == AST_FUNDEF) {
+            *link_name = sym->link_name ? sym->link_name : sym->declaration->fundef.name;
             return sym->declaration;
         }
     }
     return NULL;
 }
-
-static const Attribute *find_attr(const ASTNode *node, const char *name) {
-    for (int i = 0; i < node->attr_count; i++) {
-        if (strcmp(node->attrs[i].name, name) == 0) return &node->attrs[i];
-    }
-    return NULL;
-}
-
-static ASTNode *find_struct_decl(ASTNode *program, const char *name) {
-    for (int i = 0; i < program->block.count; i++) {
-        ASTNode *node = program->block.stmts[i];
-        if (node && node->type == AST_STRUCT && node->struct_stmt.name &&
-            strcmp(node->struct_stmt.name, name) == 0) return node;
-    }
-    return NULL;
-}
-
-// --- literals as text -------------------------------------------------------------
 
 static const char *param_base_type(const ASTNode *param) {
     const ASTNode *type = param->param.type;
@@ -272,6 +228,12 @@ static int param_is_bool(const ASTNode *param) {
     return strcmp(param_base_type(param), "bool") == 0;
 }
 
+static int param_is_plain(const ASTNode *param, const char *base) {
+    const ASTNode *type = param->param.type;
+    return type && type->type == AST_TYPE && type->type_node.pointer_level == 0 &&
+           strcmp(param_base_type(param), base) == 0;
+}
+
 /* Writes a literal AST (number, negated number, string, char) as source. */
 static void append_literal(ParserContext *context, Src *out, const ASTNode *value, int line, int col) {
     if (!value) { src_appendf(out, "0"); return; }
@@ -287,466 +249,119 @@ static void append_literal(ParserContext *context, Src *out, const ASTNode *valu
         break;
     default: break;
     }
-    annot_error(context, line, col, "only a literal can be used here");
+    annot_error(context, line, col, "only a literal can be used as an annotation argument");
 }
 
-static void append_type(ParserContext *context, Src *out, const ASTNode *type, int line, int col) {
-    if (!type || type->type != AST_TYPE || !type->type_node.base_type) {
-        annot_error(context, line, col, "@f.type: field type is not a plain type");
+#define ANNOT_FIXED_PARAMS 3
+#define ANNOT_MAX_ARGS 3
+#define ANNOT_ROW_WORDS 8
+#define ANNOT_TABLE_FN "__annotations"
+#define ANNOT_AGGREGATE_FN "__annotations_table"
+
+/* Appends the row for one attribute: `t[i] = ...;` for each of its words. */
+static void emit_annotation_row(ParserContext *context, ASTNode *program, Src *out, int base,
+                                ASTNode *target, const Attribute *attr) {
+    const char *link_name = NULL;
+    ASTNode *decl = resolve_annotation(context, program, attr->name, &link_name);
+    if (!decl) {
+        annot_error(context, attr->line, attr->col,
+                    "unknown annotation '@%s'; an annotation is a function prototype, declared here or imported "
+                    "with `import { %s } from \"...\"`", attr->name, attr->name);
     }
-    const ASTNode *base = type->type_node.base_type;
-    if (base->type == AST_IDENTIFIER) src_appendf(out, "%s", base->identifier.name);
-    else if (base->type == AST_TYPE_GENERIC) src_appendf(out, "%s", base->generic_type.name);
-    else annot_error(context, line, col, "@f.type: unsupported field type");
-    for (int i = 0; i < type->type_node.pointer_level; i++) src_appendf(out, "*");
-}
+    if (target->type != AST_FUNDEF) {
+        annot_error(context, attr->line, attr->col, "@%s: annotations go on functions and methods", attr->name);
+    }
+    int n = decl->fundef.param_count;
+    if (n < ANNOT_FIXED_PARAMS ||
+        !param_is_plain(decl->fundef.params[0], "i32") ||
+        !param_is_string(decl->fundef.params[1]) ||
+        !param_is_plain(decl->fundef.params[2], "i32")) {
+        annot_error(context, attr->line, attr->col,
+                    "'%s' cannot be used as an annotation: its first parameters must be "
+                    "(i32 fn, char *type, i32 size)", attr->name);
+    }
+    if (decl->fundef.is_variadic || n > ANNOT_FIXED_PARAMS + ANNOT_MAX_ARGS) {
+        annot_error(context, attr->line, attr->col,
+                    "'%s' cannot be used as an annotation: at most %d arguments after (fn, type, size)",
+                    attr->name, ANNOT_MAX_ARGS);
+    }
 
-// --- one use of an annotation ---------------------------------------------------------
+    int is_method = target->fundef.recv_type_name != NULL;
+    if (is_method) require_pointer_receiver(context, target, attr->line, attr->col);
 
-typedef struct {
-    ASTNode *decl;              // AST_ANNOTATION
-    const Attribute *attr;      // the use
-    ASTNode *target;            // the annotated declaration
-    const char *type_name;      // struct name (struct target) or receiver type (method target)
-    const ASTNode **arg_values; // per declared parameter: the supplied literal, or NULL for default
-    int line;
-    int col;
-} AnnotUse;
-
-/* Matches the attribute's arguments to the declaration's parameters: keyed
- * by name, positional in order, and a bare identifier naming a bool
- * parameter sets it (`@app(single)`). Literal kinds are checked against the
- * parameter types. */
-static void bind_arguments(ParserContext *context, AnnotUse *use) {
-    ASTNode *decl = use->decl;
-    int n = decl->annotation.param_count;
-    use->arg_values = calloc(n > 0 ? n : 1, sizeof(ASTNode *));
+    // Bind the written arguments to the parameters after the fixed three.
+    const ASTNode **values = calloc((size_t)n, sizeof(ASTNode *));
     static ASTNode one_literal;
     one_literal.type = AST_NUMBER;
     one_literal.number.value = "1";
-
-    int positional = 0;
-    for (int i = 0; i < use->attr->arg_count; i++) {
-        const AttrArg *arg = &use->attr->args[i];
-        int slot = -1;
+    int positional = ANNOT_FIXED_PARAMS;
+    for (int i = 0; i < attr->arg_count; i++) {
+        const AttrArg *arg = &attr->args[i];
         const ASTNode *value = arg->value;
+        int slot = -1;
         if (arg->name) {
-            for (int p = 0; p < n; p++) {
-                if (strcmp(decl->annotation.params[p]->param.name, arg->name) == 0) { slot = p; break; }
+            for (int p = ANNOT_FIXED_PARAMS; p < n; p++) {
+                if (strcmp(decl->fundef.params[p]->param.name, arg->name) == 0) { slot = p; break; }
             }
-            if (slot < 0) annot_error(context, arg->line, arg->col, "@%s has no parameter '%s'", decl->annotation.name, arg->name);
+            if (slot < 0) annot_error(context, arg->line, arg->col, "@%s has no parameter '%s'", attr->name, arg->name);
         } else if (value && value->type == AST_IDENTIFIER) {
-            for (int p = 0; p < n; p++) {
-                if (param_is_bool(decl->annotation.params[p]) &&
-                    strcmp(decl->annotation.params[p]->param.name, value->identifier.name) == 0) { slot = p; break; }
+            for (int p = ANNOT_FIXED_PARAMS; p < n; p++) {
+                if (param_is_bool(decl->fundef.params[p]) &&
+                    strcmp(decl->fundef.params[p]->param.name, value->identifier.name) == 0) { slot = p; break; }
             }
-            if (slot < 0) annot_error(context, arg->line, arg->col, "@%s: unknown flag '%s'", decl->annotation.name, value->identifier.name);
+            if (slot < 0) annot_error(context, arg->line, arg->col, "@%s: unknown flag '%s'", attr->name, value->identifier.name);
             value = &one_literal;
         } else {
-            while (positional < n && use->arg_values[positional]) positional++;
-            if (positional >= n) annot_error(context, arg->line, arg->col, "@%s takes %d argument%s", decl->annotation.name, n, n == 1 ? "" : "s");
+            while (positional < n && values[positional]) positional++;
+            if (positional >= n) {
+                annot_error(context, arg->line, arg->col, "@%s takes %d argument%s", attr->name,
+                            n - ANNOT_FIXED_PARAMS, n - ANNOT_FIXED_PARAMS == 1 ? "" : "s");
+            }
             slot = positional;
         }
-        if (use->arg_values[slot]) annot_error(context, arg->line, arg->col, "@%s: '%s' given twice", decl->annotation.name, decl->annotation.params[slot]->param.name);
-
-        const ASTNode *param = decl->annotation.params[slot];
+        if (values[slot]) annot_error(context, arg->line, arg->col, "@%s: '%s' given twice", attr->name, decl->fundef.params[slot]->param.name);
+        const ASTNode *param = decl->fundef.params[slot];
         int ok;
         if (param_is_string(param)) ok = value && value->type == AST_STRING_LITERAL;
         else if (param_is_bool(param)) ok = value && value->type == AST_NUMBER;
         else ok = value && (value->type == AST_NUMBER || value->type == AST_CHAR_LITERAL ||
                             (value->type == AST_UNARY && value->unary.op == SUB));
         if (!ok) {
-            annot_error(context, arg->line, arg->col, "@%s: argument '%s' must be a %s literal",
-                        decl->annotation.name, param->param.name,
-                        param_is_string(param) ? "string" : param_is_bool(param) ? "bool" : "number");
+            annot_error(context, arg->line, arg->col, "@%s: argument '%s' must be a %s literal", attr->name,
+                        param->param.name, param_is_string(param) ? "string" : param_is_bool(param) ? "bool" : "number");
         }
-        use->arg_values[slot] = value;
+        values[slot] = value;
     }
-    for (int p = 0; p < n; p++) {
-        if (!use->arg_values[p] && !decl->annotation.params[p]->param.default_value) {
-            annot_error(context, use->line, use->col, "@%s is missing argument '%s'",
-                        decl->annotation.name, decl->annotation.params[p]->param.name);
-        }
-    }
-}
-
-static const ASTNode *arg_value(const AnnotUse *use, const char *param_name) {
-    for (int p = 0; p < use->decl->annotation.param_count; p++) {
-        const ASTNode *param = use->decl->annotation.params[p];
-        if (strcmp(param->param.name, param_name) == 0) {
-            return use->arg_values[p] ? use->arg_values[p] : param->param.default_value;
+    for (int p = ANNOT_FIXED_PARAMS; p < n; p++) {
+        if (!values[p]) {
+            values[p] = decl->fundef.params[p]->param.default_value;
+            if (!values[p]) annot_error(context, attr->line, attr->col, "@%s is missing argument '%s'", attr->name, decl->fundef.params[p]->param.name);
         }
     }
-    return NULL;
-}
 
-// --- template expansion ---------------------------------------------------------------------
-
-typedef struct {
-    const char *var;          // loop variable name
-    int kind;                 // 1 = field, 2 = method
-    ASTNode *item;            // the field's var_decl or the method's fundef
-    const char *annot;        // for methods: the annotation whose args @v.args[i] reads
-    int index;
-} LoopBinding;
-
-typedef struct {
-    ParserContext *context;
-    ASTNode *program;
-    AnnotUse *use;
-    LoopBinding loops[8];
-    int loop_depth;
-    int line;                 // current template line, for diagnostics
-} Expand;
-
-static void expand_text(Expand *ex, const char *text, size_t len, Src *out);
-
-static const LoopBinding *find_loop(const Expand *ex, const char *var) {
-    for (int i = ex->loop_depth - 1; i >= 0; i--) {
-        if (strcmp(ex->loops[i].var, var) == 0) return &ex->loops[i];
-    }
-    return NULL;
-}
-
-// Reads an identifier at *p into buf; returns its length (0 if none).
-static size_t read_ident(const char *p, char *buf, size_t cap) {
-    size_t n = 0;
-    while ((isalnum((unsigned char)p[n]) || p[n] == '_') && n + 1 < cap) { buf[n] = p[n]; n++; }
-    buf[n] = 0;
-    return n;
-}
-
-static const char *skip_ws(const char *p) { while (*p && isspace((unsigned char)*p)) p++; return p; }
-
-// Finds the '}' matching the '{' at p (p[0] == '{'); NULL if unbalanced.
-static const char *match_brace(const char *p) {
-    int depth = 0;
-    for (; *p; p++) {
-        if (*p == '"') { p++; while (*p && *p != '"') { if (*p == '\\' && p[1]) p++; p++; } if (!*p) return NULL; continue; }
-        if (*p == '{') depth++;
-        else if (*p == '}') { depth--; if (depth == 0) return p; }
-    }
-    return NULL;
-}
-
-// Finds the ')' matching the '(' at p.
-static const char *match_paren(const char *p) {
-    int depth = 0;
-    for (; *p; p++) {
-        if (*p == '(') depth++;
-        else if (*p == ')') { depth--; if (depth == 0) return p; }
-    }
-    return NULL;
-}
-
-/* Collects the items of `@fields(T) [where init]` or `@methods(T, annot)`:
- * `spec` is the text inside @each's parentheses after `in`, or inside
- * @count's. Returns the count; fills `items` (borrowed) when non-NULL. */
-static int collect_items(Expand *ex, const char *spec, size_t spec_len, int *out_kind,
-                         const char **out_annot, ASTNode **items, int max_items) {
-    char buf[256];
-    size_t n = spec_len < sizeof(buf) - 1 ? spec_len : sizeof(buf) - 1;
-    memcpy(buf, spec, n);
-    buf[n] = 0;
-    const char *p = skip_ws(buf);
-    if (*p != '@') annot_error(ex->context, ex->line, 0, "@each/@count: expected @fields(T) or @methods(T, annot)");
-    p++;
-    char name[32];
-    p += read_ident(p, name, sizeof(name));
-    p = skip_ws(p);
-    if (*p != '(') annot_error(ex->context, ex->line, 0, "@%s: expected '('", name);
-    const char *close = match_paren(p);
-    if (!close) annot_error(ex->context, ex->line, 0, "@%s: unbalanced parentheses", name);
-    char inner[128];
-    size_t ilen = (size_t)(close - p - 1) < sizeof(inner) - 1 ? (size_t)(close - p - 1) : sizeof(inner) - 1;
-    memcpy(inner, p + 1, ilen);
-    inner[ilen] = 0;
-    const char *rest = skip_ws(close + 1);
-
-    // First argument must be the target variable.
-    char tvar[64];
-    const char *q = skip_ws(inner);
-    q += read_ident(q, tvar, sizeof(tvar));
-    if (strcmp(tvar, ex->use->decl->annotation.target_var) != 0) {
-        annot_error(ex->context, ex->line, 0, "@%s: expected the annotated type '%s', got '%s'", name,
-                    ex->use->decl->annotation.target_var, tvar);
-    }
-    q = skip_ws(q);
-
-    int count = 0;
-    if (strcmp(name, "fields") == 0) {
-        int where_init = 0;
-        if (strncmp(rest, "where", 5) == 0) {
-            const char *w = skip_ws(rest + 5);
-            if (strncmp(w, "init", 4) != 0) annot_error(ex->context, ex->line, 0, "@fields: the only filter is `where init`");
-            where_init = 1;
-        }
-        ASTNode *st = find_struct_decl(ex->program, ex->use->type_name);
-        if (!st) annot_error(ex->context, ex->line, 0, "@fields: '%s' is not a struct declared in this file", ex->use->type_name);
-        for (int i = 0; i < st->struct_stmt.member_count; i++) {
-            ASTNode *m = st->struct_stmt.members[i];
-            if (!m || m->type != AST_VAR_DECL) continue;
-            if (where_init && !m->var_decl.init) continue;
-            if (items && count < max_items) items[count] = m;
-            count++;
-        }
-        *out_kind = 1;
-        *out_annot = NULL;
-        return count;
-    }
-    if (strcmp(name, "methods") == 0) {
-        if (*q != ',') annot_error(ex->context, ex->line, 0, "@methods takes (T, annotation)");
-        q = skip_ws(q + 1);
-        static char annot[64];
-        read_ident(q, annot, sizeof(annot));
-        if (!annot[0]) annot_error(ex->context, ex->line, 0, "@methods: expected an annotation name");
-        for (int i = 0; i < ex->program->block.count; i++) {
-            ASTNode *fn = ex->program->block.stmts[i];
-            if (!fn || fn->type != AST_FUNDEF || !fn->fundef.recv_type_name) continue;
-            if (strcmp(fn->fundef.recv_type_name, ex->use->type_name) != 0) continue;
-            if (!find_attr(fn, annot)) continue;
-            if (items && count < max_items) items[count] = fn;
-            count++;
-        }
-        *out_kind = 2;
-        *out_annot = annot;
-        return count;
-    }
-    annot_error(ex->context, ex->line, 0, "unknown directive '@%s'; expected @fields or @methods", name);
-    return 0;
-}
-
-/* `@v` and `@v.x` for a loop variable. */
-static int expand_loop_ref(Expand *ex, const LoopBinding *b, const char **pp, Src *out) {
-    const char *p = *pp;
-    if (*p != '.') {
-        if (b->kind == 1) src_appendf(out, "%s", b->item->var_decl.name);
-        else src_appendf(out, "%s", method_short_name(b->item));
-        *pp = p;
-        return 1;
-    }
-    p++;
-    char member[32];
-    p += read_ident(p, member, sizeof(member));
-    if (b->kind == 1) {
-        if (strcmp(member, "init") == 0) {
-            if (!b->item->var_decl.init) annot_error(ex->context, ex->line, 0, "@%s.init: field '%s' has no initializer", b->var, b->item->var_decl.name);
-            append_literal(ex->context, out, b->item->var_decl.init, ex->line, 0);
-        } else if (strcmp(member, "type") == 0) {
-            append_type(ex->context, out, b->item->var_decl.var_type, ex->line, 0);
-        } else {
-            annot_error(ex->context, ex->line, 0, "@%s.%s: a field has .init and .type", b->var, member);
-        }
+    src_appendf(out, "    t[%d] = (i32)", base);
+    src_append_quoted(out, attr->name);
+    src_appendf(out, ";\n    t[%d] = %s;\n", base + 1, target->fundef.name);
+    if (is_method) {
+        src_appendf(out, "    t[%d] = (i32)", base + 2);
+        src_append_quoted(out, target->fundef.recv_type_name);
+        src_appendf(out, ";\n    t[%d] = sizeof(__annot_probe_%s);\n", base + 3, target->fundef.recv_type_name);
     } else {
-        if (strcmp(member, "mangled") == 0) {
-            src_appendf(out, "%s", b->item->fundef.name);
-        } else if (strcmp(member, "args") == 0) {
-            if (*p != '[') annot_error(ex->context, ex->line, 0, "@%s.args needs an index: @%s.args[0]", b->var, b->var);
-            int idx = atoi(p + 1);
-            while (*p && *p != ']') p++;
-            if (*p == ']') p++;
-            const Attribute *a = find_attr(b->item, b->annot);
-            if (!a || idx < 0 || idx >= a->arg_count) {
-                // Fall back to the declaration's default for that parameter.
-                ASTNode *decl = resolve_annotation(ex->context, ex->program, b->annot);
-                if (decl && idx >= 0 && idx < decl->annotation.param_count && decl->annotation.params[idx]->param.default_value) {
-                    append_literal(ex->context, out, decl->annotation.params[idx]->param.default_value, ex->line, 0);
-                } else {
-                    annot_error(ex->context, ex->line, 0, "@%s.args[%d]: @%s on '%s' has no such argument", b->var, idx, b->annot, method_short_name(b->item));
-                }
-            } else {
-                append_literal(ex->context, out, a->args[idx].value, ex->line, 0);
-            }
+        src_appendf(out, "    t[%d] = (i32)\"\";\n    t[%d] = 0;\n", base + 2, base + 3);
+    }
+    src_appendf(out, "    t[%d] = %d;\n", base + 4, n - ANNOT_FIXED_PARAMS);
+    for (int k = 0; k < ANNOT_MAX_ARGS; k++) {
+        int p = ANNOT_FIXED_PARAMS + k;
+        src_appendf(out, "    t[%d] = ", base + 5 + k);
+        if (p < n) {
+            if (param_is_string(decl->fundef.params[p])) src_appendf(out, "(i32)");
+            append_literal(context, out, values[p], attr->line, attr->col);
         } else {
-            annot_error(ex->context, ex->line, 0, "@%s.%s: a method has .mangled and .args[i]", b->var, member);
+            src_appendf(out, "0");
         }
+        src_appendf(out, ";\n");
     }
-    *pp = p;
-    return 1;
-}
-
-static void expand_text(Expand *ex, const char *text, size_t len, Src *out) {
-    const char *p = text;
-    const char *end = text + len;
-    while (p < end) {
-        if (*p == '\n') ex->line++;
-        // Comments are copied verbatim: a `@` in one is prose, not a directive.
-        if (*p == '/' && p + 1 < end && p[1] == '/') {
-            const char *eol = p;
-            while (eol < end && *eol != '\n') eol++;
-            src_append_n(out, p, (size_t)(eol - p));
-            p = eol;
-            continue;
-        }
-        if (*p != '@') { src_append_n(out, p, 1); p++; continue; }
-        p++;
-        if (*p == '@') { src_append_n(out, "@", 1); p++; continue; }
-        // `@{T}` splices inside an identifier: `__app_@{T}_init`. The braces
-        // may also wrap a loop reference, `@{f.init}`.
-        int braced = *p == '{';
-        if (braced) p++;
-        char name[64];
-        size_t n = read_ident(p, name, sizeof(name));
-        if (n == 0) { src_append_n(out, "@", 1); continue; }
-        p += n;
-        const char *brace_end = NULL;
-        if (braced) {
-            brace_end = strchr(p, '}');
-            if (!brace_end) annot_error(ex->context, ex->line, 0, "@{: missing '}'");
-        }
-
-        // The target type.
-        if (strcmp(name, ex->use->decl->annotation.target_var) == 0) {
-            src_appendf(out, "%s", ex->use->type_name);
-            if (braced) p = brace_end + 1;
-            continue;
-        }
-        if (strcmp(name, "i") == 0) {
-            if (ex->loop_depth == 0) annot_error(ex->context, ex->line, 0, "@i outside @each");
-            src_appendf(out, "%d", ex->loops[ex->loop_depth - 1].index);
-            if (braced) p = brace_end + 1;
-            continue;
-        }
-        const LoopBinding *b = find_loop(ex, name);
-        if (b) {
-            expand_loop_ref(ex, b, &p, out);
-            if (braced) p = brace_end + 1;
-            continue;
-        }
-        if (braced) annot_error(ex->context, ex->line, 0, "@{%s}: only the type, @i or a loop variable can be braced", name);
-
-        // Directives with parentheses.
-        const char *open = skip_ws(p);
-        if (*open != '(') annot_error(ex->context, ex->line, 0, "unknown directive '@%s'", name);
-        const char *close = match_paren(open);
-        if (!close) annot_error(ex->context, ex->line, 0, "@%s: unbalanced parentheses", name);
-        const char *inner = open + 1;
-        size_t ilen = (size_t)(close - inner);
-        p = close + 1;
-
-        if (strcmp(name, "name") == 0) {
-            char tvar[64];
-            read_ident(skip_ws(inner), tvar, sizeof(tvar));
-            if (strcmp(tvar, ex->use->decl->annotation.target_var) != 0)
-                annot_error(ex->context, ex->line, 0, "@name: expected '%s'", ex->use->decl->annotation.target_var);
-            src_append_quoted(out, ex->use->type_name);
-        } else if (strcmp(name, "arg") == 0) {
-            char pname[64];
-            read_ident(skip_ws(inner), pname, sizeof(pname));
-            const ASTNode *value = arg_value(ex->use, pname);
-            if (!value) annot_error(ex->context, ex->line, 0, "@arg(%s): @%s has no such parameter", pname, ex->use->decl->annotation.name);
-            append_literal(ex->context, out, value, ex->line, 0);
-        } else if (strcmp(name, "tramp") == 0) {
-            char var[64];
-            read_ident(skip_ws(inner), var, sizeof(var));
-            const LoopBinding *m = find_loop(ex, var);
-            if (!m || m->kind != 2) annot_error(ex->context, ex->line, 0, "@tramp(%s): expected a method loop variable", var);
-            const char *tramp = ensure_method_trampoline(ex->context, ex->program, ex->use->type_name,
-                                                         method_short_name(m->item), ex->use->line, ex->use->col);
-            src_appendf(out, "%s", tramp);
-        } else if (strcmp(name, "count") == 0) {
-            int kind; const char *annot;
-            int count = collect_items(ex, inner, ilen, &kind, &annot, NULL, 0);
-            src_appendf(out, "%d", count);
-        } else if (strcmp(name, "each") == 0) {
-            // @each(v in <spec>) { body }
-            char var[64];
-            const char *q = skip_ws(inner);
-            q += read_ident(q, var, sizeof(var));
-            q = skip_ws(q);
-            if (strncmp(q, "in", 2) != 0) annot_error(ex->context, ex->line, 0, "@each: expected `v in @fields(T)` or `v in @methods(T, annot)`");
-            q = skip_ws(q + 2);
-            ASTNode *items[128];
-            int kind; const char *annot;
-            int count = collect_items(ex, q, (size_t)(close - q), &kind, &annot, items, 128);
-            const char *body_open = skip_ws(p);
-            if (*body_open != '{') annot_error(ex->context, ex->line, 0, "@each: expected '{' after the loop header");
-            const char *body_close = match_brace(body_open);
-            if (!body_close) annot_error(ex->context, ex->line, 0, "@each: unbalanced braces in body");
-            if (ex->loop_depth >= 8) annot_error(ex->context, ex->line, 0, "@each nested too deep");
-            int saved_line = ex->line;
-            for (int i = 0; i < count && i < 128; i++) {
-                LoopBinding *lb = &ex->loops[ex->loop_depth++];
-                lb->var = var;
-                lb->kind = kind;
-                lb->item = items[i];
-                lb->annot = annot;
-                lb->index = i;
-                ex->line = saved_line;
-                expand_text(ex, body_open + 1, (size_t)(body_close - body_open - 1), out);
-                ex->loop_depth--;
-            }
-            // Account for the body's newlines once, whether or not it ran.
-            for (const char *c = body_open; c < body_close; c++) if (*c == '\n') saved_line++;
-            ex->line = saved_line;
-            p = body_close + 1;
-        } else {
-            annot_error(ex->context, ex->line, 0, "unknown directive '@%s'", name);
-        }
-    }
-}
-
-static void expand_template(ParserContext *context, ASTNode *program, AnnotUse *use) {
-    Expand ex = {0};
-    ex.context = context;
-    ex.program = program;
-    ex.use = use;
-    ex.line = use->decl->annotation.template_line;
-    Src out = {0};
-    expand_text(&ex, use->decl->annotation.template, strlen(use->decl->annotation.template), &out);
-    if (out.text) parse_generated_toplevels(context, program, out.text);
-    free(out.text);
-}
-
-// --- checking a use -------------------------------------------------------------------------
-
-static void check_use(ParserContext *context, ASTNode *program, AnnotUse *use) {
-    ASTNode *decl = use->decl;
-    const char *aname = decl->annotation.name;
-    ASTNode *target = use->target;
-
-    int is_struct = target->type == AST_STRUCT;
-    int is_method = target->type == AST_FUNDEF && target->fundef.recv_type_name != NULL;
-    int is_function = target->type == AST_FUNDEF && !is_method;
-    int allowed = (is_struct && (decl->annotation.target & ANNOT_ON_STRUCT)) ||
-                  (is_method && (decl->annotation.target & ANNOT_ON_METHOD)) ||
-                  (is_function && (decl->annotation.target & ANNOT_ON_FUNCTION));
-    if (!allowed) {
-        const char *want = decl->annotation.target == ANNOT_ON_STRUCT ? "a struct" :
-                           decl->annotation.target == ANNOT_ON_METHOD ? "a method" : "a function";
-        annot_error(context, use->line, use->col, "@%s applies to %s, not to this %s", aname, want,
-                    is_struct ? "struct" : is_method ? "method" : "function");
-    }
-    if (is_struct) {
-        if (!target->struct_stmt.name || !target->struct_stmt.name[0])
-            annot_error(context, use->line, use->col, "@%s needs a named struct", aname);
-        use->type_name = target->struct_stmt.name;
-    } else if (is_method) {
-        use->type_name = target->fundef.recv_type_name;
-    } else {
-        use->type_name = target->fundef.name;
-    }
-
-    if (decl->annotation.of_annotation) {
-        ASTNode *owner = is_method ? find_struct_decl(program, use->type_name) : NULL;
-        if (!owner || !find_attr(owner, decl->annotation.of_annotation)) {
-            annot_error(context, use->line, use->col, "@%s goes on a method of a @%s struct; '%s' is not one",
-                        aname, decl->annotation.of_annotation, use->type_name);
-        }
-    }
-    if (is_method) require_pointer_receiver(context, target, use->line, use->col);
-
-    for (int i = 0; i < decl->annotation.require_count; i++) {
-        const char *m = decl->annotation.requires[i];
-        const MethodDef *def = find_method(context, use->type_name, m);
-        if (!def) {
-            annot_error(context, use->line, use->col, "@%s struct '%s' needs a method '%s'", aname, use->type_name, m);
-        }
-        // A required method is one the template calls through the instance
-        // pointer, so it takes the same receiver as a handler.
-        require_pointer_receiver(context, def->fundef, use->line, use->col);
-    }
-    bind_arguments(context, use);
+    free(values);
 }
 
 static void clear_attrs(ASTNode *node) {
@@ -755,47 +370,106 @@ static void clear_attrs(ASTNode *node) {
     node->attr_count = 0;
 }
 
+/* Does a parsed (not lowered) module carry any attributed declaration? */
+static int module_has_annotations(const Module *mod) {
+    if (!mod || !mod->program || mod->program->type != AST_BLOCK) return 0;
+    for (int i = 0; i < mod->program->block.count; i++) {
+        ASTNode *node = mod->program->block.stmts[i];
+        if (node && node->attr_count > 0) return 1;
+    }
+    return 0;
+}
+
+/* The aggregate: defined in a module that declared the extern prototype,
+ * over every annotated module the loader reached from it. */
+static void emit_aggregate(ParserContext *context, ASTNode *program, int proto_index) {
+    FrontendSession *session = context->session;
+    ModuleLoader *loader = session ? session->loader : NULL;
+    ModuleGraph *graph = loader ? loader->graph : NULL;
+
+    Src src = {0};
+    int count = 0;
+    Src body = {0};
+    for (int i = 0; graph && i < graph->module_count; i++) {
+        Module *mod = graph->modules[i];
+        if (!module_has_annotations(mod)) continue;
+        if (!mod->package_name) {
+            annot_error(context, 0, 0, "%s: a module with annotations must declare a package (its table is named by it)",
+                        mod->canonical_path ? mod->canonical_path : "<module>");
+        }
+        src_appendf(&src, "extern i32* %s_%s();\n", mod->package_name, ANNOT_TABLE_FN);
+        src_appendf(&body, "    if (m == %d) { return %s_%s(); }\n", count, mod->package_name, ANNOT_TABLE_FN);
+        count++;
+    }
+    // A module that reaches no annotated module -- a reader such as the
+    // framework's meta.mln -- keeps its prototype: the definition belongs
+    // to the program's root, which imports the apps.
+    if (count == 0) { free(src.text); free(body.text); return; }
+
+    // Not `export`: that would mangle the name with the package, and the
+    // readers reach it by its bare name through their own extern prototype.
+    src_appendf(&src, "i32* %s(i32 m) {\n%s    return (i32*)0;\n}\n", ANNOT_AGGREGATE_FN, body.text ? body.text : "");
+
+    // The prototype gives way to the definition. The node stays registered
+    // in the function table (there is no unregister), so it is only
+    // unlinked from the program, not freed.
+    for (int i = proto_index; i + 1 < program->block.count; i++) program->block.stmts[i] = program->block.stmts[i + 1];
+    program->block.count--;
+
+    parse_generated_toplevels(context, program, src.text);
+    free(src.text);
+    free(body.text);
+}
+
 void lower_annotations(ParserContext *context, ASTNode *program) {
     if (!program || program->type != AST_BLOCK) return;
 
-    // Resolve and check every use first: expansion reads other declarations'
-    // attributes (@methods(T, timer)), so nothing is cleared until the end.
-    int count = program->block.count;
-    AnnotUse *uses = NULL;
-    int use_count = 0;
-    for (int i = 0; i < count; i++) {
+    // A prototype of the aggregate marks the module that collects every
+    // table; the real definition goes in its place (see emit_aggregate).
+    for (int i = 0; i < program->block.count; i++) {
         ASTNode *node = program->block.stmts[i];
-        if (!node || node->attr_count == 0) continue;
-        for (int k = 0; k < node->attr_count; k++) {
-            const Attribute *a = &node->attrs[k];
-            ASTNode *decl = resolve_annotation(context, program, a->name);
-            if (!decl) {
-                annot_error(context, a->line, a->col,
-                            "unknown annotation '@%s'; declare it with `annotation %s ...` or import it",
-                            a->name, a->name);
-            }
-            uses = realloc(uses, sizeof(AnnotUse) * (use_count + 1));
-            AnnotUse *use = &uses[use_count++];
-            memset(use, 0, sizeof(*use));
-            use->decl = decl;
-            use->attr = a;
-            use->target = node;
-            use->line = a->line;
-            use->col = a->col;
-            check_use(context, program, use);
+        if (node && node->type == AST_FUNDEF && !node->fundef.body &&
+            strcmp(node->fundef.name, ANNOT_AGGREGATE_FN) == 0) {
+            emit_aggregate(context, program, i);
+            break;
         }
     }
 
-    for (int i = 0; i < use_count; i++) {
-        if (uses[i].decl->annotation.template) expand_template(context, program, &uses[i]);
-    }
-
+    Src rows = {0};
+    Src probes = {0};
+    int count = program->block.count;
+    int row_count = 0;
     for (int i = 0; i < count; i++) {
         ASTNode *node = program->block.stmts[i];
-        if (node && node->attr_count > 0) clear_attrs(node);
+        if (!node || node->attr_count == 0) continue;
+        if (node->type == AST_FUNDEF && node->fundef.recv_type_name) {
+            // One local per receiver type gives sizeof(T) an operand.
+            char marker[300];
+            snprintf(marker, sizeof(marker), "__annot_probe_%s;", node->fundef.recv_type_name);
+            if (!probes.text || !strstr(probes.text, marker)) {
+                src_appendf(&probes, "    %s __annot_probe_%s;\n", node->fundef.recv_type_name, node->fundef.recv_type_name);
+            }
+        }
+        for (int k = 0; k < node->attr_count; k++) {
+            emit_annotation_row(context, program, &rows, 1 + row_count * ANNOT_ROW_WORDS, node, &node->attrs[k]);
+            row_count++;
+        }
+        clear_attrs(node);
     }
-    for (int i = 0; i < use_count; i++) free(uses[i].arg_values);
-    free(uses);
+    if (row_count > 0) {
+        const char *pkg = context->module.current_package;
+        if (!pkg || !pkg[0] || strcmp(pkg, g_default_package) == 0) {
+            annot_error(context, 0, 0, "a module with annotations must declare a package (its table is named by it)");
+        }
+        Src src = {0};
+        src_appendf(&src, "i32 __annotations_data_%s[%d];\n", pkg, 1 + row_count * ANNOT_ROW_WORDS);
+        src_appendf(&src, "export i32* %s() {\n    i32 *t = &__annotations_data_%s[0];\n%s    t[0] = %d;\n%s    return t;\n}\n",
+                    ANNOT_TABLE_FN, pkg, probes.text ? probes.text : "", row_count, rows.text ? rows.text : "");
+        parse_generated_toplevels(context, program, src.text);
+        free(src.text);
+    }
+    free(rows.text);
+    free(probes.text);
 }
 
 // --- default arguments ------------------------------------------------------------

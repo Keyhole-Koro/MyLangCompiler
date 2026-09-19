@@ -1,7 +1,0 @@
-import { app, timer, key, open, on_close } from "../../support/app/annotations.mln";
-@app
-struct Thing { i32 v; };
-i32 (Thing *t) view() { return 0; }
-@timer(50)
-void (Thing *t) tick(i32 a, i32 b, i32 c) { }
-i32 main() { return 0; }

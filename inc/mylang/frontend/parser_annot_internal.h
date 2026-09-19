@@ -3,9 +3,9 @@
 
 #include "mylang/frontend/parser_internal.h"
 
-/* Annotation lowering: resolves `@name` uses against `annotation`
- * declarations (local or imported), checks them, expands their templates,
- * and provides the handler trampolines DOM lowering shares. See
+/* Annotation lowering: turns `@a(args)` on a function or method into a call
+ * to the function `a` in the module's generated __annotations_init(). Also
+ * provides the plain-function handler trampoline DOM lowering uses. See
  * parser_lower_annot.c. */
 
 void lower_annotations(ParserContext *context, ASTNode *program);
@@ -13,13 +13,6 @@ void lower_annotations(ParserContext *context, ASTNode *program);
 /* Parses generated MyLang top-level source and appends its declarations to
  * `program`, registering functions/methods as the ordinary parser would. */
 void parse_generated_toplevels(ParserContext *context, ASTNode *program, const char *source);
-
-/* Returns the name of `void <Type>__<method>__tramp(i32 owner, i32 id, i32 arg)`,
- * generating it on first use. The method must take a pointer receiver and at
- * most (i32 id, i32 arg) after it. */
-const char *ensure_method_trampoline(ParserContext *context, ASTNode *program,
-                                     const char *type_name, const char *method_name,
-                                     int line, int col);
 
 /* For a plain local function with fewer than three parameters, returns the
  * name of a trampoline adapting it to the handler ABI; for one that already

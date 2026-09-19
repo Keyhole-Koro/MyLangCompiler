@@ -117,7 +117,10 @@ static const char *local_type_name(ParserContext *context, const char *name) {
     return find_decl_type_in(fn->fundef.body, name);
 }
 
-/* Replaces a handler property's value with a trampoline where one applies. */
+/* `onClick={c->click}` names the method itself: the dispatcher's
+ * (owner, id, arg) call lands on `(Counter *c, i32 id)` directly, since the
+ * calling convention ignores trailing arguments. A plain local function
+ * with fewer parameters is wrapped so `id` arrives in the right slot. */
 static ASTNode *lower_handler_value(ParserContext *context, ASTNode *el, const DomProp *prop, ASTNode *value) {
     const char *tramp = NULL;
     if (value->type == AST_MEMBER_ACCESS || value->type == AST_ARROW_ACCESS) {
@@ -125,9 +128,22 @@ static ASTNode *lower_handler_value(ParserContext *context, ASTNode *el, const D
         const char *member = value->type == AST_MEMBER_ACCESS ? value->member_access.member : value->arrow_access.member;
         if (lhs && lhs->type == AST_IDENTIFIER) {
             const char *type_name = local_type_name(context, lhs->identifier.name);
-            if (type_name && find_method(context, type_name, member)) {
-                tramp = ensure_method_trampoline(context, context->lowering.dom_program,
-                                                 type_name, member, prop->line, prop->col);
+            const MethodDef *m = type_name ? find_method(context, type_name, member) : NULL;
+            if (m) {
+                ASTNode *recv = m->fundef->fundef.params[0];
+                ASTNode *rt = recv && recv->type == AST_PARAM ? recv->param.type : NULL;
+                int by_pointer = rt && rt->type == AST_TYPE && rt->type_node.pointer_level == 1 && rt->type_node.ref_kind == REFKIND_NONE;
+                int by_ref = rt && rt->type == AST_TYPE && rt->type_node.pointer_level == 0 && rt->type_node.ref_kind != REFKIND_NONE;
+                if (!by_pointer && !by_ref) {
+                    dom_error(context, el, prop->line, prop->col,
+                              "handler method '%s' must take its receiver by pointer or reference, `(%s *self)` or `(ref mut %s self)`",
+                              member, type_name, type_name);
+                }
+                if (m->fundef->fundef.param_count > 3) {
+                    dom_error(context, el, prop->line, prop->col,
+                              "handler method '%s' takes too many parameters; at most (i32 id, i32 arg) after the receiver", member);
+                }
+                tramp = m->mangled;
             }
         }
     } else if (value->type == AST_IDENTIFIER) {

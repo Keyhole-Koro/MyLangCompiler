@@ -1,7 +1,6 @@
-import { app, timer } from "../../support/app/annotations.mln";
-@app
+package p;
+import { timer } from "../../support/app/annotations.mln";
 struct Thing { i32 v; };
-i32 (Thing *t) view() { return 0; }
 @timer("fast")
 void (Thing *t) tick() { }
 i32 main() { return 0; }

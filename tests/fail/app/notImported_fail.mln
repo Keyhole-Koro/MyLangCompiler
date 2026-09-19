@@ -1,4 +1,5 @@
-@app
+package p;
 struct Thing { i32 v; };
+@app
 i32 (Thing *t) view() { return 0; }
 i32 main() { return 0; }

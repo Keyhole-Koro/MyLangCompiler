@@ -94,14 +94,14 @@ Two properties are handled by the compiler rather than the callee:
   create call. The lvalue is anything assignable -- a local, a global, or a
   struct field such as `c->label`.
 - A *handler property* -- any parameter named `on` plus a capital letter
-  (`onClick`, `onChange`, `onTick`) -- takes a function with the dispatcher's
-  uniform ABI, `void (i32 owner, i32 id, i32 arg)`. When its value names a
-  method (`onClick={c->click}`, where `c` is a local or parameter of a type
-  with that method) or a local function with fewer than three parameters,
-  the compiler substitutes a generated trampoline, so handlers can be written
-  as `void (Counter *c) click(i32 id)` or `void on_click(i32 id)`. See
-  grammar.md, "Attributes and annotations". Any other value is passed
-  through unchanged.
+  (`onClick`, `onChange`, `onTick`) -- takes a function the dispatcher calls
+  as `handler(owner, id, arg)`. `onClick={c->click}`, where `c` is a local
+  or parameter of a type with that method, passes the method itself: the
+  calling convention ignores trailing arguments, so `(Counter *c, i32 id)`
+  receives `owner` as `c` and `id` as `id`. The method must take a pointer
+  receiver. A plain local function with fewer than three parameters is
+  wrapped so `id` lands in the right slot. Any other value is passed
+  through unchanged. See grammar.md, "Attributes and annotations".
 
 ```text
 i32 (Counter *c) view() {
@@ -112,7 +112,7 @@ i32 (Counter *c) view() {
 
 i32 __dom0 = dom.Window("Counter", 0, 0, 400, 200);   // x, y, h defaulted
 c->win = __dom0;
-i32 __dom1 = dom.Button("Click me", 0, 0, 90, 34, Counter__click__tramp);
+i32 __dom1 = dom.Button("Click me", 0, 0, 90, 34, Counter__click);
 dom.append_child(__dom0, __dom1);
 return __dom0;
 ```

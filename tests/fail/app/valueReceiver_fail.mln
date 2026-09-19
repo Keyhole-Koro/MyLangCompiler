@@ -1,0 +1,7 @@
+// A value receiver is a move; a handler needs an address underneath.
+package p;
+import { app } from "../../support/app/annotations.mln";
+struct Thing { i32 v; };
+@app
+i32 (Thing t) view() { return 0; }
+i32 main() { return 0; }

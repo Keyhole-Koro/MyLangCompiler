@@ -7,7 +7,7 @@ A program consists of a sequence of top-level declarations and definitions.
 
 - `program` -> `toplevel*`
 - `toplevel` -> 
-    - `attribute* ( struct_decl | fundef )` and `annotation_decl` (see "Attributes and annotations")
+    - `attribute* fundef` (see "Attributes and annotations")
     - `package_decl`
     - `import_stmt`
     - `export_decl`
@@ -112,63 +112,72 @@ calls take no defaults.
 
 - `attribute` -> `@ IDENTIFIER ( ( attr_arg ( , attr_arg )* ) )?`
 - `attr_arg` -> `IDENTIFIER` | `literal` | `IDENTIFIER = literal`
-- `toplevel` -> `attribute* export? ( struct_decl | fundef )`
-- `annotation_decl` -> `export? annotation IDENTIFIER ( param_list? )? on ( struct | method | function ) IDENTIFIER? ( of IDENTIFIER )? ( requires method IDENTIFIER ( , method IDENTIFIER )* )? ( ; | { template } )`
+- `toplevel` -> `attribute* export? fundef`
 
-The compiler carries no attribute vocabulary. Every `@name` must resolve
-to an `annotation` declaration -- in the same file, or exported by a module
-named in a symbol-list import -- and is checked against it: what it may be
-put on (`on struct` / `on method` / `on function`), its arguments against
-the declared parameters (keyed, positional, or a bare bool parameter's
-name as a flag: `@app(single)`), `of X` (a method annotation only on
-methods of a type carrying `@X`) and `requires method m` (the annotated
-type must have `m`, taking a pointer receiver). A misspelled or
-unimported annotation is an error, never silently ignored.
+An annotation is metadata on a function or method. It is declared as a
+function prototype -- never called -- whose first three parameters are
+fixed (the annotated function, the name of its receiver type, that type's
+size) and whose remaining parameters are the annotation's own arguments:
 
 ```mylang
-export annotation app(bool single = false, char *name = "")
-    on struct T
-    requires method view
-{
-    i32 __app_@{T}_view(i32 self) { @T *p = (@T*)self; return p->view(); }
-    @each(m in @methods(T, timer)) { ... @m.args[0] ... @tramp(m) ... }
-}
-export annotation timer(i32 ms) on method of app;
+// annotations.mln (a Java @interface, in effect)
+export void app(i32 fn, char *type, i32 size, bool single = false, char *name = "");
+export void timer(i32 fn, char *type, i32 size, i32 ms);
 
+// terminal.dom.mln
 import { app, timer } from "annotations.mln";
-@app struct Counter { ... };
-@timer(100) void (Counter *c) poll() { ... }
+
+@app(name = "Terminal")
+i32 (Terminal *t) view() { ... }
+
+@timer(100)
+void (Terminal *t) poll() { ... }
 ```
 
-A declaration ending in `;` is a marker: it is checked and can be read by
-other templates through `@methods(T, name)`. A declaration with a body is
-a **template**: MyLang top-level source, copied through verbatim except for
-`@` directives, which read the annotated declaration. The expansion is
-parsed by the ordinary top-level parser, so generated code is
-method-resolved, checked and compiled like anything the author wrote.
+For every `@a(args)` the compiler records one row in the module's
+generated table, `export i32* __annotations()`, laid out as
+`[count, row0..., row1...]` with eight words per row:
 
-| directive | expands to |
+| word | content |
 | --- | --- |
-| `@T`, `@{T}` | the annotated type's name (`T` as named by `on struct T`); braces splice inside an identifier, `__app_@{T}_init` |
-| `@name(T)` | the same as a string literal |
-| `@arg(p)` | annotation argument `p`, or its declared default, as a literal |
-| `@each(f in @fields(T) [where init]) { ... }` | the body once per field; `@f`, `@f.type`, `@f.init` |
-| `@each(m in @methods(T, annot)) { ... }` | once per method of `T` carrying `@annot`; `@m` (short name), `@m.mangled`, `@m.args[i]` (that annotation's i-th argument or its default) |
-| `@count(@fields(T))`, `@count(@methods(T, annot))` | the number of items |
-| `@i` | 0-based index inside the innermost `@each` |
-| `@tramp(m)` | the name of `void (i32 owner, i32 id, i32 arg)`, generated on first use, that casts `owner` to `T*` and calls `m` with `()`, `(id)` or `(id, arg)` by its arity |
-| `@@` | a literal `@` |
+| 0 | annotation name (`char*`) |
+| 1 | the annotated function |
+| 2 | receiver type name (`char*`; `""` for a plain function) |
+| 3 | `sizeof` that type (0 for a plain function) |
+| 4 | number of annotation arguments |
+| 5..7 | the arguments: a number, a bool as 0/1, a string as `char*` |
 
-Templates read declarations; they do not compute (no arithmetic, no
-conditionals -- emit runtime code for that, `i32 w = 10; ... w = w + 2;`).
-`//` comments inside a template are copied as they are. `@tramp` is the one
-piece of meaning the compiler keeps: the handler calling convention is
-its business, so a method reached through it must take a pointer receiver
-(`T *self`). Names ending in `__tramp` are reserved for those trampolines.
+Whoever reads the table decides what a row means and when (for MyOS, the
+application framework at boot). The compiler checks that `a` resolves (a
+function in this file, or one exported by a module named in a symbol-list
+import), that its first parameters are `(i32, char*, i32)` and that it
+takes at most three more, and matches the written arguments to those:
+keyed by name, positional, or a bare bool parameter's name as a flag
+(`@app(single)`); a parameter left out takes its `= literal` default; a
+literal of the wrong kind, an unknown name or a surplus argument is an
+error. A module with annotations must declare a `package`, which names
+its table (`terminal___annotations`). Annotations cannot be put on a
+struct or a generic declaration.
 
-What `@app` and its companions mean -- the descriptor table, timers,
-shortcuts, window close -- is declared by the application framework in
-`system/MyAppFramework/src/annotations.mln`, not here.
+A module that declares
+
+```mylang
+extern i32* __annotations_table(i32 m);
+```
+
+and reaches annotated modules through its imports receives that
+function's definition: the table of the m-th such module, 0 past the
+end. The program's root (MyOS's `boot/main.mln`, which imports the apps)
+declares it once, so every module's rows are collected without a
+manifest; a reader that reaches no annotated module -- the framework's
+`meta.mln` -- keeps its prototype and links against that definition.
+
+An annotated method must take its receiver by pointer or reference
+(`T *self`, `ref mut T self`): the recorded function is called later with
+an instance's address as its first argument, and because the calling
+convention ignores trailing arguments, the DOM's uniform handler shape
+`(owner, id, arg)` reaches `(T *self, i32 id)` or `(T *self)` directly --
+no wrapper is generated. A value receiver is a move and is rejected.
 
 ### Variables
 - `var_decl` -> `mut? type IDENTIFIER ( [ NUMBER? ] )* ( = ( expr | init_list ) )? ;`

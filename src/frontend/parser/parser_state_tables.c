@@ -221,16 +221,3 @@ int find_enum_constant(ParserContext *context, const char *name, long *out_value
     return 0;
 }
 
-void add_annotation(ParserContext *context, ASTNode *decl) {
-    AnnotationTable *t = &context->symbols.annotations;
-    t->decls = realloc(t->decls, sizeof(ASTNode *) * (t->count + 1));
-    t->decls[t->count++] = decl;
-}
-
-ASTNode *find_local_annotation(ParserContext *context, const char *name) {
-    AnnotationTable *t = &context->symbols.annotations;
-    for (int i = 0; i < t->count; i++) {
-        if (strcmp(t->decls[i]->annotation.name, name) == 0) return t->decls[i];
-    }
-    return NULL;
-}
