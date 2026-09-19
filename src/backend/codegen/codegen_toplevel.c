@@ -273,7 +273,13 @@ void collect_codegen_globals(CompilerContext *cc, ASTNode *root) {
             cg_globals_info[cg_globals_count].name = n->var_decl.name;
             set_localinfo_from_type(cc, &cg_globals_info[cg_globals_count], n->var_decl.var_type);
             cg_globals_count++;
-            emit_global_decl(cc, n);
+            if (n->var_decl.is_extern) {
+                // Storage lives in another object (or is synthesized by the
+                // linker, like __annotations_start): import the symbol.
+                note_import_func(cc, n->var_decl.name);
+            } else {
+                emit_global_decl(cc, n);
+            }
         }
     }
 }

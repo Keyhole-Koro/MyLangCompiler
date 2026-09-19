@@ -47,6 +47,18 @@ static void emit_scalar_bytes(StringBuilder *sb, long val, int width) {
     }
 }
 
+/* One `.word` for a 4-byte initializer: a string literal's label, a defined
+ * function's name (both relocated by the linker) or a constant. */
+static void emit_word_operand(CompilerContext *cc, StringBuilder *sb, ASTNode *expr) {
+    if (expr && expr->type == AST_STRING_LITERAL) {
+        sb_append(sb, "  .word %s\n", intern_string_literal(cc, expr->string_literal.value));
+    } else if (expr && expr->type == AST_IDENTIFIER && func_is_defined(cc, expr->identifier.name)) {
+        sb_append(sb, "  .word %s\n", expr->identifier.name);
+    } else {
+        sb_append(sb, "  .word %ld\n", eval_const_expr(expr));
+    }
+}
+
 void emit_global_init(CompilerContext *cc, StringBuilder *sb, ASTNode *init_expr,
                       int expected_bytes, int elem_bytes) {
     if (!init_expr) {
@@ -84,18 +96,34 @@ void emit_global_init(CompilerContext *cc, StringBuilder *sb, ASTNode *init_expr
     }
 
     // Aggregate initializer: emit each element at the array's element width,
-    // then zero-pad any remaining bytes (e.g. `i32 a[8] = {1, 2};`).
+    // then zero-pad any remaining bytes (e.g. `i32 a[8] = {1, 2};`). Word
+    // elements go out as `.word`, so a string literal or function name is a
+    // pointer the linker fills in (`char *names[] = {"a", "b"}`).
     if (init_expr->type == AST_INIT_LIST) {
         int width = elem_bytes > 0 ? elem_bytes : SLOT_SIZE;
         int written = 0;
         for (int i = 0; i < init_expr->init_list.count; i++) {
-            long ev = eval_const_expr(init_expr->init_list.elements[i]);
-            emit_scalar_bytes(sb, ev, width);
+            ASTNode *elem = init_expr->init_list.elements[i];
+            if (width == SLOT_SIZE) {
+                emit_word_operand(cc, sb, elem);
+            } else {
+                emit_scalar_bytes(sb, eval_const_expr(elem), width);
+            }
             written += width;
         }
         if (written < expected_bytes) {
             emit_zero_bytes(sb, expected_bytes - written);
         }
+        return;
+    }
+
+    // A pointer-sized scalar initialised with a string literal or a function
+    // name holds that symbol's address: `char *s = "hi";`, `i32 f = handler;`.
+    // Before .word existed this came out as a null pointer.
+    if (expected_bytes == SLOT_SIZE &&
+        (init_expr->type == AST_STRING_LITERAL ||
+         (init_expr->type == AST_IDENTIFIER && func_is_defined(cc, init_expr->identifier.name)))) {
+        emit_word_operand(cc, sb, init_expr);
         return;
     }
 
@@ -146,12 +174,20 @@ void emit_global_decl(CompilerContext *cc, ASTNode *var_decl) {
         elem_bytes = array_element_size_bytes(var_decl->var_decl.var_type);
     }
 
-    sb_append(&cg_data_sb, "%s:\n", var_decl->var_decl.name ? var_decl->var_decl.name : "");
+    // Build the global's block on the side: an initializer that interns a
+    // string literal appends that string's own label and bytes to the data
+    // section as it goes, and those must land before this block, not
+    // inside it (the global's address would be the string's).
+    StringBuilder block;
+    sb_init(&block);
+    sb_append(&block, "%s:\n", var_decl->var_decl.name ? var_decl->var_decl.name : "");
     if (var_decl->var_decl.init) {
-        emit_global_init(cc, &cg_data_sb, var_decl->var_decl.init, bytes, elem_bytes);
+        emit_global_init(cc, &block, var_decl->var_decl.init, bytes, elem_bytes);
     } else {
-        emit_zero_bytes(&cg_data_sb, bytes);
+        emit_zero_bytes(&block, bytes);
     }
+    sb_append(&cg_data_sb, "%s", block.buf);
+    sb_free(&block);
 }
 
 int pointer_step_bytes(CompilerContext *cc, const TypeInfo *info) {

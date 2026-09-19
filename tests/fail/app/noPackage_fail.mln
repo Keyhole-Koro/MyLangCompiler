@@ -1,5 +1,0 @@
-// A module with annotations needs a package: its table is named by it.
-import { mark } from "../../support/app/annotations.mln";
-@mark
-void f() { }
-i32 main() { return 0; }

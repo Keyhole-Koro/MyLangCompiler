@@ -134,9 +134,10 @@ i32 (Terminal *t) view() { ... }
 void (Terminal *t) poll() { ... }
 ```
 
-For every `@a(args)` the compiler records one row in the module's
-generated table, `export i32* __annotations()`, laid out as
-`[count, row0..., row1...]` with eight words per row:
+For every `@a(args)` the compiler emits one row of static data in the
+module's chunk of the `annotations` collected section
+(`codegen_annotations.c`; see `docs/design/toolchain-collected-sections.md`),
+eight words per row:
 
 | word | content |
 | --- | --- |
@@ -147,30 +148,22 @@ generated table, `export i32* __annotations()`, laid out as
 | 4 | number of annotation arguments |
 | 5..7 | the arguments: a number, a bool as 0/1, a string as `char*` |
 
-Whoever reads the table decides what a row means and when (for MyOS, the
-application framework at boot). The compiler checks that `a` resolves (a
-function in this file, or one exported by a module named in a symbol-list
-import), that its first parameters are `(i32, char*, i32)` and that it
-takes at most three more, and matches the written arguments to those:
-keyed by name, positional, or a bare bool parameter's name as a flag
-(`@app(single)`); a parameter left out takes its `= literal` default; a
-literal of the wrong kind, an unknown name or a surplus argument is an
-error. A module with annotations must declare a `package`, which names
-its table (`terminal___annotations`). Annotations cannot be put on a
+The linker gathers every object's chunk into `(address, size)` pairs
+between `__annotations_start` and `__annotations_end`; a reader declares
+`extern i32 __annotations_start[];` and walks them (for MyOS, the
+application framework's `meta.mln` at boot). No module lists the others
+and nothing is generated into the program's root: an object that carries a
+chunk is kept by the linker on that account alone. Whoever reads a row
+decides what it means and when.
+
+The compiler checks that `a` resolves (a function in this file, or one
+exported by a module named in a symbol-list import), that its first
+parameters are `(i32, char*, i32)` and that it takes at most three more,
+and matches the written arguments to those: keyed by name, positional, or
+a bare bool parameter's name as a flag (`@app(single)`); a parameter left
+out takes its `= literal` default; a literal of the wrong kind, an unknown
+name or a surplus argument is an error. Annotations cannot be put on a
 struct or a generic declaration.
-
-A module that declares
-
-```mylang
-extern i32* __annotations_table(i32 m);
-```
-
-and reaches annotated modules through its imports receives that
-function's definition: the table of the m-th such module, 0 past the
-end. The program's root (MyOS's `boot/main.mln`, which imports the apps)
-declares it once, so every module's rows are collected without a
-manifest; a reader that reaches no annotated module -- the framework's
-`meta.mln` -- keeps its prototype and links against that definition.
 
 An annotated method must take its receiver by pointer or reference
 (`T *self`, `ref mut T self`): the recorded function is called later with

@@ -188,6 +188,9 @@ int find_name(char **arr, int count, const char *name);
 const TypedefInfo *find_typedef(CompilerContext *cc, const char *alias);
 void resolve_type(CompilerContext *cc, TypeInfo *ti);
 const StructInfo *find_struct(CompilerContext *cc, const char *type_name);
+
+/* Annotation rows as a collected data section (codegen_annotations.c). */
+void emit_annotation_rows(CompilerContext *cc, StringBuilder *sb);
 const MemberInfo *find_member_info(CompilerContext *cc, const char *type_name, const char *member);
 int base_type_is_char(const char *name);
 int ast_type_is_char_scalar(ASTNode *type_node);

@@ -194,11 +194,13 @@ static ASTNode *parse_toplevel_decl(ParserContext *context, Token **cur) {
     }
 
     int want_export = 0;
+    int want_extern = 0;
     if ((*cur)->kind == EXPORT) {
         want_export = 1;
         *cur = (*cur)->next;
     }
     if ((*cur)->kind == EXTERN) {
+        want_extern = 1;
         *cur = (*cur)->next;
     }
 
@@ -300,6 +302,7 @@ static ASTNode *parse_toplevel_decl(ParserContext *context, Token **cur) {
             return fn;
         }
         ASTNode *vd = parse_variable_declaration(context, cur, 1);
+        if (vd) vd->var_decl.is_extern = want_extern;
         if (vd && want_export) {
             vd->var_decl.is_exported = 1;
             vd->var_decl.package = strdup(context->module.current_package);

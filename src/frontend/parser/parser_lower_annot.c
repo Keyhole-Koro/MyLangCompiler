@@ -25,27 +25,25 @@
  * declaration (resolvable: local or a symbol-list import; first parameters
  * (i32, char*, i32); the written arguments matched to the rest by name,
  * position or a bare bool parameter's name as a flag, defaults filling the
- * gaps) and records one row per use in the module's generated table:
+ * gaps) and records one row per use. Codegen emits the rows as static data
+ * in the `annotations` collected section (codegen_annotations.c):
  *
- *     export i32* __annotations() -> [count, row0..., row1...]
- *     row: [name char*, fn, type char*, size, argc, arg0, arg1, arg2]
+ *     .section annotations
+ *     __annotations_rows:
+ *       .word s_0, Terminal__poll, s_1, 24, 1, 100, 0, 0
  *
- * Whoever reads the table decides what "timer" means and when -- for MyOS,
- * the application framework at boot (system/MyAppFramework/src/meta.mln).
- * A module that declares
- *
- *     extern i32* __annotations_table(i32 m);
- *
- * and reaches annotated modules through its imports receives its definition
- * here: it hands back the table of the m-th such module (0 past the end),
- * so the program's root collects every module's rows without a manifest.
- * A module that reaches none (a reader like the framework's meta.mln) keeps
- * the prototype and links against the root's definition.
+ * eight words per row: name, fn, type, size, argc, arg0..arg2. The linker
+ * gathers every object's chunk into an index between `__annotations_start`
+ * and `__annotations_end` (MyLinker/inc/ObjectFormat.h, CollectEntry), so
+ * whoever reads the rows -- for MyOS, the application framework at boot --
+ * finds them all without any module listing them. What a row means is the
+ * reader's business.
  *
  * Because the calling convention ignores extra arguments, a method
  * `(T *self, i32 id)` can be called through the DOM's uniform handler shape
- * `(owner, id, arg)` directly -- a table entry is the real method, not a
- * wrapper. A method reached this way must take a pointer receiver.
+ * `(owner, id, arg)` directly -- a row holds the real method, not a
+ * wrapper. A method reached this way must take its receiver by pointer or
+ * reference.
  */
 
 static void annot_error(ParserContext *context, int line, int col, const char *fmt, ...) {
@@ -84,20 +82,6 @@ static void src_appendf(Src *s, const char *fmt, ...) {
     s->len += (size_t)need;
 }
 
-// Appends `text` as a MyLang string literal, re-escaping what the lexer unescaped.
-static void src_append_quoted(Src *s, const char *text) {
-    src_appendf(s, "\"");
-    for (const char *p = text; *p; p++) {
-        switch (*p) {
-        case '"': src_appendf(s, "\\\""); break;
-        case '\\': src_appendf(s, "\\\\"); break;
-        case '\n': src_appendf(s, "\\n"); break;
-        case '\t': src_appendf(s, "\\t"); break;
-        default: src_appendf(s, "%c", *p); break;
-        }
-    }
-    src_appendf(s, "\"");
-}
 
 /* Parses generated top-level source into the program. The tokens are freed
  * afterwards: every AST constructor copies its strings. */
@@ -234,33 +218,49 @@ static int param_is_plain(const ASTNode *param, const char *base) {
            strcmp(param_base_type(param), base) == 0;
 }
 
-/* Writes a literal AST (number, negated number, string, char) as source. */
-static void append_literal(ParserContext *context, Src *out, const ASTNode *value, int line, int col) {
-    if (!value) { src_appendf(out, "0"); return; }
-    switch (value->type) {
-    case AST_NUMBER: src_appendf(out, "%s", value->number.value); return;
-    case AST_STRING_LITERAL: src_append_quoted(out, value->string_literal.value); return;
-    case AST_CHAR_LITERAL: src_appendf(out, "'%s'", value->char_literal.value); return;
-    case AST_UNARY:
-        if (value->unary.op == SUB && value->unary.operand && value->unary.operand->type == AST_NUMBER) {
-            src_appendf(out, "-%s", value->unary.operand->number.value);
-            return;
-        }
-        break;
-    default: break;
-    }
-    annot_error(context, line, col, "only a literal can be used as an annotation argument");
-}
 
 #define ANNOT_FIXED_PARAMS 3
 #define ANNOT_MAX_ARGS 3
-#define ANNOT_ROW_WORDS 8
-#define ANNOT_TABLE_FN "__annotations"
-#define ANNOT_AGGREGATE_FN "__annotations_table"
 
-/* Appends the row for one attribute: `t[i] = ...;` for each of its words. */
-static void emit_annotation_row(ParserContext *context, ASTNode *program, Src *out, int base,
-                                ASTNode *target, const Attribute *attr) {
+static AnnotationRow *g_rows = NULL;
+static int g_row_count = 0;
+
+int annotation_row_count(void) { return g_row_count; }
+const AnnotationRow *annotation_row(int index) {
+    return index >= 0 && index < g_row_count ? &g_rows[index] : NULL;
+}
+
+void annotation_rows_reset(void) {
+    for (int i = 0; i < g_row_count; i++) {
+        free(g_rows[i].name);
+        free(g_rows[i].fn);
+        free(g_rows[i].type);
+        for (int k = 0; k < ANNOTATION_MAX_ARGS; k++) free(g_rows[i].args[k].text);
+    }
+    free(g_rows);
+    g_rows = NULL;
+    g_row_count = 0;
+}
+
+static void record_arg(AnnotationArg *out, const ASTNode *value) {
+    out->is_string = 0;
+    out->text = NULL;
+    out->value = 0;
+    if (!value) return;
+    switch (value->type) {
+    case AST_NUMBER: out->value = strtol(value->number.value, NULL, 10); break;
+    case AST_STRING_LITERAL: out->is_string = 1; out->text = strdup(value->string_literal.value); break;
+    case AST_CHAR_LITERAL: out->value = (unsigned char)value->char_literal.value[0]; break;
+    case AST_UNARY:
+        if (value->unary.op == SUB && value->unary.operand && value->unary.operand->type == AST_NUMBER)
+            out->value = -strtol(value->unary.operand->number.value, NULL, 10);
+        break;
+    default: break;
+    }
+}
+
+/* Checks one attribute against its declaration and records its row. */
+static void record_annotation(ParserContext *context, ASTNode *program, ASTNode *target, const Attribute *attr) {
     const char *link_name = NULL;
     ASTNode *decl = resolve_annotation(context, program, attr->name, &link_name);
     if (!decl) {
@@ -339,27 +339,16 @@ static void emit_annotation_row(ParserContext *context, ASTNode *program, Src *o
         }
     }
 
-    src_appendf(out, "    t[%d] = (i32)", base);
-    src_append_quoted(out, attr->name);
-    src_appendf(out, ";\n    t[%d] = %s;\n", base + 1, target->fundef.name);
-    if (is_method) {
-        src_appendf(out, "    t[%d] = (i32)", base + 2);
-        src_append_quoted(out, target->fundef.recv_type_name);
-        src_appendf(out, ";\n    t[%d] = sizeof(__annot_probe_%s);\n", base + 3, target->fundef.recv_type_name);
-    } else {
-        src_appendf(out, "    t[%d] = (i32)\"\";\n    t[%d] = 0;\n", base + 2, base + 3);
-    }
-    src_appendf(out, "    t[%d] = %d;\n", base + 4, n - ANNOT_FIXED_PARAMS);
-    for (int k = 0; k < ANNOT_MAX_ARGS; k++) {
+    g_rows = realloc(g_rows, sizeof(AnnotationRow) * (g_row_count + 1));
+    AnnotationRow *row = &g_rows[g_row_count++];
+    memset(row, 0, sizeof(*row));
+    row->name = strdup(attr->name);
+    row->fn = strdup(target->fundef.name);
+    row->type = is_method ? strdup(target->fundef.recv_type_name) : NULL;
+    row->argc = n - ANNOT_FIXED_PARAMS;
+    for (int k = 0; k < ANNOTATION_MAX_ARGS; k++) {
         int p = ANNOT_FIXED_PARAMS + k;
-        src_appendf(out, "    t[%d] = ", base + 5 + k);
-        if (p < n) {
-            if (param_is_string(decl->fundef.params[p])) src_appendf(out, "(i32)");
-            append_literal(context, out, values[p], attr->line, attr->col);
-        } else {
-            src_appendf(out, "0");
-        }
-        src_appendf(out, ";\n");
+        record_arg(&row->args[k], p < n ? values[p] : NULL);
     }
     free(values);
 }
@@ -370,106 +359,18 @@ static void clear_attrs(ASTNode *node) {
     node->attr_count = 0;
 }
 
-/* Does a parsed (not lowered) module carry any attributed declaration? */
-static int module_has_annotations(const Module *mod) {
-    if (!mod || !mod->program || mod->program->type != AST_BLOCK) return 0;
-    for (int i = 0; i < mod->program->block.count; i++) {
-        ASTNode *node = mod->program->block.stmts[i];
-        if (node && node->attr_count > 0) return 1;
-    }
-    return 0;
-}
-
-/* The aggregate: defined in a module that declared the extern prototype,
- * over every annotated module the loader reached from it. */
-static void emit_aggregate(ParserContext *context, ASTNode *program, int proto_index) {
-    FrontendSession *session = context->session;
-    ModuleLoader *loader = session ? session->loader : NULL;
-    ModuleGraph *graph = loader ? loader->graph : NULL;
-
-    Src src = {0};
-    int count = 0;
-    Src body = {0};
-    for (int i = 0; graph && i < graph->module_count; i++) {
-        Module *mod = graph->modules[i];
-        if (!module_has_annotations(mod)) continue;
-        if (!mod->package_name) {
-            annot_error(context, 0, 0, "%s: a module with annotations must declare a package (its table is named by it)",
-                        mod->canonical_path ? mod->canonical_path : "<module>");
-        }
-        src_appendf(&src, "extern i32* %s_%s();\n", mod->package_name, ANNOT_TABLE_FN);
-        src_appendf(&body, "    if (m == %d) { return %s_%s(); }\n", count, mod->package_name, ANNOT_TABLE_FN);
-        count++;
-    }
-    // A module that reaches no annotated module -- a reader such as the
-    // framework's meta.mln -- keeps its prototype: the definition belongs
-    // to the program's root, which imports the apps.
-    if (count == 0) { free(src.text); free(body.text); return; }
-
-    // Not `export`: that would mangle the name with the package, and the
-    // readers reach it by its bare name through their own extern prototype.
-    src_appendf(&src, "i32* %s(i32 m) {\n%s    return (i32*)0;\n}\n", ANNOT_AGGREGATE_FN, body.text ? body.text : "");
-
-    // The prototype gives way to the definition. The node stays registered
-    // in the function table (there is no unregister), so it is only
-    // unlinked from the program, not freed.
-    for (int i = proto_index; i + 1 < program->block.count; i++) program->block.stmts[i] = program->block.stmts[i + 1];
-    program->block.count--;
-
-    parse_generated_toplevels(context, program, src.text);
-    free(src.text);
-    free(body.text);
-}
-
 void lower_annotations(ParserContext *context, ASTNode *program) {
     if (!program || program->type != AST_BLOCK) return;
-
-    // A prototype of the aggregate marks the module that collects every
-    // table; the real definition goes in its place (see emit_aggregate).
-    for (int i = 0; i < program->block.count; i++) {
-        ASTNode *node = program->block.stmts[i];
-        if (node && node->type == AST_FUNDEF && !node->fundef.body &&
-            strcmp(node->fundef.name, ANNOT_AGGREGATE_FN) == 0) {
-            emit_aggregate(context, program, i);
-            break;
-        }
-    }
-
-    Src rows = {0};
-    Src probes = {0};
+    annotation_rows_reset();
     int count = program->block.count;
-    int row_count = 0;
     for (int i = 0; i < count; i++) {
         ASTNode *node = program->block.stmts[i];
         if (!node || node->attr_count == 0) continue;
-        if (node->type == AST_FUNDEF && node->fundef.recv_type_name) {
-            // One local per receiver type gives sizeof(T) an operand.
-            char marker[300];
-            snprintf(marker, sizeof(marker), "__annot_probe_%s;", node->fundef.recv_type_name);
-            if (!probes.text || !strstr(probes.text, marker)) {
-                src_appendf(&probes, "    %s __annot_probe_%s;\n", node->fundef.recv_type_name, node->fundef.recv_type_name);
-            }
-        }
         for (int k = 0; k < node->attr_count; k++) {
-            emit_annotation_row(context, program, &rows, 1 + row_count * ANNOT_ROW_WORDS, node, &node->attrs[k]);
-            row_count++;
+            record_annotation(context, program, node, &node->attrs[k]);
         }
         clear_attrs(node);
     }
-    if (row_count > 0) {
-        const char *pkg = context->module.current_package;
-        if (!pkg || !pkg[0] || strcmp(pkg, g_default_package) == 0) {
-            annot_error(context, 0, 0, "a module with annotations must declare a package (its table is named by it)");
-        }
-        Src src = {0};
-        src_appendf(&src, "i32 __annotations_data_%s[%d];\n", pkg, 1 + row_count * ANNOT_ROW_WORDS);
-        src_appendf(&src, "export i32* %s() {\n    i32 *t = &__annotations_data_%s[0];\n%s    t[0] = %d;\n%s    return t;\n}\n",
-                    ANNOT_TABLE_FN, pkg, probes.text ? probes.text : "", row_count, rows.text ? rows.text : "");
-        parse_generated_toplevels(context, program, src.text);
-        free(src.text);
-    }
-    free(rows.text);
-    free(probes.text);
 }
 
 // --- default arguments ------------------------------------------------------------

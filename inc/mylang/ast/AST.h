@@ -136,6 +136,7 @@ struct ASTNode {
             ASTNode *init;
             int is_mut;
             int is_exported;
+            int is_extern;   // `extern T name;`: defined in another object, so no storage here
             char *package;
         } var_decl;
         

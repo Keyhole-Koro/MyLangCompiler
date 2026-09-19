@@ -87,3 +87,4 @@ defaultArguments|62|succeed/function/defaultArgs.mln,support/app/lib.mln
 domRefAndDefaults|113|succeed/dom/refAndDefaults.dom.mln,support/app/dom.mln
 breakInCaseArm|562|succeed/enum/breakInCaseArm.mln
 refMutWriteBack|1212|succeed/semantic/refMutWriteBack.mln
+globalPointerInit|104710106|succeed/data/globalPointerInit.mln

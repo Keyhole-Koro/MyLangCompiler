@@ -22,6 +22,7 @@ char *codegen_with_session(ASTNode *root, FrontendSession *session)
     build_codegen_toplevel_info(cc, root);
     collect_codegen_globals(cc, root);
     emit_codegen_functions(cc, root, &sb);
+    emit_annotation_rows(cc, &sb); // interns its strings before the data section is written
 
     if (cg_data_sb_inited) {
         sb_append(&sb, "\n; data\n");

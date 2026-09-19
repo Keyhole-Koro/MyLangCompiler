@@ -1,0 +1,14 @@
+// Global pointers initialised with string literals and function names are
+// emitted as `.word symbol` and filled in by the linker (RELOC_WORD32).
+// Before, a global `char *s = "hi";` came out as a null pointer.
+i32 seven() { return 7; }
+char *g_name = "hello";
+i32 g_fn = seven;
+char *g_names[3] = { "ab", "cd", "ef" };
+i32 g_nums[3] = { 5, 6, 7 };
+i32 main() {
+    i32 f = g_fn;
+    char *n = g_names[2];
+    // 'h'=104, f()=7, 'e'=101, 6
+    return (i32)g_name[0] * 1000000 + f() * 100000 + (i32)n[0] * 100 + g_nums[1];
+}
