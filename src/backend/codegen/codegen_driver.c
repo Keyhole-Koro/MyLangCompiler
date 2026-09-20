@@ -25,7 +25,10 @@ char *codegen_with_session(ASTNode *root, FrontendSession *session)
     emit_annotation_rows(cc, &sb); // interns its strings before the data section is written
 
     if (cg_data_sb_inited) {
-        sb_append(&sb, "\n; data\n");
+        // Globals, string literals and constant pools go to the DATA
+        // section: writable storage the loader maps separately from code,
+        // so a process's text can stay read-only (W^X).
+        sb_append(&sb, "\n.data\n; data\n");
         sb_append(&sb, "%s", cg_data_sb.buf);
     }
 

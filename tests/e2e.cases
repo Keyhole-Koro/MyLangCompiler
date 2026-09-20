@@ -23,6 +23,7 @@ stringEscape|10|succeed/expr/stringEscape.mln
 intWidth32|20|succeed/expr/intWidth32.mln
 uintWidthSmall|69|succeed/expr/uintWidthSmall.mln
 sizeofType|13244|succeed/expr/sizeofType.mln
+bitnotWide|513|succeed/expr/bitnotWide.mln
 simpleStruct|10|succeed/struct/simpleStruct.mln
 namedStructLiteral|44|succeed/struct/namedStructLiteral.mln
 payloadEnumFieldLiteral|57|succeed/struct/payloadEnumFieldLiteral.mln

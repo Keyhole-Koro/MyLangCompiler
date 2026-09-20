@@ -1,0 +1,14 @@
+// ~ must flip all 32 bits: movi's immediate is 21 bits (zero-extended), so
+// `xor x, -1` only flipped the low ones and ~4095 masked addresses above
+// 2 MB (the kernel's page allocator hit this once its heap grew past it).
+i32 PAGE_SIZE = 4096;
+i32 align_down(i32 v) { return v & ~(PAGE_SIZE - 1); }
+i32 main() {
+    i32 a = align_down(0x00201234);           // 0x00201000
+    i32 b = ~0;                               // -1
+    i32 c = ~0x0F0F0F0F;                      // 0xF0F0F0F0
+    if (a != 0x00201000) { return 1; }
+    if (b != -1) { return 2; }
+    if (c != 0xF0F0F0F0) { return 3; }
+    return (a >> 12) + 0;                     // 0x201 = 513
+}

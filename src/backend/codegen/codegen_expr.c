@@ -210,11 +210,18 @@ void _gen_expr(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char
             sb_append(sb, "  mov %s, %s\n", target_reg, zero_reg);
             break;
         }
-        case BITNOT:
+        case BITNOT: {
+            /* ~x = (0 - x) - 1. Not `xor x, -1`: movi's immediate is 21
+             * bits and zero-extended, so -1 would only flip the low bits
+             * (`~(PAGE_SIZE - 1)` came out as 0x1FF000, silently masking
+             * every address above 2 MB). */
             _gen_expr(cc, node->unary.operand, sb, target_reg, params, param_count, locals, local_count, 0);
-            sb_append(sb, "  movi r3, -1\n");
-            sb_append(sb, "  xor %s, r3\n", target_reg);
-            break;
+            const char *tmp = (strcmp(target_reg, "r3") == 0) ? "r2" : "r3";
+            sb_append(sb, "  mov %s, 0\n", tmp);
+            sb_append(sb, "  sub %s, %s\n", tmp, target_reg);
+            sb_append(sb, "  mov %s, %s\n", target_reg, tmp);
+            sb_append(sb, "  addis %s, -1\n", target_reg);
+            break; }
         case NOT: {
             _gen_expr(cc, node->unary.operand, sb, target_reg, params, param_count, locals, local_count, 0);
             int lbl_true = next_label(cc);
