@@ -1,0 +1,18 @@
+struct Buf { i32 v[5]; char name[16]; };
+
+i32 g[7];
+
+i32 sum(i32 *p, i32 n) {
+    i32 t = 0;
+    for (i32 i = 0; i < n; i = i + 1) { t = t + p[i]; }
+    return t;
+}
+
+i32 main() {
+    i32 a[3];
+    Buf b;
+    for (i32 i = 0; i < a.length; i = i + 1) { a[i] = i + 1; }
+    // a.length = 3, g.length = 7, b.v.length = 5, b.name.length = 16, sum(a) = 6
+    i32 code = a.length * 1000 + g.length * 100 + b.v.length * 10 + b.name.length;
+    return code + sum(a, a.length) * 10000;
+}

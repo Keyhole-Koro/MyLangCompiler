@@ -4,6 +4,7 @@ genericNestedStruct|57|succeed/generic/nestedStruct.mln
 genericRecursive|15|succeed/generic/recursive.mln
 genericImportedTemplates|13|succeed/generic/imported_templates_main.mln,succeed/generic/imported_templates_lib.mln
 genericKernelContainers|63|succeed/generic/kernel_containers.mln
+genericFieldReceiver|169|succeed/generic/fieldReceiver.mln
 genericModuleIsolation|33|succeed/generic/modules_main.mln,succeed/generic/modules_one.mln,succeed/generic/modules_two.mln
 crossModuleResultReturn|149|succeed/enum/cross_module_result_main.mln,succeed/enum/cross_module_result_lib.mln
 crossModulePayloadEnum|1156|succeed/enum/cross_module_payload_enum_main.mln,succeed/enum/cross_module_payload_enum_lib.mln
@@ -30,6 +31,7 @@ payloadEnumFieldLiteral|57|succeed/struct/payloadEnumFieldLiteral.mln
 arrayInit|106|succeed/array/arrayInit.mln
 multiArray|6|succeed/array/multiArray.mln
 arraySizeof|24|succeed/array/arraySizeof.mln
+arrayLength|63766|succeed/array/arrayLength.mln
 testDoWhile|10|succeed/control/testDoWhile.mln
 testBitwise|29|succeed/expr/testBitwise.mln
 testOps|10|succeed/expr/testOps.mln

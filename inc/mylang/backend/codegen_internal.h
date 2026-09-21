@@ -199,6 +199,7 @@ int scalar_var_width_bytes(CompilerContext *cc, const char *name);
 int typeinfo_is_byte(const TypeInfo *info);
 int typeinfo_scalar_width_bytes(const TypeInfo *info);
 int infer_expr_type(CompilerContext *cc, ASTNode *expr, TypeInfo *out);
+int array_length_of_expr(CompilerContext *cc, ASTNode *lhs, int *out_len);
 int typeinfo_elem_size_bytes(CompilerContext *cc, const TypeInfo *info);
 int typeinfo_total_size_bytes(CompilerContext *cc, const TypeInfo *info);
 int pointer_step_bytes(CompilerContext *cc, const TypeInfo *info);

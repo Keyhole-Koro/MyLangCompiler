@@ -58,7 +58,9 @@ why `ref` / `ref mut` are the usual forms.
 Methods are called with `.` on any receiver expression, and `->` also works on a
 pointer. The address-of / dereference needed to match the declared receiver is
 inserted during resolution, so `u.display()` reads the same whether `display`
-takes `User`, `ref User`, or `User*`.
+takes `User`, `ref User`, or `User*`. The receiver may be a local, a parameter,
+a global, a struct field (`it.rows.len()`, `t->hits.add(1)`), a call's result,
+a cast, or `*p` / `&v` of one of those.
 
 A generic receiver binds the method's type parameters directly from its own
 type arguments. The formal names need not match those used by the struct:
@@ -269,3 +271,8 @@ Expressions are listed in order of decreasing precedence.
   primitive, a struct, or a generic parameter, which is a concrete type by
   the time it is instantiated -- it is the size of the type itself
   (`size / sizeof(T)` in `section.as_slice<T>`), with no value at hand.
+- **`array.length`**: on a fixed-size array (a local, global or struct field
+  declared `T a[N]`) the member `length` is the declared element count `N`,
+  folded to a constant at compile time. It neither reads nor moves the array,
+  so `f(a, a.length)` is allowed even though passing `a` moves it. Pointers
+  and slices have no `length`; a slice's count is `s.len()`.

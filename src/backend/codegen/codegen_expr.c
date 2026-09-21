@@ -15,6 +15,16 @@ static int gen_rest_len_access(CompilerContext *cc, ASTNode *node, StringBuilder
     return 1;
 }
 
+/* `arr.length`: the declared count of a fixed-size array, folded to a constant. */
+static int gen_array_length_access(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char *target_reg) {
+    int len = 0;
+    if (!cc || !node || node->type != AST_MEMBER_ACCESS) return 0;
+    if (!node->member_access.member || strcmp(node->member_access.member, "length") != 0) return 0;
+    if (!array_length_of_expr(cc, node->member_access.lhs, &len)) return 0;
+    sb_append(sb, "  movi %s, %d\n", target_reg, len);
+    return 1;
+}
+
 /**                                                                                                                        │
 * Generates code for accessing variadic (rest) parameters via subscripting/pointer arithmetic.                            │
 * Handles patterns like *(rest + index) or *(rest - index) by calculating the stack offset.                               │
@@ -285,6 +295,9 @@ void _gen_expr(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char
         break;
     case AST_MEMBER_ACCESS: {
         if (gen_rest_len_access(cc, node, sb, target_reg)) {
+            break;
+        }
+        if (gen_array_length_access(cc, node, sb, target_reg)) {
             break;
         }
         gen_lvalue_addr(cc, node, sb, "r3", params, param_count, locals, local_count);

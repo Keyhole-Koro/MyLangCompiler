@@ -31,6 +31,33 @@ static int infer_identifier_type(CompilerContext *cc, ASTNode *expr, TypeInfo *o
     return 1;
 }
 
+/* `a.length` on a fixed-size array is its declared element count, known at
+ * compile time: a local / global / parameter declared `T a[N]`, or a struct
+ * field declared as an array. Returns 1 and the count when `lhs` is such an
+ * array; anything else (a pointer, a slice, a struct with its own `length`
+ * field) is not this feature and falls through to ordinary member access. */
+int array_length_of_expr(CompilerContext *cc, ASTNode *lhs, int *out_len) {
+    if (!cc || !lhs || !out_len) return 0;
+    if (lhs->type == AST_IDENTIFIER) {
+        const LocalInfo *li = find_local_info(cc, lhs->identifier.name);
+        if (!li) li = find_global_info(cc, lhs->identifier.name);
+        if (!li || !li->is_array || li->dims_count <= 0 || li->dims[0] <= 0) return 0;
+        *out_len = li->dims[0];
+        return 1;
+    }
+    if (lhs->type == AST_MEMBER_ACCESS || lhs->type == AST_ARROW_ACCESS) {
+        ASTNode *base = lhs->type == AST_MEMBER_ACCESS ? lhs->member_access.lhs : lhs->arrow_access.lhs;
+        const char *field = lhs->type == AST_MEMBER_ACCESS ? lhs->member_access.member : lhs->arrow_access.member;
+        TypeInfo bt = {0};
+        if (!infer_expr_type(cc, base, &bt) || !bt.base_type || bt.base_type[0] == '\0') return 0;
+        const MemberInfo *mi = find_member_info(cc, bt.base_type, field);
+        if (!mi || !mi->is_array || mi->array_length <= 0) return 0;
+        *out_len = mi->array_length;
+        return 1;
+    }
+    return 0;
+}
+
 static int infer_member_type(CompilerContext *cc, ASTNode *lhs_expr, const char *member, int deref_ptr, TypeInfo *out) {
     if (!deref_ptr &&
         lhs_expr &&
@@ -38,6 +65,17 @@ static int infer_member_type(CompilerContext *cc, ASTNode *lhs_expr, const char 
         member &&
         strcmp(member, "len") == 0 &&
         cg_current_rest_info(cc, lhs_expr->identifier.name, NULL, NULL)) {
+        out->base_type = "i32";
+        out->pointer_level = 0;
+        out->type_modifiers = 0;
+        out->is_array = 0;
+        out->dims_count = 0;
+        return 1;
+    }
+
+    int array_len = 0;
+    if (!deref_ptr && member && strcmp(member, "length") == 0 &&
+        array_length_of_expr(cc, lhs_expr, &array_len)) {
         out->base_type = "i32";
         out->pointer_level = 0;
         out->type_modifiers = 0;

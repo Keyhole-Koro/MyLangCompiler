@@ -398,9 +398,41 @@ static void resolve_calls_node(ParserContext *context, MethodScope *scope, ASTNo
     }
 }
 
+/* The struct table (find_structdef) is what lets a receiver be a field,
+ * `it.rows.len()`: every struct the program declares by now -- its own,
+ * the generic instantiations instantiate_generics() spliced in, and the
+ * plain types an import brought along -- is registered here, members
+ * borrowed from the declaration. */
+static void register_structs(ParserContext *context, ASTNode *program) {
+    for (int i = 0; i < program->block.count; i++) {
+        ASTNode *stmt = program->block.stmts[i];
+        if (!stmt) continue;
+        if (stmt->type == AST_STRUCT && stmt->struct_stmt.name && stmt->struct_stmt.name[0] &&
+            !find_structdef(context, stmt->struct_stmt.name)) {
+            add_structdef(context, stmt->struct_stmt.name, stmt->struct_stmt.members, stmt->struct_stmt.member_count);
+        } else if (stmt->type == AST_TYPEDEF_STRUCT && stmt->typedef_struct.typedef_name &&
+                   !find_structdef(context, stmt->typedef_struct.typedef_name)) {
+            add_structdef(context, stmt->typedef_struct.typedef_name, stmt->typedef_struct.members,
+                          stmt->typedef_struct.member_count);
+        }
+    }
+    for (int i = 0; i < imported_plain_type_count(context); i++) {
+        ASTNode *decl = imported_plain_type_at(context, i);
+        if (!decl) continue;
+        if (decl->type == AST_STRUCT && decl->struct_stmt.name && !find_structdef(context, decl->struct_stmt.name)) {
+            add_structdef(context, decl->struct_stmt.name, decl->struct_stmt.members, decl->struct_stmt.member_count);
+        } else if (decl->type == AST_TYPEDEF_STRUCT && decl->typedef_struct.typedef_name &&
+                   !find_structdef(context, decl->typedef_struct.typedef_name)) {
+            add_structdef(context, decl->typedef_struct.typedef_name, decl->typedef_struct.members,
+                          decl->typedef_struct.member_count);
+        }
+    }
+}
+
 void resolve_method_calls(ParserContext *context, ASTNode *program) {
     if (!program || program->type != AST_BLOCK) return;
     resolving_program = program;
+    register_structs(context, program);
 
     MethodScope global = {0};
     for (int i = 0; i < program->block.count; i++) {

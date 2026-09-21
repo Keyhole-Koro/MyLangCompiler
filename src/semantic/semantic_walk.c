@@ -1121,6 +1121,12 @@ static int semantic_infer_expr_type(SemanticContext *ctx, ASTNode *expr, Semanti
         const char *field = expr->type == AST_MEMBER_ACCESS ? expr->member_access.member
                                                             : expr->arrow_access.member;
         if (!semantic_infer_expr_type(ctx, lhs, &target)) return 0;
+        /* `a.length` on a fixed-size array is its element count (i32). */
+        if (expr->type == AST_MEMBER_ACCESS && target.is_array && target.dims_count > 0 &&
+            field && strcmp(field, "length") == 0) {
+            semantic_typeinfo_make_scalar(out, "i32");
+            return 1;
+        }
         if (!target.base_type || !semantic_struct_is_known(ctx, target.base_type)) return 0;
 
         const SemanticStructMember *member =
@@ -1503,9 +1509,18 @@ static void semantic_walk_expr(SemanticContext *ctx, ASTNode *node, ExprContext 
         }
         check_call_signature(ctx, node);
         break;
-    case AST_MEMBER_ACCESS:
+    case AST_MEMBER_ACCESS: {
+        /* `a.length` on a fixed-size array is a compile-time constant: it
+         * neither reads nor moves `a`, so `f(a, a.length)` is fine even
+         * though passing `a` moves it. */
+        SemanticTypeInfo lhs_type;
+        if (node->member_access.member && strcmp(node->member_access.member, "length") == 0 &&
+            semantic_infer_expr_type(ctx, node->member_access.lhs, &lhs_type) &&
+            lhs_type.is_array && lhs_type.dims_count > 0) {
+            break;
+        }
         semantic_walk_expr(ctx, node->member_access.lhs, expr_ctx == EXPRCTX_MOVE ? EXPRCTX_MOVE : EXPRCTX_READ);
-        break;
+        break; }
     case AST_ARROW_ACCESS:
         semantic_walk_expr(ctx, node->arrow_access.lhs, expr_ctx == EXPRCTX_MOVE ? EXPRCTX_MOVE : EXPRCTX_READ);
         break;

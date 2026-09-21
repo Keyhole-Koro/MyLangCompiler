@@ -1,0 +1,24 @@
+// A method call whose receiver is a struct field (`it.rows.len()`,
+// `p->rows.at(i)`), including a field of a generic instantiation and a
+// field of an imported generic type.
+import { Slice } from "../../../../MyStdLib/memory/slice.mln";
+
+struct Counter<T> { T total; };
+i32 (Counter<T> *c) add(T v) { c->total = c->total + v; return c->total; }
+
+struct Table { Slice<i32> rows; Counter<i32> hits; i32 pad; };
+
+i32 through_pointer(Table *t) {
+    return t->rows.len() + *t->rows.at(1) + t->hits.add(100);
+}
+
+i32 main() {
+    i32 storage[4];
+    storage[0] = 10; storage[1] = 20; storage[2] = 30; storage[3] = 40;
+    Table it;
+    it.rows.init(&storage[0], storage.length);
+    it.hits.total = 0;
+    it.hits.add(1);
+    // 4 + 20 + 101 = 125, plus main's own reads: 4 + 40 = 44 -> 169
+    return through_pointer(&it) + it.rows.len() + *it.rows.at(3);
+}
