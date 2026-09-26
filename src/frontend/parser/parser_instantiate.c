@@ -273,7 +273,18 @@ static void concrete_node(ASTNode **slot, void *user_data) {
         }
     }
     ast_visit_children(node, concrete_node, ctx);
-    if (node->type == AST_TYPE_GENERIC) {
+    if (node->type == AST_INIT_LIST && node->init_list.struct_type_arg_count > 0) {
+        const char *name = instantiate(ctx, node, node->init_list.struct_type_name,
+                                       node->init_list.struct_type_args,
+                                       node->init_list.struct_type_arg_count, 0);
+        free(node->init_list.struct_type_name);
+        node->init_list.struct_type_name = strdup(name);
+        for (int i = 0; i < node->init_list.struct_type_arg_count; i++)
+            free_ast(node->init_list.struct_type_args[i]);
+        free(node->init_list.struct_type_args);
+        node->init_list.struct_type_args = NULL;
+        node->init_list.struct_type_arg_count = 0;
+    } else if (node->type == AST_TYPE_GENERIC) {
         const char *name = instantiate(ctx, node, node->generic_type.name,
                                        node->generic_type.args, node->generic_type.arg_count, 0);
         ASTNode *id = new_identifier((char *)name);

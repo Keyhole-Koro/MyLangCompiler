@@ -53,7 +53,8 @@ static ASTNode *parse_case_primary(ParserContext *context, Token **cur) {
 // existing AST_INIT_LIST representation with aggregate initializers; the
 // optional type/field metadata distinguishes this named form from `{...}`.
 static ASTNode *parse_struct_literal(ParserContext *context, Token **cur,
-                                     Token *type_tok) {
+                                     Token *type_tok, ASTNode **type_args,
+                                     int type_arg_count) {
     char **field_names = NULL;
     ASTNode **values = NULL;
     int count = 0;
@@ -84,6 +85,8 @@ static ASTNode *parse_struct_literal(ParserContext *context, Token **cur,
     if (!expect(cur, R_BRACE))
         parse_error(context, "expected '}' after struct literal", *cur);
     ASTNode *node = new_struct_init_list(type_tok->value, field_names, values, count);
+    node->init_list.struct_type_args = type_args;
+    node->init_list.struct_type_arg_count = type_arg_count;
     set_node_loc_from_tokens(node, type_tok, NULL);
     set_node_end_from_token(node, end_tok);
     return node;
@@ -95,7 +98,44 @@ static ASTNode *parse_identifier_primary(ParserContext *context, Token **cur) {
     *cur = (*cur)->next;
 
     if ((*cur)->kind == L_BRACE) {
-        return parse_struct_literal(context, cur, tok);
+        return parse_struct_literal(context, cur, tok, NULL, 0);
+    }
+
+    ASTNode *generic_type = find_generic_type_template(context, name);
+    Token *after_args = *cur;
+    if (after_args->kind == LT) {
+        int depth = 0;
+        do {
+            if (after_args->kind == LT) depth++;
+            else if (after_args->kind == GT) depth--;
+            else if (after_args->kind == RSH) depth -= 2;
+            after_args = after_args->next;
+        } while (after_args && depth > 0);
+    }
+    if ((*cur)->kind == LT && generic_type && generic_type->type == AST_STRUCT &&
+        after_args && after_args->kind == L_BRACE) {
+        int type_arg_count = 0;
+        ASTNode **type_args = parse_type_args(context, cur, &type_arg_count);
+        if (type_arg_count != generic_type->struct_stmt.type_param_count) {
+            char message[256];
+            snprintf(
+                message,
+                sizeof(message),
+                "generic struct '%s' expects %d type argument%s but got %d",
+                name,
+                generic_type->struct_stmt.type_param_count,
+                generic_type->struct_stmt.type_param_count == 1 ? "" : "s",
+                type_arg_count
+            );
+            parse_error_code(context,
+                SEMCODE_GENERIC_ARG_COUNT_MISMATCH,
+                message,
+                tok
+            );
+        }
+        if ((*cur)->kind != L_BRACE)
+            parse_error(context, "expected '{' after generic struct type arguments", *cur);
+        return parse_struct_literal(context, cur, tok, type_args, type_arg_count);
     }
 
     ASTNode **type_args = NULL;

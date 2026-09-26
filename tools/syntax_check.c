@@ -346,7 +346,8 @@ static size_t statement_expression_end(Token **tokens, size_t token_count, size_
 /* The editor grammar deliberately omits expression-level braces: adding a
  * recursive `IDENTIFIER { name: expr }` production makes its canonical LR(1)
  * table's build time prohibitive (60s+ even before this addition; measured
- * 90s+ with it). A named struct literal is nevertheless fully
+ * 90s+ with it). Generic struct literals add a `type_args` prefix to the same
+ * form. A named struct literal is nevertheless fully
  * self-delimiting, so collapse a well-formed token span to one expression
  * token for the lightweight checker.  The compiler remains the authority for
  * type/member validation and code generation.
@@ -355,15 +356,31 @@ static size_t statement_expression_end(Token **tokens, size_t token_count, size_
  * this assigns the two roles that production would have (the type name,
  * each field name) directly, rather than leaving the whole span an
  * unclassified blob that falls back to the editor's generic token color. */
-static size_t named_struct_literal_end(Token **tokens, size_t token_count, size_t start,
+static size_t named_struct_literal_end(Token **tokens, size_t token_count, AngleKind *angles, size_t start,
                                        int *source_roles, int type_role, int property_role) {
-    if (start + 2 >= token_count || tokens[start]->kind != IDENTIFIER ||
-        tokens[start + 1]->kind != L_BRACE)
+    if (start + 1 >= token_count || tokens[start]->kind != IDENTIFIER)
+        return token_count;
+
+    size_t brace = start + 1;
+    if (tokens[brace]->kind == LT && angles && angles[brace] == ANGLE_GENERIC_OPEN) {
+        int depth = 0;
+        for (; brace < token_count; brace++) {
+            if (angles[brace] == ANGLE_GENERIC_OPEN) depth++;
+            else if (angles[brace] == ANGLE_GENERIC_CLOSE) depth--;
+            else if (angles[brace] == ANGLE_GENERIC_DOUBLE_CLOSE) depth -= 2;
+            if (depth <= 0) { brace++; break; }
+        }
+        if (depth > 0 || brace >= token_count) return token_count;
+        for (size_t i = start + 2; i < brace - 1; i++)
+            if (tokens[i]->kind == IDENTIFIER && source_roles && type_role)
+                source_roles[i] = type_role;
+    }
+    if (tokens[brace]->kind != L_BRACE || brace + 1 >= token_count)
         return token_count;
 
     if (source_roles && type_role) source_roles[start] = type_role;
 
-    size_t i = start + 2;
+    size_t i = brace + 1;
     if (tokens[i]->kind == R_BRACE) return i;
     while (i < token_count) {
         if (tokens[i]->kind != IDENTIFIER || i + 1 >= token_count ||
@@ -622,7 +639,7 @@ static int check_tokens(
             i = statement_expr_end;
             continue;
         }
-        size_t struct_literal_end = named_struct_literal_end(source_tokens, source_count, i,
+        size_t struct_literal_end = named_struct_literal_end(source_tokens, source_count, angles, i,
                                                              source_roles, type_role, property_role);
         if (struct_literal_end != source_count) {
             // A number is an unambiguous primary expression in the grammar.

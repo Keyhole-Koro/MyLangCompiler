@@ -1,0 +1,31 @@
+// A fixed slot table can represent occupancy explicitly instead of using a
+// sentinel value in every member of the stored record.
+import { Option } from "../../../../MyStdLib/option.mln";
+
+struct Slot {
+    i32 pid;
+    i32 app;
+    Option<i32> win;
+};
+
+Option<Slot> slots[2];
+
+i32 main() {
+    i32 empty_before = case slots[0] of { Some(_) -> 100; None -> 1; };
+    Slot live;
+    live.pid = 7;
+    live.app = 3;
+    live.win = Some(11);
+    slots[0] = Some(live);
+
+    i32 total = case slots[0] of {
+        Some(value) -> case value.win of {
+            Some(win) -> value.pid + value.app + win;
+            None -> 0;
+        };
+        None -> 0;
+    };
+    slots[0] = None;
+    i32 empty = case slots[0] of { Some(_) -> 100; None -> 1; };
+    return empty_before + total + empty; // 23
+}

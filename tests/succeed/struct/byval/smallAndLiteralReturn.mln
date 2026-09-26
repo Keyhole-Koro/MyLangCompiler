@@ -1,0 +1,11 @@
+struct Small { i32 value; };
+struct Large { Small small; i32 extra; };
+Small make(i32 value) { return Small { value: value }; }
+Large nested(i32 value) { return Large { small: make(value), extra: 3 }; }
+i32 take(Small s) { return s.value; }
+i32 main() {
+    Small s = make(7);
+    s = make(9);
+    Large large = nested(11);
+    return take(s) + large.small.value + large.extra;
+}

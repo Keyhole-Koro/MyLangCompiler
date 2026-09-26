@@ -25,6 +25,20 @@ static int gen_array_length_access(CompilerContext *cc, ASTNode *node, StringBui
     return 1;
 }
 
+/* An array-valued member decays to the address of its first element when it
+ * participates in pointer arithmetic or a call.  Plain identifiers already
+ * get this treatment in emit_load_var(); member expressions need the same
+ * rule before the ordinary scalar load path runs. */
+static int gen_array_member_decay(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
+                                  const char *target_reg,
+                                  char **params, int param_count,
+                                  char **locals, int local_count) {
+    TypeInfo info = (TypeInfo){0};
+    if (!infer_expr_type(cc, node, &info) || !info.is_array) return 0;
+    gen_lvalue_addr(cc, node, sb, target_reg, params, param_count, locals, local_count);
+    return 1;
+}
+
 /**                                                                                                                        │
 * Generates code for accessing variadic (rest) parameters via subscripting/pointer arithmetic.                            │
 * Handles patterns like *(rest + index) or *(rest - index) by calculating the stack offset.                               │
@@ -300,12 +314,20 @@ void _gen_expr(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char
         if (gen_array_length_access(cc, node, sb, target_reg)) {
             break;
         }
+        if (gen_array_member_decay(cc, node, sb, target_reg,
+                                   params, param_count, locals, local_count)) {
+            break;
+        }
         gen_lvalue_addr(cc, node, sb, "r3", params, param_count, locals, local_count);
         {
             emit_load_width_from_addr(sb, target_reg, "r3", lvalue_width_bytes(cc, node));
         }
         break; }
     case AST_ARROW_ACCESS: {
+        if (gen_array_member_decay(cc, node, sb, target_reg,
+                                   params, param_count, locals, local_count)) {
+            break;
+        }
         gen_lvalue_addr(cc, node, sb, "r3", params, param_count, locals, local_count);
         {
             emit_load_width_from_addr(sb, target_reg, "r3", lvalue_width_bytes(cc, node));

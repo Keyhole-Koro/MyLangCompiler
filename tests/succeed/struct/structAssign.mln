@@ -23,11 +23,13 @@ i32 triple_copy() {
     return d.a + d.b + d.c;         // 321
 }
 
-// The copy must not run backwards into the source.
-i32 source_survives() {
+// Assignment moves ownership. Reinitializing the source makes it usable again
+// and must not change the destination's independent storage.
+i32 source_reinitialized() {
     P a; a.x = 5; a.y = 6;
     P b; b.x = 9; b.y = 9;
     b = a;
+    a = P { x: 5, y: 6 };
     return a.x + a.y + b.x + b.y;   // 22
 }
 
@@ -59,7 +61,7 @@ i32 main() {
     i32 total = 0;
     total = total + pair_copy();          // 7
     total = total + triple_copy();        // 328
-    total = total + source_survives();    // 350
+    total = total + source_reinitialized(); // 350
     total = total + via_pointer();        // 365
     total = total + from_pointer();       // 370
     total = total + scalar_still_works(); // 381

@@ -256,9 +256,12 @@ Expressions are listed in order of decreasing precedence.
 | 12 | `*`, `/`, `%` | Multiplication / Division / Modulo |
 | 13 | `!`, `~`, `-`, `*`, `&`, `++`, `--`, `(type)`, `sizeof` | Unary operators |
 | 14 | `++`, `--`, `.`, `->`, `(args)`, `type_args (args)` | Postfix operators / Function call |
-| 15 | `( expr )`, literals, `IDENTIFIER`, `case`, lambdas | Primary expressions |
+| 15 | `( expr )`, literals, `IDENTIFIER`, `Type { fields }`, `Type<T...> { fields }`, `case`, lambdas | Primary expressions |
 
 ### Special Expressions
+- **Named Struct Literal**: `Point { x: 1, y: 2 }` or `Box<i32> { value: 42 }`.
+  Generic type arguments specialize the struct before member validation and
+  code generation; omitted fields are zero-initialized.
 - **Case Expression**: `case expr of { ( (key | _) -> expr ; )* }`
   - A branch may use `-> _` as a no-op only when the whole `case` is used as
     a statement.  It cannot provide a value to an assignment, initializer, or

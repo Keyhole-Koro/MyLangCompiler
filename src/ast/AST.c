@@ -109,7 +109,10 @@ void ast_visit_children(ASTNode *n, void (*visit)(ASTNode **, void *), void *ctx
     case AST_ENUM_MEMBER: CHILD(enum_member.value); CHILD(enum_member.payload_type); break;
     case AST_MEMBER_ACCESS: CHILD(member_access.lhs); break;
     case AST_ARROW_ACCESS: CHILD(arrow_access.lhs); break;
-    case AST_INIT_LIST: CHILDREN(init_list.elements, init_list.count); break;
+    case AST_INIT_LIST:
+        CHILDREN(init_list.struct_type_args, init_list.struct_type_arg_count);
+        CHILDREN(init_list.elements, init_list.count);
+        break;
     case AST_SIZEOF: CHILD(sizeof_expr.expr); break;
     case AST_TERNARY: CHILD(ternary.cond); CHILD(ternary.then_expr); CHILD(ternary.else_expr); break;
     case AST_NUMBER: case AST_IDENTIFIER: case AST_STRUCT_MEMBER:
@@ -188,6 +191,7 @@ ASTNode *ast_clone(const ASTNode *src) {
     case AST_ARROW_ACCESS: STR(arrow_access.member); break;
     case AST_INIT_LIST:
         ARRAY(init_list.elements, init_list.count);
+        ARRAY(init_list.struct_type_args, init_list.struct_type_arg_count);
         STR(init_list.struct_type_name);
         if (src->init_list.field_names)
             STRINGS(init_list.field_names, init_list.count);

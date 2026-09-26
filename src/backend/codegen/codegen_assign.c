@@ -10,7 +10,7 @@ static int aggregate_assign_size(CompilerContext *cc, ASTNode *lhs) {
     if (!ti.is_array && !find_struct(cc, ti.base_type)) return 0;
 
     int total = typeinfo_total_size_bytes(cc, &ti);
-    return total > 4 ? total : 0;
+    return total > 0 ? total : 0;
 }
 
 void gen_assign(CompilerContext *cc, ASTNode *node, StringBuilder *sb,

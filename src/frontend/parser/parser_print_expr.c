@@ -112,7 +112,16 @@ int fprint_ast_expr_node(FILE *out, ASTNode *node, int indent) {
         return 1;
     case AST_INIT_LIST:
         fprint_indent(out, indent);
-        fprintf(out, "%s:\n", node->init_list.struct_type_name ? node->init_list.struct_type_name : "InitList");
+        fprintf(out, "%s", node->init_list.struct_type_name ? node->init_list.struct_type_name : "InitList");
+        if (node->init_list.struct_type_arg_count > 0) {
+            fprintf(out, "<");
+            for (int i = 0; i < node->init_list.struct_type_arg_count; i++) {
+                if (i) fprintf(out, ", ");
+                fprint_ast(out, node->init_list.struct_type_args[i], 0);
+            }
+            fprintf(out, ">");
+        }
+        fprintf(out, ":\n");
         for (int i = 0; i < node->init_list.count; i++) {
             if (node->init_list.field_names) {
                 fprint_indent(out, indent + 1);

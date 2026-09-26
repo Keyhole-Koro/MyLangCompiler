@@ -200,6 +200,9 @@ void free_ast(ASTNode *node) {
             for (int i = 0; i < node->init_list.count; i++)
                 free_ast(node->init_list.elements[i]);
             free(node->init_list.elements);
+            for (int i = 0; i < node->init_list.struct_type_arg_count; i++)
+                free_ast(node->init_list.struct_type_args[i]);
+            free(node->init_list.struct_type_args);
             free(node->init_list.struct_type_name);
             for (int i = 0; i < node->init_list.count; i++)
                 free(node->init_list.field_names ? node->init_list.field_names[i] : NULL);

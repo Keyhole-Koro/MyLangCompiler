@@ -184,6 +184,17 @@ void gen_struct_literal_into_addr(CompilerContext *cc, ASTNode *literal,
                 continue;
             }
 
+            if (call_returns_aggregate(cc, literal->init_list.elements[i])) {
+                sb_append(sb, "  push %s\n", dest_addr_reg);
+                sb_append(sb, "  mov r1, %s\n", dest_addr_reg);
+                if (member->offset) sb_append(sb, "  addis r1, %d\n", member->offset);
+                sb_append(sb, "  push r1\n");
+                gen_call_sret(cc, literal->init_list.elements[i], sb,
+                              params, param_count, locals, local_count);
+                sb_append(sb, "  pop %s\n", dest_addr_reg);
+                continue;
+            }
+
             /* An aggregate value stored in a struct literal is copied in
              * full.  `gen_expr` would only load its first word. */
             if (!is_addressable_expr(literal->init_list.elements[i])) {
@@ -333,7 +344,11 @@ static void gen_stmt_labeled(CompilerContext *cc, ASTNode *node, StringBuilder *
     case AST_RETURN:
         // A bare `return;` has no expression; only evaluate one when present.
         if (node->ret.expr && cc->sret_active) {
-            if (is_mock_call_original(node->ret.expr)) {
+            if (node->ret.expr->type == AST_INIT_LIST && node->ret.expr->init_list.struct_type_name) {
+                sb_append(sb, "  mov r3, bp\n  addis r3, %d\n  load r3, r3\n", cc->sret_offset);
+                gen_struct_literal_into_addr(cc, node->ret.expr, sb, "r3",
+                                             params, param_count, locals, local_count);
+            } else if (is_mock_call_original(node->ret.expr)) {
                 sb_append(sb, "  ; forward aggregate Spy fake to original\n");
                 gen_mock_call_original_sret(cc, node->ret.expr, sb, params,
                                             param_count, locals, local_count);

@@ -2,8 +2,8 @@
 
 // Aggregate (struct/array) by-value calling convention (MLC-015).
 //
-// A struct or array wider than one word has no register to travel in, so
-// every place it crosses the ABI boundary -- a parameter, a return value --
+// Structs and arrays always use the same convention, including one-word
+// aggregates. Every place they cross the ABI boundary -- a parameter, a return value --
 // is compiled as a hidden pointer instead: the caller supplies the address of
 // somewhere to put or find the value, and only that one address travels
 // through the normal register/stack argument mechanism unchanged.
@@ -35,7 +35,7 @@ int aggregate_type_size(CompilerContext *cc, ASTNode *type_ast) {
     TypeInfo ti = {0};
     if (!typeinfo_from_type_ast(cc, type_ast, &ti)) return 0;
     int total = typeinfo_total_size_bytes(cc, &ti);
-    return total > 4 ? total : 0;
+    return total > 0 ? total : 0;
 }
 
 int is_addressable_expr(ASTNode *node) {
