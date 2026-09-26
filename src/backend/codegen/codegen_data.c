@@ -1,4 +1,5 @@
 #include "mylang/backend/codegen_internal.h"
+#include <stdint.h>
 
 static long eval_const_expr(ASTNode *node);
 int array_element_size_bytes(ASTNode *array_type);
@@ -24,10 +25,49 @@ static long eval_const_expr(ASTNode *node) {
     if (node->type == AST_CHAR_LITERAL) {
         return (unsigned char)(node->char_literal.value ? node->char_literal.value[0] : 0);
     }
-    if (node->type == AST_UNARY && node->unary.op == SUB) {
-        return -eval_const_expr(node->unary.operand);
+    if (node->type == AST_UNARY) {
+        uint32_t value = (uint32_t)eval_const_expr(node->unary.operand);
+        switch (node->unary.op) {
+        case SUB: return (int32_t)(0u - value);
+        case ADD: return (int32_t)value;
+        case NOT: return !value;
+        case BITNOT: return (int32_t)~value;
+        default: break;
+        }
     }
-    return 0; 
+    if (node->type == AST_TERNARY) {
+        return eval_const_expr(eval_const_expr(node->ternary.cond)
+                               ? node->ternary.then_expr : node->ternary.else_expr);
+    }
+    if (node->type == AST_BINARY) {
+        uint32_t left = (uint32_t)eval_const_expr(node->binary.left);
+        if (node->binary.op == LAND && !left) return 0;
+        if (node->binary.op == LOR && left) return 1;
+        uint32_t right = (uint32_t)eval_const_expr(node->binary.right);
+        switch (node->binary.op) {
+        case ADD: return (int32_t)(left + right);
+        case SUB: return (int32_t)(left - right);
+        case ASTARISK: return (int32_t)(left * right);
+        case DIV: if (right) return (int32_t)((int64_t)(int32_t)left / (int32_t)right); break;
+        case MOD: if (right) return (int32_t)((int64_t)(int32_t)left % (int32_t)right); break;
+        case LSH: if (right < 32) return (int32_t)(left << right); break;
+        case RSH: if (right < 32) return left >> right; break;
+        case AMPERSAND: return (int32_t)(left & right);
+        case BITOR: return (int32_t)(left | right);
+        case BITXOR: return (int32_t)(left ^ right);
+        case EQ: return left == right;
+        case NEQ: return left != right;
+        case LT: return (int32_t)left < (int32_t)right;
+        case LTE: return (int32_t)left <= (int32_t)right;
+        case GT: return (int32_t)left > (int32_t)right;
+        case GTE: return (int32_t)left >= (int32_t)right;
+        case LAND: return left && right;
+        case LOR: return left || right;
+        default: break;
+        }
+    }
+    fprintf(stderr, "Codegen error: invalid or non-constant global initializer\n");
+    exit(1);
 }
 
 // Emit a single scalar constant as `width` big-endian bytes.
@@ -90,7 +130,11 @@ void emit_global_init(CompilerContext *cc, StringBuilder *sb, ASTNode *init_expr
                     break;
                 }
             }
-            emit_scalar_bytes(sb, eval_const_expr(value), member->total_size_bytes);
+            if (member->total_size_bytes == SLOT_SIZE) {
+                emit_word_operand(cc, sb, value);
+            } else {
+                emit_scalar_bytes(sb, eval_const_expr(value), member->total_size_bytes);
+            }
         }
         return;
     }
@@ -337,4 +381,3 @@ void emit_scale_reg_const(CompilerContext *cc, StringBuilder *sb, const char *re
     sb_append(sb, "  jmp b_idx_mul_%d\n", lbl);
     sb_append(sb, "b_idx_mul_end_%d:\n", lbl);
 }
-

@@ -1,0 +1,13 @@
+struct Config { char *name; i32 callback; i32 value; };
+i32 handle() { return 5; }
+i32 sum = 1 + 2 * 3;
+i32 bits = (1 << 8) | 3;
+i32 choice = true ? 11 : 1 / 0;
+bool shorted = false && (1 / 0);
+Config config = Config { name: "Hi", callback: handle, value: 2 + 3 };
+i32 values[3] = {1 + 2, 8 / 2};
+i32 main() {
+    i32 callback = config.callback;
+    return sum + bits + choice + shorted + config.name[0] + config.value + callback()
+         + values[0] + values[1] + values[2];
+}

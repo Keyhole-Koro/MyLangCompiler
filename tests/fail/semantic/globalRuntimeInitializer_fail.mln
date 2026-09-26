@@ -1,0 +1,3 @@
+i32 value() { return 7; }
+i32 dynamic = value();
+i32 main() { return dynamic; }
