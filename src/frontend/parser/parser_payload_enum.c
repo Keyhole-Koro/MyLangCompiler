@@ -57,6 +57,7 @@ typedef struct {
      * what to build -- NULL outside a function body (or one whose return type
      * isn't itself a payload enum construction site). */
     ASTNode *current_return_type;
+    ASTNode *current_function;
     /* Freshens the `__mlg_ret_N` stand-in used for `return Ok(5);` below; the
      * __mlg_ prefix is reserved for compiler-generated names (see
      * parser_instantiate.c), so these can't collide with user identifiers. */
@@ -501,6 +502,95 @@ static ASTNode *call_result_type(VariantTable *table, ASTNode *node, Module **pr
     return imported_call_result_type(table, node, provider);
 }
 
+static ASTNode *find_local_type(ASTNode *node, const char *name) {
+    if (!node || !name) return NULL;
+    if (node->type == AST_VAR_DECL && node->var_decl.name &&
+        strcmp(node->var_decl.name, name) == 0)
+        return node->var_decl.var_type;
+    if (node->type == AST_PARAM && node->param.name && strcmp(node->param.name, name) == 0)
+        return node->param.type;
+    if (node->type == AST_BLOCK) {
+        for (int i = 0; i < node->block.count; i++) {
+            ASTNode *found = find_local_type(node->block.stmts[i], name);
+            if (found) return found;
+        }
+    } else if (node->type == AST_IF) {
+        ASTNode *found = find_local_type(node->if_stmt.then_stmt, name);
+        return found ? found : find_local_type(node->if_stmt.else_stmt, name);
+    } else if (node->type == AST_WHILE) {
+        return find_local_type(node->while_stmt.body, name);
+    } else if (node->type == AST_DO_WHILE) {
+        return find_local_type(node->do_while_stmt.body, name);
+    } else if (node->type == AST_FOR) {
+        ASTNode *found = find_local_type(node->for_stmt.init, name);
+        return found ? found : find_local_type(node->for_stmt.body, name);
+    } else if (node->type == AST_STMT_EXPR) {
+        return find_local_type(node->stmt_expr.block, name);
+    }
+    return NULL;
+}
+
+static ASTNode *try_source_type(VariantTable *table, ASTNode *target) {
+    ASTNode *type = call_result_type(table, target, NULL);
+    if (type) return type;
+    if (target && target->type == AST_IDENTIFIER && table->current_function) {
+        ASTNode *fn = table->current_function;
+        for (int i = 0; i < fn->fundef.param_count; i++) {
+            type = find_local_type(fn->fundef.params[i], target->identifier.name);
+            if (type) return type;
+        }
+        return find_local_type(fn->fundef.body, target->identifier.name);
+    }
+    return NULL;
+}
+
+static const char *skip_encoded_type_key(const char *segment) {
+    if (!segment || strncmp(segment, "_p", 2) != 0) return NULL;
+    const char *length_marker = strstr(segment, "_n");
+    if (!length_marker) return NULL;
+    char *end = NULL;
+    long length = strtol(length_marker + 2, &end, 10);
+    if (!end || *end != '_' || length < 0) return NULL;
+    const char *name = end + 1;
+    if (strlen(name) < (size_t)length) return NULL;
+    return name + length;
+}
+
+/* A concrete Result name ends in two length-prefixed type keys. Returning the
+ * start of the second key lets `?` compare E without requiring enum E itself
+ * to have a runtime-distinct representation. */
+static const char *result_error_type_key(ASTNode *type) {
+    const char *name = type_base_name(type);
+    if (!name || strncmp(name, "__mlg_s_6_Result", 16) != 0) return NULL;
+    const char *first = name + 16;
+    return skip_encoded_type_key(first);
+}
+
+static int is_generated_try_case(ASTNode *node) {
+    if (!node || node->type != AST_CASE || node->case_expr.case_count != 2) return 0;
+    ASTNode *key = node->case_expr.cases[0].key;
+    if (!key || key->type != AST_CALL || key->call.arg_count != 1) return 0;
+    ASTNode *binding = key->call.args[0];
+    return binding && binding->type == AST_IDENTIFIER && binding->identifier.name &&
+           strncmp(binding->identifier.name, "__mlg_try_value_", 16) == 0;
+}
+
+static void check_try_error_type(VariantTable *table, ASTNode *node) {
+    if (!is_generated_try_case(node) || !table->current_return_type) return;
+    ASTNode *source_type = try_source_type(table, node->case_expr.target);
+    const char *source_error = result_error_type_key(source_type);
+    const char *target_error = result_error_type_key(table->current_return_type);
+    if (!source_error)
+        payload_error(table->context, node,
+                      "'?' requires a Result value whose error can be propagated");
+    if (!target_error)
+        payload_error(table->context, node,
+                      "'?' can only be used in a function returning Result");
+    if (strcmp(source_error, target_error) == 0) return;
+    payload_error(table->context, node,
+                  "'?' can only propagate the function's Result error type; handle or convert this error explicitly");
+}
+
 /* `case r of { Ok(x) -> E; ... }` becomes `case r.__tag of { 0 -> E[x := r.Ok]; ... }`.
  * Arms that are not variant patterns are left alone, so a payload enum and a
  * plain integer case can be written the same way. */
@@ -663,6 +753,7 @@ static void merge_nested_patterns(VariantTable *table, ASTNode *node) {
 }
 
 static void rewrite_payload_case(VariantTable *table, ASTNode *node) {
+    check_try_error_type(table, node);
     merge_nested_patterns(table, node);
 
     int patterns = 0;
@@ -774,6 +865,100 @@ static void flush_pending_hoists(VariantTable *table, ASTNode ***out, int *count
     table->pending_hoist_count = 0;
 }
 
+/* Find a construction used as a value of a case arm.  Pattern keys are
+ * deliberately ignored: `case value of { Some(x) -> x; ... }` matches a
+ * payload enum, but it does not itself produce one. */
+static VariantTag *case_result_variant(VariantTable *table, ASTNode *node) {
+    if (!node || node->type != AST_CASE) return NULL;
+    for (int i = 0; i < node->case_expr.case_count; i++) {
+        ASTNode *expr = node->case_expr.cases[i].expr;
+        VariantTag *variant = variant_use(table, expr);
+        if (variant) return variant;
+        variant = case_result_variant(table, expr);
+        if (variant) return variant;
+    }
+    VariantTag *variant = variant_use(table, node->case_expr.default_expr);
+    if (variant) return variant;
+    return case_result_variant(table, node->case_expr.default_expr);
+}
+
+static ASTNode *case_result_store(ASTNode *dest, ASTNode *value) {
+    ASTNode **statements = malloc(sizeof(ASTNode *) * 2);
+    statements[0] = new_expr_stmt(new_assign(ast_clone(dest), value));
+    /* The surrounding case is evaluated only for its stores.  Give every arm
+     * the same harmless scalar result so ordinary case codegen can still be
+     * used; the aggregate itself lives in `dest`. */
+    statements[1] = new_yield(new_number("0"));
+    return new_stmt_expr(new_block(statements, 2));
+}
+
+/* Turn an aggregate-valued case into destination-passing form.  For example,
+ *
+ *   Result r = case x of { 0 -> Ok(1); _ -> Err(2); };
+ *
+ * becomes a bare declaration followed by a scalar case whose arms assign
+ * directly into r.  Nested cases use the same destination. */
+static void lower_case_result_into(VariantTable *table, ASTNode *node, ASTNode *dest,
+                                   ASTNode *expected_type, const char *expected_enum) {
+    if (!node || node->type != AST_CASE) return;
+
+    for (int i = 0; i < node->case_expr.case_count; i++) {
+        CaseItem *arm = &node->case_expr.cases[i];
+        if (arm->is_noop || !arm->expr)
+            payload_error(table->context, arm->key,
+                          "an aggregate-valued case arm must produce a value");
+
+        if (arm->expr->type == AST_CASE) {
+            lower_case_result_into(table, arm->expr, dest, expected_type, expected_enum);
+            continue;
+        }
+
+        VariantTag *variant = variant_use(table, arm->expr);
+        if (variant) {
+            check_unambiguous(table, variant, arm->expr);
+            if (expected_type) check_variant_belongs(table, expected_type, variant, arm->expr);
+            if (expected_enum && variant->enum_name &&
+                strcmp(expected_enum, variant->enum_name) != 0) {
+                char first[64], second[64], message[256];
+                copy_display_name(first, sizeof(first), expected_enum);
+                copy_display_name(second, sizeof(second), variant->enum_name);
+                snprintf(message, sizeof(message),
+                         "this case produces variants of both '%s' and '%s'",
+                         first, second);
+                payload_error(table->context, arm->expr, message);
+            }
+        }
+        arm->expr = case_result_store(dest, arm->expr);
+    }
+
+    if (node->case_expr.default_is_noop)
+        payload_error(table->context, node,
+                      "an aggregate-valued case default must produce a value");
+    if (node->case_expr.default_expr) {
+        ASTNode *expr = node->case_expr.default_expr;
+        if (expr->type == AST_CASE) {
+            lower_case_result_into(table, expr, dest, expected_type, expected_enum);
+        } else {
+            VariantTag *variant = variant_use(table, expr);
+            if (variant) {
+                check_unambiguous(table, variant, expr);
+                if (expected_type) check_variant_belongs(table, expected_type, variant, expr);
+                if (expected_enum && variant->enum_name &&
+                    strcmp(expected_enum, variant->enum_name) != 0) {
+                    char first[64], second[64], message[256];
+                    copy_display_name(first, sizeof(first), expected_enum);
+                    copy_display_name(second, sizeof(second), variant->enum_name);
+                    snprintf(message, sizeof(message),
+                             "this case produces variants of both '%s' and '%s'",
+                             first, second);
+                    payload_error(table->context, expr, message);
+                }
+            }
+            node->case_expr.default_expr = case_result_store(dest, expr);
+        }
+    }
+}
+
 /* Statements are rewritten as a list because a construction expands into two
  * of them, so a block's statement array is rebuilt rather than edited. */
 static void rewrite_payload_block(VariantTable *table, ASTNode *block) {
@@ -792,8 +977,62 @@ static void rewrite_payload_block(VariantTable *table, ASTNode *block) {
         ASTNode *stmt = block->block.stmts[i];
         ASTNode *dest = NULL;
         ASTNode *call = NULL;
+        ASTNode *case_value = NULL;
+        ASTNode *expected_type = NULL;
         int is_return = 0;
         char temp_name[32];
+
+        /* A carrying constructor may be the direct result of a case arm.  The
+         * case itself needs the same concrete destination as a direct
+         * constructor, so recognize these sites before the ordinary
+         * construction cases below. */
+        if (stmt && stmt->type == AST_VAR_DECL &&
+            stmt->var_decl.init && stmt->var_decl.init->type == AST_CASE &&
+            case_result_variant(table, stmt->var_decl.init)) {
+            case_value = stmt->var_decl.init;
+            stmt->var_decl.init = NULL;
+            dest = new_identifier(stmt->var_decl.name);
+            expected_type = stmt->var_decl.var_type;
+        } else if (stmt && stmt->type == AST_EXPR_STMT && stmt->expr_stmt.expr &&
+                   stmt->expr_stmt.expr->type == AST_ASSIGN &&
+                   stmt->expr_stmt.expr->assign.right &&
+                   stmt->expr_stmt.expr->assign.right->type == AST_CASE &&
+                   case_result_variant(table, stmt->expr_stmt.expr->assign.right)) {
+            case_value = stmt->expr_stmt.expr->assign.right;
+            stmt->expr_stmt.expr->assign.right = NULL;
+            dest = ast_clone(stmt->expr_stmt.expr->assign.left);
+        } else if (stmt && stmt->type == AST_RETURN && stmt->ret.expr &&
+                   stmt->ret.expr->type == AST_CASE && table->current_return_type &&
+                   case_result_variant(table, stmt->ret.expr)) {
+            is_return = 1;
+            case_value = stmt->ret.expr;
+            stmt->ret.expr = NULL;
+            expected_type = table->current_return_type;
+            snprintf(temp_name, sizeof(temp_name), "__mlg_ret_%d", table->temp_counter++);
+            dest = new_identifier(temp_name);
+        }
+
+        if (case_value) {
+            VariantTag *produced = case_result_variant(table, case_value);
+            lower_case_result_into(table, case_value, dest, expected_type,
+                                   produced ? produced->enum_name : NULL);
+            rewrite_payload_node(&case_value, table);
+
+            flush_pending_hoists(table, &out, &count);
+            out = realloc(out, sizeof(ASTNode *) * (size_t)(count + 3));
+            if (is_return) {
+                out[count++] = new_var_decl(ast_clone(table->current_return_type), temp_name, NULL);
+                free_ast(stmt);
+            } else if (stmt->type == AST_VAR_DECL) {
+                out[count++] = stmt;
+            } else {
+                free_ast(stmt);
+            }
+            out[count++] = new_expr_stmt(case_value);
+            if (is_return) out[count++] = new_return(ast_clone(dest));
+            free_ast(dest);
+            continue;
+        }
 
         if (stmt && stmt->type == AST_VAR_DECL && variant_use(table, stmt->var_decl.init)) {
             /* `T r = Ok(5);` -- keep the declaration, drop the initialiser, and
@@ -914,9 +1153,12 @@ static void rewrite_payload_node(ASTNode **slot, void *user_data) {
      * see their own return type rather than the enclosing one's. */
     if (node->type == AST_FUNDEF) {
         ASTNode *saved_return_type = table->current_return_type;
+        ASTNode *saved_function = table->current_function;
         table->current_return_type = node->fundef.ret_type;
+        table->current_function = node;
         ast_visit_children(node, rewrite_payload_node, user_data);
         table->current_return_type = saved_return_type;
+        table->current_function = saved_function;
         return;
     }
 
@@ -970,7 +1212,7 @@ static void rewrite_payload_node(ASTNode **slot, void *user_data) {
  * and its variants carry final tags, and before the declarations themselves are
  * lowered to structs. */
 void lower_payload_enum_uses(ParserContext *context, ASTNode *program) {
-    VariantTable table = {NULL, 0, context, program, NULL, 0, NULL, 0};
+    VariantTable table = {NULL, 0, context, program, NULL, NULL, 0, NULL, 0};
     collect_variants(&table, program);
     if (table.count == 0) return;
 

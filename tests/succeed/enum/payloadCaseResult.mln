@@ -1,0 +1,48 @@
+enum Option<T> {
+    Some(T),
+    None,
+}
+
+Option<i32> choose(i32 value) {
+    return case value of {
+        0 -> None;
+        _ -> Some(value);
+    };
+}
+
+i32 main() {
+    Option<i32> first = case 1 of {
+        0 -> None;
+        _ -> Some(40);
+    };
+
+    Option<i32> second = None;
+    // Inspect before the following case may move first into second.
+    i32 total = case first of {
+        Some(value) -> value;
+        None -> 0;
+    };
+    second = case 2 of {
+        0 -> first;
+        _ -> Some(2);
+    };
+
+    Option<i32> nested = case 1 of {
+        0 -> None;
+        _ -> case 0 of {
+            0 -> second;
+            _ -> Some(99);
+        };
+    };
+
+    total = total + case nested of {
+        Some(value) -> value;
+        None -> 0;
+    };
+    Option<i32> returned = choose(0);
+    total = total + case returned of {
+        Some(value) -> value;
+        None -> 0;
+    };
+    return total;
+}

@@ -1,0 +1,15 @@
+enum Result<T, E> { Ok(T), Err(E) }
+enum SourceError { Source }
+enum TargetError { Target }
+
+Result<i32, SourceError> source() { return Err(SourceError::Source); }
+
+Result<i32, TargetError> target() {
+    // `?` never guesses an error conversion. The propagated SourceError must
+    // fail to type-check against this function's TargetError.
+    Result<i32, SourceError> result = source();
+    i32 value = result?;
+    return Ok(value);
+}
+
+i32 main() { return 0; }

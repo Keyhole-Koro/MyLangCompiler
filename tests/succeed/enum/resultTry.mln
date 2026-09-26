@@ -1,0 +1,32 @@
+enum Result<T, E> {
+    Ok(T),
+    Err(E),
+}
+
+enum ReadError {
+    Missing(i32),
+    Broken,
+}
+
+Result<i32, ReadError> read(i32 id) {
+    if (id == 0) { return Err(ReadError::Missing(id)); }
+    return Ok(id * 2);
+}
+
+Result<i32, ReadError> add_reads(i32 left, i32 right) {
+    i32 a = read(left)?;
+    i32 b = (read(right)?);
+    return Ok(a + b);
+}
+
+i32 main() {
+    Result<i32, ReadError> ok = add_reads(2, 3);
+    Result<i32, ReadError> err = add_reads(2, 0);
+    i32 a = case ok of { Ok(v) -> v; Err(_) -> 0; };
+    i32 b = case err of {
+        Ok(_) -> 0;
+        Err(ReadError::Missing(id)) -> id + 1;
+        Err(ReadError::Broken) -> 99;
+    };
+    return a + b;
+}

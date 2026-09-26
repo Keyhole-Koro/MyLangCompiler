@@ -1,6 +1,54 @@
 #include "mylang/frontend/parser_internal.h"
 #include "mylang/frontend/parser_ast_internal.h"
 
+/* `?` is postfix when it closes the current expression. A question followed
+ * by another expression remains the existing ternary operator. This covers
+ * the propagation forms used at statement/argument/group boundaries while
+ * keeping `condition ? yes : no` unambiguous. */
+static int is_try_question(Token *question) {
+    if (!question || question->kind != QUESTION || !question->next) return 0;
+    switch (question->next->kind) {
+    case SEMICOLON:
+    case COMMA:
+    case R_PARENTHESES:
+    case R_BRACKET:
+    case R_BRACE:
+        return 1;
+    default:
+        return 0;
+    }
+}
+
+static ASTNode *new_try_expr(ParserContext *context, ASTNode *target) {
+    char value_name[48], error_name[48];
+    int id = context->lowering.payload_case_counter++;
+    snprintf(value_name, sizeof(value_name), "__mlg_try_value_%d", id);
+    snprintf(error_name, sizeof(error_name), "__mlg_try_error_%d", id);
+
+    CaseItem *arms = calloc(2, sizeof(CaseItem));
+    ASTNode **ok_pattern_args = malloc(sizeof(ASTNode *));
+    ok_pattern_args[0] = new_identifier(value_name);
+    arms[0].key = new_call("Ok", ok_pattern_args, 1);
+    arms[0].expr = new_identifier(value_name);
+
+    ASTNode **err_pattern_args = malloc(sizeof(ASTNode *));
+    err_pattern_args[0] = new_identifier(error_name);
+    arms[1].key = new_call("Err", err_pattern_args, 1);
+    ASTNode **return_args = malloc(sizeof(ASTNode *));
+    return_args[0] = new_identifier(error_name);
+    ASTNode **statements = malloc(sizeof(ASTNode *) * 2);
+    statements[0] = new_return(new_call("Err", return_args, 1));
+    statements[1] = new_yield(new_number("0")); // unreachable, fixes arm shape
+    arms[1].expr = new_stmt_expr(new_block(statements, 2));
+
+    ASTNode *node = new_case_expr(target, arms, 2, NULL, 0);
+    node->line = target->line;
+    node->col = target->col;
+    node->end_line = target->end_line;
+    node->end_col = target->end_col;
+    return node;
+}
+
 ASTNode *parse_postfix(ParserContext *context, Token **cur) {
     ASTNode *node = parse_primary(context, cur);
     while (1) {
@@ -131,6 +179,26 @@ ASTNode *parse_postfix(ParserContext *context, Token **cur) {
             }
             node->line = line;
             node->col = col;
+        } else if ((*cur)->kind == L_BRACKET) {
+            // `name[index]` is lowered in parse_primary, but member and call
+            // expressions arrive here: `p->items[i]`, `s.items[i]`, and
+            // `make_buffer()[i]`.  Keep one representation for codegen by
+            // lowering all of them to `*(base + index)`.
+            int line = node->line;
+            int col = node->col;
+            *cur = (*cur)->next;
+            ASTNode *index = parse_expr(context, cur);
+            Token *end_tok = *cur;
+            if (!expect(cur, R_BRACKET))
+                parse_error(context, "expected ']' after array index", *cur);
+            ASTNode *add = new_binary(ADD, node, index);
+            node = new_unary(ASTARISK, add);
+            node->line = line;
+            node->col = col;
+            set_node_end_from_token(node, end_tok);
+        } else if (is_try_question(*cur)) {
+            *cur = (*cur)->next;
+            node = new_try_expr(context, node);
         } else {
             break;
         }
