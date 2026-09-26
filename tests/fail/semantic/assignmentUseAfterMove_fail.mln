@@ -1,0 +1,7 @@
+struct Box { i32 value; };
+i32 main() {
+    Box a = Box { value: 7 };
+    Box b;
+    b = a;
+    return a.value;
+}

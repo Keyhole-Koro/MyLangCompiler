@@ -1,0 +1,11 @@
+void change(ref mut i32 a, ref mut i32 b) { *a = *a + 1; *b = *b + 2; }
+void read(ref i32 a, ref i32 b) { }
+i32 main() {
+    mut i32 x = 0; mut i32 y = 0;
+    read(&x, &x);
+    { ref i32 r = &x; read(r, r); }
+    change(&mut x, &mut y);
+    change(&mut x, &mut y);
+    ref mut i32 after = &mut x;
+    return *after + y;
+}

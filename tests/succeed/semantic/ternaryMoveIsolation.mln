@@ -1,0 +1,7 @@
+struct Box { i32 x; };
+i32 consume(Box b) { return b.x; }
+i32 choose(i32 condition) {
+    Box a = Box { x: 7 };
+    return condition ? consume(a) : consume(a);
+}
+i32 main() { return choose(0) + choose(1); }

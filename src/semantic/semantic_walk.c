@@ -397,20 +397,20 @@ static void check_mock_callback_signature(SemanticContext *ctx, ASTNode *call) {
     }
 }
 
-static int semantic_type_is_copy(SemanticContext *ctx, ASTNode *type_node) {
-    if (!type_node) return 1;
-    SemanticTypeInfo info;
-    const char *base_type;
-
-    if (!semantic_typeinfo_from_type_ast(type_node, &info)) return 0;
-    if (info.ref_kind != REFKIND_NONE) return 1;
-    if (info.pointer_level > 0) return 1;
-    if (info.is_array) return 0;
-
-    base_type = info.base_type;
+static int semantic_typeinfo_is_copy(SemanticContext *ctx, const SemanticTypeInfo *info) {
+    if (info->ref_kind != REFKIND_NONE) return 1;
+    if (info->pointer_level > 0) return 1;
+    if (info->is_array) return 0;
+    const char *base_type = info->base_type;
     if (!base_type) return 0;
     if (semantic_enum_type_exists(ctx, base_type)) return 1;
     return semantic_is_builtin_type(base_type);
+}
+
+static int semantic_type_is_copy(SemanticContext *ctx, ASTNode *type_node) {
+    if (!type_node) return 1;
+    SemanticTypeInfo info;
+    return semantic_typeinfo_from_type_ast(type_node, &info) && semantic_typeinfo_is_copy(ctx, &info);
 }
 
 static const char *semantic_type_base_name(ASTNode *type_node) {
@@ -1246,6 +1246,19 @@ static void check_initializer_type(SemanticContext *ctx, ASTNode *node) {
 
     if (!ctx || !node || node->type != AST_VAR_DECL || !node->var_decl.init) return;
     if (!semantic_typeinfo_from_type_ast(node->var_decl.var_type, &expected)) return;
+    if (expected.is_array && node->var_decl.init->type == AST_INIT_LIST) {
+        /* Array lists are flat, including multidimensional arrays. */
+        long capacity = 1;
+        for (int i = 0; i < expected.dims_count; i++) {
+            if (expected.dims[i] <= 0) { capacity = 0; break; }
+            if (capacity > node->var_decl.init->init_list.count) break;
+            capacity *= expected.dims[i];
+        }
+        if (capacity > 0 && node->var_decl.init->init_list.count > capacity) {
+            semantic_error_at(ctx, semantic_location_from_ast(node->var_decl.init),
+                              "too many elements in array initializer (capacity %ld)", capacity);
+        }
+    }
     if (!semantic_infer_expr_type(ctx, node->var_decl.init, &actual)) return;
     if (semantic_typeinfo_compatible(ctx, &expected, &actual)) return;
     semantic_report_type_mismatch(ctx, semantic_location_from_ast(node->var_decl.init),
@@ -1479,7 +1492,7 @@ static void semantic_walk_expr(SemanticContext *ctx, ASTNode *node, ExprContext 
         check_binary_type(ctx, node);
         break;
     case AST_ASSIGN:
-        semantic_walk_expr(ctx, node->assign.right, EXPRCTX_READ);
+        semantic_walk_expr(ctx, node->assign.right, EXPRCTX_MOVE);
         semantic_walk_expr(ctx, node->assign.left, EXPRCTX_WRITE);
         check_assignment_type(ctx, node);
         revive_binding_if_identifier(ctx, node->assign.left);
@@ -1503,12 +1516,48 @@ static void semantic_walk_expr(SemanticContext *ctx, ASTNode *node, ExprContext 
         semantic_walk_stmt(ctx, node->cast.type);
         semantic_walk_expr(ctx, node->cast.expr, EXPRCTX_READ);
         break;
-    case AST_CALL:
+    case AST_CALL: {
+        /* Keep temporary argument borrows alive until the entire call has
+         * been checked, including nested calls in later arguments. */
+        int saved_shared[256], saved_mutable[256];
+        int saved_count = ctx->binding_count;
+        for (int i = 0; i < saved_count; i++) {
+            saved_shared[i] = ctx->bindings[i].shared_borrow_count;
+            saved_mutable[i] = ctx->bindings[i].mutable_borrow_active;
+        }
         for (int i = 0; i < node->call.arg_count; i++) {
-            semantic_walk_expr(ctx, node->call.args[i], EXPRCTX_MOVE);
+            ASTNode *arg = node->call.args[i];
+            SemanticBinding *reference = arg && arg->type == AST_IDENTIFIER
+                ? find_binding(ctx, arg->identifier.name) : NULL;
+            if (reference && (!reference->has_type || reference->type_info.ref_kind == REFKIND_NONE))
+                reference = NULL;
+            semantic_walk_expr(ctx, arg, reference ? EXPRCTX_READ : EXPRCTX_MOVE);
+            int is_mut = arg && arg->type == AST_BORROW_MUT;
+            ASTNode *target = is_mut ? arg->borrow_mut.expr :
+                (arg && arg->type == AST_BORROW ? arg->borrow.expr : NULL);
+            SemanticBinding *owner = borrow_target_binding(ctx, target);
+            /* Reborrowing a named reference uses that reference as the
+             * capability. Its owner's lexical borrow remains active, while
+             * two uses of the same mutable capability in one call conflict. */
+            if (reference) {
+                owner = reference;
+                is_mut = reference->type_info.ref_kind == REFKIND_MUT;
+            }
+            if (!owner) continue;
+            if (owner->mutable_borrow_active || (is_mut && owner->shared_borrow_count)) {
+                semantic_error_at(ctx, semantic_location_from_ast(arg),
+                                  "conflicting borrow of '%s' in function call", owner->name);
+            }
+            if (is_mut) owner->mutable_borrow_active = 1;
+            else owner->shared_borrow_count++;
         }
         check_call_signature(ctx, node);
+        for (int i = 0; i < saved_count; i++) {
+            ctx->bindings[i].shared_borrow_count = saved_shared[i];
+            ctx->bindings[i].mutable_borrow_active = saved_mutable[i];
+        }
         break;
+    }
     case AST_MEMBER_ACCESS: {
         /* `a.length` on a fixed-size array is a compile-time constant: it
          * neither reads nor moves `a`, so `f(a, a.length)` is fine even
@@ -1519,7 +1568,10 @@ static void semantic_walk_expr(SemanticContext *ctx, ASTNode *node, ExprContext 
             lhs_type.is_array && lhs_type.dims_count > 0) {
             break;
         }
-        semantic_walk_expr(ctx, node->member_access.lhs, expr_ctx == EXPRCTX_MOVE ? EXPRCTX_MOVE : EXPRCTX_READ);
+        SemanticTypeInfo member_type;
+        int move = expr_ctx == EXPRCTX_MOVE &&
+            !(semantic_infer_expr_type(ctx, node, &member_type) && semantic_typeinfo_is_copy(ctx, &member_type));
+        semantic_walk_expr(ctx, node->member_access.lhs, move ? EXPRCTX_MOVE : EXPRCTX_READ);
         break; }
     case AST_ARROW_ACCESS:
         semantic_walk_expr(ctx, node->arrow_access.lhs, expr_ctx == EXPRCTX_MOVE ? EXPRCTX_MOVE : EXPRCTX_READ);
@@ -1533,12 +1585,19 @@ static void semantic_walk_expr(SemanticContext *ctx, ASTNode *node, ExprContext 
     case AST_SIZEOF:
         semantic_walk_expr(ctx, node->sizeof_expr.expr, EXPRCTX_READ);
         break;
-    case AST_TERNARY:
+    case AST_TERNARY: {
+        SemanticBindingSnapshot base_state, then_state, else_state;
         semantic_walk_expr(ctx, node->ternary.cond, EXPRCTX_READ);
         check_condition_type(ctx, node->ternary.cond);
-        semantic_walk_expr(ctx, node->ternary.then_expr, EXPRCTX_READ);
-        semantic_walk_expr(ctx, node->ternary.else_expr, EXPRCTX_READ);
+        snapshot_bindings(ctx, &base_state);
+        semantic_walk_expr(ctx, node->ternary.then_expr, expr_ctx);
+        snapshot_bindings(ctx, &then_state);
+        restore_bindings(ctx, &base_state);
+        semantic_walk_expr(ctx, node->ternary.else_expr, expr_ctx);
+        snapshot_bindings(ctx, &else_state);
+        merge_if_binding_states(ctx, &base_state, &then_state, &else_state);
         break;
+    }
     case AST_CASE:
         semantic_walk_case(ctx, node, 0);
         break;

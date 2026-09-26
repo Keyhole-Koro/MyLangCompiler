@@ -1,0 +1,2 @@
+void change(ref mut i32 a) { *a = 1; }
+i32 main() { mut i32 x = 0; ref i32 r = &x; change(&mut x); return *r; }

@@ -1,0 +1,1 @@
+i32 main() { i32 values[2][2] = {1, 2, 3, 4, 5}; return values[0][0]; }
