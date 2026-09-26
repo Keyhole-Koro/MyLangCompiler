@@ -34,12 +34,15 @@ typedef struct {
  *   name.safe.mln
  *   name.dom.mln
  *   name.dom.safe.mln
+ *   name.contract.mln
+ *   name.safe.contract.mln
  *   name.test.mln
  *   name.dom.test.mln
  *
  * Modifier order is canonical and enforced: syntax modifiers precede semantic
- * policy modifiers. The optional, final `test` modifier is accepted as a
- * MyLangTester artifact marker and does not change MLC's language profile.
+ * policy modifiers. The optional, final `contract` or `test` role marker does
+ * not change MLC's language profile. `test` is consumed by MyLangTester;
+ * repository policy keeps `.contract.mln` sources data-only.
  * Unknown and duplicate modifiers are rejected. The legacy .mlx extension is
  * intentionally unsupported.
  */

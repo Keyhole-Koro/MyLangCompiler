@@ -17,6 +17,7 @@ void dom_signature_free(DomSignature *sig) {
     sig->param_defaults = NULL;
     sig->param_count = 0;
     sig->call_name = NULL;
+    sig->return_type = NULL;
 }
 
 int dom_signature_lookup(ParserContext *context, ASTNode *program,

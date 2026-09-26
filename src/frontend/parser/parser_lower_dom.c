@@ -186,6 +186,23 @@ static ASTNode *i32_type(void) {
     return new_type_node(new_identifier("i32"), 0, TYPEMOD_NONE, REFKIND_NONE);
 }
 
+static int signature_returns_result(const DomSignature *sig) {
+    ASTNode *type = sig ? sig->return_type : NULL;
+    if (!type || type->type != AST_TYPE || !type->type_node.base_type) return 0;
+    ASTNode *base = type->type_node.base_type;
+    if (base->type == AST_IDENTIFIER) {
+        const char *name = base->identifier.name;
+        return strcmp(name, "Result") == 0 ||
+               (strncmp(name, "__mlg_s_", 8) == 0 && strstr(name, "_Result_") != NULL);
+    }
+    if (base->type == AST_TYPE_GENERIC) {
+        const char *name = base->generic_type.name;
+        return strcmp(name, "Result") == 0 ||
+               (strncmp(name, "__mlg_s_", 8) == 0 && strstr(name, "_Result_") != NULL);
+    }
+    return 0;
+}
+
 static void emit_stmt(DomEmit *out, ASTNode *stmt) {
     out->stmts = realloc(out->stmts, sizeof(ASTNode*) * (out->count + 1));
     out->stmts[out->count++] = stmt;
@@ -253,10 +270,26 @@ static char *emit_element(ParserContext *context, ASTNode *el, DomEmit *out) {
         args[i] = value;
     }
 
+    int ordinal = context->lowering.dom_node_counter++;
     char var[32];
-    snprintf(var, sizeof(var), "__dom%d", context->lowering.dom_node_counter++);
-    emit_stmt(out, new_var_decl(i32_type(), var,
-                                dom_call(sig.call_name, args, sig.param_count, el)));
+    snprintf(var, sizeof(var), "__dom%d", ordinal);
+    ASTNode *create_call = NULL;
+    if (signature_returns_result(&sig)) {
+        char adapter_name[256];
+        snprintf(adapter_name, sizeof(adapter_name), "dom_%s", tag);
+        DomSignature adapter_sig;
+        if (!dom_signature_lookup(context, context->lowering.dom_program,
+                                  adapter_name, &adapter_sig)) {
+            dom_error(context, el, 0, 0,
+                      "Result-returning <%s> needs a function named '%s' in scope",
+                      tag, adapter_name);
+        }
+        create_call = dom_call(adapter_sig.call_name, args, sig.param_count, el);
+        dom_signature_free(&adapter_sig);
+    } else {
+        create_call = dom_call(sig.call_name, args, sig.param_count, el);
+    }
+    emit_stmt(out, new_var_decl(i32_type(), var, create_call));
 
     ASTNode *ref_target = take_prop(el, DOM_REF_PROP);
     if (ref_target) {
@@ -277,7 +310,23 @@ static char *emit_element(ParserContext *context, ASTNode *el, DomEmit *out) {
             ASTNode **child_args = malloc(sizeof(ASTNode*) * 2);
             child_args[0] = new_identifier(var);
             child_args[1] = new_identifier(child_var);
-            emit_stmt(out, new_expr_stmt(dom_call(append_sig.call_name, child_args, 2, el)));
+            ASTNode *append_call = dom_call(append_sig.call_name, child_args, 2, el);
+            if (signature_returns_result(&append_sig)) {
+                DomSignature adapter_sig;
+                if (!dom_signature_lookup(context, context->lowering.dom_program,
+                                          "dom_append_child", &adapter_sig)) {
+                    dom_error(context, el, 0, 0,
+                              "Result-returning append_child needs a function named 'dom_append_child' in scope");
+                }
+                free_ast(append_call);
+                ASTNode **adapter_args = malloc(sizeof(ASTNode *) * 2);
+                adapter_args[0] = new_identifier(var);
+                adapter_args[1] = new_identifier(child_var);
+                emit_stmt(out, new_expr_stmt(dom_call(adapter_sig.call_name, adapter_args, 2, el)));
+                dom_signature_free(&adapter_sig);
+            } else {
+                emit_stmt(out, new_expr_stmt(append_call));
+            }
             free(child_var);
         }
         dom_signature_free(&append_sig);

@@ -73,6 +73,7 @@ MyLangSourceSpecResult mylang_source_spec_parse(const char *path) {
 
     bool saw_dom = false;
     bool saw_safe = false;
+    bool saw_contract = false;
     bool saw_test = false;
     bool semantic_phase = false;
 
@@ -85,6 +86,10 @@ MyLangSourceSpecResult mylang_source_spec_parse(const char *path) {
 
         if (saw_test) {
             fail(&result, "test source modifier '%s' must be last", modifier);
+            return result;
+        }
+        if (saw_contract) {
+            fail(&result, "contract source modifier '%s' must be last", modifier);
             return result;
         }
 
@@ -116,6 +121,15 @@ MyLangSourceSpecResult mylang_source_spec_parse(const char *path) {
                 return result;
             }
             saw_test = true;
+        } else if (strcmp(modifier, "contract") == 0) {
+            /* Contract is a source-role marker. Its data-only policy is
+             * enforced by the repository boundary check; it does not select
+             * a different parser or semantic profile. */
+            if (saw_contract) {
+                fail(&result, "duplicate source modifier '%s'", modifier);
+                return result;
+            }
+            saw_contract = true;
         } else {
             fail(&result, "unknown source modifier '%s'", modifier);
             return result;

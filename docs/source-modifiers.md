@@ -10,6 +10,8 @@ main.mln
 main.safe.mln
 page.dom.mln
 page.dom.safe.mln
+schema.contract.mln
+schema.safe.contract.mln
 serial_rx.test.mln
 page.dom.test.mln
 ```
@@ -17,13 +19,15 @@ page.dom.test.mln
 The canonical order is:
 
 ```text
-<name>.<syntax modifiers>.<semantic policy modifiers>.<test marker>.mln
+<name>.<syntax modifiers>.<semantic policy modifiers>.<role marker>.mln
 ```
 
 `dom` enables DOM expression syntax. `safe` selects the strict memory-safety
 profile. The two axes are independent, so DOM syntax can be compiled with or
-without the strict policy. `test` is an optional final marker consumed by
-MyLangTester; it does not change the compiler profile.
+without the strict policy. `contract` and `test` are optional, mutually
+exclusive final role markers; neither changes the compiler profile. `test` is
+consumed by MyLangTester. Repository boundary checks enforce that contract
+sources contain declarations rather than implementations.
 
 ## Rejected forms
 

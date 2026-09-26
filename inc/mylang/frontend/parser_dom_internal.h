@@ -13,6 +13,9 @@ ASTNode *parse_dom_element(ParserContext *context, Token **cur);
 // which give properties their argument order.
 typedef struct {
     char *call_name;
+    // Borrowed from the function declaration; clone before inserting it into
+    // the lowered AST.
+    ASTNode *return_type;
     char **param_names;
     // Per parameter: its `= literal` default, borrowed from the declaration
     // (NULL when the parameter has none). Clone before use.

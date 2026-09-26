@@ -114,6 +114,7 @@ void resolver_fill_dom_signature(const ASTNode *fundef_node, const char *call_na
 
     memset(out, 0, sizeof(*out));
     out->call_name = call_name ? strdup(call_name) : strdup(fundef_node->fundef.name ? fundef_node->fundef.name : "");
+    out->return_type = fundef_node->fundef.ret_type;
     out->param_count = fundef_node->fundef.param_count;
 
     if (out->param_count > 0) {
