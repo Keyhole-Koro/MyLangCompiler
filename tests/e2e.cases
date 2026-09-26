@@ -1,4 +1,8 @@
 # name | expected R1 (decimal or 0x...) | comma-separated sources relative to this directory
+globalConstantExpressions|366|succeed/global/constantExpressions.mln
+ternaryMoveIsolation|14|succeed/semantic/ternaryMoveIsolation.mln
+callBorrowLifetime|6|succeed/semantic/callBorrowLifetime.mln
+smallAndLiteralReturn|23|succeed/struct/byval/smallAndLiteralReturn.mln
 genericInstantiation|45|succeed/generic/instantiation.mln
 genericNestedStruct|57|succeed/generic/nestedStruct.mln
 genericRecursive|15|succeed/generic/recursive.mln
