@@ -60,3 +60,29 @@ unchecked {
 }
 ```
 Inside an `unchecked` block, the compiler allows raw pointer operations and bypasses the borrow checker's strict exclusivity rules for references.
+
+## 6. Automatic Drop
+
+A non-Copy struct opts into deterministic cleanup by defining a one-argument
+pointer/reference method named `drop` that returns `void`:
+
+```mylang
+void (Resource *self) drop() {
+    release(self->handle);
+}
+```
+
+The compiler tracks a runtime ownership flag for each droppable parameter and
+local. It calls `drop()` once for the final owner at lexical scope exit,
+including `break`, `continue`, and function return paths. Moving a value clears
+the source flag; assigning a new value drops the destination's old value first.
+Droppable fields are destroyed recursively in reverse declaration order after
+their containing type's own `drop()` method.
+
+Local arrays of droppable values are not owner-tracked yet. Use a container
+type with its own `drop()` method when an owned collection is needed.
+Moving or replacing a droppable field separately is likewise not supported;
+move or replace its containing owner as one value.
+
+`drop()` must accept its receiver through a pointer or reference. A value
+receiver is not a destructor and is ignored by automatic cleanup.

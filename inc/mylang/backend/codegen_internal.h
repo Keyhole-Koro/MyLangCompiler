@@ -42,6 +42,16 @@ typedef struct {
     int dims_count;
 } LocalInfo;
 
+/** One function-local owner whose type supplies `void (T *self) drop()`.
+ * The flag lives in the stack frame so branch-dependent initialization and
+ * moves remain correct at runtime. */
+typedef struct {
+    const char *name;
+    const char *base_type;
+    int flag_offset;
+    bool is_param;
+} DropBinding;
+
 typedef MylangType TypeInfo;
 
 typedef struct {
@@ -73,6 +83,8 @@ typedef struct {
     bool has_return_type;
     TypeInfo return_type;
     bool *param_is_aggregate; // param_count entries, or NULL if param_count == 0
+    bool *param_has_type;
+    TypeInfo *param_types;
 } FunctionSig;
 
 typedef struct {
@@ -124,6 +136,12 @@ typedef struct {
     bool sret_active;
     int sret_offset;
     int sret_size_bytes;
+    DropBinding *drop_bindings;
+    int drop_binding_count;
+    int drop_return_offset;
+    DropBinding **active_drop_bindings;
+    int active_drop_count;
+    int loop_drop_base;
 } CompilerContext;
 
 #define cg_structs        (cc->structs)
@@ -285,5 +303,26 @@ void gen_do_while(CompilerContext *cc, ASTNode *node, StringBuilder *sb, char **
 void gen_stmt(CompilerContext *cc, ASTNode *node, StringBuilder *sb, char **params, int param_count, char **locals, int local_count);
 void gen_stmt_internal(CompilerContext *cc, ASTNode *node, StringBuilder *sb, char **params, int param_count, char **locals, int local_count, const char *break_label, const char *continue_label);
 void gen_func(CompilerContext *cc, ASTNode *node, StringBuilder *sb);
+
+bool type_needs_drop(CompilerContext *cc, ASTNode *type_node);
+bool expr_needs_drop(CompilerContext *cc, ASTNode *expr);
+void collect_drop_bindings(CompilerContext *cc, ASTNode *node, bool is_param,
+                           int param_count, int local_count);
+DropBinding *find_drop_binding(CompilerContext *cc, const char *name);
+DropBinding *drop_binding_for_expr(CompilerContext *cc, ASTNode *expr);
+void emit_drop_flag(CompilerContext *cc, DropBinding *binding, bool active,
+                    StringBuilder *sb);
+void emit_drop_binding(CompilerContext *cc, DropBinding *binding, StringBuilder *sb,
+                       char **params, int param_count, char **locals, int local_count);
+void emit_drop_all(CompilerContext *cc, StringBuilder *sb,
+                   char **params, int param_count, char **locals, int local_count);
+void clear_moved_drop_binding(CompilerContext *cc, ASTNode *expr, StringBuilder *sb);
+void activate_drop_binding(CompilerContext *cc, const char *name, StringBuilder *sb);
+void cleanup_drop_bindings(CompilerContext *cc);
+void push_active_drop_binding(CompilerContext *cc, DropBinding *binding);
+void emit_drop_active_from(CompilerContext *cc, int first, StringBuilder *sb,
+                           char **params, int param_count, char **locals, int local_count);
+void pop_drop_scope(CompilerContext *cc, int mark, StringBuilder *sb,
+                    char **params, int param_count, char **locals, int local_count);
 
 #endif

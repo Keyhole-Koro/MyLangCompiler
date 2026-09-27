@@ -1,0 +1,43 @@
+import allocator from "../../../../MyStdLib/memory/allocator.mln";
+import string from "../../../../MyStdLib/text/string.mln";
+import { String } from "../../../../MyStdLib/text/string.mln";
+
+u8 storage[256];
+i32 used = 0;
+i32 frees = 0;
+
+i32 test_alloc(i32 size) {
+    if (size > 256 - used) { return 0; }
+    i32 result = (i32)(&storage[used]);
+    used = used + size;
+    return result;
+}
+
+void test_free(i32 pointer) {
+    if (pointer != 0) { frees++; }
+}
+
+String greeting() {
+    String result = string.with_capacity(2);
+    result.append("hello");
+    result.push((u8)'!');
+    return result;
+}
+
+i32 exercise() {
+    String text = greeting();
+    if (text.as_str() != "hello!") { return 1; }
+    if (text.len() != 6) { return 2; }
+    str original = text.as_str();
+    if (!text.append(original)) { return 3; }
+    if (text.as_str() != "hello!hello!") { return 4; }
+    return 0;
+}
+
+i32 main() {
+    allocator.configure(test_alloc, test_free);
+    i32 error = exercise();
+    if (error != 0) { return error; }
+    // 2 -> 8 -> 16 frees both old allocations; scope drop frees the final one.
+    return frees * 10 + used;
+}

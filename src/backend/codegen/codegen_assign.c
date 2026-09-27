@@ -13,6 +13,13 @@ static int aggregate_assign_size(CompilerContext *cc, ASTNode *lhs) {
     return total > 0 ? total : 0;
 }
 
+static void finish_drop_assignment(CompilerContext *cc, DropBinding *dest,
+                                   DropBinding *source, StringBuilder *sb) {
+    if (!dest) return;
+    activate_drop_binding(cc, dest->name, sb);
+    if (source && source != dest) emit_drop_flag(cc, source, false, sb);
+}
+
 void gen_assign(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
               char **params, int param_count,
               char **locals, int local_count,
@@ -25,6 +32,21 @@ void gen_assign(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
         fprintf(stderr, "Codegen error: assignment to const lvalue is not allowed\n");
         exit(1);
     }
+    if (node->assign.left->type != AST_IDENTIFIER &&
+        expr_needs_drop(cc, node->assign.left)) {
+        fprintf(stderr,
+                "Codegen error at %d:%d: replacing a droppable field or "
+                "dereference is not supported yet; replace its containing "
+                "owner instead\n",
+                node->assign.left->line, node->assign.left->col);
+        exit(1);
+    }
+    DropBinding *dest_drop = node->assign.left->type == AST_IDENTIFIER
+        ? find_drop_binding(cc, node->assign.left->identifier.name) : NULL;
+    DropBinding *source_drop = drop_binding_for_expr(cc, node->assign.right);
+    bool self_move = dest_drop && source_drop == dest_drop;
+    if (dest_drop && !self_move)
+        emit_drop_binding(cc, dest_drop, sb, params, param_count, locals, local_count);
     if (node->assign.right->type == AST_INIT_LIST &&
         node->assign.right->init_list.struct_type_name) {
         gen_lvalue_addr(cc, node->assign.left, sb, "r3",
@@ -33,6 +55,7 @@ void gen_assign(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
                                      params, param_count, locals, local_count);
         if (target_reg && strcmp(target_reg, "r3") != 0)
             sb_append(sb, "  mov %s, r3\n", target_reg);
+        finish_drop_assignment(cc, dest_drop, source_drop, sb);
         return;
     }
     int total = aggregate_assign_size(cc, node->assign.left);
@@ -43,6 +66,7 @@ void gen_assign(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
             emit_string_literal_into_addr(cc, node->assign.right, sb, "r3");
             if (target_reg && strcmp(target_reg, "r3") != 0)
                 sb_append(sb, "  mov %s, r3\n", target_reg);
+            finish_drop_assignment(cc, dest_drop, source_drop, sb);
             return;
         }
         if (call_returns_aggregate(cc, node->assign.right)) {
@@ -60,6 +84,7 @@ void gen_assign(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
             if (target_reg) {
                 gen_lvalue_addr(cc, node->assign.left, sb, target_reg, params, param_count, locals, local_count);
             }
+            finish_drop_assignment(cc, dest_drop, source_drop, sb);
             return;
         }
 
@@ -86,6 +111,7 @@ void gen_assign(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
         if (target_reg && strcmp(target_reg, "r3") != 0) {
             sb_append(sb, "  mov %s, r3\n", target_reg);
         }
+        finish_drop_assignment(cc, dest_drop, source_drop, sb);
         return;
     }
 
@@ -98,4 +124,5 @@ void gen_assign(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
     if (target_reg && strcmp(target_reg, "r1") != 0) {
         sb_append(sb, "  mov %s, r1\n", target_reg);
     }
+    finish_drop_assignment(cc, dest_drop, source_drop, sb);
 }

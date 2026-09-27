@@ -71,12 +71,23 @@ void gen_func(CompilerContext *cc, ASTNode *node, StringBuilder *sb)
         cg_locals_info = NULL;
     }
 
+    cleanup_drop_bindings(cc);
+    for (int i = 0; i < param_count; i++)
+        collect_drop_bindings(cc, fn->fundef.params[i], true, param_count, local_count);
+    collect_drop_bindings(cc, fn->fundef.body, false, param_count, local_count);
+
     // One more slot, past every named local/param, to stash the hidden
     // out-pointer -- computed the same way local_offset gives each declared
     // local its own slot, just one index past the last of them, so it can
     // never collide with a real name (nothing is ever declared there).
-    int frame_slots = local_count + param_count + (ret_agg_size > 0 ? 1 : 0);
-    int sret_offset = ret_agg_size > 0 ? local_offset(param_count, local_count) : 0;
+    int sret_index = local_count + cc->drop_binding_count;
+    int return_index = sret_index + (ret_agg_size > 0 ? 1 : 0);
+    int needs_drop_return_slot = cc->drop_binding_count > 0 && ret_agg_size == 0;
+    int frame_slots = local_count + param_count + cc->drop_binding_count +
+                      (ret_agg_size > 0 ? 1 : 0) + (needs_drop_return_slot ? 1 : 0);
+    int sret_offset = ret_agg_size > 0 ? local_offset(param_count, sret_index) : 0;
+    cc->drop_return_offset = needs_drop_return_slot
+        ? local_offset(param_count, return_index) : 0;
 
     sb_append(sb, "\n");
     sb_append(sb, "%s:\n", fname);
@@ -105,6 +116,9 @@ void gen_func(CompilerContext *cc, ASTNode *node, StringBuilder *sb)
         sb_append(sb, "  addis r3, %d\n", sret_offset);
         sb_append(sb, "  store r3, r4\n");
     }
+    for (int i = 0; i < cc->drop_binding_count; i++) {
+        emit_drop_flag(cc, &cc->drop_bindings[i], cc->drop_bindings[i].is_param, sb);
+    }
 
     char ret_label[32];
     snprintf(ret_label, sizeof(ret_label), "b_L_ret_%d", next_label(cc));
@@ -117,6 +131,12 @@ void gen_func(CompilerContext *cc, ASTNode *node, StringBuilder *sb)
     gen_stmt(cc, fn->fundef.body, sb, params, param_count, locals, local_count);
 
     sb_append(sb, "%s:\n", ret_label);
+    emit_drop_all(cc, sb, params, param_count, locals, local_count);
+    if (cc->drop_return_offset != 0) {
+        sb_append(sb, "  mov r3, bp\n");
+        sb_append(sb, "  addis r3, %d\n", cc->drop_return_offset);
+        sb_append(sb, "  load r1, r3\n");
+    }
     sb_append(sb, "  addis sp, %d\n", frame_slots * SLOT_SIZE);
     sb_append(sb, "; epilogue\n  pop  bp\n  pop  lr\n");
 
@@ -135,6 +155,7 @@ void gen_func(CompilerContext *cc, ASTNode *node, StringBuilder *sb)
         cg_locals_info = NULL;
     }
     cg_locals_count = 0;
+    cleanup_drop_bindings(cc);
     free(locals);
     free(params);
 }

@@ -25,6 +25,8 @@ void gen_for(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
     const char *continue_label)
 {
     (void)break_label; (void)continue_label;
+    int outer_loop_drop_base = cc->loop_drop_base;
+    int for_scope_mark = cc->active_drop_count;
     int cur_label = next_label(cc);
     char for_cond[32], for_body[32], for_inc[32], for_end[32];
     snprintf(for_cond, sizeof(for_cond), "b_L_for_cond_%d", cur_label);
@@ -32,8 +34,13 @@ void gen_for(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
     snprintf(for_inc, sizeof(for_inc), "b_L_for_inc_%d", cur_label);
     snprintf(for_end, sizeof(for_end), "b_L_for_end_%d", cur_label);
 
-    if (node->for_stmt.init)
+    if (node->for_stmt.init) {
         gen_stmt(cc, node->for_stmt.init, sb, params, param_count, locals, local_count);
+        if (node->for_stmt.init->type == AST_VAR_DECL)
+            push_active_drop_binding(cc,
+                find_drop_binding(cc, node->for_stmt.init->var_decl.name));
+    }
+    cc->loop_drop_base = cc->active_drop_count;
 
     sb_append(sb, "%s:\n", for_cond);
 
@@ -55,6 +62,8 @@ void gen_for(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
 
     sb_append(sb, "  jmp %s\n", for_cond);
     sb_append(sb, "%s:\n", for_end);
+    pop_drop_scope(cc, for_scope_mark, sb, params, param_count, locals, local_count);
+    cc->loop_drop_base = outer_loop_drop_base;
 }
 
 void gen_while(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
@@ -64,6 +73,8 @@ void gen_while(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
     const char *continue_label)
 {
     (void)break_label; (void)continue_label;
+    int outer_loop_drop_base = cc->loop_drop_base;
+    cc->loop_drop_base = cc->active_drop_count;
     int cur = next_label(cc);
 
     char cond_label[32], body_label[32], end_label[32];
@@ -83,6 +94,7 @@ void gen_while(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
 
     sb_append(sb, "  jmp %s\n", cond_label);
     sb_append(sb, "%s:\n", end_label);
+    cc->loop_drop_base = outer_loop_drop_base;
 }
 
 void gen_do_while(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
@@ -92,6 +104,8 @@ void gen_do_while(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
     const char *continue_label)
 {
     (void)break_label; (void)continue_label;
+    int outer_loop_drop_base = cc->loop_drop_base;
+    cc->loop_drop_base = cc->active_drop_count;
     int cur = next_label(cc);
 
     char cond_label[32], body_label[32], end_label[32];
@@ -110,4 +124,5 @@ void gen_do_while(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
                         body_label, end_label);
 
     sb_append(sb, "%s:\n", end_label);
+    cc->loop_drop_base = outer_loop_drop_base;
 }

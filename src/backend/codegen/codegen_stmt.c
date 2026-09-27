@@ -289,6 +289,11 @@ static void gen_stmt_labeled(CompilerContext *cc, ASTNode *node, StringBuilder *
         if (node->var_decl.init)
         {
             ASTNode *vtype = node->var_decl.var_type;
+            DropBinding *drop = find_drop_binding(cc, node->var_decl.name);
+            if (drop) {
+                /* A declaration inside a loop reuses its frame slot. */
+                emit_drop_binding(cc, drop, sb, params, param_count, locals, local_count);
+            }
             if (vtype && vtype->type == AST_TYPE_ARRAY &&
                 (node->var_decl.init->type == AST_INIT_LIST || node->var_decl.init->type == AST_STRING_LITERAL)) {
                 gen_array_init(cc, node, sb, params, param_count, locals, local_count);
@@ -311,9 +316,20 @@ static void gen_stmt_labeled(CompilerContext *cc, ASTNode *node, StringBuilder *
                 emit_addr_of_var(cc, sb, node->var_decl.name, "r1", params, param_count, locals, local_count);
                 sb_append(sb, "  push r1\n");
                 gen_call_sret(cc, node->var_decl.init, sb, params, param_count, locals, local_count);
+            } else if (aggregate_type_size(cc, vtype) > SLOT_SIZE &&
+                       is_addressable_expr(node->var_decl.init)) {
+                emit_addr_of_var(cc, sb, node->var_decl.name, "r3",
+                                 params, param_count, locals, local_count);
+                gen_lvalue_addr(cc, node->var_decl.init, sb, "r2",
+                                params, param_count, locals, local_count);
+                emit_aggregate_copy(sb, "r3", "r2", aggregate_type_size(cc, vtype));
             } else {
                 gen_expr(cc, node->var_decl.init, sb, "r1", params, param_count, locals, local_count);
                 emit_store_var(cc, sb, node->var_decl.name, "r1", params, param_count, locals, local_count);
+            }
+            if (drop) {
+                activate_drop_binding(cc, node->var_decl.name, sb);
+                clear_moved_drop_binding(cc, node->var_decl.init, sb);
             }
         }
         break;
@@ -324,15 +340,19 @@ static void gen_stmt_labeled(CompilerContext *cc, ASTNode *node, StringBuilder *
         gen_assign(cc, node, sb, params, param_count, locals, local_count, "r1");
         break;
     case AST_BREAK:
-        if (break_label)
+        if (break_label) {
+            emit_drop_active_from(cc, cc->loop_drop_base, sb,
+                                  params, param_count, locals, local_count);
             sb_append(sb, "  jmp %s\n", break_label);
-        else
+        } else
             sb_append(sb, "  ; error: break used outside loop\n");
         break;
     case AST_CONTINUE:
-        if (continue_label)
+        if (continue_label) {
+            emit_drop_active_from(cc, cc->loop_drop_base, sb,
+                                  params, param_count, locals, local_count);
             sb_append(sb, "  jmp %s\n", continue_label);
-        else
+        } else
             sb_append(sb, "  ; error: continue used outside loop\n");
         break;
     case AST_EXPR_STMT:
@@ -405,6 +425,13 @@ static void gen_stmt_labeled(CompilerContext *cc, ASTNode *node, StringBuilder *
         } else if (node->ret.expr) {
             gen_expr(cc, node->ret.expr, sb, "r1", params, param_count, locals, local_count);
         }
+        if (node->ret.expr && cc->sret_active)
+            clear_moved_drop_binding(cc, node->ret.expr, sb);
+        if (node->ret.expr && cc->drop_return_offset != 0 && !cc->sret_active) {
+            sb_append(sb, "  mov r3, bp\n");
+            sb_append(sb, "  addis r3, %d\n", cc->drop_return_offset);
+            sb_append(sb, "  store r3, r1\n");
+        }
         sb_append(sb, "  \n; return\n");
         if (cc->return_label)
             sb_append(sb, "  jmp %s\n", cc->return_label);
@@ -413,12 +440,19 @@ static void gen_stmt_labeled(CompilerContext *cc, ASTNode *node, StringBuilder *
         gen_expr(cc, node->yield_stmt.expr, sb, "r1", params, param_count, locals, local_count);
         break;
     case AST_BLOCK:
+    {
+        int drop_mark = cc->active_drop_count;
         for (int i = 0; i < node->block.count; i++)
         {
             gen_stmt_internal(cc, node->block.stmts[i], sb, params, param_count, locals, local_count,
                               break_label, continue_label);
+            ASTNode *stmt = node->block.stmts[i];
+            if (stmt && stmt->type == AST_VAR_DECL)
+                push_active_drop_binding(cc, find_drop_binding(cc, stmt->var_decl.name));
         }
+        pop_drop_scope(cc, drop_mark, sb, params, param_count, locals, local_count);
         break;
+    }
     case AST_UNCHECKED:
         gen_stmt_internal(cc, node->unchecked_block.body, sb, params, param_count, locals, local_count,
                           break_label, continue_label);

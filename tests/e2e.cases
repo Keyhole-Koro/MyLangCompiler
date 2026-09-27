@@ -1,6 +1,8 @@
 # name | expected R1 (decimal or 0x...) | comma-separated sources relative to this directory
 globalConstantExpressions|366|succeed/global/constantExpressions.mln
 ternaryMoveIsolation|14|succeed/semantic/ternaryMoveIsolation.mln
+automaticDrop|1166|succeed/semantic/automaticDrop.mln
+ownedString|56|succeed/string/ownedString.mln,../../MyStdLib/memory/allocator.mln,../../MyStdLib/text/string.mln
 callBorrowLifetime|6|succeed/semantic/callBorrowLifetime.mln
 smallAndLiteralReturn|23|succeed/struct/byval/smallAndLiteralReturn.mln
 genericInstantiation|45|succeed/generic/instantiation.mln

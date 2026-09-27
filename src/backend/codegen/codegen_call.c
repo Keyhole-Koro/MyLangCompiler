@@ -196,6 +196,15 @@ static int sig_arg_is_aggregate(const FunctionSig *sig, int i)
     return sig && sig->param_is_aggregate && i < sig->param_count && sig->param_is_aggregate[i];
 }
 
+static void clear_moved_call_args(CompilerContext *cc, ASTNode *node,
+                                  const FunctionSig *sig, StringBuilder *sb) {
+    if (!sig) return;
+    for (int i = 0; i < node->call.arg_count && i < sig->param_count; i++) {
+        if (sig_arg_is_aggregate(sig, i))
+            clear_moved_drop_binding(cc, node->call.args[i], sb);
+    }
+}
+
 static const char *direct_call_target(const char *name)
 {
     return codegen_redirect_call_target(name);
@@ -286,6 +295,7 @@ void gen_call(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char 
         }
         sb_append(sb, "  movi r4, %d\n", rest_count);
         sb_append(sb, "  call %s\n", direct_call_target(node->call.name));
+        clear_moved_call_args(cc, node, sig, sb);
 
         if (stack_args > 0) {
             sb_append(sb, "  ; restore sp after variadic call\n");
@@ -328,6 +338,7 @@ void gen_call(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char 
             sb_append(sb, "  load %s, r2\n", arg_regs[i]);
         }
         sb_append(sb, "  call %s\n", direct_call_target(node->call.name));
+        clear_moved_call_args(cc, node, sig, sb);
         sb_append(sb, "  ; release aggregate call arguments and register slots\n");
         sb_append(sb, "  addis sp, %d\n", aggregate_temp_bytes + slot_bytes);
         if (strcmp(target_reg, "r1") != 0)
@@ -368,6 +379,7 @@ void gen_call(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char 
     }
 
     sb_append(sb, "  call %s\n", direct_call_target(node->call.name));
+    clear_moved_call_args(cc, node, sig, sb);
 
     if (aggregate_temp_bytes > 0)
     {
@@ -450,6 +462,7 @@ void gen_call_sret(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
     sb_append(sb, "  load r4, r4\n");
 
     sb_append(sb, "  call %s\n", direct_call_target(node->call.name));
+    clear_moved_call_args(cc, node, sig, sb);
 
     if (stack_args > 0)
     {

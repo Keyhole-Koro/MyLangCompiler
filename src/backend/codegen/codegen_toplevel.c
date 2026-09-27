@@ -139,12 +139,17 @@ static void append_func_sig(CompilerContext *cc, ASTNode *node) {
     sig->has_return_type = fn->fundef.ret_type &&
                            typeinfo_from_type_ast(cc, fn->fundef.ret_type, &sig->return_type);
     sig->param_is_aggregate = NULL;
+    sig->param_has_type = NULL;
+    sig->param_types = NULL;
     if (sig->param_count > 0) {
         sig->param_is_aggregate = (bool*)calloc((size_t)sig->param_count, sizeof(bool));
+        sig->param_has_type = (bool*)calloc((size_t)sig->param_count, sizeof(bool));
+        sig->param_types = (TypeInfo*)calloc((size_t)sig->param_count, sizeof(TypeInfo));
         for (int i = 0; i < sig->param_count; i++) {
             ASTNode *p = fn->fundef.params[i];
             if (p->param.is_rest) continue; // rest args are always i32
             sig->param_is_aggregate[i] = aggregate_type_size(cc, p->param.type) > 0;
+            sig->param_has_type[i] = typeinfo_from_type_ast(cc, p->param.type, &sig->param_types[i]);
         }
     }
     cc->func_sig_count++;
@@ -164,11 +169,17 @@ static void append_imported_func_sig(CompilerContext *cc, const char *name,
     sig->has_return_type = fn_info->ret_type_ast &&
                            typeinfo_from_type_ast(cc, fn_info->ret_type_ast, &sig->return_type);
     sig->param_is_aggregate = NULL;
+    sig->param_has_type = NULL;
+    sig->param_types = NULL;
     if (sig->param_count > 0) {
         sig->param_is_aggregate = (bool*)calloc((size_t)sig->param_count, sizeof(bool));
+        sig->param_has_type = (bool*)calloc((size_t)sig->param_count, sizeof(bool));
+        sig->param_types = (TypeInfo*)calloc((size_t)sig->param_count, sizeof(TypeInfo));
         for (int i = 0; i < sig->param_count; i++) {
             if (fn_info->params[i].is_rest) continue;
             sig->param_is_aggregate[i] = aggregate_type_size(cc, fn_info->params[i].type_ast) > 0;
+            sig->param_has_type[i] = typeinfo_from_type_ast(
+                cc, fn_info->params[i].type_ast, &sig->param_types[i]);
         }
     }
     cc->func_sig_count++;
@@ -418,6 +429,8 @@ void cleanup_codegen_context(CompilerContext *cc) {
     if (cc->func_sigs) {
         for (int i = 0; i < cc->func_sig_count; i++) {
             free(cc->func_sigs[i].param_is_aggregate);
+            free(cc->func_sigs[i].param_has_type);
+            free(cc->func_sigs[i].param_types);
         }
         free(cc->func_sigs);
         cc->func_sigs = NULL;

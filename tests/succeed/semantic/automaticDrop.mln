@@ -1,0 +1,68 @@
+i32 dropped = 0;
+
+struct Resource {
+    i32 value;
+    i32 marker;
+};
+
+struct Holder {
+    Resource resource;
+};
+
+void (Resource *self) drop() {
+    dropped = dropped + self->value;
+    self->value = 0;
+}
+
+Resource make(i32 value) {
+    return Resource { value: value, marker: 99 };
+}
+
+void consume(Resource value) {
+    if (value.marker != 99) { dropped = -1000; }
+}
+
+void exercise() {
+    {
+        Holder holder = Holder {
+            resource: Resource { value: 1000, marker: 99 },
+        };
+    }
+    {
+        Resource nested = make(1);
+    }
+
+    Resource passed = make(10);
+    consume(passed);
+
+    Resource source = make(100);
+    Resource moved = source;
+
+    Resource field_source = make(20);
+    {
+        Holder from_field = Holder { resource: field_source };
+    }
+
+    Holder holder_source = Holder {
+        resource: Resource { value: 30, marker: 99 },
+    };
+    Holder holder_moved = holder_source;
+
+    Resource assigned = make(2);
+    Resource replacement = make(1);
+    assigned = replacement;
+
+    i32 i = 0;
+    while (i < 3) {
+        Resource loop_value = make(1);
+        i++;
+        if (i == 1) { continue; }
+        if (i == 2) { break; }
+    }
+
+}
+
+i32 main() {
+    exercise();
+    return dropped;
+}
