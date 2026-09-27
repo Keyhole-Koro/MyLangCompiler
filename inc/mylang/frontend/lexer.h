@@ -128,6 +128,7 @@ typedef struct Token Token;
 struct Token{
   TokenKind kind;
   char *value;
+  int value_length; // decoded byte length; may include embedded NUL bytes
   int line;
   int col;
   int length;   // source width in bytes (may differ from strlen(value): hex->dec, escapes, quotes)

@@ -148,6 +148,13 @@ static int gen_arg_word(CompilerContext *cc, ASTNode *arg, StringBuilder *sb, co
         return 0;
     }
 
+    if (arg && arg->type == AST_STRING_LITERAL) {
+        const char *view = intern_string_view_n(cc, arg->string_literal.value,
+                                                arg->string_literal.length);
+        sb_append(sb, "  movi %s, %s\n", target_reg, view);
+        return 0;
+    }
+
     const FunctionSig *result_sig = call_returns_aggregate(cc, arg);
     if (result_sig) {
         int temp_bytes = ((result_sig->ret_size_bytes + SLOT_SIZE - 1) / SLOT_SIZE) * SLOT_SIZE;

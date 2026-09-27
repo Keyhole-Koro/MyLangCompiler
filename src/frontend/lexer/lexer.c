@@ -16,7 +16,7 @@ static void advance_pos(const char *start, size_t len, int *line, int *col) {
     }
 }
 
-static void unescape_string_literal_inplace(char *s) {
+static size_t unescape_string_literal_inplace(char *s) {
     char *src = s;
     char *dst = s;
 
@@ -45,6 +45,7 @@ static void unescape_string_literal_inplace(char *s) {
     }
 
     *dst = '\0';
+    return (size_t)(dst - s);
 }
 
 StringTokenKindMap operators[] = {
@@ -181,6 +182,7 @@ Token *createTokenSingle(int kind, char *value, int line, int col, int length) {
     Token *newTk = malloc(sizeof(Token));
     newTk->kind = kind;
     newTk->value = strdup(value);
+    newTk->value_length = (int)strlen(value);
     newTk->line = line;
     newTk->col = col;
     newTk->length = length;
@@ -555,8 +557,13 @@ Token *lexer_next_token(LexerContext *ctx) {
 
             memmove(buffer, buffer + 1, strlen(buffer) - 2);
             buffer[strlen(buffer) - 2] = '\0';
-            unescape_string_literal_inplace(buffer);
+            size_t decoded_len = unescape_string_literal_inplace(buffer);
             Token *t = createTokenSingle(STRING_LITERAL, buffer, tok_line, tok_col, (int)consumed);
+            free(t->value);
+            t->value = malloc(decoded_len + 1);
+            memcpy(t->value, buffer, decoded_len);
+            t->value[decoded_len] = '\0';
+            t->value_length = (int)decoded_len;
             free(buffer);
             ctx->last_token_kind = STRING_LITERAL;
             return t;

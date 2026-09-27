@@ -2,6 +2,7 @@
 #include "mylang/frontend/module.h"
 #include "mylang/frontend/resolver.h"
 #include "mylang/frontend/parser_ast_internal.h"
+#include "mylang/type/type_info.h"
 
 static int import_requests_symbol(const ASTNode *node, const char *name) {
     if (!node || node->type != AST_IMPORT || !name) return 0;
@@ -51,6 +52,8 @@ typedef struct GenericImportClosure {
 } GenericImportClosure;
 
 static void import_generic_template_closure(GenericImportClosure *closure, ASTNode *template);
+static void import_plain_dependency(ParserContext *context, Module *mod,
+                                    const char *type_name);
 
 static void import_generic_dependency(ASTNode **slot, void *user_data) {
     ASTNode *node = slot ? *slot : NULL;
@@ -67,6 +70,11 @@ static void import_generic_dependency(ASTNode **slot, void *user_data) {
                 break;
             }
         }
+    }
+    if (node && node->type == AST_TYPE && node->type_node.base_type &&
+        node->type_node.base_type->type == AST_IDENTIFIER) {
+        import_plain_dependency(closure->context, closure->module,
+                                node->type_node.base_type->identifier.name);
     }
     ast_visit_children(node, import_generic_dependency, closure);
 }
@@ -120,8 +128,7 @@ static void import_generic_template_closure(GenericImportClosure *closure, ASTNo
 
 void load_imported_generic_templates(ParserContext *context, ASTNode *import_node,
                                      const char *source_path) {
-    if (!import_node || import_node->type != AST_IMPORT ||
-        !source_path || import_node->import_stmt.symbol_count == 0)
+    if (!import_node || import_node->type != AST_IMPORT || !source_path)
         return;
 
     FrontendSession *session = context->session;
@@ -226,35 +233,53 @@ static void import_member_types(ParserContext *context, Module *mod, ASTNode *de
         if (type->type != AST_TYPE || !type->type_node.base_type ||
             type->type_node.base_type->type != AST_IDENTIFIER)
             continue;
-        const char *type_name = type->type_node.base_type->identifier.name;
-        if (is_user_typename(context, type_name)) continue;
-
-        ASTNode *dep = NULL;
-        for (int k = 0; k < mod->program->block.count && !dep; k++) {
-            ASTNode *stmt = mod->program->block.stmts[k];
-            if (!stmt) continue;
-            if (stmt->type == AST_STRUCT && stmt->struct_stmt.name &&
-                strcmp(stmt->struct_stmt.name, type_name) == 0)
-                dep = stmt;
-            else if (stmt->type == AST_TYPEDEF_STRUCT && stmt->typedef_struct.typedef_name &&
-                     strcmp(stmt->typedef_struct.typedef_name, type_name) == 0)
-                dep = stmt;
-        }
-        if (!dep) continue; /* a primitive, or declared elsewhere */
-
-        ASTNode *copy = ast_clone(dep);
-        if (copy->type == AST_STRUCT && strncmp(type_name, "__mlg_", 6) == 0)
-            copy->struct_stmt.is_imported_instance = 1;
-        add_typename(context, type_name);            /* before recursing: closes cycles */
-        import_member_types(context, mod, copy);     /* its own fields' types first */
-        add_imported_plain_type(context, copy);
+        import_plain_dependency(context, mod,
+                                type->type_node.base_type->identifier.name);
     }
+}
+
+/* Import concrete field/signature types reached through an exported type.
+ * This is also used by generic templates: for example importing
+ * FsSeekArgs<Out> must carry its SeekWhence enum into the instantiating
+ * module, even though SeekWhence was not named in that module's import list. */
+static void import_plain_dependency(ParserContext *context, Module *mod,
+                                    const char *type_name) {
+    if (!context || !mod || !type_name || mylang_type_is_builtin(type_name) ||
+        is_user_typename(context, type_name) || !mod->program ||
+        mod->program->type != AST_BLOCK)
+        return;
+
+    ASTNode *dep = NULL;
+    for (int k = 0; k < mod->program->block.count && !dep; k++) {
+        ASTNode *stmt = mod->program->block.stmts[k];
+        if (!stmt) continue;
+        if (stmt->type == AST_STRUCT && stmt->struct_stmt.name &&
+            strcmp(stmt->struct_stmt.name, type_name) == 0)
+            dep = stmt;
+        else if (stmt->type == AST_ENUM && stmt->enum_stmt.name &&
+                 strcmp(stmt->enum_stmt.name, type_name) == 0)
+            dep = stmt;
+        else if (stmt->type == AST_TYPEDEF_STRUCT &&
+                 stmt->typedef_struct.typedef_name &&
+                 strcmp(stmt->typedef_struct.typedef_name, type_name) == 0)
+            dep = stmt;
+        else if (stmt->type == AST_TYPEDEF && stmt->typedef_stmt.alias &&
+                 strcmp(stmt->typedef_stmt.alias, type_name) == 0)
+            dep = stmt;
+    }
+    if (!dep) return; /* a type parameter, or declared in another module */
+
+    ASTNode *copy = ast_clone(dep);
+    if (copy->type == AST_STRUCT && strncmp(type_name, "__mlg_", 6) == 0)
+        copy->struct_stmt.is_imported_instance = 1;
+    add_typename(context, type_name);            /* before recursing: closes cycles */
+    import_member_types(context, mod, copy);     /* its own fields' types first */
+    add_imported_plain_type(context, copy);
 }
 
 void load_imported_plain_types(ParserContext *context, ASTNode *import_node,
                                const char *source_path) {
-    if (!import_node || import_node->type != AST_IMPORT ||
-        !source_path || import_node->import_stmt.symbol_count == 0)
+    if (!import_node || import_node->type != AST_IMPORT || !source_path)
         return;
 
     FrontendSession *session = context->session;
@@ -262,6 +287,19 @@ void load_imported_plain_types(ParserContext *context, ASTNode *import_node,
 
     Module *mod = module_loader_load(session->loader, context->module.filename, source_path);
     if (!mod || mod->state != MODULE_LOADED) return;
+
+    /* Compiler-known receivers have no exported type declaration to request,
+     * but a package import may still provide their library methods. */
+    if (import_node->import_stmt.symbol_count == 0 && mod->program &&
+        mod->program->type == AST_BLOCK) {
+        for (int i = 0; i < mod->program->block.count; i++) {
+            ASTNode *fn = mod->program->block.stmts[i];
+            if (!fn || fn->type != AST_FUNDEF || !fn->fundef.is_exported ||
+                !fn->fundef.recv_type_name ||
+                !mylang_type_is_builtin(fn->fundef.recv_type_name)) continue;
+            import_type_methods(context, mod, fn->fundef.recv_type_name);
+        }
+    }
 
     for (int i = 0; i < mod->symbol_count; i++) {
         ModuleSymbol *sym = &mod->symbols[i];

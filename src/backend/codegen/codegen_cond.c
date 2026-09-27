@@ -12,6 +12,13 @@ void emit_cond_jump(CompilerContext *cc, ASTNode *left, ASTNode *right, TokenKin
                     char **params, int param_count, char **locals, int local_count,
                     const char *trueLabel, const char *falseLabel)
 {
+    if (gen_str_equality(cc, left, right, op, sb, "r1",
+                         params, param_count, locals, local_count)) {
+        sb_append(sb, "  cmp r1, 0\n");
+        sb_append(sb, "  jnz %s\n", trueLabel);
+        if (falseLabel) sb_append(sb, "  jmp %s\n", falseLabel);
+        return;
+    }
     // Generate left and right expressions into r2 and r3. The right operand may
     // itself be an expression that clobbers r2 (e.g. a binary op evaluates its
     // own operands through r2/r1), so preserve the left result across it.

@@ -37,6 +37,14 @@ void gen_assign(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
     }
     int total = aggregate_assign_size(cc, node->assign.left);
     if (total > 0) {
+        if (node->assign.right->type == AST_STRING_LITERAL && total == SLOT_SIZE * 2) {
+            gen_lvalue_addr(cc, node->assign.left, sb, "r3",
+                            params, param_count, locals, local_count);
+            emit_string_literal_into_addr(cc, node->assign.right, sb, "r3");
+            if (target_reg && strcmp(target_reg, "r3") != 0)
+                sb_append(sb, "  mov %s, r3\n", target_reg);
+            return;
+        }
         if (call_returns_aggregate(cc, node->assign.right)) {
             // `y = callee(args);` -- same hidden out-pointer convention as a
             // var-decl initializer (codegen_stmt.c), just with y's address

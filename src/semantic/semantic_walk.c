@@ -475,6 +475,16 @@ static int semantic_typeinfo_same_base(const SemanticTypeInfo *a, const Semantic
     return a && b && a->base_type && b->base_type && strcmp(a->base_type, b->base_type) == 0;
 }
 
+static int semantic_literal_to_legacy_c_string(const SemanticTypeInfo *expected,
+                                               const SemanticTypeInfo *actual,
+                                               ASTNode *expr) {
+    if (!expected || !actual || !expr || expr->type != AST_STRING_LITERAL) return 0;
+    if (!actual->base_type || strcmp(actual->base_type, "str") != 0 ||
+        actual->pointer_level != 0 || actual->is_array) return 0;
+    if (!expected->base_type || strcmp(expected->base_type, "char") != 0) return 0;
+    return expected->pointer_level == 1 || expected->is_array;
+}
+
 static int semantic_typeinfo_compatible(SemanticContext *ctx, const SemanticTypeInfo *expected, const SemanticTypeInfo *actual) {
     if (!expected || !actual) return 0;
     if (semantic_typeinfo_is_integer_like_or_enum(ctx, expected) &&
@@ -606,7 +616,9 @@ static void check_return_type(SemanticContext *ctx, ASTNode *return_node) {
     }
 
     if (semantic_infer_expr_type(ctx, return_node->ret.expr, &actual) &&
-        !semantic_typeinfo_compatible(ctx, &expected, &actual)) {
+        !semantic_typeinfo_compatible(ctx, &expected, &actual) &&
+        !semantic_literal_to_legacy_c_string(&expected, &actual,
+                                             return_node->ret.expr)) {
         semantic_report_type_mismatch(ctx, semantic_location_from_ast(return_node->ret.expr),
                                       SEMCODE_RETURN_TYPE_MISMATCH,
                                       "return", &expected, &actual);
@@ -1146,9 +1158,7 @@ static int semantic_infer_expr_type(SemanticContext *ctx, ASTNode *expr, Semanti
         semantic_typeinfo_make_scalar(out, "char");
         return 1;
     case AST_STRING_LITERAL:
-        semantic_typeinfo_make_scalar(out, "char");
-        out->is_array = 1;
-        out->dims_count = 1;
+        semantic_typeinfo_make_scalar(out, "str");
         return 1;
     case AST_IDENTIFIER:
         return semantic_infer_identifier_type(ctx, expr, out);
@@ -1201,6 +1211,13 @@ static void check_binary_type(SemanticContext *ctx, ASTNode *node) {
     if (!semantic_infer_expr_type(ctx, node->binary.left, &left)) return;
     if (!semantic_infer_expr_type(ctx, node->binary.right, &right)) return;
 
+    if ((node->binary.op == EQ || node->binary.op == NEQ) &&
+        semantic_typeinfo_same_base(&left, &right) &&
+        strcmp(left.base_type, "str") == 0 &&
+        left.pointer_level == 0 && right.pointer_level == 0 &&
+        !left.is_array && !right.is_array) {
+        return;
+    }
     if (semantic_binary_is_comparison(node->binary.op) || semantic_binary_is_logical(node->binary.op)) {
         if ((semantic_typeinfo_is_integer_like_or_enum(ctx, &left) || left.pointer_level > 0 || left.ref_kind != REFKIND_NONE) &&
             (semantic_typeinfo_is_integer_like_or_enum(ctx, &right) || right.pointer_level > 0 || right.ref_kind != REFKIND_NONE)) {
@@ -1234,7 +1251,8 @@ static void check_assignment_type(SemanticContext *ctx, ASTNode *node) {
     if (!ctx || !node || node->type != AST_ASSIGN) return;
     if (!semantic_infer_expr_type(ctx, node->assign.left, &left)) return;
     if (!semantic_infer_expr_type(ctx, node->assign.right, &right)) return;
-    if (semantic_typeinfo_compatible(ctx, &left, &right)) return;
+    if (semantic_typeinfo_compatible(ctx, &left, &right) ||
+        semantic_literal_to_legacy_c_string(&left, &right, node->assign.right)) return;
     semantic_report_type_mismatch(ctx, semantic_location_from_ast(node->assign.right),
                                   SEMCODE_ASSIGNMENT_TYPE_MISMATCH,
                                   "assignment", &left, &right);
@@ -1260,7 +1278,8 @@ static void check_initializer_type(SemanticContext *ctx, ASTNode *node) {
         }
     }
     if (!semantic_infer_expr_type(ctx, node->var_decl.init, &actual)) return;
-    if (semantic_typeinfo_compatible(ctx, &expected, &actual)) return;
+    if (semantic_typeinfo_compatible(ctx, &expected, &actual) ||
+        semantic_literal_to_legacy_c_string(&expected, &actual, node->var_decl.init)) return;
     semantic_report_type_mismatch(ctx, semantic_location_from_ast(node->var_decl.init),
                                   SEMCODE_ASSIGNMENT_TYPE_MISMATCH,
                                   "initializer", &expected, &actual);
@@ -1316,7 +1335,9 @@ static void check_struct_literal(SemanticContext *ctx, ASTNode *node) {
         }
         SemanticTypeInfo actual;
         if (semantic_infer_expr_type(ctx, node->init_list.elements[i], &actual) &&
-            !semantic_typeinfo_compatible(ctx, &member->type, &actual)) {
+            !semantic_typeinfo_compatible(ctx, &member->type, &actual) &&
+            !semantic_literal_to_legacy_c_string(&member->type, &actual,
+                                                 node->init_list.elements[i])) {
             semantic_report_type_mismatch(ctx,
                                           semantic_location_from_ast(node->init_list.elements[i]),
                                           SEMCODE_ASSIGNMENT_TYPE_MISMATCH,
@@ -1403,7 +1424,9 @@ static void check_call_signature(SemanticContext *ctx, ASTNode *node) {
         char actual_buf[96];
 
         if (!semantic_infer_expr_type(ctx, node->call.args[i], &actual)) continue;
-        if (semantic_call_arg_compatible(ctx, &sig->param_types[i], &actual)) continue;
+        if (semantic_call_arg_compatible(ctx, &sig->param_types[i], &actual) ||
+            semantic_literal_to_legacy_c_string(&sig->param_types[i], &actual,
+                                                node->call.args[i])) continue;
 
         semantic_typeinfo_format(&sig->param_types[i], expected_buf, sizeof(expected_buf));
         semantic_typeinfo_format(&actual, actual_buf, sizeof(actual_buf));
@@ -1835,6 +1858,19 @@ static const SemanticStructMember *semantic_find_struct_member(SemanticContext *
                                                                const char *struct_name,
                                                                const char *member_name) {
     if (!ctx || !struct_name || !member_name) return NULL;
+    if (strcmp(struct_name, "str") == 0) {
+        static const SemanticStructMember data = {
+            .name = "data",
+            .type = { .base_type = "char", .pointer_level = 1 },
+        };
+        static const SemanticStructMember length = {
+            .name = "length",
+            .type = { .base_type = "i32" },
+        };
+        if (strcmp(member_name, "data") == 0) return &data;
+        if (strcmp(member_name, "length") == 0) return &length;
+        return NULL;
+    }
     for (int i = 0; i < ctx->struct_layout_count; i++) {
         if (strcmp(ctx->struct_layouts[i].name, struct_name) != 0) continue;
         for (int m = 0; m < ctx->struct_layouts[i].member_count; m++)
@@ -1847,6 +1883,7 @@ static const SemanticStructMember *semantic_find_struct_member(SemanticContext *
 
 static int semantic_struct_is_known(SemanticContext *ctx, const char *struct_name) {
     if (!ctx || !struct_name) return 0;
+    if (strcmp(struct_name, "str") == 0) return 1;
     for (int i = 0; i < ctx->struct_layout_count; i++)
         if (strcmp(ctx->struct_layouts[i].name, struct_name) == 0) return 1;
     return 0;

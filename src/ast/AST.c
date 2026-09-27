@@ -186,7 +186,10 @@ ASTNode *ast_clone(const ASTNode *src) {
         STRINGS(enum_stmt.type_params, enum_stmt.type_param_count); break;
     case AST_ENUM_MEMBER: STR(enum_member.name); break;
     case AST_CHAR_LITERAL: STR(char_literal.value); break;
-    case AST_STRING_LITERAL: STR(string_literal.value); break;
+    case AST_STRING_LITERAL:
+        n->string_literal.value = copy_array(src->string_literal.value,
+                                             (size_t)src->string_literal.length + 1);
+        break;
     case AST_MEMBER_ACCESS: STR(member_access.member); break;
     case AST_ARROW_ACCESS: STR(arrow_access.member); break;
     case AST_INIT_LIST:

@@ -59,13 +59,6 @@ ASTNode *parse_unary(ParserContext *context, Token **cur) {
         if (!expect(cur, R_PARENTHESES)) parse_error(context, "expected ')' after sizeof expression", *cur);
         return new_sizeof(inner);
     }
-    if ((*cur)->kind == STRING_LITERAL) {
-        Token *tok = *cur;
-        ASTNode *node = new_string_literal((*cur)->value);
-        set_node_loc_from_tokens(node, tok, NULL);
-        *cur = (*cur)->next;
-        return node;
-    }
     if ((*cur)->kind == CHAR_LITERAL) {
         Token *tok = *cur;
         ASTNode *node = new_char_literal((*cur)->value);

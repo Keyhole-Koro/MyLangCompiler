@@ -78,7 +78,7 @@ static void gen_array_init(CompilerContext *cc, ASTNode *node, StringBuilder *sb
         vtype->type_array.element_type &&
         vtype->type_array.element_type->type != AST_TYPE_ARRAY) {
         const char *str = node->var_decl.init->string_literal.value ? node->var_decl.init->string_literal.value : "";
-        int len = (int)strlen(str);
+        int len = node->var_decl.init->string_literal.length;
         int total = total_elems > 0 ? total_elems : (len + 1);
         for (int i = 0; i < total; i++) {
             unsigned char val = 0;
@@ -170,6 +170,13 @@ void gen_struct_literal_into_addr(CompilerContext *cc, ASTNode *literal,
         }
 
         if (member->total_size_bytes > SLOT_SIZE) {
+            if (literal->init_list.elements[i]->type == AST_STRING_LITERAL &&
+                member->base_type && strcmp(member->base_type, "str") == 0) {
+                sb_append(sb, "  mov r3, %s\n", dest_addr_reg);
+                if (member->offset) sb_append(sb, "  addis r3, %d\n", member->offset);
+                emit_string_literal_into_addr(cc, literal->init_list.elements[i], sb, "r3");
+                continue;
+            }
             /* A nested named literal has its own destination: this member's
              * address.  Its recursive initializer will zero and populate the
              * complete aggregate, including any omitted fields. */
@@ -285,6 +292,11 @@ static void gen_stmt_labeled(CompilerContext *cc, ASTNode *node, StringBuilder *
             if (vtype && vtype->type == AST_TYPE_ARRAY &&
                 (node->var_decl.init->type == AST_INIT_LIST || node->var_decl.init->type == AST_STRING_LITERAL)) {
                 gen_array_init(cc, node, sb, params, param_count, locals, local_count);
+            } else if (node->var_decl.init->type == AST_STRING_LITERAL &&
+                       aggregate_type_size(cc, vtype) == SLOT_SIZE * 2) {
+                emit_addr_of_var(cc, sb, node->var_decl.name, "r3",
+                                 params, param_count, locals, local_count);
+                emit_string_literal_into_addr(cc, node->var_decl.init, sb, "r3");
             } else if (node->var_decl.init->type == AST_INIT_LIST &&
                        node->var_decl.init->init_list.struct_type_name) {
                 emit_addr_of_var(cc, sb, node->var_decl.name, "r3",
@@ -344,7 +356,11 @@ static void gen_stmt_labeled(CompilerContext *cc, ASTNode *node, StringBuilder *
     case AST_RETURN:
         // A bare `return;` has no expression; only evaluate one when present.
         if (node->ret.expr && cc->sret_active) {
-            if (node->ret.expr->type == AST_INIT_LIST && node->ret.expr->init_list.struct_type_name) {
+            if (node->ret.expr->type == AST_STRING_LITERAL &&
+                cc->sret_size_bytes == SLOT_SIZE * 2) {
+                sb_append(sb, "  mov r3, bp\n  addis r3, %d\n  load r3, r3\n", cc->sret_offset);
+                emit_string_literal_into_addr(cc, node->ret.expr, sb, "r3");
+            } else if (node->ret.expr->type == AST_INIT_LIST && node->ret.expr->init_list.struct_type_name) {
                 sb_append(sb, "  mov r3, bp\n  addis r3, %d\n  load r3, r3\n", cc->sret_offset);
                 gen_struct_literal_into_addr(cc, node->ret.expr, sb, "r3",
                                              params, param_count, locals, local_count);

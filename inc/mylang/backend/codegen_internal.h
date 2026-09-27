@@ -46,7 +46,9 @@ typedef MylangType TypeInfo;
 
 typedef struct {
     char *text;
+    int length;
     char *label;
+    char *view_label;
 } StrItem;
 
 // A 32-bit constant parked in the data section. `movi` carries only a 21-bit
@@ -68,6 +70,8 @@ typedef struct {
     // ret_size_bytes is 0 exactly when ret_is_aggregate is false.
     bool ret_is_aggregate;
     int ret_size_bytes;
+    bool has_return_type;
+    TypeInfo return_type;
     bool *param_is_aggregate; // param_count entries, or NULL if param_count == 0
 } FunctionSig;
 
@@ -176,6 +180,10 @@ void emit_codegen_functions(CompilerContext *cc, ASTNode *root, StringBuilder *s
 char *prepend_codegen_imports(CompilerContext *cc, StringBuilder *body);
 void cleanup_codegen_context(CompilerContext *cc);
 const char *intern_string_literal(CompilerContext *cc, const char *s);
+const char *intern_string_literal_n(CompilerContext *cc, const char *s, int length);
+const char *intern_string_view_n(CompilerContext *cc, const char *s, int length);
+void emit_string_literal_into_addr(CompilerContext *cc, ASTNode *literal,
+                                   StringBuilder *sb, const char *dest_addr_reg);
 const char *intern_word_constant(CompilerContext *cc, long value);
 void emit_load_const(CompilerContext *cc, StringBuilder *sb, const char *target_reg, long value);
 
@@ -238,6 +246,9 @@ void gen_lvalue_addr(CompilerContext *cc, ASTNode *node, StringBuilder *sb, cons
 void gen_expr(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char *target_reg, char **params, int param_count, char **locals, int local_count);
 void _gen_expr(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char *target_reg, char **params, int param_count, char **locals, int local_count, int want_address);
 void gen_expr_binop(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char *target_reg, char **params, int param_count, char **locals, int local_count);
+int gen_str_equality(CompilerContext *cc, ASTNode *left, ASTNode *right,
+                     TokenKind op, StringBuilder *sb, const char *target_reg,
+                     char **params, int param_count, char **locals, int local_count);
 void gen_call(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char *target_reg, char **params, int param_count, char **locals, int local_count);
 void gen_call_sret(CompilerContext *cc, ASTNode *node, StringBuilder *sb, char **params, int param_count, char **locals, int local_count);
 void gen_assign(CompilerContext *cc, ASTNode *node, StringBuilder *sb, char **params, int param_count, char **locals, int local_count, const char *target_reg);

@@ -1,33 +1,70 @@
 #include "mylang/backend/codegen_internal.h"
 
-const char *intern_string_literal(CompilerContext *cc, const char *s)
+static StrItem *intern_string_item(CompilerContext *cc, const char *s, int length)
 {
+    if (length < 0) length = 0;
     for (int i = 0; i < cg_string_count; i++) {
-        if (strcmp(cg_strings[i].text, s) == 0) return cg_strings[i].label;
+        if (cg_strings[i].length == length &&
+            (length == 0 || memcmp(cg_strings[i].text, s, (size_t)length) == 0))
+            return &cg_strings[i];
     }
 
-    char buf[32];
-    snprintf(buf, sizeof(buf), "s_%d", cg_string_count);
-    StrItem it = { strdup(s), strdup(buf) };
+    char bytes_buf[32], view_buf[32];
+    snprintf(bytes_buf, sizeof(bytes_buf), "s_%d", cg_string_count);
+    snprintf(view_buf, sizeof(view_buf), "sv_%d", cg_string_count);
+    char *text = malloc((size_t)length + 1);
+    if (length > 0) memcpy(text, s, (size_t)length);
+    text[length] = '\0';
+    StrItem it = { text, length, strdup(bytes_buf), strdup(view_buf) };
     if (!cg_data_sb_inited) {
         sb_init(&cg_data_sb);
         cg_data_sb_inited = 1;
     }
 
+    sb_append(&cg_data_sb, "%s:\n", it.view_label);
+    sb_append(&cg_data_sb, "  .word %s, %d\n", it.label, length);
     sb_append(&cg_data_sb, "%s:\n", it.label);
     sb_append(&cg_data_sb, "  .byte ");
     const unsigned char *p = (const unsigned char*)s;
     int first = 1;
-    while (*p) {
-        sb_append(&cg_data_sb, "%s0x%02X", first ? "" : ", ", (unsigned)*p);
+    for (int i = 0; i < length; i++) {
+        sb_append(&cg_data_sb, "%s0x%02X", first ? "" : ", ", (unsigned)p[i]);
         first = 0;
-        p++;
     }
     sb_append(&cg_data_sb, "%s0x00\n", first ? "" : ", ");
 
     cg_strings = (StrItem*)realloc(cg_strings, sizeof(StrItem) * (cg_string_count + 1));
     cg_strings[cg_string_count++] = it;
-    return it.label;
+    return &cg_strings[cg_string_count - 1];
+}
+
+const char *intern_string_literal_n(CompilerContext *cc, const char *s, int length)
+{
+    return intern_string_item(cc, s ? s : "", length)->label;
+}
+
+const char *intern_string_view_n(CompilerContext *cc, const char *s, int length)
+{
+    return intern_string_item(cc, s ? s : "", length)->view_label;
+}
+
+const char *intern_string_literal(CompilerContext *cc, const char *s)
+{
+    return intern_string_literal_n(cc, s ? s : "", s ? (int)strlen(s) : 0);
+}
+
+void emit_string_literal_into_addr(CompilerContext *cc, ASTNode *literal,
+                                   StringBuilder *sb, const char *dest_addr_reg)
+{
+    if (!literal || literal->type != AST_STRING_LITERAL) return;
+    const char *bytes = intern_string_literal_n(cc, literal->string_literal.value,
+                                                literal->string_literal.length);
+    sb_append(sb, "  movi r1, %s\n", bytes);
+    emit_store_to_addr(sb, dest_addr_reg, "r1", 0);
+    sb_append(sb, "  movi r1, %d\n", literal->string_literal.length);
+    sb_append(sb, "  mov r2, %s\n", dest_addr_reg);
+    sb_append(sb, "  addis r2, %d\n", SLOT_SIZE);
+    emit_store_to_addr(sb, "r2", "r1", 0);
 }
 
 // `movi` carries a 21-bit zero-extended immediate and `movis` a 21-bit

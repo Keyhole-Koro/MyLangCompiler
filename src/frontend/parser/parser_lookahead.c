@@ -3,6 +3,11 @@
 int is_type(ParserContext *context, TokenKind kind, Token *cur) {
     if (kind == CONST || kind == REF) return 1;
 
+    /* Keep `str` context-sensitive instead of reserving the word: package
+     * declarations and imports named `str` remain source-compatible. */
+    if (kind == IDENTIFIER && cur && strcmp(cur->value, "str") == 0 &&
+        (!cur->next || cur->next->kind != DOT)) return 1;
+
     if (kind == VOID ||
         kind == U8 ||
         kind == U16 ||

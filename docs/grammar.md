@@ -76,6 +76,23 @@ method, then resolves `box.get()` to the concrete method. Receiver-bound type
 arguments must currently be distinct identifiers; method-level type parameters
 cannot be combined with a generic receiver yet.
 
+#### The built-in `str` type
+
+`str` is a compiler-known, copyable two-word value type:
+
+```mylang
+str title = "hello";       // { char* data; i32 length; }
+i32 n = title.len();
+if (title == "hello") { ... } // content equality
+```
+
+String literals are length-aware views over interned, NUL-terminated bytes, so
+embedded NULs are preserved. The standard library's `str.mln` module provides
+`len`, `is_empty`, `compare`, `starts_with`, `ends_with`, `find`, `slice`,
+`byte_at`, and `as_c_str`, plus the `char*` bridge `as_str()`.
+Literals may still be passed to legacy `char*` or `char[]` parameters; a
+non-literal `str` must use `as_c_str()` explicitly.
+
 #### Methods across packages
 
 An `export`ed method travels with its receiver type: importing the type is

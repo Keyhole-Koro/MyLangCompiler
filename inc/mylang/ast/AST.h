@@ -294,7 +294,10 @@ struct ASTNode {
             char *value;
         } char_literal;
 
-        struct { char *value; } string_literal;
+        struct {
+            char *value;
+            int length; // decoded byte length, excluding the trailing NUL
+        } string_literal;
 
         struct {
             ASTNode *lhs;

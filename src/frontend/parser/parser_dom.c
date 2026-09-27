@@ -38,7 +38,7 @@ static DomProp *parse_dom_props(ParserContext *context, Token **cur, int *out_co
         ASTNode *value = NULL;
         if ((*cur)->kind == STRING_LITERAL) {
             Token *tok = *cur;
-            value = new_string_literal(tok->value);
+            value = new_string_literal_n(tok->value, tok->value_length);
             set_node_loc_from_tokens(value, tok, NULL);
             *cur = (*cur)->next;
         } else if ((*cur)->kind == L_BRACE) {

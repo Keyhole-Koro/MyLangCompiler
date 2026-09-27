@@ -25,6 +25,9 @@ static long eval_const_expr(ASTNode *node) {
     if (node->type == AST_CHAR_LITERAL) {
         return (unsigned char)(node->char_literal.value ? node->char_literal.value[0] : 0);
     }
+    if (node->type == AST_CAST) {
+        return eval_const_expr(node->cast.expr);
+    }
     if (node->type == AST_UNARY) {
         uint32_t value = (uint32_t)eval_const_expr(node->unary.operand);
         switch (node->unary.op) {
@@ -66,7 +69,9 @@ static long eval_const_expr(ASTNode *node) {
         default: break;
         }
     }
-    fprintf(stderr, "Codegen error: invalid or non-constant global initializer\n");
+    fprintf(stderr, "Codegen error at %d:%d: invalid or non-constant global initializer (%s)\n",
+            node ? node->line : 0, node ? node->col : 0,
+            node ? astType2str(node->type) : "null");
     exit(1);
 }
 
@@ -91,7 +96,8 @@ static void emit_scalar_bytes(StringBuilder *sb, long val, int width) {
  * function's name (both relocated by the linker) or a constant. */
 static void emit_word_operand(CompilerContext *cc, StringBuilder *sb, ASTNode *expr) {
     if (expr && expr->type == AST_STRING_LITERAL) {
-        sb_append(sb, "  .word %s\n", intern_string_literal(cc, expr->string_literal.value));
+        sb_append(sb, "  .word %s\n", intern_string_literal_n(cc,
+                  expr->string_literal.value, expr->string_literal.length));
     } else if (expr && expr->type == AST_IDENTIFIER && func_is_defined(cc, expr->identifier.name)) {
         sb_append(sb, "  .word %s\n", expr->identifier.name);
     } else {
@@ -161,6 +167,14 @@ void emit_global_init(CompilerContext *cc, StringBuilder *sb, ASTNode *init_expr
         return;
     }
 
+    if (expected_bytes == SLOT_SIZE * 2 && init_expr->type == AST_STRING_LITERAL) {
+        sb_append(sb, "  .word %s, %d\n",
+                  intern_string_literal_n(cc, init_expr->string_literal.value,
+                                          init_expr->string_literal.length),
+                  init_expr->string_literal.length);
+        return;
+    }
+
     // A pointer-sized scalar initialised with a string literal or a function
     // name holds that symbol's address: `char *s = "hi";`, `i32 f = handler;`.
     // Before .word existed this came out as a null pointer.
@@ -169,6 +183,13 @@ void emit_global_init(CompilerContext *cc, StringBuilder *sb, ASTNode *init_expr
          (init_expr->type == AST_IDENTIFIER && func_is_defined(cc, init_expr->identifier.name)))) {
         emit_word_operand(cc, sb, init_expr);
         return;
+    }
+
+    if (init_expr->type == AST_STRING_LITERAL) {
+        fprintf(stderr,
+                "Codegen error at %d:%d: a string literal cannot initialize this %d-byte global\n",
+                init_expr->line, init_expr->col, expected_bytes);
+        exit(1);
     }
 
     // Evaluate constant expression

@@ -256,7 +256,7 @@ if ((*cur)->kind == NUMBER) {
     }
     if ((*cur)->kind == STRING_LITERAL) {
         Token *tok = *cur;
-        ASTNode *node = new_string_literal((*cur)->value);
+        ASTNode *node = new_string_literal_n((*cur)->value, (*cur)->value_length);
         set_node_loc_from_tokens(node, tok, NULL);
         *cur = (*cur)->next;
         return node;

@@ -6,6 +6,7 @@
 #include "mylang/frontend/parser_internal.h"
 
 ASTNode *new_string_literal(char *str);
+ASTNode *new_string_literal_n(const char *str, int length);
 ASTNode *new_char_literal(char *str);
 ASTNode *new_sizeof(ASTNode *expr);
 ASTNode *new_type_array(ASTNode *elem_type, int size);

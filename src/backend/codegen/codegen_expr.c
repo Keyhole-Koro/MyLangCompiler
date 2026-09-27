@@ -131,7 +131,9 @@ void _gen_expr(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char
         sb_append(sb, "  movi %s, %d\n", target_reg, sz);
         break; }
     case AST_STRING_LITERAL: {
-        const char *label = intern_string_literal(cc, node->string_literal.value ? node->string_literal.value : "");
+        const char *label = intern_string_literal_n(cc,
+            node->string_literal.value ? node->string_literal.value : "",
+            node->string_literal.length);
         sb_append(sb, "  movi  %s, %s\n", target_reg, label);
         break; }
     case AST_CHAR_LITERAL: {

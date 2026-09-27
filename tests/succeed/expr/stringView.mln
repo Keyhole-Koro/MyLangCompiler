@@ -1,0 +1,40 @@
+import str from "../../../../MyStdLib/str.mln";
+
+str greeting = "global";
+struct Holder { str text; };
+
+str returned() { return "returned"; }
+
+i32 main() {
+    str a = "hello";
+    str b = "hello";
+    str c = "world";
+    if (a != b) { return 1; }
+    if (a == c) { return 2; }
+    if (a.len() != 5) { return 3; }
+    if (!a.starts_with("he")) { return 4; }
+    if (!a.ends_with("lo")) { return 5; }
+    if (!"".is_empty()) { return 6; }
+
+    char legacy[6] = "hello";
+    char* pointer = &legacy[0];
+    str view = pointer.as_str();
+    if (view != a) { return 7; }
+    if (view.as_c_str()[1] != 'e') { return 8; }
+    if (pointer.as_str() != "hello") { return 17; }
+    if (pointer.as_str() != pointer.as_str()) { return 18; }
+    str embedded = "a\0b";
+    if (embedded.len() != 3) { return 9; }
+    if (embedded != "a\0b") { return 10; }
+    if (embedded == "a") { return 11; }
+    if (embedded.data[2] != 'b') { return 12; }
+    if (greeting != "global") { return 13; }
+    str result = returned();
+    if (result != "returned") { return 14; }
+    mut str changed = "before";
+    changed = "after";
+    if (changed != "after") { return 15; }
+    Holder holder = Holder { text: "field" };
+    if (holder.text != "field") { return 16; }
+    return 47;
+}

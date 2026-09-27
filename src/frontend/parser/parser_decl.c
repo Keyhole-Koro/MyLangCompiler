@@ -74,7 +74,7 @@ ASTNode *parse_literal_value(ParserContext *context, Token **cur) {
     case NUMBER: node = new_number(tok->value); break;
     case TRUE_LITERAL: node = new_number("1"); break;
     case FALSE_LITERAL: node = new_number("0"); break;
-    case STRING_LITERAL: node = new_string_literal(tok->value); break;
+    case STRING_LITERAL: node = new_string_literal_n(tok->value, tok->value_length); break;
     case CHAR_LITERAL: node = new_char_literal(tok->value); break;
     default: return NULL;
     }

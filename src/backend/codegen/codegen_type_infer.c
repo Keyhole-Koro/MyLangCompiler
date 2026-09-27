@@ -155,6 +155,9 @@ int infer_expr_type(CompilerContext *cc, ASTNode *expr, TypeInfo *out) {
     case AST_NUMBER:
         out->base_type = "i32";
         return 1;
+    case AST_STRING_LITERAL:
+        out->base_type = "str";
+        return 1;
     case AST_MEMBER_ACCESS:
         return infer_member_type(cc, expr->member_access.lhs, expr->member_access.member, 0, out);
     case AST_ARROW_ACCESS:
@@ -197,7 +200,12 @@ int infer_expr_type(CompilerContext *cc, ASTNode *expr, TypeInfo *out) {
             out->base_type = "i32";
             return 1;
         }
-        return 0;
+        {
+            const FunctionSig *sig = find_func_sig(cc, expr->call.name);
+            if (!sig || !sig->has_return_type) return 0;
+            *out = sig->return_type;
+            return 1;
+        }
     default:
         return 0;
     }

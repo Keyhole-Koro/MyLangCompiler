@@ -54,5 +54,6 @@ int mylang_type_is_builtin(const char *base_type) {
            strcmp(base_type, "double") == 0 ||
            strcmp(base_type, "long") == 0 ||
            strcmp(base_type, "short") == 0 ||
+           strcmp(base_type, "str") == 0 ||
            strcmp(base_type, "void") == 0;
 }

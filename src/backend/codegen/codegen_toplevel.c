@@ -102,6 +102,23 @@ static void append_struct_info(CompilerContext *cc, const char *type_name, ASTNo
     cg_struct_count++;
 }
 
+static void append_builtin_str_info(CompilerContext *cc) {
+    MemberInfo *members = calloc(2, sizeof(MemberInfo));
+    members[0] = (MemberInfo){
+        .name = "data", .offset = 0, .size_bytes = SLOT_SIZE,
+        .total_size_bytes = SLOT_SIZE, .base_type = "char", .pointer_level = 1,
+    };
+    members[1] = (MemberInfo){
+        .name = "length", .offset = SLOT_SIZE, .size_bytes = SLOT_SIZE,
+        .total_size_bytes = SLOT_SIZE, .base_type = "i32", .pointer_level = 0,
+    };
+    cg_structs = realloc(cg_structs, sizeof(StructInfo) * (cg_struct_count + 1));
+    cg_structs[cg_struct_count++] = (StructInfo){
+        .type_name = "str", .members = members, .member_count = 2,
+        .size_bytes = SLOT_SIZE * 2,
+    };
+}
+
 // Per-parameter and return-type aggregate flags let a call site (gen_call)
 // and the callee's own prologue (gen_func) agree on which words in the
 // existing register/stack argument mechanism carry a value directly and
@@ -119,6 +136,8 @@ static void append_func_sig(CompilerContext *cc, ASTNode *node) {
     sig->is_variadic = fn->fundef.is_variadic;
     sig->ret_size_bytes = fn->fundef.ret_type ? aggregate_type_size(cc, fn->fundef.ret_type) : 0;
     sig->ret_is_aggregate = sig->ret_size_bytes > 0;
+    sig->has_return_type = fn->fundef.ret_type &&
+                           typeinfo_from_type_ast(cc, fn->fundef.ret_type, &sig->return_type);
     sig->param_is_aggregate = NULL;
     if (sig->param_count > 0) {
         sig->param_is_aggregate = (bool*)calloc((size_t)sig->param_count, sizeof(bool));
@@ -142,6 +161,8 @@ static void append_imported_func_sig(CompilerContext *cc, const char *name,
     sig->is_variadic = fn_info->is_variadic;
     sig->ret_size_bytes = aggregate_type_size(cc, fn_info->ret_type_ast);
     sig->ret_is_aggregate = sig->ret_size_bytes > 0;
+    sig->has_return_type = fn_info->ret_type_ast &&
+                           typeinfo_from_type_ast(cc, fn_info->ret_type_ast, &sig->return_type);
     sig->param_is_aggregate = NULL;
     if (sig->param_count > 0) {
         sig->param_is_aggregate = (bool*)calloc((size_t)sig->param_count, sizeof(bool));
@@ -242,6 +263,7 @@ void build_codegen_toplevel_info(CompilerContext *cc, ASTNode *root) {
     cc->func_sigs = NULL;
     cc->enum_value_count = 0;
     cc->enum_values = NULL;
+    append_builtin_str_info(cc);
     if (!block) return;
 
     // Struct layouts have to exist before function signatures are registered:
@@ -372,6 +394,7 @@ void cleanup_codegen_context(CompilerContext *cc) {
         for (int i = 0; i < cg_string_count; i++) {
             free(cg_strings[i].text);
             free(cg_strings[i].label);
+            free(cg_strings[i].view_label);
         }
         free(cg_strings);
         cg_strings = NULL;
