@@ -235,7 +235,8 @@ void gen_call(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char 
      * that same area, so those combinations need a frame-resident temporary
      * rather than this compact lowering. No system source currently needs
      * that wider form; diagnose it rather than misplacing an argument. */
-    if (has_direct_aggregate_return_argument(cc, node, sig) &&
+    int has_direct_aggregate_arg = has_direct_aggregate_return_argument(cc, node, sig);
+    if (has_direct_aggregate_arg &&
         (argc > 3 || (sig && sig->is_variadic))) {
         fprintf(stderr,
                 "Codegen error: direct aggregate call results can only be passed to a non-variadic call with at most three arguments; bind it to a variable first\n");
@@ -298,6 +299,41 @@ void gen_call(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char 
 
     note_direct_call_import(cc, node->call.name);
     int stack_args = argc > 3 ? (argc - 3) : 0;
+
+    /* A direct aggregate-returning argument leaves its temporary on the
+     * stack until this call completes. If an earlier register argument was
+     * pushed first, that temporary would split the push sequence and the
+     * later pops would read aggregate bytes as argument words. Reserve stable
+     * argument slots first and address them past all accumulated temporaries;
+     * this preserves left-to-right evaluation as well as the temporary's
+     * lifetime. The guard above ensures this path has no stack arguments. */
+    if (has_direct_aggregate_arg) {
+        int reg_argc = argc < 3 ? argc : 3;
+        int slot_bytes = reg_argc * SLOT_SIZE;
+        int aggregate_temp_bytes = 0;
+        sb_append(sb, "  ; reserve register argument slots\n");
+        sb_append(sb, "  addis sp, -%d\n", slot_bytes);
+        for (int i = 0; i < reg_argc; i++) {
+            aggregate_temp_bytes += gen_arg_word(
+                cc, node->call.args[i], sb, "r1", params, param_count,
+                locals, local_count, sig_arg_is_aggregate(sig, i),
+                node->call.name, i);
+            sb_append(sb, "  mov r2, sp\n");
+            sb_append(sb, "  addis r2, %d\n", aggregate_temp_bytes + i * SLOT_SIZE);
+            sb_append(sb, "  store r2, r1\n");
+        }
+        for (int i = 0; i < reg_argc; i++) {
+            sb_append(sb, "  mov r2, sp\n");
+            sb_append(sb, "  addis r2, %d\n", aggregate_temp_bytes + i * SLOT_SIZE);
+            sb_append(sb, "  load %s, r2\n", arg_regs[i]);
+        }
+        sb_append(sb, "  call %s\n", direct_call_target(node->call.name));
+        sb_append(sb, "  ; release aggregate call arguments and register slots\n");
+        sb_append(sb, "  addis sp, %d\n", aggregate_temp_bytes + slot_bytes);
+        if (strcmp(target_reg, "r1") != 0)
+            sb_append(sb, "  mov %s, r1\n", target_reg);
+        return;
+    }
 
     if (stack_args > 0)
     {

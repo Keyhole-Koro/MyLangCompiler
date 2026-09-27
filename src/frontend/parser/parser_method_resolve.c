@@ -131,6 +131,11 @@ static void resolve_mock_facade_method(ASTNode *call, const char *mangled) {
 static int infer_recv_shape(ParserContext *ctx, MethodScope *scope, ASTNode *expr, RecvShape *out) {
     if (!expr) return 0;
     switch (expr->type) {
+    case AST_NUMBER:
+        out->base_name = "i32";
+        out->pointer_level = 0;
+        out->ref_kind = REFKIND_NONE;
+        return 1;
     case AST_STRING_LITERAL:
         out->base_name = "str";
         out->pointer_level = 0;

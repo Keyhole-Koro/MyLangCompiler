@@ -267,7 +267,10 @@ bool isNumber(char *ptr, char *buffer, size_t *src_len) {
 
     char *numStart = ptr;
     while (isdigit(*ptr)) ptr++;
-    if (*ptr == '.') {
+    /* Leave `.` for postfix member/method access in `42.to_str(...)`.
+     * A decimal point belongs to the number only when a fractional digit
+     * follows it. */
+    if (ptr[0] == '.' && isdigit((unsigned char)ptr[1])) {
         ptr++;
         while (isdigit(*ptr)) ptr++;
     }

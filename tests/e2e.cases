@@ -26,6 +26,7 @@ complexWhile|16|succeed/control/complexWhile.mln
 simpleChar|72|succeed/expr/simpleChar.mln
 stringEscape|10|succeed/expr/stringEscape.mln
 stringView|47|succeed/expr/stringView.mln,../../MyStdLib/str.mln,../../MyStdLib/option.mln
+stringBuilder|73|succeed/expr/stringBuilder.mln,../../MyStdLib/str.mln,../../MyStdLib/option.mln,../../MyStdLib/text/string_builder.mln
 intWidth32|20|succeed/expr/intWidth32.mln
 uintWidthSmall|69|succeed/expr/uintWidthSmall.mln
 sizeofType|13244|succeed/expr/sizeofType.mln
