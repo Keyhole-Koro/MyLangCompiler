@@ -198,6 +198,8 @@ Nodes are represented by the `ASTNode` struct, which contains a union of specifi
 ### AST_TYPE_ARRAY
 - `type_array.element_type`: `ASTNode*`
 - `type_array.array_size`: `int`
+- `type_array.array_size_param`: `char*` (Template-only const parameter name;
+  replaced by `array_size` during generic instantiation.)
 
 ---
 

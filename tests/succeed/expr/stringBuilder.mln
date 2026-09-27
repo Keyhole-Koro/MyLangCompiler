@@ -1,20 +1,18 @@
 import str from "../../../../MyStdLib/str.mln";
-import { StringBuilder } from "../../../../MyStdLib/text/string_builder.mln";
+import { InlineString } from "../../../../MyStdLib/text/inline_string.mln";
 
 i32 main() {
-    char storage[16];
-    StringBuilder line;
-    line.init(&storage[0], storage.length);
+    InlineString<16> line = InlineString<16> {};
     if (!line.is_empty()) { return 1; }
     if (!line.append("pid=")) { return 2; }
 
-    char digits[12];
-    if (!line.append(42.to_str(&digits[0]))) { return 3; }
+    InlineString<12> digits = 42.to_string();
+    if (!line.append(digits.as_str())) { return 3; }
     if (line.as_str() != "pid=42") { return 4; }
-    if (line.len() != 6 || line.remaining() != 9) { return 5; }
+    if (line.len() != 6 || line.remaining() != 10) { return 5; }
 
-    if (line.append("0123456789")) { return 6; }
-    if (line.as_str() != "pid=42012345678") { return 7; }
+    if (line.append("01234567890")) { return 6; }
+    if (line.as_str() != "pid=42") { return 7; }
     line.truncate(6);
     if (!line.push((u8)'!')) { return 8; }
     if (line.as_str() != "pid=42!") { return 9; }
@@ -25,7 +23,8 @@ i32 main() {
 
     line.clear();
     i32 minimum = -2147483647 - 1;
-    if (!line.append(minimum.to_str(&digits[0]))) { return 12; }
+    digits = minimum.to_string();
+    if (!line.append(digits.as_str())) { return 12; }
     if (line.as_str() != "-2147483648") { return 13; }
     return 73;
 }

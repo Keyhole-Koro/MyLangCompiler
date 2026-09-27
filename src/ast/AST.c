@@ -158,6 +158,7 @@ ASTNode *ast_clone(const ASTNode *src) {
     case AST_NUMBER: STR(number.value); break;
     case AST_IDENTIFIER: STR(identifier.name); break;
     case AST_TYPE_GENERIC: STR(generic_type.name); ARRAY(generic_type.args, generic_type.arg_count); break;
+    case AST_TYPE_ARRAY: STR(type_array.array_size_param); break;
     case AST_VAR_DECL: STR(var_decl.name); STR(var_decl.package); break;
     case AST_TYPEDEF: STR(typedef_stmt.alias); break;
     case AST_BLOCK: ARRAY(block.stmts, block.count); break;
@@ -166,7 +167,11 @@ ASTNode *ast_clone(const ASTNode *src) {
     case AST_FUNDEF:
         STR(fundef.name); STR(fundef.package); STR(fundef.recv_type_name);
         ARRAY(fundef.params, fundef.param_count);
-        STRINGS(fundef.type_params, fundef.type_param_count); break;
+        STRINGS(fundef.type_params, fundef.type_param_count);
+        if (src->fundef.type_param_is_const)
+            n->fundef.type_param_is_const = copy_array(src->fundef.type_param_is_const,
+                                                       (size_t)src->fundef.type_param_count);
+        break;
     case AST_PARAM: STR(param.name); break;
     case AST_CALL:
         STR(call.name); ARRAY(call.args, call.arg_count); ARRAY(call.type_args, call.type_arg_count); break;
@@ -176,14 +181,22 @@ ASTNode *ast_clone(const ASTNode *src) {
         ARRAY(dom_element.children, dom_element.child_count); break;
     case AST_STRUCT:
         STR(struct_stmt.name); STR(struct_stmt.package); ARRAY(struct_stmt.members, struct_stmt.member_count);
-        STRINGS(struct_stmt.type_params, struct_stmt.type_param_count); break;
+        STRINGS(struct_stmt.type_params, struct_stmt.type_param_count);
+        if (src->struct_stmt.type_param_is_const)
+            n->struct_stmt.type_param_is_const = copy_array(src->struct_stmt.type_param_is_const,
+                                                            (size_t)src->struct_stmt.type_param_count);
+        break;
     case AST_STRUCT_MEMBER: STR(struct_member.type); STR(struct_member.name); break;
     case AST_TYPEDEF_STRUCT:
         STR(typedef_struct.struct_name); STR(typedef_struct.typedef_name); STR(typedef_struct.package);
         ARRAY(typedef_struct.members, typedef_struct.member_count); break;
     case AST_ENUM:
         STR(enum_stmt.name); STR(enum_stmt.package); ARRAY(enum_stmt.members, enum_stmt.member_count);
-        STRINGS(enum_stmt.type_params, enum_stmt.type_param_count); break;
+        STRINGS(enum_stmt.type_params, enum_stmt.type_param_count);
+        if (src->enum_stmt.type_param_is_const)
+            n->enum_stmt.type_param_is_const = copy_array(src->enum_stmt.type_param_is_const,
+                                                          (size_t)src->enum_stmt.type_param_count);
+        break;
     case AST_ENUM_MEMBER: STR(enum_member.name); break;
     case AST_CHAR_LITERAL: STR(char_literal.value); break;
     case AST_STRING_LITERAL:

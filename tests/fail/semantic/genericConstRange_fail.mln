@@ -1,0 +1,8 @@
+struct Marker<const N> {
+    i32 value;
+};
+
+i32 main() {
+    Marker<0> marker;
+    return marker.value;
+}

@@ -1,0 +1,13 @@
+struct Buffer<const N> {
+    char data[N];
+    i32 length;
+};
+
+i32 (Buffer<N> *self) capacity() {
+    return self->data.length;
+}
+
+i32 main() {
+    Buffer<10> buffer;
+    return buffer.capacity();
+}

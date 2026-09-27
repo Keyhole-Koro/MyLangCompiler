@@ -4,6 +4,11 @@ ternaryMoveIsolation|14|succeed/semantic/ternaryMoveIsolation.mln
 callBorrowLifetime|6|succeed/semantic/callBorrowLifetime.mln
 smallAndLiteralReturn|23|succeed/struct/byval/smallAndLiteralReturn.mln
 genericInstantiation|45|succeed/generic/instantiation.mln
+genericConstCapacity|10|succeed/generic/constCapacity.mln
+genericInlineString|81|succeed/generic/inlineString.mln,../../MyStdLib/str.mln,../../MyStdLib/option.mln,../../MyStdLib/text/inline_string.mln
+genericInlineStringZeroValue|4|succeed/generic/inlineStringZeroValue.mln,../../MyStdLib/str.mln,../../MyStdLib/option.mln,../../MyStdLib/text/inline_string.mln
+genericI32ToString|22|succeed/generic/i32ToString.mln,../../MyStdLib/str.mln,../../MyStdLib/option.mln,../../MyStdLib/text/inline_string.mln
+genericInlineCString|82|succeed/generic/inlineCString.mln,../../MyStdLib/str.mln,../../MyStdLib/option.mln,../../MyStdLib/text/inline_string.mln,../../MyStdLib/text/inline_c_string.mln
 genericNestedStruct|57|succeed/generic/nestedStruct.mln
 genericRecursive|15|succeed/generic/recursive.mln
 genericImportedTemplates|13|succeed/generic/imported_templates_main.mln,succeed/generic/imported_templates_lib.mln
@@ -26,7 +31,7 @@ complexWhile|16|succeed/control/complexWhile.mln
 simpleChar|72|succeed/expr/simpleChar.mln
 stringEscape|10|succeed/expr/stringEscape.mln
 stringView|47|succeed/expr/stringView.mln,../../MyStdLib/str.mln,../../MyStdLib/option.mln
-stringBuilder|73|succeed/expr/stringBuilder.mln,../../MyStdLib/str.mln,../../MyStdLib/option.mln,../../MyStdLib/text/string_builder.mln
+inlineStringFormatting|73|succeed/expr/stringBuilder.mln,../../MyStdLib/str.mln,../../MyStdLib/option.mln,../../MyStdLib/text/inline_string.mln
 intWidth32|20|succeed/expr/intWidth32.mln
 uintWidthSmall|69|succeed/expr/uintWidthSmall.mln
 sizeofType|13244|succeed/expr/sizeofType.mln

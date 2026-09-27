@@ -1,0 +1,15 @@
+import str from "../../../../MyStdLib/str.mln";
+import { InlineCString } from "../../../../MyStdLib/text/inline_c_string.mln";
+
+i32 main() {
+    InlineCString<8> text = InlineCString<8> {};
+    if (text.capacity() != 7 || text.as_ptr()[0] != 0) { return 1; }
+    if (!text.append("abc")) { return 2; }
+    if (text.append("12345")) { return 3; }
+    if (text.as_str() != "abc" || text.as_ptr()[3] != 0) { return 4; }
+    if (!text.push((u8)'!')) { return 5; }
+    text.truncate(2);
+    if (text.as_str() != "ab" || text.as_ptr()[2] != 0) { return 6; }
+    if (text.append("x\0y")) { return 7; }
+    return 82;
+}

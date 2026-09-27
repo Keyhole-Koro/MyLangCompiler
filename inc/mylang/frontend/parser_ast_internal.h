@@ -10,6 +10,7 @@ ASTNode *new_string_literal_n(const char *str, int length);
 ASTNode *new_char_literal(char *str);
 ASTNode *new_sizeof(ASTNode *expr);
 ASTNode *new_type_array(ASTNode *elem_type, int size);
+ASTNode *new_type_array_param(ASTNode *elem_type, const char *size_param);
 ASTNode *new_var_decl(ASTNode *type, char *name, ASTNode *init);
 ASTNode *new_var_decl_mut(ASTNode *type, char *name, ASTNode *init, int is_mut);
 ASTNode *new_param(ASTNode *type, char *name);

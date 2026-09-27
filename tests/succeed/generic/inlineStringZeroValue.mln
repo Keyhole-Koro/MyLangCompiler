@@ -1,0 +1,8 @@
+import str from "../../../../MyStdLib/str.mln";
+import { InlineString } from "../../../../MyStdLib/text/inline_string.mln";
+
+i32 main() {
+    InlineString<8> text = InlineString<8> {};
+    if (!text.append("zero")) { return 1; }
+    return text.len();
+}

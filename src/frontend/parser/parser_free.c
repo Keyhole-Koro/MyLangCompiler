@@ -55,6 +55,7 @@ void free_ast(ASTNode *node) {
             break;
         case AST_TYPE_ARRAY:
             free_ast(node->type_array.element_type);
+            free(node->type_array.array_size_param);
             break;
         case AST_STRING_LITERAL:
             free(node->string_literal.value);
@@ -125,6 +126,7 @@ void free_ast(ASTNode *node) {
             for (int i = 0; i < node->fundef.type_param_count; i++)
                 free(node->fundef.type_params[i]);
             free(node->fundef.type_params);
+            free(node->fundef.type_param_is_const);
             for (int i = 0; i < node->fundef.param_count; i++)
                 free_ast(node->fundef.params[i]);
             free(node->fundef.params);
@@ -153,6 +155,7 @@ void free_ast(ASTNode *node) {
             for (int i = 0; i < node->struct_stmt.type_param_count; i++)
                 free(node->struct_stmt.type_params[i]);
             free(node->struct_stmt.type_params);
+            free(node->struct_stmt.type_param_is_const);
             for (int i = 0; i < node->struct_stmt.member_count; i++)
                 free_ast(node->struct_stmt.members[i]);
             free(node->struct_stmt.members);
@@ -179,6 +182,7 @@ void free_ast(ASTNode *node) {
             for (int i = 0; i < node->enum_stmt.type_param_count; i++)
                 free(node->enum_stmt.type_params[i]);
             free(node->enum_stmt.type_params);
+            free(node->enum_stmt.type_param_is_const);
             for (int i = 0; i < node->enum_stmt.member_count; i++)
                 free_ast(node->enum_stmt.members[i]);
             free(node->enum_stmt.members);

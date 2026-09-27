@@ -5,6 +5,13 @@ ASTNode *new_type_array(ASTNode *elem_type, int size) {
     node->type = AST_TYPE_ARRAY;
     node->type_array.element_type = elem_type;
     node->type_array.array_size = size;
+    node->type_array.array_size_param = NULL;
+    return node;
+}
+
+ASTNode *new_type_array_param(ASTNode *elem_type, const char *size_param) {
+    ASTNode *node = new_type_array(elem_type, -1);
+    node->type_array.array_size_param = strdup(size_param);
     return node;
 }
 

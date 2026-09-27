@@ -21,6 +21,22 @@ instantiated body with the ordinary semantic checker, and emits ordinary
 struct layouts and functions. Unused templates generate no code and their
 bodies are not type-checked until instantiated.
 
+Integer constants used in layouts are declared explicitly with `const`:
+
+```mylang
+struct InlineString<const N> {
+    u8 data[N];
+    i32 length;
+};
+
+InlineString<128> line = InlineString<128> {};
+```
+
+This distinction is part of the declaration, so `InlineString<i32>` and
+`Box<128>` are rejected immediately instead of producing a malformed
+specialization. Const arguments are decimal integer literals in the range
+1..1048576. They may currently be used as fixed-array capacities.
+
 The same declaration and type arguments share one instance in a translation
 unit. Type aliases are expanded, while pointer depth, `const`, and reference
 kind remain part of the instance identity. A type parameter is substituted
@@ -51,6 +67,8 @@ ordered by their layout dependencies before the existing backend sees them.
   `Result`, destructors, or error propagation.
 - A reference type argument cannot be wrapped in another reference or pointer;
   reference nesting/collapsing rules are not defined yet.
+- Const-generic arithmetic and inferred const arguments are not supported;
+  write a literal such as `InlineString<128>`.
 - Expansion is bounded to 64 active instantiations/alias resolutions and 256
   instances per translation unit. Internal names are limited to 240 bytes for
   the assembly toolchain. Expanding recursion fails with a diagnostic.

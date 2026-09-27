@@ -99,7 +99,8 @@ ASTNode *parse_stmt(ParserContext *context, Token **cur);
 ASTNode *parse_fundef(ParserContext *context, Token **cur);
 ASTNode *parse_method(ParserContext *context, Token **cur);
 ASTNode *parse_generic_fundef(ParserContext *context, Token **cur);
-char **parse_type_params(ParserContext *context, Token **cur, int *out_count, int add_to_scope);
+char **parse_type_params(ParserContext *context, Token **cur, int *out_count,
+                         unsigned char **out_is_const, int add_to_scope);
 ASTNode **parse_type_args(ParserContext *context, Token **cur, int *out_count);
 void instantiate_generics(ParserContext *context, ASTNode *program);
 void load_imported_generic_templates(ParserContext *context, ASTNode *import_node, const char *source_path);

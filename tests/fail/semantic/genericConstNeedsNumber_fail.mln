@@ -1,0 +1,8 @@
+struct Buffer<const N> {
+    u8 data[N];
+};
+
+i32 main() {
+    Buffer<i32> buffer;
+    return buffer.data.length;
+}

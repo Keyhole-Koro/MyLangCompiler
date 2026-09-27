@@ -1,2 +1,3 @@
 T max<T>(T a, T b) { return a; }
-i32 main() { return max<i32>(1, 2); }
+struct Buffer<const N> { u8 data[N]; };
+i32 main() { Buffer<8> buffer; return max<i32>(1, 2) + buffer.data.length; }

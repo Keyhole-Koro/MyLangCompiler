@@ -46,7 +46,11 @@ int fprint_ast_decl_node(FILE *out, ASTNode *node, int indent) {
             fprint_ast(out, node->generic_type.args[i], indent + 1);
         return 1;
     case AST_TYPE_ARRAY:
-        fprint_indent(out, indent); fprintf(out, "TypeArray: size=%d\n", node->type_array.array_size);
+        fprint_indent(out, indent);
+        if (node->type_array.array_size_param)
+            fprintf(out, "TypeArray: size=%s\n", node->type_array.array_size_param);
+        else
+            fprintf(out, "TypeArray: size=%d\n", node->type_array.array_size);
         fprint_ast(out, node->type_array.element_type, indent + 1);
         return 1;
     case AST_VAR_DECL:
@@ -70,7 +74,9 @@ int fprint_ast_decl_node(FILE *out, ASTNode *node, int indent) {
     case AST_STRUCT:
         fprint_indent(out, indent); fprintf(out, "Struct: %s\n", node->struct_stmt.name);
         for (int i = 0; i < node->struct_stmt.type_param_count; i++) {
-            fprint_indent(out, indent + 1); fprintf(out, "TypeParam: %s\n", node->struct_stmt.type_params[i]);
+            fprint_indent(out, indent + 1); fprintf(out, "%sParam: %s\n",
+                node->struct_stmt.type_param_is_const && node->struct_stmt.type_param_is_const[i] ? "Const" : "Type",
+                node->struct_stmt.type_params[i]);
         }
         for (int i = 0; i < node->struct_stmt.member_count; i++)
             fprint_member_name(out, node->struct_stmt.members[i], indent + 1);
@@ -91,7 +97,9 @@ int fprint_ast_decl_node(FILE *out, ASTNode *node, int indent) {
     case AST_ENUM:
         fprint_indent(out, indent); fprintf(out, "Enum: %s\n", node->enum_stmt.name);
         for (int i = 0; i < node->enum_stmt.type_param_count; i++) {
-            fprint_indent(out, indent + 1); fprintf(out, "TypeParam: %s\n", node->enum_stmt.type_params[i]);
+            fprint_indent(out, indent + 1); fprintf(out, "%sParam: %s\n",
+                node->enum_stmt.type_param_is_const && node->enum_stmt.type_param_is_const[i] ? "Const" : "Type",
+                node->enum_stmt.type_params[i]);
         }
         for (int i = 0; i < node->enum_stmt.member_count; i++) {
             ASTNode *member = node->enum_stmt.members[i];
@@ -118,7 +126,9 @@ int fprint_ast_decl_node(FILE *out, ASTNode *node, int indent) {
         else
             fprintf(out, "Function:  %s\n", node->fundef.name);
         for (int i = 0; i < node->fundef.type_param_count; i++) {
-            fprint_indent(out, indent); fprintf(out, "  TypeParam: %s\n", node->fundef.type_params[i]);
+            fprint_indent(out, indent); fprintf(out, "  %sParam: %s\n",
+                node->fundef.type_param_is_const && node->fundef.type_param_is_const[i] ? "Const" : "Type",
+                node->fundef.type_params[i]);
         }
         for (int i = 0; i < node->fundef.param_count; i++) {
             ASTNode *param = node->fundef.params[i];

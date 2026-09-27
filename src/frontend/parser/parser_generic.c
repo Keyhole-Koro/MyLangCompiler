@@ -1,4 +1,5 @@
 #include "mylang/frontend/parser_internal.h"
+#include "mylang/frontend/parser_ast_internal.h"
 
 static int contains_name(char **names, int count, const char *name) {
     for (int i = 0; i < count; i++) {
@@ -32,21 +33,27 @@ static int expect_type_arg_close(Token **cur) {
     return 0;
 }
 
-char **parse_type_params(ParserContext *context, Token **cur, int *out_count, int add_to_scope) {
+char **parse_type_params(ParserContext *context, Token **cur, int *out_count,
+                         unsigned char **out_is_const, int add_to_scope) {
     char **params = NULL;
+    unsigned char *is_const = NULL;
     int count = 0;
 
     if (!expect(cur, LT)) parse_error(context, "expected '<' before type parameters", *cur);
     if ((*cur)->kind == GT) parse_error(context, "generic declaration requires at least one type parameter", *cur);
 
     while (1) {
+        int param_is_const = expect(cur, CONST);
         if ((*cur)->kind != IDENTIFIER)
-            parse_error(context, "expected type parameter name", *cur);
+            parse_error(context, param_is_const ? "expected const parameter name" :
+                                               "expected type parameter name", *cur);
         if (contains_name(params, count, (*cur)->value))
             parse_error(context, "duplicate type parameter", *cur);
 
         params = realloc(params, sizeof(char *) * (count + 1));
+        is_const = realloc(is_const, sizeof(unsigned char) * (count + 1));
         params[count] = strdup((*cur)->value);
+        is_const[count] = (unsigned char)param_is_const;
         if (add_to_scope) add_typename(context, (*cur)->value);
         count++;
         *cur = (*cur)->next;
@@ -59,6 +66,8 @@ char **parse_type_params(ParserContext *context, Token **cur, int *out_count, in
 
     if (!expect(cur, GT)) parse_error(context, "expected '>' after type parameters", *cur);
     *out_count = count;
+    if (out_is_const) *out_is_const = is_const;
+    else free(is_const);
     return params;
 }
 
@@ -70,7 +79,15 @@ ASTNode **parse_type_args(ParserContext *context, Token **cur, int *out_count) {
     if ((*cur)->kind == GT) parse_error(context, "generic use requires at least one type argument", *cur);
 
     while (1) {
-        ASTNode *arg = parse_type(context, cur);
+        ASTNode *arg;
+        if ((*cur)->kind == NUMBER) {
+            Token *number = *cur;
+            arg = new_number(number->value);
+            set_node_loc_from_tokens(arg, number, NULL);
+            *cur = number->next;
+        } else {
+            arg = parse_type(context, cur);
+        }
         args = realloc(args, sizeof(ASTNode *) * (count + 1));
         args[count++] = arg;
         if ((*cur)->kind != COMMA) break;
@@ -95,10 +112,13 @@ ASTNode *parse_generic_fundef(ParserContext *context, Token **cur) {
 
     int mark = typename_scope_mark(context);
     int scope_param_count = 0;
+    unsigned char *scope_param_is_const = NULL;
     Token *lookahead = params_start;
-    char **scope_params = parse_type_params(context, &lookahead, &scope_param_count, 1);
+    char **scope_params = parse_type_params(context, &lookahead, &scope_param_count,
+                                            &scope_param_is_const, 1);
     for (int i = 0; i < scope_param_count; i++) free(scope_params[i]);
     free(scope_params);
+    free(scope_param_is_const);
 
     const char *previous_generic_function = context->control.current_generic_function_name;
     context->control.current_generic_function_name = name_tok->value;

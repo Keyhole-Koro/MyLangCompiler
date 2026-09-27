@@ -32,12 +32,18 @@ ASTNode* parse_param(ParserContext *context, Token **cur) {
     while ((*cur)->kind == L_BRACKET) {
         *cur = (*cur)->next;
         int size = -1;
+        const char *size_param = NULL;
         if ((*cur)->kind == NUMBER) {
             size = atoi((*cur)->value);
             *cur = (*cur)->next;
+        } else if ((*cur)->kind == IDENTIFIER && context->control.generic_decl_depth > 0) {
+            size_param = (*cur)->value;
+            *cur = (*cur)->next;
         }
         if (!expect(cur, R_BRACKET)) parse_error(context, "expected ']' for parameter array", *cur);
-        final_type = new_type_array(final_type, size);
+        final_type = size_param
+            ? new_type_array_param(final_type, size_param)
+            : new_type_array(final_type, size);
     }
 
     ASTNode *param = new_param_mut(final_type, name, is_mut);
@@ -117,9 +123,11 @@ ASTNode* parse_fundef(ParserContext *context, Token **cur) {
     char *name = name_tok->value;
     *cur = (*cur)->next;
     char **type_params = NULL;
+    unsigned char *type_param_is_const = NULL;
     int type_param_count = 0;
     if ((*cur)->kind == LT) {
-        type_params = parse_type_params(context, cur, &type_param_count, 0);
+        type_params = parse_type_params(context, cur, &type_param_count,
+                                        &type_param_is_const, 0);
     }
     if (!expect(cur, L_PARENTHESES)) parse_error(context, "expected '(' after function name", *cur);
 
@@ -136,6 +144,7 @@ ASTNode* parse_fundef(ParserContext *context, Token **cur) {
         // For now, treat declarations as fundefs with no body
         ASTNode *fndef = new_fundef(ret_type, name, params, param_count, NULL, is_variadic);
         fndef->fundef.type_params = type_params;
+        fndef->fundef.type_param_is_const = type_param_is_const;
         fndef->fundef.type_param_count = type_param_count;
         set_node_loc_from_tokens(fndef, start, name_tok);
         if (type_param_count == 0) add_function(context, fndef);
@@ -145,6 +154,7 @@ ASTNode* parse_fundef(ParserContext *context, Token **cur) {
     ASTNode *body = parse_block(context, cur);
     ASTNode *fndef = new_fundef(ret_type, name, params, param_count, body, is_variadic);
     fndef->fundef.type_params = type_params;
+    fndef->fundef.type_param_is_const = type_param_is_const;
     fndef->fundef.type_param_count = type_param_count;
     set_node_loc_from_tokens(fndef, start, name_tok);
     if (type_param_count == 0) add_function(context, fndef);
@@ -244,6 +254,8 @@ ASTNode *parse_method(ParserContext *context, Token **cur) {
     Token *start = *cur;
     int type_param_count = 0;
     char **type_params = receiver_bound_type_params(*cur, &type_param_count);
+    unsigned char *type_param_is_const = type_param_count > 0
+        ? calloc((size_t)type_param_count, sizeof(unsigned char)) : NULL;
     int type_scope_mark = typename_scope_mark(context);
     for (int i = 0; i < type_param_count; i++) add_typename(context, type_params[i]);
 
@@ -265,7 +277,9 @@ ASTNode *parse_method(ParserContext *context, Token **cur) {
     if ((*cur)->kind == LT) {
         if (generic_receiver)
             parse_error(context, "generic receiver methods cannot declare additional type parameters", *cur);
-        type_params = parse_type_params(context, cur, &type_param_count, 0);
+        free(type_param_is_const);
+        type_params = parse_type_params(context, cur, &type_param_count,
+                                        &type_param_is_const, 0);
     }
     if (!expect(cur, L_PARENTHESES)) parse_error(context, "expected '(' after method name", *cur);
 
@@ -294,6 +308,7 @@ ASTNode *parse_method(ParserContext *context, Token **cur) {
 
     ASTNode *fndef = new_fundef(ret_type, mangled, params, param_count, body, is_variadic);
     fndef->fundef.type_params = type_params;
+    fndef->fundef.type_param_is_const = type_param_is_const;
     fndef->fundef.type_param_count = type_param_count;
     fndef->fundef.recv_type_name = strdup(recv_type);
     set_node_loc_from_tokens(fndef, start, name_tok);

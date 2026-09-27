@@ -45,11 +45,38 @@ static void substitute(ASTNode **slot, void *user_data) {
     ASTNode *node = *slot;
     Substitution *sub = user_data;
     if (!node) return;
+    if (node->type == AST_TYPE_ARRAY && node->type_array.array_size_param) {
+        for (int i = 0; i < sub->count; i++) {
+            if (strcmp(node->type_array.array_size_param, sub->params[i]) != 0) continue;
+            ASTNode *arg = sub->args[i];
+            if (!arg || arg->type != AST_NUMBER)
+                generic_error(sub->parser_context, node,
+                              "array capacity generic argument must be an integer constant");
+            long size = strtol(arg->number.value, NULL, 10);
+            if (size <= 0 || size > 1048576)
+                generic_error(sub->parser_context, arg,
+                              "array capacity generic argument is outside 1..1048576");
+            node->type_array.array_size = (int)size;
+            free(node->type_array.array_size_param);
+            node->type_array.array_size_param = NULL;
+            break;
+        }
+    }
     if (node->type == AST_TYPE && node->type_node.base_type &&
         node->type_node.base_type->type == AST_IDENTIFIER) {
         for (int i = 0; i < sub->count; i++) {
             if (strcmp(node->type_node.base_type->identifier.name, sub->params[i]) != 0) continue;
             ASTNode *arg = ast_clone(sub->args[i]);
+            if (arg->type == AST_NUMBER) {
+                if (node->type_node.pointer_level ||
+                    node->type_node.ref_kind != REFKIND_NONE ||
+                    node->type_node.type_modifiers != TYPEMOD_NONE)
+                    generic_error(sub->parser_context, node,
+                                  "integer generic argument cannot be used as a wrapped type");
+                free_ast(node);
+                *slot = arg;
+                return;
+            }
             if (arg->type != AST_TYPE)
                 generic_error(sub->parser_context, node, "unsupported generic type argument");
             if (arg->type_node.ref_kind != REFKIND_NONE &&
@@ -73,6 +100,10 @@ static void substitute(ASTNode **slot, void *user_data) {
 /* Length-prefixed names and every qualifier keep the key unambiguous. Nested
  * generic arguments have already become concrete type names at this point. */
 static void append_type_key(ParserContext *context, StringBuilder *key, ASTNode *arg) {
+    if (arg && arg->type == AST_NUMBER) {
+        sb_append(key, "_c%zu_%s", strlen(arg->number.value), arg->number.value);
+        return;
+    }
     if (!arg || arg->type != AST_TYPE || !arg->type_node.base_type ||
         arg->type_node.base_type->type != AST_IDENTIFIER)
         generic_error(context, arg, "generic argument did not resolve to a concrete type");
@@ -104,6 +135,8 @@ static void instantiate_receiver_methods(Instantiation *ctx, const char *templat
             free(method->fundef.type_params[p]);
         free(method->fundef.type_params);
         method->fundef.type_params = NULL;
+        free(method->fundef.type_param_is_const);
+        method->fundef.type_param_is_const = NULL;
         method->fundef.type_param_count = 0;
 
         StringBuilder mangled;
@@ -136,6 +169,23 @@ static const char *instantiate(Instantiation *ctx, ASTNode *use, const char *nam
     if (is_function && !tpl->fundef.body)
         generic_error(context, use,
                       "generic function instantiation requires a definition in this module");
+
+    unsigned char *param_is_const = is_function ? tpl->fundef.type_param_is_const :
+                                    is_enum ? tpl->enum_stmt.type_param_is_const :
+                                              tpl->struct_stmt.type_param_is_const;
+    for (int i = 0; i < count; i++) {
+        int numeric = args[i] && args[i]->type == AST_NUMBER;
+        if (param_is_const && param_is_const[i] && !numeric)
+            generic_error(context, args[i], "const generic argument must be an integer constant");
+        if ((!param_is_const || !param_is_const[i]) && numeric)
+            generic_error(context, args[i], "type generic argument must be a type");
+        if (numeric) {
+            long value = strtol(args[i]->number.value, NULL, 10);
+            if (value <= 0 || value > 1048576)
+                generic_error(context, args[i],
+                              "const generic argument is outside 1..1048576");
+        }
+    }
 
     StringBuilder key;
     sb_init(&key);
@@ -177,18 +227,24 @@ static const char *instantiate(Instantiation *ctx, ASTNode *use, const char *nam
         free(decl->fundef.name);
         decl->fundef.name = strdup(concrete_name);
         decl->fundef.type_params = NULL;
+        free(decl->fundef.type_param_is_const);
+        decl->fundef.type_param_is_const = NULL;
         decl->fundef.type_param_count = 0;
         decl->fundef.is_exported = 0;
     } else if (is_enum) {
         free(decl->enum_stmt.name);
         decl->enum_stmt.name = strdup(concrete_name);
         decl->enum_stmt.type_params = NULL;
+        free(decl->enum_stmt.type_param_is_const);
+        decl->enum_stmt.type_param_is_const = NULL;
         decl->enum_stmt.type_param_count = 0;
         decl->enum_stmt.is_exported = 0;
     } else {
         free(decl->struct_stmt.name);
         decl->struct_stmt.name = strdup(concrete_name);
         decl->struct_stmt.type_params = NULL;
+        free(decl->struct_stmt.type_param_is_const);
+        decl->struct_stmt.type_param_is_const = NULL;
         decl->struct_stmt.type_param_count = 0;
         decl->struct_stmt.is_exported = 0;
     }

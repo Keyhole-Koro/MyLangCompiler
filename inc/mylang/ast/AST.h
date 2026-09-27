@@ -143,6 +143,9 @@ struct ASTNode {
         struct {
             ASTNode *element_type;
             int array_size;
+            /* Non-NULL only inside a generic template such as `u8 data[N]`.
+             * Instantiation replaces it with the numeric argument. */
+            char *array_size_param;
         } type_array;
 
         struct {
@@ -188,6 +191,9 @@ struct ASTNode {
             char *package;
             bool is_variadic;
             char **type_params;
+            /* Parallel to type_params: non-zero means `const N`, whose
+             * argument is an integer constant rather than a type. */
+            unsigned char *type_param_is_const;
             int type_param_count;
             /* Non-NULL only for a method (`void (ref User u) display()`):
              * the receiver's base type name. The receiver itself already
@@ -251,6 +257,7 @@ struct ASTNode {
             ASTNode **members;
             int member_count;
             char **type_params;
+            unsigned char *type_param_is_const;
             int type_param_count;
             int is_exported;
             char *package;
@@ -279,6 +286,7 @@ struct ASTNode {
             ASTNode **members;
             int member_count;
             char **type_params;
+            unsigned char *type_param_is_const;
             int type_param_count;
             int is_exported;
             char *package;

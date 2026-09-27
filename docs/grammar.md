@@ -222,18 +222,21 @@ convention ignores trailing arguments, the DOM's uniform handler shape
 no wrapper is generated. A value receiver is a move and is rejected.
 
 ### Variables
-- `var_decl` -> `mut? type IDENTIFIER ( [ NUMBER? ] )* ( = ( expr | init_list ) )? ;`
+- `var_decl` -> `mut? type IDENTIFIER ( [ ( NUMBER | const_parameter )? ] )* ( = ( expr | init_list ) )? ;`
 - `init_list` -> `{ expr ( , expr )* ,? }`
 
 ### Types and Enumerations
-- `struct_decl` -> `struct IDENTIFIER? { var_decl* } IDENTIFIER? ;` | `struct IDENTIFIER type_params { var_decl* } ;`
+- `struct_decl` -> `struct IDENTIFIER? { var_decl* } IDENTIFIER? ;` | `struct IDENTIFIER generic_params { var_decl* } ;`
 - `enum_decl` -> `enum IDENTIFIER { IDENTIFIER ( = NUMBER )? ( , IDENTIFIER ( = NUMBER )? )* ,? } ;`
 - `typedef_stmt` -> `typedef type IDENTIFIER ;` | `typedef struct ... IDENTIFIER ;`
 
 ## 4. Type System
 - `type` -> `const* ( ref mut? )? base_type ( * )*`
 - `base_type` -> `primitive_type` | `IDENTIFIER type_args?`
-- `type_args` -> `< type ( , type )* >`
+- `generic_params` -> `< generic_param ( , generic_param )* >`
+- `generic_param` -> `IDENTIFIER` | `const IDENTIFIER`
+- `type_args` -> `< generic_arg ( , generic_arg )* >`
+- `generic_arg` -> `type` | `NUMBER`
 - `primitive_type` -> `u8` | `u16` | `i32` | `u32` | `bool` | `char` | `float` | `double` | `void` | `long` | `short`
 
 Generic uses are concretely instantiated before semantic analysis. See

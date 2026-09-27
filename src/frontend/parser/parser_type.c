@@ -67,6 +67,7 @@ ASTNode *parse_struct(ParserContext *context, Token **cur) {
 
     char *name = NULL;
     char **type_params = NULL;
+    unsigned char *type_param_is_const = NULL;
     int type_param_count = 0;
     int type_scope_mark = -1;
     if ((*cur)->kind == IDENTIFIER) {
@@ -78,7 +79,8 @@ ASTNode *parse_struct(ParserContext *context, Token **cur) {
         if (!name) parse_error(context, "generic struct requires a name", *cur);
         add_typename(context, name);
         type_scope_mark = typename_scope_mark(context);
-        type_params = parse_type_params(context, cur, &type_param_count, 1);
+        type_params = parse_type_params(context, cur, &type_param_count,
+                                        &type_param_is_const, 1);
         context->control.generic_decl_depth++;
     } else if (name) {
         /* Make a named struct visible while parsing its own pointer members. */
@@ -107,6 +109,7 @@ ASTNode *parse_struct(ParserContext *context, Token **cur) {
             parse_error(context, "expected ';' after struct definition", *cur);
         ASTNode *node = new_struct(name ? name : "", members, member_count);
         node->struct_stmt.type_params = type_params;
+        node->struct_stmt.type_param_is_const = type_param_is_const;
         node->struct_stmt.type_param_count = type_param_count;
         if (type_param_count > 0) {
             context->control.generic_decl_depth--;
@@ -119,6 +122,7 @@ ASTNode *parse_struct(ParserContext *context, Token **cur) {
         parse_error(context, "expected ';' after struct declaration", *cur);
     ASTNode *node = new_struct(name ? name : "", NULL, 0);
     node->struct_stmt.type_params = type_params;
+    node->struct_stmt.type_param_is_const = type_param_is_const;
     node->struct_stmt.type_param_count = type_param_count;
     if (type_param_count > 0) {
         context->control.generic_decl_depth--;
@@ -139,12 +143,14 @@ ASTNode *parse_enum(ParserContext *context, Token **cur) {
     *cur = (*cur)->next;
 
     char **type_params = NULL;
+    unsigned char *type_param_is_const = NULL;
     int type_param_count = 0;
     int type_scope_mark = -1;
     if ((*cur)->kind == LT) {
         add_typename(context, name);
         type_scope_mark = typename_scope_mark(context);
-        type_params = parse_type_params(context, cur, &type_param_count, 1);
+        type_params = parse_type_params(context, cur, &type_param_count,
+                                        &type_param_is_const, 1);
         context->control.generic_decl_depth++;
     }
 
@@ -236,6 +242,7 @@ ASTNode *parse_enum(ParserContext *context, Token **cur) {
     if (type_param_count == 0) add_typename(context, name);
     ASTNode *node = new_enum(name, members, member_count);
     node->enum_stmt.type_params = type_params;
+    node->enum_stmt.type_param_is_const = type_param_is_const;
     node->enum_stmt.type_param_count = type_param_count;
     node->enum_stmt.has_payloads = has_payload;
     set_node_loc_from_tokens(node, name_tok, NULL);

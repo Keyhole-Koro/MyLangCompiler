@@ -1,0 +1,13 @@
+import str from "../../../../MyStdLib/str.mln";
+import { InlineString } from "../../../../MyStdLib/text/inline_string.mln";
+
+i32 main() {
+    InlineString<12> positive = 2147483647.to_string();
+    i32 minimum = -2147483647 - 1;
+    InlineString<12> negative = minimum.to_string();
+    InlineString<12> zero = 0.to_string();
+    if (positive.as_str() != "2147483647") { return 1; }
+    if (negative.as_str() != "-2147483648") { return 2; }
+    if (zero.as_str() != "0") { return 3; }
+    return positive.len() + negative.len() + zero.len();
+}

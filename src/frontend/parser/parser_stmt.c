@@ -145,12 +145,18 @@ ASTNode *parse_variable_declaration(ParserContext *context, Token **cur, int nee
     while ((*cur)->kind == L_BRACKET) {
         *cur = (*cur)->next;
         int size = -1;
+        const char *size_param = NULL;
         if ((*cur)->kind == NUMBER) {
             size = atoi((*cur)->value);
             *cur = (*cur)->next;
+        } else if ((*cur)->kind == IDENTIFIER && context->control.generic_decl_depth > 0) {
+            size_param = (*cur)->value;
+            *cur = (*cur)->next;
         }
         if (!expect(cur, R_BRACKET)) parse_error(context, "expected ']' for array", *cur);
-        final_type = new_type_array(final_type, size);
+        final_type = size_param
+            ? new_type_array_param(final_type, size_param)
+            : new_type_array(final_type, size);
     }
 
     ASTNode *init = NULL;

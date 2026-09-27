@@ -1,0 +1,20 @@
+import str from "../../../../MyStdLib/str.mln";
+import { InlineString } from "../../../../MyStdLib/text/inline_string.mln";
+
+i32 main() {
+    InlineString<8> text;
+    text.init();
+    if (text.capacity() != 8 || !text.is_empty()) { return 1; }
+    if (!text.append("ab")) { return 2; }
+    if (!text.append("c\0d")) { return 3; }
+    if (text.as_str() != "abc\0d") { return 4; }
+    if (text.append("wxyz")) { return 5; }
+    if (text.as_str() != "abc\0d") { return 6; }
+    if (!text.push((u8)'!')) { return 7; }
+    if (text.len() != 6 || text.remaining() != 2) { return 8; }
+    text.truncate(2);
+    if (text.as_str() != "ab") { return 9; }
+    text.clear();
+    if (!text.is_empty()) { return 10; }
+    return 81;
+}
