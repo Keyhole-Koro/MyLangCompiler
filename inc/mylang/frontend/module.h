@@ -107,6 +107,11 @@ typedef struct ModuleGraph {
 
 typedef struct FrontendSession FrontendSession;
 
+typedef struct ModuleAlias {
+    char *name;
+    char *target;
+} ModuleAlias;
+
 /*
  * Loader responsible for resolving relative import paths, canonicalizing them,
  * and caching parsed Module representations.
@@ -115,6 +120,8 @@ typedef struct ModuleLoader {
     ModuleGraph *graph;
     /* Borrowed. Every parser context created by this loader inherits it. */
     FrontendSession *session;
+    ModuleAlias *aliases;
+    int alias_count;
 } ModuleLoader;
 
 /*
@@ -146,8 +153,12 @@ void module_add_symbol(Module *module, SymbolKind kind, const char *source_name,
 ModuleLoader *module_loader_create(ModuleGraph *graph, FrontendSession *session);
 void module_loader_destroy(ModuleLoader *loader);
 int module_loader_is_mylang_source(const char *path);
-int module_loader_resolve_path(const char *importer_path, const char *rel_path,
-                               char *out_canonical, size_t out_size);
+int module_loader_resolve_import_path(const ModuleLoader *loader,
+                                      const char *importer_path,
+                                      const char *import_path,
+                                      char *out_canonical,
+                                      size_t out_size);
+int module_loader_add_alias(ModuleLoader *loader, const char *name, const char *target);
 Module *module_loader_load(ModuleLoader *loader, const char *importer_path, const char *rel_path);
 
 /* FrontendSession lifecycle */
@@ -158,5 +169,6 @@ void frontend_session_set_current(FrontendSession *session);
 /* Releases only a compatibility session created by frontend_session_current(). */
 void frontend_session_destroy_implicit_current(void);
 void frontend_session_add_root_imported_package(FrontendSession *session, const char *name);
+int frontend_session_add_alias(FrontendSession *session, const char *name, const char *target);
 
 #endif /* MYLANG_FRONTEND_MODULE_H */

@@ -9,6 +9,8 @@ void driver_print_usage(const char *prog) {
             "Options:\n"
             "  -exclude <path>   Exclude relative path or directory name (repeatable)\n"
             "  -entry <name>     Entry function name mapped to __START__ (default: main)\n"
+            "  --alias <@name=path>  Resolve an import prefix to a source directory (repeatable)\n"
+            "  --depfile <path>  Write canonical direct source dependencies\n"
             "  --redirect-call <from>=<to>  Redirect direct calls (repeatable)\n"
             "  -masm             When compiling a directory, also copy .masm files\n"
             "  --dump-tokens     Print lexer tokens to stdout\n"
@@ -24,6 +26,9 @@ void driver_options_dispose(DriverOptions *opts) {
     free((void *)opts->call_redirects);
     opts->call_redirects = NULL;
     opts->call_redirect_count = 0;
+    free((void *)opts->aliases);
+    opts->aliases = NULL;
+    opts->alias_count = 0;
 }
 
 int driver_parse_args(int argc, char *argv[], DriverOptions *opts) {
@@ -35,6 +40,32 @@ int driver_parse_args(int argc, char *argv[], DriverOptions *opts) {
             opts->excludes[opts->exclude_count++] = argv[++i];
         } else if ((strcmp(argv[i], "-entry") == 0 || strcmp(argv[i], "--entry") == 0) && i + 1 < argc) {
             opts->entry_name = argv[++i];
+        } else if (strcmp(argv[i], "--alias") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "--alias must be <@name=path>\n");
+                return -1;
+            }
+            const char *spec = argv[++i];
+            const char *equals = strchr(spec, '=');
+            if (!equals || equals == spec || equals[1] == '\0' || spec[0] != '@') {
+                fprintf(stderr, "--alias must be <@name=path>\n");
+                return -1;
+            }
+            const char **grown = (const char**)realloc(
+                (void *)opts->aliases,
+                sizeof(char*) * (opts->alias_count + 1));
+            if (!grown) {
+                fprintf(stderr, "out of memory while recording --alias\n");
+                return -1;
+            }
+            opts->aliases = grown;
+            opts->aliases[opts->alias_count++] = spec;
+        } else if (strcmp(argv[i], "--depfile") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "--depfile requires a path\n");
+                return -1;
+            }
+            opts->depfile_path = argv[++i];
         } else if (strcmp(argv[i], "--redirect-call") == 0 && i + 1 < argc) {
             const char *spec = argv[++i];
             if (!strchr(spec, '=')) {

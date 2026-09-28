@@ -1,4 +1,4 @@
-import str from "../../../../MyStdLib/str.mln";
+import str from "@std/text/str.mln";
 
 str greeting = "global";
 struct Holder { str text; };

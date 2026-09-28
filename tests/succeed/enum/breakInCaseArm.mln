@@ -2,7 +2,7 @@
 // gen_stmt() carries no loop labels, so the codegen keeps the innermost
 // loop's in the compiler context; without that the break was silently
 // dropped and the arm's value was garbage.
-import { Option } from "../../../../MyStdLib/option.mln";
+import { Option } from "@std/core/option.mln";
 
 Option<i32> f(i32 x) { if (x < 2) { return Some(x + 5); } return None; }
 

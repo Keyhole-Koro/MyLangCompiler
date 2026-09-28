@@ -1,5 +1,5 @@
-import str from "../../../../MyStdLib/str.mln";
-import { InlineString } from "../../../../MyStdLib/text/inline_string.mln";
+import str from "@std/text/str.mln";
+import { InlineString } from "@std/text/inline_string.mln";
 
 i32 main() {
     InlineString<8> text = InlineString<8> {};

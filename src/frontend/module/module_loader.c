@@ -19,6 +19,11 @@ ModuleLoader *module_loader_create(ModuleGraph *graph, FrontendSession *session)
 
 void module_loader_destroy(ModuleLoader *loader) {
     if (!loader) return;
+    for (int i = 0; i < loader->alias_count; i++) {
+        free(loader->aliases[i].name);
+        free(loader->aliases[i].target);
+    }
+    free(loader->aliases);
     free(loader);
 }
 
@@ -28,15 +33,75 @@ int module_loader_is_mylang_source(const char *path) {
     return len >= 4 && strcmp(path + len - 4, ".mln") == 0;
 }
 
-int module_loader_resolve_path(const char *importer_path, const char *rel_path,
-                               char *out_canonical, size_t out_size) {
+int module_loader_add_alias(ModuleLoader *loader, const char *name, const char *target) {
+    if (!loader || !name || !target || name[0] != '@' || name[1] == '\0' || target[0] == '\0') {
+        return 0;
+    }
+    if (strchr(name, '/') || strchr(name, '\\') || strchr(name, '=')) return 0;
+    for (int i = 0; i < loader->alias_count; i++) {
+        if (strcmp(loader->aliases[i].name, name) == 0) {
+            return strcmp(loader->aliases[i].target, target) == 0;
+        }
+    }
+    ModuleAlias *grown = realloc(loader->aliases,
+                                 sizeof(ModuleAlias) * (loader->alias_count + 1));
+    if (!grown) return 0;
+    loader->aliases = grown;
+    loader->aliases[loader->alias_count].name = strdup(name);
+    loader->aliases[loader->alias_count].target = strdup(target);
+    if (!loader->aliases[loader->alias_count].name ||
+        !loader->aliases[loader->alias_count].target) {
+        free(loader->aliases[loader->alias_count].name);
+        free(loader->aliases[loader->alias_count].target);
+        return 0;
+    }
+    loader->alias_count++;
+    return 1;
+}
+
+static const ModuleAlias *find_alias(const ModuleLoader *loader, const char *path,
+                                     const char **remainder) {
+    if (remainder) *remainder = NULL;
+    if (!loader || !path || path[0] != '@') return NULL;
+
+    const ModuleAlias *best = NULL;
+    size_t best_len = 0;
+    for (int i = 0; i < loader->alias_count; i++) {
+        const ModuleAlias *candidate = &loader->aliases[i];
+        size_t len = strlen(candidate->name);
+        if (len <= best_len || strncmp(path, candidate->name, len) != 0) continue;
+        if (path[len] != '/' && path[len] != '\0') continue;
+        best = candidate;
+        best_len = len;
+    }
+    if (best && remainder) {
+        const char *rest = path + best_len;
+        while (*rest == '/' || *rest == '\\') rest++;
+        *remainder = rest;
+    }
+    return best;
+}
+
+int module_loader_resolve_import_path(const ModuleLoader *loader,
+                                      const char *importer_path,
+                                      const char *rel_path,
+                                      char *out_canonical,
+                                      size_t out_size) {
     char raw_buf[PATH_MAX];
     char resolved[PATH_MAX];
 
     if (!rel_path || !out_canonical || out_size == 0) return 0;
 
-    if (rel_path[0] == '/') {
-        snprintf(raw_buf, sizeof(raw_buf), "%s", rel_path);
+    const char *remainder = NULL;
+    const ModuleAlias *alias = find_alias(loader, rel_path, &remainder);
+    if (alias) {
+        if (!remainder || remainder[0] == '\0') return 0;
+        int written = snprintf(raw_buf, sizeof(raw_buf), "%s/%s",
+                               alias->target, remainder);
+        if (written < 0 || (size_t)written >= sizeof(raw_buf)) return 0;
+    } else if (rel_path[0] == '/') {
+        int written = snprintf(raw_buf, sizeof(raw_buf), "%s", rel_path);
+        if (written < 0 || (size_t)written >= sizeof(raw_buf)) return 0;
     } else if (importer_path && importer_path[0]) {
         const char *slash = strrchr(importer_path, '/');
         if (slash) {
@@ -44,18 +109,19 @@ int module_loader_resolve_path(const char *importer_path, const char *rel_path,
             if (dir_len >= sizeof(raw_buf)) return 0;
             memcpy(raw_buf, importer_path, dir_len);
             raw_buf[dir_len] = '\0';
-            snprintf(raw_buf + dir_len, sizeof(raw_buf) - dir_len, "/%s", rel_path);
+            int written = snprintf(raw_buf + dir_len, sizeof(raw_buf) - dir_len,
+                                   "/%s", rel_path);
+            if (written < 0 || (size_t)written >= sizeof(raw_buf) - dir_len) return 0;
         } else {
-            snprintf(raw_buf, sizeof(raw_buf), "%s", rel_path);
+            int written = snprintf(raw_buf, sizeof(raw_buf), "%s", rel_path);
+            if (written < 0 || (size_t)written >= sizeof(raw_buf)) return 0;
         }
     } else {
-        snprintf(raw_buf, sizeof(raw_buf), "%s", rel_path);
+        int written = snprintf(raw_buf, sizeof(raw_buf), "%s", rel_path);
+        if (written < 0 || (size_t)written >= sizeof(raw_buf)) return 0;
     }
 
-    if (!realpath(raw_buf, resolved)) {
-        return 0;
-    }
-
+    if (!realpath(raw_buf, resolved)) return 0;
     if (strlen(resolved) >= out_size) return 0;
     snprintf(out_canonical, out_size, "%s", resolved);
     return 1;
@@ -154,7 +220,8 @@ Module *module_loader_load(ModuleLoader *loader, const char *importer_path, cons
     }
 
     char canonical[PATH_MAX];
-    if (!module_loader_resolve_path(importer_path, rel_path, canonical, sizeof(canonical))) {
+    if (!module_loader_resolve_import_path(loader, importer_path, rel_path,
+                                           canonical, sizeof(canonical))) {
         fprintf(stderr, "module_loader: failed to resolve path '%s' relative to '%s'\n",
                 rel_path, importer_path ? importer_path : "(none)");
         return NULL;

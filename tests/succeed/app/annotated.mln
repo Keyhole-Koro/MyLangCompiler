@@ -6,9 +6,9 @@
 // the annotation prototypes themselves, and nothing lists the modules:
 // contributing a chunk keeps an object live.
 import counter from "../../support/app/counter.mln";
-import annotations from "../../../../MyStdLib/meta/annotations.mln";
-import { Annotations } from "../../../../MyStdLib/meta/annotations.mln";
-import section from "../../../../MyStdLib/memory/section.mln";
+import annotations from "@std/meta/annotations.mln";
+import { Annotations } from "@std/meta/annotations.mln";
+import section from "@std/memory/section.mln";
 
 i32 main() {
     if (!section.exists("annotations")) { return 1; }

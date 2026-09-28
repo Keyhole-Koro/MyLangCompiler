@@ -29,6 +29,27 @@ MyLang uses a package-based module system.
 - `export_decl` -> `export ( fundef | var_decl | typedef_stmt | struct_decl | enum_decl )`
 - `extern_decl` -> `extern ( fundef | var_decl )`
 
+Import paths may use a project alias configured in `mylang.toml`:
+
+```toml
+[alias]
+"@std" = "toolchain/MyStdLib"
+```
+
+```mln
+import { Option } from "@std/core/option.mln";
+```
+
+`./` and `../` paths remain relative to the importing file. Alias paths are
+resolved from the project configuration file and are matched by complete path
+segments. The compiler also accepts repeatable `--alias @name=path` options;
+command-line aliases are applied after the project file, so a duplicate is
+allowed only when it points to the same canonical directory.
+
+`mlc --depfile <path>` writes the root source's direct `mln` and `masm`
+dependencies after resolving relative paths and aliases. The build runner uses
+this manifest instead of scanning MyLang source text independently.
+
 ## 3. Declarations and Definitions
 
 ### Functions
@@ -87,7 +108,7 @@ if (title == "hello") { ... } // content equality
 ```
 
 String literals are length-aware views over interned, NUL-terminated bytes, so
-embedded NULs are preserved. The standard library's `str.mln` module provides
+embedded NULs are preserved. The standard library's `text/str.mln` module provides
 `len`, `is_empty`, `compare`, `starts_with`, `ends_with`, `find`, `slice`,
 `byte_at`, and `as_c_str`, plus the `char*` bridge `as_str()`.
 Literals may still be passed to legacy `char*` or `char[]` parameters; a

@@ -26,6 +26,9 @@ typedef struct {
     int exclude_count;
     const char **call_redirects;
     int call_redirect_count;
+    const char **aliases;
+    int alias_count;
+    const char *depfile_path;
     int include_masm;
     int warnings_as_errors;
     int dump_tokens;
@@ -41,6 +44,8 @@ typedef struct {
     int include_masm;
     int dump_tokens;
     int dump_ast;
+    const char **aliases;
+    int alias_count;
     int compiled_count;
     int copied_count;
 } WalkCtx;
@@ -59,7 +64,9 @@ void ensure_parent_dir(const char *file_path);
 int copy_file(const char *src, const char *dst);
 
 int compile_one(const char *input_path, const char *output_path,
-                int dump_tokens_to_stdout, int dump_ast_to_stdout);
+                int dump_tokens_to_stdout, int dump_ast_to_stdout,
+                const char **aliases, int alias_count,
+                const char *depfile_path);
 int walk_dir(WalkCtx *ctx, const char *dir_path);
 void driver_print_usage(const char *prog);
 void driver_options_dispose(DriverOptions *opts);

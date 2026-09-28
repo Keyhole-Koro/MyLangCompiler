@@ -1,6 +1,6 @@
-import allocator from "../../../../MyStdLib/memory/allocator.mln";
-import string from "../../../../MyStdLib/text/string.mln";
-import { String } from "../../../../MyStdLib/text/string.mln";
+import allocator from "@std/memory/allocator.mln";
+import string from "@std/text/string.mln";
+import { String } from "@std/text/string.mln";
 
 u8 storage[256];
 i32 used = 0;

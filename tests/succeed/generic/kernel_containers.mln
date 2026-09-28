@@ -1,19 +1,19 @@
 import { Slice }
-    from "../../../../MyStdLib/memory/slice.mln";
+    from "@std/memory/slice.mln";
 import { Vec }
-    from "../../../../MyStdLib/vec.mln";
+    from "@std/collections/vec.mln";
 import { Arena }
-    from "../../../../MyStdLib/memory/arena.mln";
+    from "@std/memory/arena.mln";
 import { RingBuffer }
-    from "../../../../MyStdLib/collections/ringbuf.mln";
+    from "@std/collections/ringbuf.mln";
 import { IntrusiveList }
-    from "../../../../MyStdLib/collections/intrusive_list.mln";
-import { Option, option_take }
-    from "../../../../MyStdLib/option.mln";
+    from "@std/collections/intrusive_list.mln";
+import { Option }
+    from "@std/core/option.mln";
 import { Result, result_take_err }
-    from "../../../../MyStdLib/result.mln";
+    from "@std/core/result.mln";
 import { HashMap }
-    from "../../../../MyStdLib/collections/hashmap.mln";
+    from "@std/collections/hashmap.mln";
 
 struct Node {
     i32 value;
@@ -47,8 +47,10 @@ i32 main() {
     ring.pop(&ring_value);
 
     Option<i32> option = Some(2);
-    i32 option_value = 0;
-    option_take<i32>(&option, &option_value);
+    i32 option_value = case option of {
+        Some(value) -> value;
+        None -> 0;
+    };
 
     Result<i32, i32> result = Err(7);
     i32 error = 0;

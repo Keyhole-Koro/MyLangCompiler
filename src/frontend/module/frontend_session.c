@@ -69,3 +69,8 @@ void frontend_session_add_root_imported_package(FrontendSession *session, const 
     );
     session->root_imported_packages[session->root_imported_package_count++] = strdup(name);
 }
+
+int frontend_session_add_alias(FrontendSession *session, const char *name, const char *target) {
+    if (!session || !session->loader) return 0;
+    return module_loader_add_alias(session->loader, name, target);
+}

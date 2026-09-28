@@ -1,7 +1,7 @@
 // A method call whose receiver is a struct field (`it.rows.len()`,
 // `p->rows.at(i)`), including a field of a generic instantiation and a
 // field of an imported generic type.
-import { Slice } from "../../../../MyStdLib/memory/slice.mln";
+import { Slice } from "@std/memory/slice.mln";
 
 struct Counter<T> { T total; };
 i32 (Counter<T> *c) add(T v) { c->total = c->total + v; return c->total; }

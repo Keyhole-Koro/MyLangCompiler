@@ -1,6 +1,10 @@
 #include "mylang/driver/driver_internal.h"
 
 static int run_directory_mode(const DriverOptions *opts) {
+    if (opts->depfile_path) {
+        fprintf(stderr, "--depfile is supported only for single-file compilation\n");
+        return 1;
+    }
     if (!path_is_dir(opts->output_path)) {
         if (mkdir_p(opts->output_path) != 0) {
             fprintf(stderr, "Failed to create output directory: %s\n", opts->output_path);
@@ -17,6 +21,8 @@ static int run_directory_mode(const DriverOptions *opts) {
         .include_masm = opts->include_masm,
         .dump_tokens = opts->dump_tokens,
         .dump_ast = opts->dump_ast,
+        .aliases = opts->aliases,
+        .alias_count = opts->alias_count,
         .compiled_count = 0,
         .copied_count = 0,
     };
@@ -36,7 +42,9 @@ static int run_single_file_mode(const DriverOptions *opts) {
         return 1;
     }
     return compile_one(opts->input_path, opts->output_path,
-                       opts->dump_tokens, opts->dump_ast);
+                       opts->dump_tokens, opts->dump_ast,
+                       opts->aliases, opts->alias_count,
+                       opts->depfile_path);
 }
 
 int main(int argc, char *argv[]) {

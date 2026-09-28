@@ -107,10 +107,13 @@ part of the design.
 4. A present `.mln` file that fails to load or parse is a compiler diagnostic,
    not a silent fallback to a linker symbol.
 5. `.masm` and other linker-visible imports are not parsed as MyLang modules.
-6. Module-owned AST and metadata remain valid until the session destroys the
+6. `@name/...` imports use the project's `[alias]` entries from `mylang.toml`
+   (or the compiler's repeatable `--alias @name=path` option); their targets are
+   canonicalized before entering the module graph.
+7. Module-owned AST and metadata remain valid until the session destroys the
    graph. Resetting a temporary parser context must not leave dangling module
    pointers.
-7. AST cloning is limited to the boundaries that require a concrete generic
+8. AST cloning is limited to the boundaries that require a concrete generic
    specialization. The owner and freeing phase must be explicit.
 
 ## Import and visibility semantics
@@ -142,7 +145,9 @@ The resolver provides, at minimum:
 
 Own session initialization and destruction, path resolution, canonicalization,
 cache lookup, `.mln` parsing, package metadata, export metadata, load failures,
-and cycle state.
+and cycle state. The same import-path resolver is also used when emitting a
+dependency manifest for non-MyLang imports such as `.masm`; those files are
+recorded but are not parsed as modules.
 
 ### Resolver
 

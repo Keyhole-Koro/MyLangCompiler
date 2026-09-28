@@ -1,6 +1,6 @@
 // A fixed slot table can represent occupancy explicitly instead of using a
 // sentinel value in every member of the stored record.
-import { Option } from "../../../../MyStdLib/option.mln";
+import { Option } from "@std/core/option.mln";
 
 struct Slot {
     i32 pid;

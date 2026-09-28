@@ -1,0 +1,9 @@
+import { Option } from "@std/core/option.mln";
+
+i32 main() {
+    Option<i32> value = Some(7);
+    return case value of {
+        Some(v) -> v;
+        None -> 0;
+    };
+}

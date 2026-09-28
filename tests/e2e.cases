@@ -7,10 +7,10 @@ callBorrowLifetime|6|succeed/semantic/callBorrowLifetime.mln
 smallAndLiteralReturn|23|succeed/struct/byval/smallAndLiteralReturn.mln
 genericInstantiation|45|succeed/generic/instantiation.mln
 genericConstCapacity|10|succeed/generic/constCapacity.mln
-genericInlineString|81|succeed/generic/inlineString.mln,../../MyStdLib/str.mln,../../MyStdLib/option.mln,../../MyStdLib/text/inline_string.mln
-genericInlineStringZeroValue|4|succeed/generic/inlineStringZeroValue.mln,../../MyStdLib/str.mln,../../MyStdLib/option.mln,../../MyStdLib/text/inline_string.mln
-genericI32ToString|22|succeed/generic/i32ToString.mln,../../MyStdLib/str.mln,../../MyStdLib/option.mln,../../MyStdLib/text/inline_string.mln
-genericInlineCString|82|succeed/generic/inlineCString.mln,../../MyStdLib/str.mln,../../MyStdLib/option.mln,../../MyStdLib/text/inline_string.mln,../../MyStdLib/text/inline_c_string.mln
+genericInlineString|81|succeed/generic/inlineString.mln,../../MyStdLib/text/str.mln,../../MyStdLib/core/option.mln,../../MyStdLib/text/inline_string.mln
+genericInlineStringZeroValue|4|succeed/generic/inlineStringZeroValue.mln,../../MyStdLib/text/str.mln,../../MyStdLib/core/option.mln,../../MyStdLib/text/inline_string.mln
+genericI32ToString|22|succeed/generic/i32ToString.mln,../../MyStdLib/text/str.mln,../../MyStdLib/core/option.mln,../../MyStdLib/text/inline_string.mln
+genericInlineCString|82|succeed/generic/inlineCString.mln,../../MyStdLib/text/str.mln,../../MyStdLib/core/option.mln,../../MyStdLib/text/inline_string.mln,../../MyStdLib/text/inline_c_string.mln
 genericNestedStruct|57|succeed/generic/nestedStruct.mln
 genericRecursive|15|succeed/generic/recursive.mln
 genericImportedTemplates|13|succeed/generic/imported_templates_main.mln,succeed/generic/imported_templates_lib.mln
@@ -32,8 +32,8 @@ simpleWhile|15|succeed/control/simpleWhile.mln
 complexWhile|16|succeed/control/complexWhile.mln
 simpleChar|72|succeed/expr/simpleChar.mln
 stringEscape|10|succeed/expr/stringEscape.mln
-stringView|47|succeed/expr/stringView.mln,../../MyStdLib/str.mln,../../MyStdLib/option.mln
-inlineStringFormatting|73|succeed/expr/stringBuilder.mln,../../MyStdLib/str.mln,../../MyStdLib/option.mln,../../MyStdLib/text/inline_string.mln
+stringView|47|succeed/expr/stringView.mln,../../MyStdLib/text/str.mln,../../MyStdLib/core/option.mln
+inlineStringFormatting|73|succeed/expr/stringBuilder.mln,../../MyStdLib/text/str.mln,../../MyStdLib/core/option.mln,../../MyStdLib/text/inline_string.mln
 intWidth32|20|succeed/expr/intWidth32.mln
 uintWidthSmall|69|succeed/expr/uintWidthSmall.mln
 sizeofType|13244|succeed/expr/sizeofType.mln
@@ -100,7 +100,7 @@ phase2_refMutParam|9|succeed/semantic/phase2_refMutParam.mln
 phase2_uncheckedNested|12|succeed/semantic/phase2_uncheckedNested.mln
 refImportLongLocals|49|succeed/semantic/refImportLongLocals_main.mln,succeed/semantic/refImportLongLocals_helper.mln
 phase_restParam|0|succeed/semantic/phase_restParam.mln
-annotationTable|4422313|succeed/app/annotated.mln,support/app/counter.mln,support/app/annotations.mln,../../MyStdLib/meta/annotations.mln,../../MyStdLib/memory/section.mln,../../MyStdLib/memory/slice.mln,../../MyStdLib/format/mbin.mln,../../MyStdLib/str.mln,../../MyStdLib/option.mln
+annotationTable|4422313|succeed/app/annotated.mln,support/app/counter.mln,support/app/annotations.mln,../../MyStdLib/meta/annotations.mln,../../MyStdLib/memory/section.mln,../../MyStdLib/memory/slice.mln,../../MyStdLib/format/mbin.mln,../../MyStdLib/text/str.mln,../../MyStdLib/core/option.mln
 defaultArguments|62|succeed/function/defaultArgs.mln,support/app/lib.mln
 domRefAndDefaults|113|succeed/dom/refAndDefaults.dom.mln,support/app/dom.mln
 breakInCaseArm|562|succeed/enum/breakInCaseArm.mln
