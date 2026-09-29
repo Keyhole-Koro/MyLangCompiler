@@ -309,13 +309,29 @@ static void mark_generic_span(
 
 /* The LR grammar intentionally cannot distinguish `(Name *)value` from a
  * parenthesized identifier expression without a resolver for user-defined
- * type names.  Treat this unambiguous pointer-cast prefix as transparent so
- * valid compiler input does not become an editor-only syntax error. */
+ * type names. It also cannot parse generic types in cast position without
+ * adding conflicts to the grammar. Treat named pointer-cast prefixes as
+ * transparent so valid compiler input does not become an editor-only syntax
+ * error. */
 static size_t named_pointer_cast_end(Token **tokens, size_t token_count, size_t start) {
-    if (start + 3 >= token_count || tokens[start]->kind != L_PARENTHESES ||
-        tokens[start + 1]->kind != IDENTIFIER || tokens[start + 2]->kind != ASTARISK)
+    if (start + 2 >= token_count || tokens[start]->kind != L_PARENTHESES ||
+        tokens[start + 1]->kind != IDENTIFIER)
         return token_count;
-    size_t index = start + 2;
+
+    size_t index;
+    if (tokens[start + 2]->kind == ASTARISK) {
+        index = start + 2;
+    } else if (tokens[start + 2]->kind == LT) {
+        size_t type_args_end = 0;
+        if (!find_angle_close(tokens, token_count, start + 2, &type_args_end))
+            return token_count;
+        index = type_args_end + 1;
+        if (index >= token_count || tokens[index]->kind != ASTARISK)
+            return token_count;
+    } else {
+        return token_count;
+    }
+
     while (index + 1 < token_count && tokens[index + 1]->kind == ASTARISK) index++;
     return index + 1 < token_count && tokens[index + 1]->kind == R_PARENTHESES
         ? index + 1 : token_count;
