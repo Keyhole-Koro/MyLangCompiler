@@ -1,16 +1,19 @@
 import allocator from "@std/memory/allocator.mln";
 import string from "@std/text/string.mln";
 import { String } from "@std/text/string.mln";
+import { AllocationError } from "@std/memory/allocator.mln";
+import { Result } from "@std/core/result.mln";
 
 u8 storage[256];
 i32 used = 0;
 i32 frees = 0;
 
-i32 test_alloc(i32 size) {
-    if (size > 256 - used) { return 0; }
+Result<i32, AllocationError> test_alloc(i32 size) {
+    if (size <= 0) { return Err(AllocationError::InvalidSize); }
+    if (size > 256 - used) { return Err(AllocationError::OutOfMemory); }
     i32 result = (i32)(&storage[used]);
     used = used + size;
-    return result;
+    return Ok(result);
 }
 
 void test_free(i32 pointer) {
