@@ -918,18 +918,25 @@ static void use_identifier(SemanticContext *ctx, ASTNode *node, ExprContext expr
         }
         return;
     }
-    if (call_may_be_package_import(ctx, ident->identifier.name)) {
+    binding = find_binding(ctx, ident->identifier.name);
+    if (!binding && call_may_be_package_import(ctx, ident->identifier.name)) {
         if (expr_ctx == EXPRCTX_WRITE) {
             semantic_error_at(ctx, semantic_location_from_ast(node),
-                              "cannot assign to function '%s'", ident->identifier.name);
+                              "cannot assign to imported symbol '%s'", ident->identifier.name);
         }
         return;
     }
-    binding = find_binding(ctx, ident->identifier.name);
     if (!binding) {
         semantic_error_code_at(ctx, semantic_location_from_ast(node),
                                SEMCODE_UNDEFINED_IDENTIFIER,
                                "undefined identifier '%s'", ident->identifier.name);
+        return;
+    }
+
+    if (expr_ctx == EXPRCTX_WRITE && binding->has_type &&
+        (binding->type_info.type_modifiers & TYPEMOD_CONST) != 0) {
+        semantic_error_at(ctx, semantic_location_from_ast(node),
+                          "cannot assign to const value '%s'", ident->identifier.name);
         return;
     }
 
@@ -1010,14 +1017,16 @@ static int semantic_infer_identifier_type(SemanticContext *ctx, ASTNode *expr, S
         semantic_typeinfo_make_scalar(out, "i32");
         return 1;
     }
+    binding = find_binding(ctx, expr->identifier.name);
+    if (binding && binding->has_type) {
+        *out = binding->type_info;
+        return 1;
+    }
     if (call_may_be_package_import(ctx, expr->identifier.name)) {
         semantic_typeinfo_make_scalar(out, "i32");
         return 1;
     }
-    binding = find_binding(ctx, expr->identifier.name);
-    if (!binding || !binding->has_type) return 0;
-    *out = binding->type_info;
-    return 1;
+    return 0;
 }
 
 static int semantic_infer_unary_type(SemanticContext *ctx, ASTNode *expr, SemanticTypeInfo *out) {
@@ -1928,6 +1937,41 @@ static void semantic_collect_imported_user_types(SemanticContext *ctx, ASTNode *
     }
 }
 
+static void semantic_collect_imported_globals(SemanticContext *ctx, ASTNode *node) {
+    if (!ctx || !node) return;
+    if (node->type == AST_BLOCK) {
+        for (int i = 0; i < node->block.count; i++) {
+            semantic_collect_imported_globals(ctx, node->block.stmts[i]);
+        }
+        return;
+    }
+    if (node->type != AST_IMPORT || !node->import_stmt.path ||
+        !module_loader_is_mylang_source(node->import_stmt.path)) {
+        return;
+    }
+
+    FrontendSession *session = ctx->session;
+    if (!session || !session->loader) return;
+    Module *mod = module_loader_load(session->loader, ctx->filename,
+                                     node->import_stmt.path);
+    if (!mod || mod->state != MODULE_LOADED) return;
+
+    for (int i = 0; i < mod->symbol_count; i++) {
+        ModuleSymbol *sym = &mod->symbols[i];
+        if (sym->kind != SYMBOL_GLOBAL || !sym->source_name ||
+            !sym->link_name || !sym->declaration ||
+            !resolver_lookup_import_symbol(node, mod, sym->source_name)) {
+            continue;
+        }
+        const char *visible_name = node->import_stmt.symbol_count == 0
+            ? sym->link_name : sym->source_name;
+        ASTNode *decl = sym->declaration;
+        int is_copy = semantic_type_is_copy(ctx, decl->var_decl.var_type);
+        declare_binding(ctx, visible_name, decl->var_decl.var_type, is_copy, 0,
+                        semantic_location_from_ast(node));
+    }
+}
+
 static void semantic_collect_user_types(SemanticContext *ctx, ASTNode *node) {
     if (!ctx || !node) return;
     if (node->type == AST_BLOCK) {
@@ -1977,5 +2021,6 @@ static void semantic_check_type_exists(SemanticContext *ctx, ASTNode *type_node)
 void semantic_walk_ast(SemanticContext *ctx, ASTNode *node) {
     semantic_collect_user_types(ctx, node);
     semantic_collect_function_sigs(ctx, node);
+    semantic_collect_imported_globals(ctx, node);
     semantic_walk_stmt(ctx, node);
 }

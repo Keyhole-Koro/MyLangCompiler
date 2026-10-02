@@ -41,6 +41,7 @@ int semantic_check_with_session(ASTNode *root, FrontendSession *session) {
     ctx.enum_value_count = 0;
     ctx.function_sig_count = 0;
     ctx.user_type_count = 0;
+    ctx.struct_layout_count = 0;
     ctx.imported_package_count = 0;
 
     if (session) {

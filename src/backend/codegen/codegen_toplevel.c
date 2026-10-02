@@ -185,6 +185,21 @@ static void append_imported_func_sig(CompilerContext *cc, const char *name,
     cc->func_sig_count++;
 }
 
+static void append_imported_global_info(CompilerContext *cc, const char *name,
+                                        const ASTNode *declaration) {
+    if (!cc || !name || !declaration || declaration->type != AST_VAR_DECL ||
+        find_global_info(cc, name)) {
+        return;
+    }
+    cg_globals_info = (LocalInfo*)realloc(
+        cg_globals_info, sizeof(LocalInfo) * (cg_globals_count + 1));
+    cg_globals_info[cg_globals_count].name = name;
+    set_localinfo_from_type(cc, &cg_globals_info[cg_globals_count],
+                            declaration->var_decl.var_type);
+    cg_globals_count++;
+    note_import_func(cc, name);
+}
+
 /*
  * Registers exported function signatures from an imported .mln source module
  * using the shared ModuleLoader and Resolver.
@@ -205,7 +220,13 @@ static void append_import_sigs_from_source(CompilerContext *cc, ASTNode *node) {
     if (is_package_import) {
         for (int i = 0; i < mod->symbol_count; i++) {
             ModuleSymbol *sym = &mod->symbols[i];
-            if (!sym->is_exported || sym->kind != SYMBOL_FUNCTION) continue;
+            if (!sym->is_exported) continue;
+
+            if (sym->kind == SYMBOL_GLOBAL) {
+                append_imported_global_info(cc, sym->link_name, sym->declaration);
+                continue;
+            }
+            if (sym->kind != SYMBOL_FUNCTION) continue;
 
             ResolverFunctionInfo fn_info;
             if (resolver_get_function_info(sym, &fn_info)) {
@@ -220,6 +241,11 @@ static void append_import_sigs_from_source(CompilerContext *cc, ASTNode *node) {
 
             ModuleSymbol *sym = resolver_lookup_import_symbol(node, mod, req_name);
             if (!sym) continue;
+
+            if (sym->kind == SYMBOL_GLOBAL) {
+                append_imported_global_info(cc, sym->source_name, sym->declaration);
+                continue;
+            }
 
             if (sym->kind == SYMBOL_FUNCTION) {
                 ResolverFunctionInfo fn_info;

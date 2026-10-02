@@ -126,6 +126,11 @@ part of the design.
 - `import foo;` remains the path-less linker/package import form.
 - An exported method travels with its exported receiver type; importing the
   type provides the method prototype needed for resolution.
+- An exported global travels with its declared scalar/array type and type
+  modifiers. Package imports expose its link name (`pkg_VALUE` internally),
+  while symbol imports expose the requested source name. `const` remains
+  read-only in the importing translation unit and byte-width globals retain
+  their load width.
 - Non-exported declarations and generic templates remain invisible to
   importers.
 

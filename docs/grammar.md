@@ -260,6 +260,9 @@ no wrapper is generated. A value receiver is a move and is rejected.
 - `generic_arg` -> `type` | `NUMBER`
 - `primitive_type` -> `u8` | `u16` | `i32` | `u32` | `bool` | `char` | `float` | `double` | `void` | `long` | `short`
 
+`const` applies to the declared value. Assignment through that binding is a
+semantic error, including when the value was imported from another package.
+
 Generic uses are concretely instantiated before semantic analysis. See
 [Generic instantiation](generics.md) for supported behavior and boundaries.
 
