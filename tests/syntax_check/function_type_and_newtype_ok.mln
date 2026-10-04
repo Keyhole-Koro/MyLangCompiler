@@ -1,0 +1,4 @@
+newtype CodeAddress = i32;
+
+fn(i32 value) -> i32 callback;
+fn(i32) -> void notifier;

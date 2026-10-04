@@ -161,7 +161,7 @@ static void collect_module_symbols(Module *module, ParserContext *ctx) {
             } else if (stmt->type == AST_TYPEDEF) {
                 const char *alias = stmt->typedef_stmt.alias;
                 module_add_symbol(module, SYMBOL_TYPEDEF, alias, alias,
-                                  stmt, 0);
+                                  stmt, stmt->typedef_stmt.is_exported);
             } else if (stmt->type == AST_TYPEDEF_STRUCT) {
                 const char *name = stmt->typedef_struct.typedef_name;
                 module_add_symbol(module, SYMBOL_TYPEDEF, name, name,

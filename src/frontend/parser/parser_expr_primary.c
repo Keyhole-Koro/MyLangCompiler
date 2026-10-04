@@ -63,7 +63,7 @@ static ASTNode *parse_struct_literal(ParserContext *context, Token **cur,
         parse_error(context, "expected '{' after struct type", *cur);
 
     while ((*cur)->kind != R_BRACE && (*cur)->kind != EOT) {
-        if ((*cur)->kind != IDENTIFIER)
+        if (!token_is_name(*cur))
             parse_error(context, "expected field name in struct literal", *cur);
         char *field_name = strdup((*cur)->value);
         *cur = (*cur)->next;

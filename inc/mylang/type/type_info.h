@@ -15,6 +15,9 @@ typedef struct MylangType {
     int is_array;
     int dims[MYLANG_TYPE_MAX_DIMS];
     int dims_count;
+    int is_function;
+    const ASTNode *function_type;
+    const ASTNode *function_decl;
 } MylangType;
 
 void mylang_type_clear(MylangType *type);

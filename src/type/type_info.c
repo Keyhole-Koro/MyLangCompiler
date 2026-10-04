@@ -19,10 +19,27 @@ int mylang_type_from_ast(const ASTNode *type_node, MylangType *out) {
     mylang_type_clear(out);
     if (!node) return 0;
 
+    if (node->type == AST_TYPE_FUNCTION) {
+        out->base_type = "fn";
+        out->is_function = 1;
+        out->function_type = node;
+        return 1;
+    }
+
     while (node && node->type == AST_TYPE_ARRAY &&
            dimension_count < MYLANG_TYPE_MAX_DIMS) {
         dimensions[dimension_count++] = node->type_array.array_size;
         node = node->type_array.element_type;
+    }
+    if (node && node->type == AST_TYPE_FUNCTION) {
+        out->is_array = dimension_count > 0;
+        out->dims_count = dimension_count;
+        for (int i = 0; i < dimension_count; i++)
+            out->dims[i] = dimensions[dimension_count - 1 - i];
+        out->base_type = "fn";
+        out->is_function = 1;
+        out->function_type = node;
+        return 1;
     }
     if (!node || node->type != AST_TYPE) return 0;
 

@@ -1,7 +1,7 @@
 #include "mylang/backend/codegen_internal.h"
 #include <stdint.h>
 
-static long eval_const_expr(ASTNode *node);
+static long eval_const_expr(CompilerContext *cc, ASTNode *node);
 int array_element_size_bytes(ASTNode *array_type);
 
 void ensure_data_section(CompilerContext *cc) {
@@ -17,7 +17,7 @@ void emit_zero_bytes(StringBuilder *sb, int count) {
     sb_append(sb, "\n");
 }
 
-static long eval_const_expr(ASTNode *node) {
+static long eval_const_expr(CompilerContext *cc, ASTNode *node) {
     if (!node) return 0;
     if (node->type == AST_NUMBER) {
         return strtol(node->number.value, NULL, 10);
@@ -26,10 +26,16 @@ static long eval_const_expr(ASTNode *node) {
         return (unsigned char)(node->char_literal.value ? node->char_literal.value[0] : 0);
     }
     if (node->type == AST_CAST) {
-        return eval_const_expr(node->cast.expr);
+        return eval_const_expr(cc, node->cast.expr);
+    }
+    if (node->type == AST_CALL) {
+        const TypedefInfo *newtype = find_typedef(cc, node->call.name);
+        if (newtype && newtype->is_newtype && node->call.arg_count == 1) {
+            return eval_const_expr(cc, node->call.args[0]);
+        }
     }
     if (node->type == AST_UNARY) {
-        uint32_t value = (uint32_t)eval_const_expr(node->unary.operand);
+        uint32_t value = (uint32_t)eval_const_expr(cc, node->unary.operand);
         switch (node->unary.op) {
         case SUB: return (int32_t)(0u - value);
         case ADD: return (int32_t)value;
@@ -39,14 +45,14 @@ static long eval_const_expr(ASTNode *node) {
         }
     }
     if (node->type == AST_TERNARY) {
-        return eval_const_expr(eval_const_expr(node->ternary.cond)
+        return eval_const_expr(cc, eval_const_expr(cc, node->ternary.cond)
                                ? node->ternary.then_expr : node->ternary.else_expr);
     }
     if (node->type == AST_BINARY) {
-        uint32_t left = (uint32_t)eval_const_expr(node->binary.left);
+        uint32_t left = (uint32_t)eval_const_expr(cc, node->binary.left);
         if (node->binary.op == LAND && !left) return 0;
         if (node->binary.op == LOR && left) return 1;
-        uint32_t right = (uint32_t)eval_const_expr(node->binary.right);
+        uint32_t right = (uint32_t)eval_const_expr(cc, node->binary.right);
         switch (node->binary.op) {
         case ADD: return (int32_t)(left + right);
         case SUB: return (int32_t)(left - right);
@@ -101,7 +107,7 @@ static void emit_word_operand(CompilerContext *cc, StringBuilder *sb, ASTNode *e
     } else if (expr && expr->type == AST_IDENTIFIER && func_is_defined(cc, expr->identifier.name)) {
         sb_append(sb, "  .word %s\n", expr->identifier.name);
     } else {
-        sb_append(sb, "  .word %ld\n", eval_const_expr(expr));
+        sb_append(sb, "  .word %ld\n", eval_const_expr(cc, expr));
     }
 }
 
@@ -139,7 +145,7 @@ void emit_global_init(CompilerContext *cc, StringBuilder *sb, ASTNode *init_expr
             if (member->total_size_bytes == SLOT_SIZE) {
                 emit_word_operand(cc, sb, value);
             } else {
-                emit_scalar_bytes(sb, eval_const_expr(value), member->total_size_bytes);
+                emit_scalar_bytes(sb, eval_const_expr(cc, value), member->total_size_bytes);
             }
         }
         return;
@@ -157,7 +163,7 @@ void emit_global_init(CompilerContext *cc, StringBuilder *sb, ASTNode *init_expr
             if (width == SLOT_SIZE) {
                 emit_word_operand(cc, sb, elem);
             } else {
-                emit_scalar_bytes(sb, eval_const_expr(elem), width);
+                emit_scalar_bytes(sb, eval_const_expr(cc, elem), width);
             }
             written += width;
         }
@@ -193,7 +199,7 @@ void emit_global_init(CompilerContext *cc, StringBuilder *sb, ASTNode *init_expr
     }
 
     // Evaluate constant expression
-    long val = eval_const_expr(init_expr);
+    long val = eval_const_expr(cc, init_expr);
 
     if (expected_bytes == 1) {
         sb_append(sb, "  .byte 0x%02X\n", (unsigned)(val & 0xFF));

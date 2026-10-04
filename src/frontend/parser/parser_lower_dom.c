@@ -5,6 +5,9 @@
 #include <stdarg.h>
 #include <ctype.h>
 
+static void lower_nested_blocks(ParserContext *context, ASTNode *stmt);
+static ASTNode *i32_type(void);
+
 /* Lowers AST_DOM_ELEMENT nodes into ordinary MyLang calls.
  *
  * The compiler holds no element vocabulary. A tag names a function, its
@@ -155,8 +158,19 @@ static ASTNode *lower_handler_value(ParserContext *context, ASTNode *el, const D
     ASTNode *ref = new_identifier((char *)tramp);
     ref->line = value->line;
     ref->col = value->col;
+    ASTNode **params = calloc(3, sizeof(ASTNode *));
+    params[0] = i32_type();
+    params[1] = i32_type();
+    params[2] = i32_type();
+    ASTNode *handler_type = new_function_type(
+        params, 3,
+        new_type_node(new_identifier("void"), 0, TYPEMOD_NONE, REFKIND_NONE),
+        false);
+    ASTNode *cast = new_cast(handler_type, ref);
+    cast->line = value->line;
+    cast->col = value->col;
     free_ast(value);
-    return ref;
+    return cast;
 }
 
 static ASTNode *take_prop(ASTNode *el, const char *name) {
@@ -411,6 +425,9 @@ static void lower_stmt_exprs(ParserContext *context, ASTNode *stmt, DomEmit *out
     case AST_RETURN:
         lower_expr(context, &stmt->ret.expr, out);
         break;
+    case AST_DEFER:
+        lower_nested_blocks(context, stmt->defer_stmt.body);
+        break;
     case AST_YIELD:
         lower_expr(context, &stmt->yield_stmt.expr, out);
         break;
@@ -470,6 +487,9 @@ static void lower_nested_blocks(ParserContext *context, ASTNode *stmt) {
         break;
     case AST_FOR:
         lower_nested_blocks(context, stmt->for_stmt.body);
+        break;
+    case AST_DEFER:
+        lower_nested_blocks(context, stmt->defer_stmt.body);
         break;
     case AST_UNCHECKED:
         lower_nested_blocks(context, stmt->unchecked_block.body);
@@ -571,6 +591,9 @@ void ensure_no_dom_elements(ParserContext *context, ASTNode *node) {
         break;
     case AST_RETURN:
         ensure_no_dom_elements(context, node->ret.expr);
+        break;
+    case AST_DEFER:
+        ensure_no_dom_elements(context, node->defer_stmt.body);
         break;
     case AST_YIELD:
         ensure_no_dom_elements(context, node->yield_stmt.expr);

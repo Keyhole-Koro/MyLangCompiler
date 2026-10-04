@@ -70,13 +70,16 @@ typedef enum {
     CONTINUE, // continue
     RETURN,   // return
     YIELD,    // yield
+    DEFER,    // defer
     UNCHECKED, // unchecked
     OF,       // of
     UNDERSCORE, // _
     TYPEDEF,  // typedef
+    NEWTYPE,  // newtype
     STRUCT,   // struct
     UNION,    // union
     ENUM,     // enum
+    FN,       // fn (function value type)
     SIZEOF,   // sizeof
     IMPORT,   // import
     EXPORT,   // export

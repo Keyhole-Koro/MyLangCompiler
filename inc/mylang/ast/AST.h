@@ -11,6 +11,7 @@ typedef enum {
     AST_TYPE,
     AST_TYPE_GENERIC,
     AST_TYPE_ARRAY,
+    AST_TYPE_FUNCTION,
     AST_VAR_DECL,
     AST_BORROW,
     AST_BORROW_MUT,
@@ -47,6 +48,7 @@ typedef enum {
     AST_YIELD,
     AST_STMT_EXPR,
     AST_CASE,
+    AST_DEFER,
     AST_UNCHECKED,
     // DOM syntax extension node. Only reachable in a .dom.mln source, and only
     // between parsing and DOM lowering; later passes never see one.
@@ -147,10 +149,19 @@ struct ASTNode {
              * Instantiation replaces it with the numeric argument. */
             char *array_size_param;
         } type_array;
+        struct {
+            ASTNode **param_types;
+            int param_count;
+            ASTNode *return_type;
+            bool is_variadic;
+        } function_type;
 
         struct {
             ASTNode *src_type;
             char *alias;
+            int is_newtype;
+            int is_exported;
+            char *package;
         } typedef_stmt;
         struct {
             ASTNode *type;
@@ -165,6 +176,7 @@ struct ASTNode {
         struct { ASTNode *expr; } ret;
         struct { ASTNode *expr; } yield_stmt;
         struct { ASTNode **stmts; int count; } block;
+        struct { ASTNode *body; } defer_stmt;
         struct { ASTNode *body; } unchecked_block;
         struct { ASTNode *block; } stmt_expr;
         struct {

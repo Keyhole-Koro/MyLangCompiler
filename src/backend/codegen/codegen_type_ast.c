@@ -10,10 +10,14 @@ void set_localinfo_from_type(CompilerContext *cc, LocalInfo *info, ASTNode *type
     info->is_array = 0;
     info->array_length = 0;
     info->dims_count = 0;
+    info->is_function = 0;
+    info->function_type = NULL;
     for (int i = 0; i < 8; i++) info->dims[i] = 0;
     if (!mylang_type_from_ast(type_node, &type)) return;
 
     info->base_type = type.base_type;
+    info->is_function = type.is_function;
+    info->function_type = type.function_type;
     info->pointer_level = type.pointer_level + (type.ref_kind != REFKIND_NONE);
     info->type_modifiers = type.type_modifiers;
     info->is_array = type.is_array;
@@ -43,6 +47,7 @@ void set_localinfo_from_type(CompilerContext *cc, LocalInfo *info, ASTNode *type
 
 int typeinfo_from_type_ast(CompilerContext *cc, ASTNode *type_node, TypeInfo *out) {
     if (!out) return 0;
+    mylang_type_clear(out);
     LocalInfo tmp = {0};
     set_localinfo_from_type(cc, &tmp, type_node);
     out->base_type = tmp.base_type;
@@ -50,6 +55,8 @@ int typeinfo_from_type_ast(CompilerContext *cc, ASTNode *type_node, TypeInfo *ou
     out->type_modifiers = tmp.type_modifiers;
     out->is_array = tmp.is_array;
     out->dims_count = tmp.dims_count;
+    out->is_function = tmp.is_function;
+    out->function_type = tmp.function_type;
     for (int i = 0; i < tmp.dims_count && i < 8; i++) out->dims[i] = tmp.dims[i];
     return tmp.base_type != NULL;
 }

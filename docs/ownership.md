@@ -61,6 +61,15 @@ unchecked {
 ```
 Inside an `unchecked` block, the compiler allows raw pointer operations and bypasses the borrow checker's strict exclusivity rules for references.
 
+## Scope cleanup with `defer`
+
+`defer expression;` and `defer { ... }` register cleanup for the current
+lexical scope. Registered bodies run in reverse order on normal scope exit and
+before `return`, `break`, or `continue` transfers control out of that scope.
+The cleanup runs before automatic drops registered in the same scope and reads
+the current values from the variables' stack slots. A defer body cannot contain
+`return`, `break`, `continue`, or another `defer`.
+
 ## 6. Automatic Drop
 
 A non-Copy struct opts into deterministic cleanup by defining a one-argument

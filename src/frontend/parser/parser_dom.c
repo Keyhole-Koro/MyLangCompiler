@@ -27,7 +27,7 @@ static DomProp *parse_dom_props(ParserContext *context, Token **cur, int *out_co
 
     // `ref` is a keyword elsewhere, but as a property name it is the
     // compiler-handled node-id binding (see parser_lower_dom.c).
-    while ((*cur)->kind == IDENTIFIER || (*cur)->kind == REF) {
+    while (token_is_name(*cur) || (*cur)->kind == REF) {
         Token *name_tok = *cur;
         char *name = name_tok->kind == REF ? "ref" : name_tok->value;
         *cur = (*cur)->next;
@@ -67,7 +67,7 @@ ASTNode *parse_dom_element(ParserContext *context, Token **cur) {
     if (!expect(cur, MLX_TAG_OPEN))
         parse_error(context, "expected '<' to open a DOM element", *cur);
 
-    if ((*cur)->kind != IDENTIFIER)
+    if (!token_is_name(*cur))
         parse_error(context, "expected an element name after '<'", *cur);
     char *tag = strdup((*cur)->value);
     *cur = (*cur)->next;
@@ -101,7 +101,7 @@ ASTNode *parse_dom_element(ParserContext *context, Token **cur) {
 
         if (!expect(cur, MLX_CLOSE_TAG_OPEN))
             parse_error(context, "expected '</' to close a DOM element", *cur);
-        if ((*cur)->kind != IDENTIFIER)
+        if (!token_is_name(*cur))
             parse_error(context, "expected an element name after '</'", *cur);
         if (strcmp((*cur)->value, tag) != 0)
             parse_error(context, "closing tag does not match the opening element name", *cur);

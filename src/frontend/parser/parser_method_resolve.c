@@ -365,6 +365,9 @@ static void resolve_calls_node(ParserContext *context, MethodScope *scope, ASTNo
     case AST_RETURN:
         resolve_calls_node(context, scope, node->ret.expr);
         break;
+    case AST_DEFER:
+        resolve_calls_node(context, scope, node->defer_stmt.body);
+        break;
     case AST_YIELD:
         resolve_calls_node(context, scope, node->yield_stmt.expr);
         break;

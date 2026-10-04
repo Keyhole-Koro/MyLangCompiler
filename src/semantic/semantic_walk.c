@@ -62,6 +62,14 @@ static SemanticFunctionSig *find_function_sig(SemanticContext *ctx, const char *
     return NULL;
 }
 
+static SemanticNewtype *find_newtype(SemanticContext *ctx, const char *name) {
+    if (!ctx || !name) return NULL;
+    for (int i = 0; i < ctx->newtype_count; i++)
+        if (ctx->newtypes[i].name && strcmp(ctx->newtypes[i].name, name) == 0)
+            return &ctx->newtypes[i];
+    return NULL;
+}
+
 static void populate_function_sig_types(SemanticContext *ctx, SemanticFunctionSig *sig,
                                         ASTNode *return_type, ASTNode **params,
                                         int param_count, SemanticLocation loc) {
@@ -104,7 +112,8 @@ static void populate_function_sig_types(SemanticContext *ctx, SemanticFunctionSi
 
 static void register_function_sig(SemanticContext *ctx, const char *name, int param_count,
                                   int is_variadic, int is_imported, SemanticLocation loc,
-                                  ASTNode *return_type, ASTNode **params) {
+                                  ASTNode *return_type, ASTNode **params,
+                                  ASTNode *declaration) {
     SemanticFunctionSig *sig;
 
     if (!ctx || !name) return;
@@ -116,6 +125,7 @@ static void register_function_sig(SemanticContext *ctx, const char *name, int pa
         sig->is_variadic = is_variadic;
         sig->is_imported = 0;
         sig->decl_loc = loc;
+        sig->declaration = declaration;
         populate_function_sig_types(ctx, sig, return_type, params, param_count, loc);
         return;
     }
@@ -132,6 +142,7 @@ static void register_function_sig(SemanticContext *ctx, const char *name, int pa
     sig->is_variadic = is_variadic;
     sig->is_imported = is_imported;
     sig->decl_loc = loc;
+    sig->declaration = declaration;
     populate_function_sig_types(ctx, sig, return_type, params, param_count, loc);
 }
 
@@ -190,7 +201,8 @@ static void semantic_collect_function_sigs(SemanticContext *ctx, ASTNode *node) 
                               0,
                               semantic_location_from_ast(node),
                               node->fundef.ret_type,
-                              node->fundef.params);
+                              node->fundef.params,
+                              node);
         break;
     case AST_IMPORT:
         if (node->import_stmt.path && module_loader_is_mylang_source(node->import_stmt.path)) {
@@ -220,7 +232,8 @@ static void semantic_collect_function_sigs(SemanticContext *ctx, ASTNode *node) 
                                               0,
                                               semantic_location_from_ast(node),
                                               fn->fundef.ret_type,
-                                              fn->fundef.params);
+                                              fn->fundef.params,
+                                              fn);
                     }
                 }
             }
@@ -232,6 +245,7 @@ static void semantic_collect_function_sigs(SemanticContext *ctx, ASTNode *node) 
                                   0,
                                   1,
                                   semantic_location_from_ast(node),
+                                  NULL,
                                   NULL,
                                   NULL);
         }
@@ -257,6 +271,11 @@ static int semantic_typeinfo_exact(const SemanticTypeInfo *left,
     return 1;
 }
 
+static ASTNode *unwrap_mock_target_cast(ASTNode *expr) {
+    while (expr && expr->type == AST_CAST) expr = expr->cast.expr;
+    return expr;
+}
+
 static ASTNode *mock_rule_target_expr(ASTNode *call, const char *rule_name) {
     ASTNode *when;
     ASTNode *factory;
@@ -272,7 +291,7 @@ static ASTNode *mock_rule_target_expr(ASTNode *call, const char *rule_name) {
         (strcmp(factory->call.name, "mock_target") != 0 &&
          strcmp(factory->call.name, "mock_spy") != 0) ||
         factory->call.arg_count != 1) return NULL;
-    return factory->call.args[0];
+    return unwrap_mock_target_cast(factory->call.args[0]);
 }
 
 static ASTNode *mock_callback_target_expr(ASTNode *call) {
@@ -398,12 +417,14 @@ static void check_mock_callback_signature(SemanticContext *ctx, ASTNode *call) {
 }
 
 static int semantic_typeinfo_is_copy(SemanticContext *ctx, const SemanticTypeInfo *info) {
+    if (info->is_function) return 1;
     if (info->ref_kind != REFKIND_NONE) return 1;
     if (info->pointer_level > 0) return 1;
     if (info->is_array) return 0;
     const char *base_type = info->base_type;
     if (!base_type) return 0;
     if (semantic_enum_type_exists(ctx, base_type)) return 1;
+    if (find_newtype(ctx, base_type)) return 1;
     return semantic_is_builtin_type(base_type);
 }
 
@@ -442,12 +463,97 @@ static int semantic_typeinfo_is_integer_like_or_enum(SemanticContext *ctx, const
     return semantic_enum_type_exists(ctx, info->base_type);
 }
 
+static int semantic_typeinfo_compatible(SemanticContext *ctx,
+                                        const SemanticTypeInfo *expected,
+                                        const SemanticTypeInfo *actual);
+
+static int function_type_parts(const SemanticTypeInfo *info,
+                               ASTNode ***params, int *param_count,
+                               ASTNode **return_type, int *is_variadic) {
+    if (!info || !info->is_function) return 0;
+    if (info->function_type && info->function_type->type == AST_TYPE_FUNCTION) {
+        *params = info->function_type->function_type.param_types;
+        *param_count = info->function_type->function_type.param_count;
+        *return_type = info->function_type->function_type.return_type;
+        *is_variadic = info->function_type->function_type.is_variadic ? 1 : 0;
+        return 1;
+    }
+    if (info->function_decl && info->function_decl->type == AST_FUNDEF) {
+        ASTNode *decl = (ASTNode *)info->function_decl;
+        *params = decl->fundef.params;
+        *param_count = decl->fundef.param_count;
+        *return_type = decl->fundef.ret_type;
+        *is_variadic = decl->fundef.is_variadic ? 1 : 0;
+        return 2;
+    }
+    return 0;
+}
+
+static ASTNode *function_param_type(ASTNode *param, int declaration_form) {
+    if (!param) return NULL;
+    return declaration_form == 2 && param->type == AST_PARAM ? param->param.type : param;
+}
+
+static int semantic_function_type_compatible(SemanticContext *ctx,
+                                             const SemanticTypeInfo *expected,
+                                             const SemanticTypeInfo *actual) {
+    ASTNode **expected_params = NULL, **actual_params = NULL;
+    ASTNode *expected_return = NULL, *actual_return = NULL;
+    int expected_count = 0, actual_count = 0;
+    int expected_variadic = 0, actual_variadic = 0;
+    int expected_form = function_type_parts(expected, &expected_params, &expected_count,
+                                            &expected_return, &expected_variadic);
+    int actual_form = function_type_parts(actual, &actual_params, &actual_count,
+                                          &actual_return, &actual_variadic);
+    if (!expected_form || !actual_form || expected_count != actual_count ||
+        expected_variadic != actual_variadic) return 0;
+
+    SemanticTypeInfo expected_info, actual_info;
+    if (!semantic_typeinfo_from_type_ast(expected_return, &expected_info) ||
+        !semantic_typeinfo_from_type_ast(actual_return, &actual_info) ||
+        !semantic_typeinfo_compatible(ctx, &expected_info, &actual_info)) return 0;
+    for (int i = 0; i < expected_count; i++) {
+        ASTNode *ep = function_param_type(expected_params[i], expected_form);
+        ASTNode *ap = function_param_type(actual_params[i], actual_form);
+        if (!semantic_typeinfo_from_type_ast(ep, &expected_info) ||
+            !semantic_typeinfo_from_type_ast(ap, &actual_info) ||
+            !semantic_typeinfo_compatible(ctx, &expected_info, &actual_info)) return 0;
+    }
+    return 1;
+}
+
 static void semantic_typeinfo_format(const SemanticTypeInfo *info, char *buf, size_t buf_size) {
     size_t used;
 
     if (!buf || buf_size == 0) return;
     if (!info || !info->base_type || info->base_type[0] == '\0') {
         snprintf(buf, buf_size, "<unknown>");
+        return;
+    }
+
+    if (info->is_function) {
+        ASTNode **params = NULL;
+        ASTNode *ret = NULL;
+        int count = 0, variadic = 0;
+        int form = function_type_parts(info, &params, &count, &ret, &variadic);
+        if (!form) { snprintf(buf, buf_size, "fn(?)"); return; }
+        size_t at = (size_t)snprintf(buf, buf_size, "fn(");
+        for (int i = 0; i < count && at < buf_size; i++) {
+            SemanticTypeInfo param_info;
+            char part[48];
+            semantic_typeinfo_from_type_ast(function_param_type(params[i], form), &param_info);
+            semantic_typeinfo_format(&param_info, part, sizeof(part));
+            at += (size_t)snprintf(buf + at, buf_size - at, "%s%s", i ? ", " : "", part);
+        }
+        if (variadic && at < buf_size)
+            at += (size_t)snprintf(buf + at, buf_size - at, "%srest", count ? ", " : "");
+        if (at < buf_size) {
+            SemanticTypeInfo ret_info;
+            char part[48];
+            semantic_typeinfo_from_type_ast(ret, &ret_info);
+            semantic_typeinfo_format(&ret_info, part, sizeof(part));
+            snprintf(buf + at, buf_size - at, ") -> %s", part);
+        }
         return;
     }
 
@@ -475,6 +581,11 @@ static int semantic_typeinfo_same_base(const SemanticTypeInfo *a, const Semantic
     return a && b && a->base_type && b->base_type && strcmp(a->base_type, b->base_type) == 0;
 }
 
+static int semantic_typeinfo_is_code_address(const SemanticTypeInfo *info) {
+    return info && info->base_type && strcmp(info->base_type, "CodeAddress") == 0 &&
+           info->ref_kind == REFKIND_NONE && info->pointer_level == 0 && !info->is_array;
+}
+
 static int semantic_literal_to_legacy_c_string(const SemanticTypeInfo *expected,
                                                const SemanticTypeInfo *actual,
                                                ASTNode *expr) {
@@ -485,8 +596,20 @@ static int semantic_literal_to_legacy_c_string(const SemanticTypeInfo *expected,
     return expected->pointer_level == 1 || expected->is_array;
 }
 
+static int semantic_null_function_literal(const SemanticTypeInfo *expected,
+                                          ASTNode *expr) {
+    return expected && expected->is_function && expr && expr->type == AST_NUMBER &&
+           expr->number.value && strcmp(expr->number.value, "0") == 0;
+}
+
 static int semantic_typeinfo_compatible(SemanticContext *ctx, const SemanticTypeInfo *expected, const SemanticTypeInfo *actual) {
     if (!expected || !actual) return 0;
+    // Function values occupy one code address at the ABI. Only the nominal
+    // CodeAddress type accepts that representation implicitly; a function
+    // must not silently become an unrelated integer.
+    if (semantic_typeinfo_is_code_address(expected) && actual->is_function) return 1;
+    if (expected->is_function || actual->is_function)
+        return semantic_function_type_compatible(ctx, expected, actual);
     if (semantic_typeinfo_is_integer_like_or_enum(ctx, expected) &&
         semantic_typeinfo_is_integer_like_or_enum(ctx, actual)) return 1;
 
@@ -525,6 +648,7 @@ static int semantic_typeinfo_compatible(SemanticContext *ctx, const SemanticType
 
 static int semantic_call_arg_compatible(SemanticContext *ctx, const SemanticTypeInfo *expected, const SemanticTypeInfo *actual) {
     if (!expected || !actual) return 0;
+    if (semantic_typeinfo_is_code_address(expected) && actual->is_function) return 1;
     if (semantic_typeinfo_is_integer_like_or_enum(ctx, expected) &&
         semantic_typeinfo_is_integer_like_or_enum(ctx, actual)) return 1;
 
@@ -617,6 +741,7 @@ static void check_return_type(SemanticContext *ctx, ASTNode *return_node) {
 
     if (semantic_infer_expr_type(ctx, return_node->ret.expr, &actual) &&
         !semantic_typeinfo_compatible(ctx, &expected, &actual) &&
+        !semantic_null_function_literal(&expected, return_node->ret.expr) &&
         !semantic_literal_to_legacy_c_string(&expected, &actual,
                                              return_node->ret.expr)) {
         semantic_report_type_mismatch(ctx, semantic_location_from_ast(return_node->ret.expr),
@@ -1013,7 +1138,15 @@ static int semantic_infer_identifier_type(SemanticContext *ctx, ASTNode *expr, S
         semantic_typeinfo_make_scalar(out, "i32");
         return 1;
     }
-    if (find_function_sig(ctx, expr->identifier.name)) {
+    SemanticFunctionSig *function = find_function_sig(ctx, expr->identifier.name);
+    if (function && function->declaration) {
+        semantic_typeinfo_clear(out);
+        out->base_type = "fn";
+        out->is_function = 1;
+        out->function_decl = function->declaration;
+        return 1;
+    }
+    if (function) {
         semantic_typeinfo_make_scalar(out, "i32");
         return 1;
     }
@@ -1197,8 +1330,25 @@ static int semantic_infer_expr_type(SemanticContext *ctx, ASTNode *expr, Semanti
             semantic_typeinfo_make_scalar(out, "i32");
             return 1;
         }
+        {
+            SemanticNewtype *newtype = find_newtype(ctx, expr->call.name);
+            if (newtype) {
+                semantic_typeinfo_make_scalar(out, newtype->name);
+                return 1;
+            }
+        }
         sig = find_function_sig(ctx, expr->call.name);
-        if (!sig || !sig->has_return_type) return 0;
+        if (!sig) {
+            SemanticBinding *callee = find_binding(ctx, expr->call.name);
+            ASTNode **params = NULL;
+            ASTNode *return_type = NULL;
+            int count = 0, variadic = 0;
+            if (!callee || !callee->has_type ||
+                !function_type_parts(&callee->type_info, &params, &count,
+                                     &return_type, &variadic)) return 0;
+            return semantic_typeinfo_from_type_ast(return_type, out);
+        }
+        if (!sig->has_return_type) return 0;
         *out = sig->return_type;
         return 1;
     case AST_INIT_LIST:
@@ -1228,6 +1378,12 @@ static void check_binary_type(SemanticContext *ctx, ASTNode *node) {
         return;
     }
     if (semantic_binary_is_comparison(node->binary.op) || semantic_binary_is_logical(node->binary.op)) {
+        if ((node->binary.op == EQ || node->binary.op == NEQ) &&
+            ((left.is_function && semantic_null_function_literal(&left, node->binary.right)) ||
+             (right.is_function && semantic_null_function_literal(&right, node->binary.left)))) return;
+        if ((node->binary.op == EQ || node->binary.op == NEQ) &&
+            find_newtype(ctx, left.base_type) &&
+            semantic_typeinfo_compatible(ctx, &left, &right)) return;
         if ((semantic_typeinfo_is_integer_like_or_enum(ctx, &left) || left.pointer_level > 0 || left.ref_kind != REFKIND_NONE) &&
             (semantic_typeinfo_is_integer_like_or_enum(ctx, &right) || right.pointer_level > 0 || right.ref_kind != REFKIND_NONE)) {
             return;
@@ -1261,6 +1417,7 @@ static void check_assignment_type(SemanticContext *ctx, ASTNode *node) {
     if (!semantic_infer_expr_type(ctx, node->assign.left, &left)) return;
     if (!semantic_infer_expr_type(ctx, node->assign.right, &right)) return;
     if (semantic_typeinfo_compatible(ctx, &left, &right) ||
+        semantic_null_function_literal(&left, node->assign.right) ||
         semantic_literal_to_legacy_c_string(&left, &right, node->assign.right)) return;
     semantic_report_type_mismatch(ctx, semantic_location_from_ast(node->assign.right),
                                   SEMCODE_ASSIGNMENT_TYPE_MISMATCH,
@@ -1288,6 +1445,7 @@ static void check_initializer_type(SemanticContext *ctx, ASTNode *node) {
     }
     if (!semantic_infer_expr_type(ctx, node->var_decl.init, &actual)) return;
     if (semantic_typeinfo_compatible(ctx, &expected, &actual) ||
+        semantic_null_function_literal(&expected, node->var_decl.init) ||
         semantic_literal_to_legacy_c_string(&expected, &actual, node->var_decl.init)) return;
     semantic_report_type_mismatch(ctx, semantic_location_from_ast(node->var_decl.init),
                                   SEMCODE_ASSIGNMENT_TYPE_MISMATCH,
@@ -1345,6 +1503,7 @@ static void check_struct_literal(SemanticContext *ctx, ASTNode *node) {
         SemanticTypeInfo actual;
         if (semantic_infer_expr_type(ctx, node->init_list.elements[i], &actual) &&
             !semantic_typeinfo_compatible(ctx, &member->type, &actual) &&
+            !semantic_null_function_literal(&member->type, node->init_list.elements[i]) &&
             !semantic_literal_to_legacy_c_string(&member->type, &actual,
                                                  node->init_list.elements[i])) {
             semantic_report_type_mismatch(ctx,
@@ -1362,6 +1521,27 @@ static void check_call_signature(SemanticContext *ctx, ASTNode *node) {
 
     if (!ctx || !node || node->type != AST_CALL || !node->call.name) return;
     if (semantic_is_builtin_call(node->call.name)) return;
+    {
+        SemanticNewtype *newtype = find_newtype(ctx, node->call.name);
+        if (newtype) {
+            if (node->call.arg_count != 1) {
+                semantic_error_code_at(ctx, semantic_location_from_ast(node),
+                                       SEMCODE_ARG_COUNT_MISMATCH,
+                                       "newtype constructor '%s' expects 1 argument but got %d",
+                                       node->call.name, node->call.arg_count);
+                return;
+            }
+            SemanticTypeInfo expected, actual;
+            if (semantic_typeinfo_from_type_ast(newtype->base_type, &expected) &&
+                semantic_infer_expr_type(ctx, node->call.args[0], &actual) &&
+                !semantic_typeinfo_compatible(ctx, &expected, &actual)) {
+                semantic_report_type_mismatch(ctx,
+                    semantic_location_from_ast(node->call.args[0]),
+                    SEMCODE_ARG_TYPE_MISMATCH, "newtype constructor", &expected, &actual);
+            }
+            return;
+        }
+    }
     // The parser lowers the public mock facade chain to these imported
     // receiver-method symbols. Their declarations are carried by the module
     // resolver for codegen, while semantic analysis intentionally treats the
@@ -1388,11 +1568,43 @@ static void check_call_signature(SemanticContext *ctx, ASTNode *node) {
     sig = find_function_sig(ctx, node->call.name);
     if (!sig) {
         if (call_may_be_package_import(ctx, node->call.name)) return;
-        // A call whose name is a variable in scope is an indirect call through a
-        // function-pointer value (taken by naming a function bare, stored as i32).
-        // We have no signature to check against, so accept it and let codegen
-        // emit the indirect dispatch.
-        if (find_binding(ctx, node->call.name)) return;
+        SemanticBinding *callee = find_binding(ctx, node->call.name);
+        if (callee) {
+            ASTNode **params = NULL;
+            ASTNode *return_type = NULL;
+            int param_count = 0, is_variadic = 0;
+            int form = callee->has_type
+                ? function_type_parts(&callee->type_info, &params, &param_count,
+                                      &return_type, &is_variadic)
+                : 0;
+            if (!form) {
+                semantic_error_at(ctx, semantic_location_from_ast(node),
+                                  "'%s' is not callable; expected a fn(...) -> ... value",
+                                  node->call.name);
+                return;
+            }
+            int argc = node->call.arg_count;
+            if ((!is_variadic && argc != param_count) ||
+                (is_variadic && argc < param_count)) {
+                semantic_error_code_at(ctx, semantic_location_from_ast(node),
+                                       SEMCODE_ARG_COUNT_MISMATCH,
+                                       "function value '%s' expects %s%d arguments but got %d",
+                                       node->call.name, is_variadic ? "at least " : "",
+                                       param_count, argc);
+            }
+            int checked = argc < param_count ? argc : param_count;
+            for (int i = 0; i < checked; i++) {
+                SemanticTypeInfo expected, actual;
+                if (!semantic_typeinfo_from_type_ast(function_param_type(params[i], form), &expected) ||
+                    !semantic_infer_expr_type(ctx, node->call.args[i], &actual)) continue;
+                if (!semantic_call_arg_compatible(ctx, &expected, &actual)) {
+                    semantic_report_type_mismatch(ctx,
+                        semantic_location_from_ast(node->call.args[i]),
+                        SEMCODE_ARG_TYPE_MISMATCH, "function argument", &expected, &actual);
+                }
+            }
+            return;
+        }
         semantic_error_code_at(ctx, semantic_location_from_ast(node),
                                SEMCODE_UNDEFINED_FUNCTION,
                                "undefined function '%s'", node->call.name);
@@ -1434,6 +1646,7 @@ static void check_call_signature(SemanticContext *ctx, ASTNode *node) {
 
         if (!semantic_infer_expr_type(ctx, node->call.args[i], &actual)) continue;
         if (semantic_call_arg_compatible(ctx, &sig->param_types[i], &actual) ||
+            semantic_null_function_literal(&sig->param_types[i], node->call.args[i]) ||
             semantic_literal_to_legacy_c_string(&sig->param_types[i], &actual,
                                                 node->call.args[i])) continue;
 
@@ -1638,10 +1851,12 @@ static void semantic_walk_expr(SemanticContext *ctx, ASTNode *node, ExprContext 
         break;
     case AST_TYPE:
     case AST_TYPE_ARRAY:
+    case AST_TYPE_FUNCTION:
     case AST_VAR_DECL:
     case AST_EXPR_STMT:
     case AST_IF:
     case AST_RETURN:
+    case AST_DEFER:
     case AST_BLOCK:
     case AST_FUN_LITERAL:
     case AST_FUNDEF:
@@ -1693,6 +1908,7 @@ static void semantic_walk_stmt(SemanticContext *ctx, ASTNode *node) {
         semantic_walk_case(ctx, node, 1);
         break;
     case AST_TYPE:
+    case AST_TYPE_FUNCTION:
         semantic_check_type_exists(ctx, node);
         break;
     case AST_TYPE_ARRAY:
@@ -1737,9 +1953,22 @@ static void semantic_walk_stmt(SemanticContext *ctx, ASTNode *node) {
         break;
     }
     case AST_RETURN:
+        if (ctx->defer_depth > 0) {
+            semantic_error_at(ctx, semantic_location_from_ast(node),
+                              "return is not allowed inside defer");
+        }
         check_return_type(ctx, node);
         check_return_reference_escape(ctx, node->ret.expr);
         semantic_walk_expr(ctx, node->ret.expr, EXPRCTX_MOVE);
+        break;
+    case AST_DEFER:
+        if (ctx->defer_depth > 0) {
+            semantic_error_at(ctx, semantic_location_from_ast(node),
+                              "defer is not allowed inside defer");
+        }
+        ctx->defer_depth++;
+        semantic_walk_stmt(ctx, node->defer_stmt.body);
+        ctx->defer_depth--;
         break;
     case AST_YIELD:
         semantic_walk_expr(ctx, node->yield_stmt.expr, EXPRCTX_MOVE);
@@ -1797,6 +2026,18 @@ static void semantic_walk_stmt(SemanticContext *ctx, ASTNode *node) {
         break;
     case AST_TYPEDEF:
         semantic_walk_stmt(ctx, node->typedef_stmt.src_type);
+        if (node->typedef_stmt.is_newtype) {
+            SemanticTypeInfo base;
+            if (!semantic_typeinfo_from_type_ast(node->typedef_stmt.src_type, &base) ||
+                base.pointer_level != 0 || base.ref_kind != REFKIND_NONE ||
+                base.is_array || base.is_function ||
+                !semantic_is_builtin_type(base.base_type) ||
+                strcmp(base.base_type, "void") == 0 || strcmp(base.base_type, "str") == 0) {
+                semantic_error_at(ctx, semantic_location_from_ast(node),
+                                  "newtype '%s' must wrap a scalar builtin type",
+                                  node->typedef_stmt.alias);
+            }
+        }
         break;
     case AST_ENUM:
         semantic_register_enum(ctx, node);
@@ -1817,6 +2058,10 @@ static void semantic_walk_stmt(SemanticContext *ctx, ASTNode *node) {
         break;
     case AST_BREAK:
     case AST_CONTINUE:
+        if (ctx->defer_depth > 0) {
+            semantic_error_at(ctx, semantic_location_from_ast(node),
+                              "loop control is not allowed inside defer");
+        }
         break;
     case AST_IMPORT:
         break;
@@ -1933,6 +2178,12 @@ static void semantic_collect_imported_user_types(SemanticContext *ctx, ASTNode *
                                             decl->typedef_struct.member_count);
         } else if (decl->type == AST_TYPEDEF) {
             semantic_register_user_type(ctx, sym->link_name);
+            if (decl->typedef_stmt.is_newtype && !find_newtype(ctx, sym->link_name) &&
+                ctx->newtype_count < (int)(sizeof(ctx->newtypes) / sizeof(ctx->newtypes[0]))) {
+                ctx->newtypes[ctx->newtype_count].name = sym->link_name;
+                ctx->newtypes[ctx->newtype_count].base_type = decl->typedef_stmt.src_type;
+                ctx->newtype_count++;
+            }
         }
     }
 }
@@ -1989,6 +2240,12 @@ static void semantic_collect_user_types(SemanticContext *ctx, ASTNode *node) {
                                         node->typedef_struct.member_count);
     } else if (node->type == AST_TYPEDEF && node->typedef_stmt.alias) {
         semantic_register_user_type(ctx, node->typedef_stmt.alias);
+        if (node->typedef_stmt.is_newtype && !find_newtype(ctx, node->typedef_stmt.alias) &&
+            ctx->newtype_count < (int)(sizeof(ctx->newtypes) / sizeof(ctx->newtypes[0]))) {
+            ctx->newtypes[ctx->newtype_count].name = node->typedef_stmt.alias;
+            ctx->newtypes[ctx->newtype_count].base_type = node->typedef_stmt.src_type;
+            ctx->newtype_count++;
+        }
     } else if (node->type == AST_IMPORT) {
         semantic_collect_imported_user_types(ctx, node);
     }
@@ -1996,6 +2253,12 @@ static void semantic_collect_user_types(SemanticContext *ctx, ASTNode *node) {
 
 static void semantic_check_type_exists(SemanticContext *ctx, ASTNode *type_node) {
     if (!ctx || !type_node) return;
+    if (type_node->type == AST_TYPE_FUNCTION) {
+        for (int i = 0; i < type_node->function_type.param_count; i++)
+            semantic_check_type_exists(ctx, type_node->function_type.param_types[i]);
+        semantic_check_type_exists(ctx, type_node->function_type.return_type);
+        return;
+    }
     SemanticTypeInfo info;
     if (!semantic_typeinfo_from_type_ast(type_node, &info)) return;
 

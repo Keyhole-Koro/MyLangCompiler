@@ -1,0 +1,23 @@
+i32 g_calls = 0;
+fn(i32) -> i32 g_transform;
+fn(i32) -> void g_callback;
+
+i32 transform(i32 value) {
+    return value + 1;
+}
+
+void record(i32 value) {
+    g_calls = g_calls + value;
+}
+
+void install(fn(i32) -> i32 transform, fn(i32) -> void callback) {
+    g_transform = transform;
+    g_callback = callback;
+}
+
+i32 main() {
+    install(transform, record);
+    if (g_callback == 0) { return 1; }
+    g_callback(g_transform(42));
+    return g_calls;
+}

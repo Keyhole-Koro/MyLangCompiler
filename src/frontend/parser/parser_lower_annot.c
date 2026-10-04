@@ -14,7 +14,7 @@
  * and that type's size -- followed by the annotation's own arguments:
  *
  *     // annotations.mln
- *     export void timer(i32 fn, char *type, i32 size, i32 ms);
+ *     export void timer(CodeAddress fn, char *type, i32 size, i32 ms);
  *
  *     // terminal.dom.mln
  *     import { app, timer } from "annotations.mln";
@@ -23,7 +23,7 @@
  *
  * The compiler never calls `timer`. It checks the use against the
  * declaration (resolvable: local or a symbol-list import; first parameters
- * (i32, char*, i32); the written arguments matched to the rest by name,
+ * (CodeAddress, char*, i32); the written arguments matched to the rest by name,
  * position or a bare bool parameter's name as a flag, defaults filling the
  * gaps) and records one row per use. Codegen emits the rows as static data
  * in the `annotations` collected section (codegen_annotations.c):
@@ -273,12 +273,12 @@ static void record_annotation(ParserContext *context, ASTNode *program, ASTNode 
     }
     int n = decl->fundef.param_count;
     if (n < ANNOT_FIXED_PARAMS ||
-        !param_is_plain(decl->fundef.params[0], "i32") ||
+        !param_is_plain(decl->fundef.params[0], "CodeAddress") ||
         !param_is_string(decl->fundef.params[1]) ||
         !param_is_plain(decl->fundef.params[2], "i32")) {
         annot_error(context, attr->line, attr->col,
                     "'%s' cannot be used as an annotation: its first parameters must be "
-                    "(i32 fn, char *type, i32 size)", attr->name);
+                    "(CodeAddress fn, char *type, i32 size)", attr->name);
     }
     if (decl->fundef.is_variadic || n > ANNOT_FIXED_PARAMS + ANNOT_MAX_ARGS) {
         annot_error(context, attr->line, attr->col,

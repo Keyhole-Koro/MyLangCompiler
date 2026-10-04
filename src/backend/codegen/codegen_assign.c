@@ -69,7 +69,7 @@ void gen_assign(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
             finish_drop_assignment(cc, dest_drop, source_drop, sb);
             return;
         }
-        if (call_returns_aggregate(cc, node->assign.right)) {
+        if (call_return_aggregate_size(cc, node->assign.right) > 0) {
             // `y = callee(args);` -- same hidden out-pointer convention as a
             // var-decl initializer (codegen_stmt.c), just with y's address
             // computed generally since it may be a field or a deref, not

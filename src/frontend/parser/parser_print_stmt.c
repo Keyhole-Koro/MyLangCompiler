@@ -20,6 +20,10 @@ int fprint_ast_stmt_node(FILE *out, ASTNode *node, int indent) {
         fprint_indent(out, indent); fprintf(out, "Return\n");
         fprint_ast(out, node->ret.expr, indent + 1);
         return 1;
+    case AST_DEFER:
+        fprint_indent(out, indent); fprintf(out, "Defer\n");
+        fprint_ast(out, node->defer_stmt.body, indent + 1);
+        return 1;
     case AST_YIELD:
         fprint_indent(out, indent); fprintf(out, "Yield\n");
         fprint_ast(out, node->yield_stmt.expr, indent + 1);

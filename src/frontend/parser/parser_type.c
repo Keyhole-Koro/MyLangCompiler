@@ -293,7 +293,26 @@ ASTNode *parse_typedef(ParserContext *context, Token **cur, int want_export) {
         parse_error(context, "expected ';' after typedef", *cur);
     add_typename(context, typedef_name);
     ASTNode *node = new_typedef(type, typedef_name);
+    node->typedef_stmt.is_exported = want_export;
+    if (want_export) node->typedef_stmt.package = strdup(context->module.current_package);
     free(typedef_name);
+    return node;
+}
+
+ASTNode *parse_newtype(ParserContext *context, Token **cur, int want_export) {
+    if (!expect(cur, NEWTYPE)) parse_error(context, "expected 'newtype'", *cur);
+    if ((*cur)->kind != IDENTIFIER)
+        parse_error(context, "expected newtype name", *cur);
+    char *name = strdup((*cur)->value);
+    *cur = (*cur)->next;
+    if (!expect(cur, ASSIGN)) parse_error(context, "expected '=' after newtype name", *cur);
+    ASTNode *base_type = parse_type(context, cur);
+    if (!expect(cur, SEMICOLON)) parse_error(context, "expected ';' after newtype", *cur);
+    add_typename(context, name);
+    ASTNode *node = new_newtype(base_type, name);
+    node->typedef_stmt.is_exported = want_export;
+    if (want_export) node->typedef_stmt.package = strdup(context->module.current_package);
+    free(name);
     return node;
 }
 
@@ -313,6 +332,36 @@ ASTNode *parse_type(ParserContext *context, Token **cur) {
             ref_kind = REFKIND_MUT;
             *cur = (*cur)->next;
         }
+    }
+
+    if ((*cur)->kind == FN) {
+        if (modifiers != 0 || ref_kind != REFKIND_NONE)
+            parse_error(context, "function value types cannot have const or ref modifiers", *cur);
+        *cur = (*cur)->next;
+        if (!expect(cur, L_PARENTHESES))
+            parse_error(context, "expected '(' after fn", *cur);
+        ASTNode **param_types = NULL;
+        int param_count = 0;
+        bool is_variadic = false;
+        while ((*cur)->kind != R_PARENTHESES) {
+            if ((*cur)->kind == REST) {
+                is_variadic = true;
+                *cur = (*cur)->next;
+                break;
+            }
+            ASTNode *param_type = parse_type(context, cur);
+            if (token_is_name(*cur)) *cur = (*cur)->next;
+            param_types = realloc(param_types, sizeof(ASTNode *) * (size_t)(param_count + 1));
+            param_types[param_count++] = param_type;
+            if ((*cur)->kind != COMMA) break;
+            *cur = (*cur)->next;
+        }
+        if (!expect(cur, R_PARENTHESES))
+            parse_error(context, "expected ')' after function value parameters", *cur);
+        if (!expect(cur, ARROW))
+            parse_error(context, "expected '->' after function value parameters", *cur);
+        ASTNode *return_type = parse_type(context, cur);
+        return new_function_type(param_types, param_count, return_type, is_variadic);
     }
 
     if (!is_type(context, (*cur)->kind, *cur))

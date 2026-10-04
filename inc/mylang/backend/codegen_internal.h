@@ -40,6 +40,8 @@ typedef struct {
     int array_length;
     int dims[8];
     int dims_count;
+    int is_function;
+    const ASTNode *function_type;
 } LocalInfo;
 
 /** One function-local owner whose type supplies `void (T *self) drop()`.
@@ -85,6 +87,9 @@ typedef struct {
     bool *param_is_aggregate; // param_count entries, or NULL if param_count == 0
     bool *param_has_type;
     TypeInfo *param_types;
+    // Non-NULL for a call through a typed function value. Its AST supplies
+    // the same parameter/return information as the cached arrays above.
+    const ASTNode *function_type;
 } FunctionSig;
 
 typedef struct {
@@ -95,6 +100,7 @@ typedef struct {
 typedef struct {
     const char *alias;
     TypeInfo info;
+    bool is_newtype;
 } TypedefInfo;
 
 typedef struct {
@@ -142,6 +148,9 @@ typedef struct {
     DropBinding **active_drop_bindings;
     int active_drop_count;
     int loop_drop_base;
+    ASTNode **active_defers;
+    int active_defer_count;
+    int loop_defer_base;
 } CompilerContext;
 
 #define cg_structs        (cc->structs)
@@ -287,10 +296,9 @@ int is_addressable_expr(ASTNode *node);
 // being compiled. Its slot holds the hidden pointer the caller supplied
 // rather than the aggregate's own bytes; see emit_addr_of_var.
 int is_byval_aggregate_param(CompilerContext *cc, const char *name, char **params, int param_count);
-// node's signature when node is a direct call to a function returning a
-// struct or array by value, or NULL otherwise (not a call, or an ordinary
-// scalar/pointer return).
-const FunctionSig *call_returns_aggregate(CompilerContext *cc, ASTNode *node);
+// Returns the size of a struct or array returned by this direct or typed
+// indirect call, or 0 for a non-call or a scalar/pointer return.
+int call_return_aggregate_size(CompilerContext *cc, ASTNode *node);
 // Copies total_bytes from [src_addr_reg] to [dest_addr_reg], word by word
 // with a byte tail. Clobbers r1 and r4; neither address register may be one
 // of those.
@@ -324,5 +332,10 @@ void emit_drop_active_from(CompilerContext *cc, int first, StringBuilder *sb,
                            char **params, int param_count, char **locals, int local_count);
 void pop_drop_scope(CompilerContext *cc, int mark, StringBuilder *sb,
                     char **params, int param_count, char **locals, int local_count);
+void push_active_defer(CompilerContext *cc, ASTNode *body);
+void emit_defer_active_from(CompilerContext *cc, int first, StringBuilder *sb,
+                            char **params, int param_count, char **locals, int local_count);
+void pop_defer_scope(CompilerContext *cc, int mark, StringBuilder *sb,
+                     char **params, int param_count, char **locals, int local_count);
 
 #endif

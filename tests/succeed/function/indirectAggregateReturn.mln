@@ -1,0 +1,37 @@
+// Function values use the same by-value aggregate ABI as named functions.
+typedef struct { i32 x; i32 y; } Pair;
+
+Pair clone(Pair value, i32 dx, i32 dy, i32 dz) {
+    value.x = value.x + dx;
+    value.y = value.y + dy + dz;
+    return value;
+}
+
+Pair make_pair() {
+    Pair value;
+    value.x = 20;
+    value.y = 22;
+    return value;
+}
+
+Pair add_x(Pair value, i32 dx) {
+    value.x = value.x + dx;
+    return value;
+}
+
+Pair apply(fn(Pair value, i32 dx, i32 dy, i32 dz) -> Pair callback, Pair value) {
+    return callback(value, 5, 0, 0);
+}
+
+Pair apply_temporary(fn(Pair value, i32 dx) -> Pair callback) {
+    return callback(make_pair(), 5);
+}
+
+i32 main() {
+    Pair source;
+    source.x = 20;
+    source.y = 22;
+    Pair copy = apply(clone, source);
+    Pair temporary = apply_temporary(add_x);
+    return copy.x + copy.y + temporary.x + temporary.y;
+}

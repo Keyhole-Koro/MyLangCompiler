@@ -21,6 +21,8 @@ static int infer_identifier_type(CompilerContext *cc, ASTNode *expr, TypeInfo *o
     out->type_modifiers = li->type_modifiers;
     out->is_array = li->is_array;
     out->dims_count = li->dims_count;
+    out->is_function = li->is_function;
+    out->function_type = li->function_type;
     for (int i = 0; i < li->dims_count && i < 8; i++) out->dims[i] = li->dims[i];
     if (li->is_array && li->dims_count > 0) {
         out->pointer_level += 1;
@@ -202,9 +204,16 @@ int infer_expr_type(CompilerContext *cc, ASTNode *expr, TypeInfo *out) {
         }
         {
             const FunctionSig *sig = find_func_sig(cc, expr->call.name);
-            if (!sig || !sig->has_return_type) return 0;
-            *out = sig->return_type;
-            return 1;
+            if (sig && sig->has_return_type) {
+                *out = sig->return_type;
+                return 1;
+            }
+            const LocalInfo *li = find_local_info(cc, expr->call.name);
+            if (!li) li = find_global_info(cc, expr->call.name);
+            if (!li || !li->is_function || !li->function_type ||
+                li->function_type->type != AST_TYPE_FUNCTION) return 0;
+            return typeinfo_from_type_ast(
+                cc, (ASTNode *)li->function_type->function_type.return_type, out);
         }
     default:
         return 0;

@@ -119,6 +119,7 @@ Nodes are represented by the `ASTNode` struct, which contains a union of specifi
 
 ### AST_YIELD
 - `yield_stmt.expr`: `ASTNode*`
+- `defer_stmt.body`: `ASTNode*` (An expression statement or block executed when its lexical scope exits)
 
 ### AST_EXPR_STMT
 - `expr_stmt.expr`: `ASTNode*`
@@ -195,11 +196,20 @@ Nodes are represented by the `ASTNode` struct, which contains a union of specifi
 - `type_node.type_modifiers`: `int` (Bitmask of `TYPEMOD_CONST`, etc.)
 - `type_node.ref_kind`: `RefKind` (`NONE`, `SHARED`, `MUT`)
 
+`AST_TYPEDEF` uses `typedef_stmt.is_newtype` to distinguish an ABI transparent
+nominal `newtype` declaration from a source alias.
+
 ### AST_TYPE_ARRAY
 - `type_array.element_type`: `ASTNode*`
 - `type_array.array_size`: `int`
 - `type_array.array_size_param`: `char*` (Template-only const parameter name;
   replaced by `array_size` during generic instantiation.)
+
+### AST_TYPE_FUNCTION
+- `function_type.param_types`: `ASTNode**`
+- `function_type.param_count`: `int`
+- `function_type.return_type`: `ASTNode*`
+- `function_type.is_variadic`: `bool`
 
 ---
 

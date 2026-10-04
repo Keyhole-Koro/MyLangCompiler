@@ -77,6 +77,18 @@ static void substitute(ASTNode **slot, void *user_data) {
                 *slot = arg;
                 return;
             }
+            if (arg->type == AST_TYPE_FUNCTION) {
+                if (node->type_node.pointer_level ||
+                    node->type_node.ref_kind != REFKIND_NONE ||
+                    node->type_node.type_modifiers != TYPEMOD_NONE)
+                    generic_error(sub->parser_context, node,
+                                  "function type argument cannot be wrapped in a modifier, reference, or pointer");
+                arg->line = node->line; arg->col = node->col;
+                arg->end_line = node->end_line; arg->end_col = node->end_col;
+                free_ast(node);
+                *slot = arg;
+                return;
+            }
             if (arg->type != AST_TYPE)
                 generic_error(sub->parser_context, node, "unsupported generic type argument");
             if (arg->type_node.ref_kind != REFKIND_NONE &&
@@ -102,6 +114,15 @@ static void substitute(ASTNode **slot, void *user_data) {
 static void append_type_key(ParserContext *context, StringBuilder *key, ASTNode *arg) {
     if (arg && arg->type == AST_NUMBER) {
         sb_append(key, "_c%zu_%s", strlen(arg->number.value), arg->number.value);
+        return;
+    }
+    if (arg && arg->type == AST_TYPE_FUNCTION) {
+        sb_append(key, "_f%d_v%d", arg->function_type.param_count,
+                  arg->function_type.is_variadic ? 1 : 0);
+        for (int i = 0; i < arg->function_type.param_count; i++)
+            append_type_key(context, key, arg->function_type.param_types[i]);
+        sb_append(key, "_ret");
+        append_type_key(context, key, arg->function_type.return_type);
         return;
     }
     if (!arg || arg->type != AST_TYPE || !arg->type_node.base_type ||
@@ -314,7 +335,8 @@ static void concrete_node(ASTNode **slot, void *user_data) {
         const char *name = node->type_node.base_type->identifier.name;
         for (int i = 0; i < ctx->program->block.count; i++) {
             ASTNode *alias = ctx->program->block.stmts[i];
-            if (alias->type != AST_TYPEDEF || strcmp(alias->typedef_stmt.alias, name) != 0) continue;
+            if (alias->type != AST_TYPEDEF || alias->typedef_stmt.is_newtype ||
+                strcmp(alias->typedef_stmt.alias, name) != 0) continue;
             if (ctx->depth >= 64)
                 generic_error(context, node,
                               "generic instantiation limit exceeded while resolving aliases");
@@ -392,7 +414,7 @@ static void order_struct(ParserContext *context, ASTNode *program, int index,
                 const char *name = struct_name(candidate);
                 if (name && strcmp(name, base->identifier.name) == 0)
                     order_struct(context, program, j, state, ordered, count);
-                if (candidate->type == AST_TYPEDEF &&
+                if (candidate->type == AST_TYPEDEF && !candidate->typedef_stmt.is_newtype &&
                     strcmp(candidate->typedef_stmt.alias, base->identifier.name) == 0)
                     alias = candidate->typedef_stmt.src_type;
             }

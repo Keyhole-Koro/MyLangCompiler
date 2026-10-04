@@ -1,5 +1,16 @@
 #include "mylang/frontend/parser_ast_internal.h"
 
+ASTNode *new_function_type(ASTNode **param_types, int param_count,
+                           ASTNode *return_type, bool is_variadic) {
+    ASTNode *node = calloc(1, sizeof(ASTNode));
+    node->type = AST_TYPE_FUNCTION;
+    node->function_type.param_types = param_types;
+    node->function_type.param_count = param_count;
+    node->function_type.return_type = return_type;
+    node->function_type.is_variadic = is_variadic;
+    return node;
+}
+
 ASTNode *new_expr_stmt(ASTNode *expr) {
     ASTNode *node = calloc(1, sizeof(ASTNode));
     node->type = AST_EXPR_STMT;
@@ -64,6 +75,14 @@ ASTNode *new_return(ASTNode *expr) {
     node->type = AST_RETURN;
     node->ret.expr = expr;
     set_node_range_from_children(node, expr, expr);
+    return node;
+}
+
+ASTNode *new_defer(ASTNode *body) {
+    ASTNode *node = calloc(1, sizeof(ASTNode));
+    node->type = AST_DEFER;
+    node->defer_stmt.body = body;
+    set_node_range_from_children(node, body, body);
     return node;
 }
 

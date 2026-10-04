@@ -8,6 +8,9 @@ int collect_local_type_info(CompilerContext *cc, ASTNode *node, LocalInfo *arr) 
         for (int i = 0; i < node->block.count; i++)
             n += collect_local_type_info(cc, node->block.stmts[i], arr ? (arr + n) : NULL);
         break;
+    case AST_DEFER:
+        n += collect_local_type_info(cc, node->defer_stmt.body, arr ? (arr + n) : NULL);
+        break;
     case AST_VAR_DECL:
         if (arr) {
             arr[n].name = node->var_decl.name;

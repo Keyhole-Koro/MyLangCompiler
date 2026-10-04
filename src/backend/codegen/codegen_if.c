@@ -40,14 +40,18 @@ void gen_if(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
                              then_label, else_label);
 
     sb_append(sb, "%s:\n", then_label);
+    int then_defer_mark = cc->active_defer_count;
     gen_stmt_internal(cc, node->if_stmt.then_stmt, sb, params, param_count, locals, local_count,
         break_label, continue_label);
+    pop_defer_scope(cc, then_defer_mark, sb, params, param_count, locals, local_count);
     sb_append(sb, "  jmp %s\n", end_label);
 
     if (node->if_stmt.else_stmt) {
         sb_append(sb, "%s:\n", else_label);
+        int else_defer_mark = cc->active_defer_count;
         gen_stmt_internal(cc, node->if_stmt.else_stmt, sb, params, param_count, locals, local_count,
             break_label, continue_label);
+        pop_defer_scope(cc, else_defer_mark, sb, params, param_count, locals, local_count);
     }
     sb_append(sb, "%s:\n", end_label);
 }

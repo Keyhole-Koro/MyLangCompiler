@@ -108,6 +108,9 @@ void collect_drop_bindings(CompilerContext *cc, ASTNode *node, bool is_param,
     case AST_UNCHECKED:
         collect_drop_bindings(cc, node->unchecked_block.body, false, param_count, local_count);
         break;
+    case AST_DEFER:
+        collect_drop_bindings(cc, node->defer_stmt.body, false, param_count, local_count);
+        break;
     case AST_STMT_EXPR:
         collect_drop_bindings(cc, node->stmt_expr.block, false, param_count, local_count);
         break;
@@ -265,12 +268,16 @@ void activate_drop_binding(CompilerContext *cc, const char *name, StringBuilder 
 void cleanup_drop_bindings(CompilerContext *cc) {
     free(cc->drop_bindings);
     free(cc->active_drop_bindings);
+    free(cc->active_defers);
     cc->drop_bindings = NULL;
     cc->drop_binding_count = 0;
     cc->drop_return_offset = 0;
     cc->active_drop_bindings = NULL;
     cc->active_drop_count = 0;
     cc->loop_drop_base = 0;
+    cc->active_defers = NULL;
+    cc->active_defer_count = 0;
+    cc->loop_defer_base = 0;
 }
 
 void push_active_drop_binding(CompilerContext *cc, DropBinding *binding) {

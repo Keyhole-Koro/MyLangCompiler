@@ -190,8 +190,10 @@ size) and whose remaining parameters are the annotation's own arguments:
 
 ```mylang
 // annotations.mln (a Java @interface, in effect)
-export void app(i32 fn, char *type, i32 size, bool single = false, char *name = "");
-export void timer(i32 fn, char *type, i32 size, i32 ms);
+import { CodeAddress } from "@std/core/address.mln";
+
+export void app(CodeAddress fn, char *type, i32 size, bool single = false, char *name = "");
+export void timer(CodeAddress fn, char *type, i32 size, i32 ms);
 
 // terminal.dom.mln
 import { app, timer } from "annotations.mln";
@@ -252,6 +254,38 @@ no wrapper is generated. A value receiver is a move and is rejected.
 - `typedef_stmt` -> `typedef type IDENTIFIER ;` | `typedef struct ... IDENTIFIER ;`
 
 ## 4. Type System
+
+Function values carry their complete signature:
+
+```mylang
+fn(i32 owner, i32 id, i32 arg) -> void
+fn(i32 owner, i32 code, i32 mods) -> bool
+```
+
+Parameter names in a function type are optional. Function values use one word
+at runtime, and indirect calls use the same argument and return type checks as
+direct calls. Struct and array parameters and return values also use the same
+by-value aggregate ABI through a function value as through a named function.
+The literal `0` is the null function value and cannot be called.
+`fn` introduces a function type in type position and remains available as an
+ordinary identifier in name and expression positions.
+
+`CodeAddress` is the sole nominal type that accepts a function value directly.
+It records the one-word code address for low-level registries such as TestKit;
+ordinary integer types do not accept a function value implicitly.
+
+Opaque scalar types use `newtype`:
+
+```mylang
+export newtype Pid = i32;
+export newtype CodeAddress = i32;
+Pid pid = Pid(raw_pid);
+i32 raw_pid = (i32)pid;
+```
+
+Each newtype has nominal identity while keeping its base scalar's size,
+alignment, and calling convention. Construction and extraction are explicit;
+arithmetic requires extracting the base value first.
 - `type` -> `const* ( ref mut? )? base_type ( * )*`
 - `base_type` -> `primitive_type` | `IDENTIFIER type_args?`
 - `generic_params` -> `< generic_param ( , generic_param )* >`
@@ -277,6 +311,8 @@ Generic uses are concretely instantiated before semantic analysis. See
     - `break ;`
     - `continue ;`
     - `yield expr ;`
+    - `defer expression ;`
+    - `defer block`
     - `unchecked block` (Disables safety checks)
     - `var_decl`
     - `expr ;`

@@ -2,6 +2,7 @@
 
 int is_type(ParserContext *context, TokenKind kind, Token *cur) {
     if (kind == CONST || kind == REF) return 1;
+    if (kind == FN) return 1;
 
     /* Keep `str` context-sensitive instead of reserving the word: package
      * declarations and imports named `str` remain source-compatible. */
@@ -25,6 +26,38 @@ int is_type(ParserContext *context, TokenKind kind, Token *cur) {
     return 0;
 }
 
+static Token *skip_type_tokens(ParserContext *context, Token *t) {
+    while (t && (t->kind == CONST || t->kind == REF || t->kind == MUT)) t = t->next;
+    if (!t || !is_type(context, t->kind, t)) return NULL;
+    if (t->kind == FN) {
+        t = t->next;
+        if (!t || t->kind != L_PARENTHESES) return NULL;
+        int depth = 1;
+        t = t->next;
+        while (t && depth > 0) {
+            if (t->kind == L_PARENTHESES) depth++;
+            else if (t->kind == R_PARENTHESES) depth--;
+            t = t->next;
+        }
+        if (!t || t->kind != ARROW) return NULL;
+        return skip_type_tokens(context, t->next);
+    }
+    t = t->next;
+    if (t && t->kind == LT) {
+        int depth = 1;
+        t = t->next;
+        while (t && depth > 0) {
+            if (t->kind == LT) depth++;
+            else if (t->kind == GT) depth--;
+            else if (t->kind == RSH) depth -= 2;
+            t = t->next;
+        }
+        if (depth != 0) return NULL;
+    }
+    while (t && t->kind == ASTARISK) t = t->next;
+    return t;
+}
+
 // Parse an expression but stop before consuming an ARROW token (used for
 // distinguishing case-pattern arrows from member access).
 ASTNode *parse_expr_until_arrow(ParserContext *context, Token **cur) {
@@ -37,25 +70,17 @@ ASTNode *parse_expr_until_arrow(ParserContext *context, Token **cur) {
 
 // Look ahead to see if the current tokens form a function declaration/defn.
 int looks_like_function(ParserContext *context, Token *cur) {
-    Token *t = cur;
-    while (t && (t->kind == CONST || t->kind == REF || t->kind == MUT)) {
-        t = t->next;
-    }
-    if (!t || !is_type(context, t->kind, t)) return 0;
-    t = t->next; // past base type
-    if (t && t->kind == LT) {
-        int depth = 1;
-        t = t->next;
-        while (t && depth > 0) {
-            if (t->kind == LT) depth++;
-            else if (t->kind == GT) depth--;
-            else if (t->kind == RSH) depth -= 2;
-            t = t->next;
-        }
-        if (depth != 0) return 0;
-    }
-    while (t && t->kind == ASTARISK) t = t->next;
-    return t && t->kind == IDENTIFIER && t->next && t->next->kind == L_PARENTHESES;
+    Token *t = skip_type_tokens(context, cur);
+    return token_is_name(t) && t->next && t->next->kind == L_PARENTHESES;
+}
+
+// A function type begins with `fn`, which is also a valid expression name.
+// In statement position it is a declaration only when a variable name follows
+// the complete function type; otherwise `fn(...)` is an ordinary call.
+int looks_like_function_type_declaration(ParserContext *context, Token *cur) {
+    if (!cur || cur->kind != FN) return 0;
+    Token *name = skip_type_tokens(context, cur);
+    return token_is_name(name);
 }
 
 // Look ahead to see if the current tokens form a method: `type (recv)
@@ -99,7 +124,7 @@ int looks_like_method(ParserContext *context, Token *cur) {
     }
     if (depth != 0) return 0;
 
-    return t && t->kind == IDENTIFIER && t->next && t->next->kind == L_PARENTHESES;
+    return token_is_name(t) && t->next && t->next->kind == L_PARENTHESES;
 }
 
 Token *generic_function_type_params_start(ParserContext *context, Token *cur) {
@@ -120,7 +145,7 @@ Token *generic_function_type_params_start(ParserContext *context, Token *cur) {
         if (depth != 0) return NULL;
     }
     while (t && t->kind == ASTARISK) t = t->next;
-    if (!t || t->kind != IDENTIFIER || !t->next || t->next->kind != LT) return NULL;
+    if (!token_is_name(t) || !t->next || t->next->kind != LT) return NULL;
 
     Token *params_start = t->next;
     Token *p = params_start->next;

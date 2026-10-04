@@ -53,6 +53,14 @@ int fprint_ast_decl_node(FILE *out, ASTNode *node, int indent) {
             fprintf(out, "TypeArray: size=%d\n", node->type_array.array_size);
         fprint_ast(out, node->type_array.element_type, indent + 1);
         return 1;
+    case AST_TYPE_FUNCTION:
+        fprint_indent(out, indent); fprintf(out, "FunctionType%s\n",
+                                            node->function_type.is_variadic ? " variadic" : "");
+        for (int i = 0; i < node->function_type.param_count; i++)
+            fprint_ast(out, node->function_type.param_types[i], indent + 1);
+        fprint_indent(out, indent + 1); fprintf(out, "Returns:\n");
+        fprint_ast(out, node->function_type.return_type, indent + 2);
+        return 1;
     case AST_VAR_DECL:
         fprint_indent(out, indent); fprintf(out, "VarDecl:\n");
         fprint_indent(out, indent); fprintf(out, "  Type:\n");
@@ -82,7 +90,9 @@ int fprint_ast_decl_node(FILE *out, ASTNode *node, int indent) {
             fprint_member_name(out, node->struct_stmt.members[i], indent + 1);
         return 1;
     case AST_TYPEDEF:
-        fprint_indent(out, indent); fprintf(out, "Typedef: %s\n", node->typedef_stmt.alias);
+        fprint_indent(out, indent); fprintf(out, "%s: %s\n",
+                                            node->typedef_stmt.is_newtype ? "Newtype" : "Typedef",
+                                            node->typedef_stmt.alias);
         fprint_indent(out, indent); fprintf(out, "  BaseType:\n");
         fprint_ast(out, node->typedef_stmt.src_type, indent + 2);
         return 1;

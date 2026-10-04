@@ -7,5 +7,6 @@ package dom;
 export void append_child(i32 p, i32 c) { }
 
 export i32 Window(char *title, i32 x, i32 y, i32 w, i32 h) { return 1; }
-export i32 Button(char *text, i32 x, i32 y, i32 w, i32 h, i32 onClick) { return 2; }
+export i32 Button(char *text, i32 x, i32 y, i32 w, i32 h,
+                  fn(i32 owner, i32 id, i32 arg) -> void onClick) { return 2; }
 export i32 Text(char *text, i32 x, i32 y) { return 3; }

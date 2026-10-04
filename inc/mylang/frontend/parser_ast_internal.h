@@ -11,6 +11,8 @@ ASTNode *new_char_literal(char *str);
 ASTNode *new_sizeof(ASTNode *expr);
 ASTNode *new_type_array(ASTNode *elem_type, int size);
 ASTNode *new_type_array_param(ASTNode *elem_type, const char *size_param);
+ASTNode *new_function_type(ASTNode **param_types, int param_count,
+                           ASTNode *return_type, bool is_variadic);
 ASTNode *new_var_decl(ASTNode *type, char *name, ASTNode *init);
 ASTNode *new_var_decl_mut(ASTNode *type, char *name, ASTNode *init, int is_mut);
 ASTNode *new_param(ASTNode *type, char *name);
@@ -31,6 +33,7 @@ ASTNode *new_type_node(ASTNode *base_type, int pointer_level, int modifiers, int
 ASTNode *new_generic_type(char *name, ASTNode **args, int arg_count);
 ASTNode *new_expr_stmt(ASTNode *expr);
 ASTNode *new_typedef(ASTNode *src_type, char *alias);
+ASTNode *new_newtype(ASTNode *src_type, char *name);
 ASTNode *new_typedef_struct(char *struct_name, ASTNode **members, int member_count, char *typedef_name);
 ASTNode *new_struct(char *name, ASTNode **members, int member_count);
 ASTNode *new_enum(char *name, ASTNode **members, int member_count);
@@ -50,6 +53,7 @@ ASTNode *new_break(void);
 ASTNode *new_continue(void);
 ASTNode *new_if(ASTNode *cond, ASTNode *then_stmt, ASTNode *else_stmt);
 ASTNode *new_return(ASTNode *expr);
+ASTNode *new_defer(ASTNode *body);
 ASTNode *new_yield(ASTNode *expr);
 ASTNode *new_block(ASTNode **stmts, int count);
 ASTNode *new_unchecked_block(ASTNode *body);

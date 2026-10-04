@@ -1,8 +1,9 @@
 package annotations;
+import { CodeAddress } from "../../../../MyStdLib/core/address.mln";
 // Annotation declarations for the @app cases: name and argument shape only.
 // The compiler records uses in a table; nothing ever calls these.
 // Declarations only: name and argument shape. Never called.
-export void app(i32 fn, char *type, i32 size, bool single = false, char *name = "");
-export void timer(i32 fn, char *type, i32 size, i32 ms);
-export void key(i32 fn, char *type, i32 size, char *combo);
-export void mark(i32 fn, char *type, i32 size);
+export void app(CodeAddress fn, char *type, i32 size, bool single = false, char *name = "");
+export void timer(CodeAddress fn, char *type, i32 size, i32 ms);
+export void key(CodeAddress fn, char *type, i32 size, char *combo);
+export void mark(CodeAddress fn, char *type, i32 size);

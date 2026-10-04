@@ -107,7 +107,7 @@ ASTNode *parse_generic_fundef(ParserContext *context, Token **cur) {
 
     Token *name_tok = *cur;
     while (name_tok && name_tok->next != params_start) name_tok = name_tok->next;
-    if (!name_tok || name_tok->kind != IDENTIFIER)
+    if (!token_is_name(name_tok))
         parse_error(context, "expected generic function name", *cur);
 
     int mark = typename_scope_mark(context);

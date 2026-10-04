@@ -47,7 +47,8 @@ ASTNode *parse_for_stmt(ParserContext *context, Token **cur) {
     ASTNode *init = NULL, *cond = NULL, *inc = NULL;
 
     if ((*cur)->kind != SEMICOLON) {
-        if (is_type(context, (*cur)->kind, *cur) ||
+        if ((is_type(context, (*cur)->kind, *cur) &&
+             ((*cur)->kind != FN || looks_like_function_type_declaration(context, *cur))) ||
             ((*cur)->kind == MUT && (*cur)->next && is_type(context, (*cur)->next->kind, (*cur)->next))) {
             init = parse_variable_declaration(context, cur, 0);
         } else {
@@ -107,6 +108,18 @@ ASTNode *parse_expr_stmt(ParserContext *context, Token **cur) {
     return new_expr_stmt(expr);
 }
 
+static ASTNode *parse_defer_stmt(ParserContext *context, Token **cur) {
+    Token *start = *cur;
+    if (!expect(cur, DEFER)) parse_error(context, "expected 'defer'", *cur);
+    ASTNode *body = (*cur)->kind == L_BRACE
+        ? parse_block(context, cur)
+        : parse_expr_stmt(context, cur);
+    ASTNode *node = new_defer(body);
+    set_node_loc_from_tokens(node, start, NULL);
+    set_node_range_from_children(node, node, body);
+    return node;
+}
+
 static ASTNode *parse_init_list(ParserContext *context, Token **cur) {
     if (!expect(cur, L_BRACE)) parse_error(context, "expected '{' for initializer list", *cur);
     ASTNode **elems = NULL;
@@ -135,7 +148,7 @@ ASTNode *parse_variable_declaration(ParserContext *context, Token **cur, int nee
         start = *cur;
     }
     ASTNode *type = parse_type(context, cur);
-    if ((*cur)->kind != IDENTIFIER)
+    if (!token_is_name(*cur))
         parse_error(context, "expected identifier for variable name", *cur);
     Token *name_tok = *cur;
     char *name = name_tok->value;
@@ -194,7 +207,7 @@ ASTNode *parse_variable_declaration(ParserContext *context, Token **cur, int nee
 
 
 ASTNode *parse_variable_assignment(ParserContext *context, Token **cur) {
-    if ((*cur)->kind != IDENTIFIER) parse_error(context, "expected identifier for assignment", *cur);
+    if (!token_is_name(*cur)) parse_error(context, "expected identifier for assignment", *cur);
     Token *name_tok = *cur;
     char *name = name_tok->value;
     *cur = (*cur)->next;
@@ -219,6 +232,7 @@ ASTNode *parse_stmt(ParserContext *context, Token **cur) {
     if ((*cur)->kind == WHILE) return parse_while_stmt(context, cur);
     if ((*cur)->kind == DO) return parse_do_while_stmt(context, cur);
     if ((*cur)->kind == FOR) return parse_for_stmt(context, cur);
+    if ((*cur)->kind == DEFER) return parse_defer_stmt(context, cur);
     if ((*cur)->kind == UNCHECKED) {
         *cur = (*cur)->next;
         context->control.unchecked_depth++;
@@ -247,7 +261,9 @@ ASTNode *parse_stmt(ParserContext *context, Token **cur) {
 
     if ((*cur)->kind == L_BRACE) return parse_block(context, cur);
     if ((*cur)->kind == MUT && (*cur)->next && is_type(context, (*cur)->next->kind, (*cur)->next)) return parse_variable_declaration(context, cur, 1);
-    if (is_type(context, (*cur)->kind, *cur)) return parse_variable_declaration(context, cur, 1);
+    if (is_type(context, (*cur)->kind, *cur) &&
+        ((*cur)->kind != FN || looks_like_function_type_declaration(context, *cur)))
+        return parse_variable_declaration(context, cur, 1);
 
     return parse_expr_stmt(context, cur);
 }

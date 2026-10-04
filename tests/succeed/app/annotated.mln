@@ -10,9 +10,14 @@ import annotations from "@std/meta/annotations.mln";
 import { Annotations, AnnotationError } from "@std/meta/annotations.mln";
 import section from "@std/memory/section.mln";
 import { Result } from "@std/core/result.mln";
+import { CodeAddress } from "@std/core/address.mln";
 
 i32 annotation_i32(Result<i32, AnnotationError> result) {
     return case result of { Ok(value) -> value; Err(_) -> 0; };
+}
+
+CodeAddress annotation_code(Result<CodeAddress, AnnotationError> result) {
+    return case result of { Ok(value) -> value; Err(_) -> CodeAddress(0); };
 }
 
 char* annotation_text(Result<char*, AnnotationError> result) {
@@ -28,8 +33,9 @@ i32 main() {
     Annotations it = annotations.named("app");
     while (it.next()) {
         i32 buf[4]; i32 self = (i32)(&buf[0]);
-        i32 fn = annotation_i32(it.fn());
-        i32 v = fn(self);                                  // 42
+        CodeAddress function_address = annotation_code(it.fn());
+        fn(i32) -> i32 callback = (fn(i32) -> i32)function_address;
+        i32 v = callback(self);                            // 42
         out = out + v * 10000 + annotation_i32(it.size()) * 100 + annotation_i32(it.arg(0)) * 10;   // size 16, single 1
         char *label = annotation_text(it.text(1));
         if (label[0] == 'C') { out = out + 1; }

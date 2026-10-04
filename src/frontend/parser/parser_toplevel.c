@@ -206,6 +206,7 @@ static ASTNode *parse_toplevel_decl(ParserContext *context, Token **cur) {
 
     if ((*cur)->kind == IMPORT) return parse_import(context, cur);
     if ((*cur)->kind == TYPEDEF) return parse_typedef(context, cur, want_export);
+    if ((*cur)->kind == NEWTYPE) return parse_newtype(context, cur, want_export);
     if ((*cur)->kind == STRUCT) {
         ASTNode *declaration = parse_struct(context, cur);
         if (declaration && declaration->type == AST_STRUCT && declaration->struct_stmt.type_param_count > 0) {

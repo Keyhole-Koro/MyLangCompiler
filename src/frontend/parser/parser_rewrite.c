@@ -123,6 +123,9 @@ void rewrite_node(ParserContext *context, ASTNode *node, char **scope, int scope
     case AST_RETURN:
         rewrite_node(context, node->ret.expr, scope, scope_count);
         break;
+    case AST_DEFER:
+        rewrite_node(context, node->defer_stmt.body, scope, scope_count);
+        break;
     case AST_EXPR_STMT:
         rewrite_node(context, node->expr_stmt.expr, scope, scope_count);
         break;

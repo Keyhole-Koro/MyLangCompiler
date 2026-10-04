@@ -57,6 +57,12 @@ void free_ast(ASTNode *node) {
             free_ast(node->type_array.element_type);
             free(node->type_array.array_size_param);
             break;
+        case AST_TYPE_FUNCTION:
+            for (int i = 0; i < node->function_type.param_count; i++)
+                free_ast(node->function_type.param_types[i]);
+            free(node->function_type.param_types);
+            free_ast(node->function_type.return_type);
+            break;
         case AST_STRING_LITERAL:
             free(node->string_literal.value);
             break;
@@ -90,6 +96,9 @@ void free_ast(ASTNode *node) {
             break;
             case AST_RETURN:
                     free_ast(node->ret.expr);
+                    break;
+            case AST_DEFER:
+                    free_ast(node->defer_stmt.body);
                     break;
             case AST_YIELD:
                     free_ast(node->yield_stmt.expr);
@@ -166,6 +175,7 @@ void free_ast(ASTNode *node) {
             break;
         case AST_TYPEDEF:
             free(node->typedef_stmt.alias);
+            free(node->typedef_stmt.package);
             free_ast(node->typedef_stmt.src_type);
             break;
         case AST_TYPEDEF_STRUCT:

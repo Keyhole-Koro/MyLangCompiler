@@ -57,6 +57,9 @@ void ensure_no_fun_literals(ASTNode *node) {
     case AST_RETURN:
         ensure_no_fun_literals(node->ret.expr);
         break;
+    case AST_DEFER:
+        ensure_no_fun_literals(node->defer_stmt.body);
+        break;
     case AST_YIELD:
         ensure_no_fun_literals(node->yield_stmt.expr);
         break;
@@ -112,6 +115,11 @@ void ensure_no_fun_literals(ASTNode *node) {
         break;
     case AST_TYPE_ARRAY:
         ensure_no_fun_literals(node->type_array.element_type);
+        break;
+    case AST_TYPE_FUNCTION:
+        for (int i = 0; i < node->function_type.param_count; i++)
+            ensure_no_fun_literals(node->function_type.param_types[i]);
+        ensure_no_fun_literals(node->function_type.return_type);
         break;
     case AST_INIT_LIST:
         for (int i = 0; i < node->init_list.count; i++) {

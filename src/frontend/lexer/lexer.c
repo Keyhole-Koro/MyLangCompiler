@@ -67,9 +67,9 @@ StringTokenKindMap reservedWords[] = {
     {"if", IF}, {"else", ELSE}, {"while", WHILE}, {"do", DO}, {"for", FOR},
     {"switch", SWITCH}, {"case", CASE}, {"default", DEFAULT},
     {"break", BREAK}, {"continue", CONTINUE}, {"return", RETURN},
-    {"yield", YIELD}, {"unchecked", UNCHECKED},
+    {"yield", YIELD}, {"defer", DEFER}, {"unchecked", UNCHECKED},
     {"of", OF}, {"_", UNDERSCORE},
-    {"typedef", TYPEDEF}, {"struct", STRUCT}, {"union", UNION}, {"enum", ENUM},
+    {"typedef", TYPEDEF}, {"newtype", NEWTYPE}, {"struct", STRUCT}, {"union", UNION}, {"enum", ENUM}, {"fn", FN},
     {"import", IMPORT}, {"from", FROM}, {"export", EXPORT}, {"package", PACKAGE}, {"rest", REST},
     {"test", TEST}
 };
@@ -149,13 +149,16 @@ char *tokenkind2str(TokenKind kind) {
         case CONTINUE: return "CONTINUE";
         case RETURN: return "RETURN";
         case YIELD: return "YIELD";
+        case DEFER: return "DEFER";
         case UNCHECKED: return "UNCHECKED";
         case OF: return "OF";
         case UNDERSCORE: return "UNDERSCORE";
         case TYPEDEF: return "TYPEDEF";
+        case NEWTYPE: return "NEWTYPE";
         case STRUCT: return "STRUCT";
         case UNION: return "UNION";
         case ENUM: return "ENUM";
+        case FN: return "FN";
         case IMPORT: return "IMPORT";
         case FROM: return "FROM";
         case REST: return "REST";

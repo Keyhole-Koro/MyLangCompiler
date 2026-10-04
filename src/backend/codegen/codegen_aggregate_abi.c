@@ -59,10 +59,17 @@ int is_byval_aggregate_param(CompilerContext *cc, const char *name, char **param
     return li->is_array || find_struct(cc, li->base_type) != NULL;
 }
 
-const FunctionSig *call_returns_aggregate(CompilerContext *cc, ASTNode *node) {
-    if (!node || node->type != AST_CALL) return NULL;
+int call_return_aggregate_size(CompilerContext *cc, ASTNode *node) {
+    if (!node || node->type != AST_CALL) return 0;
     const FunctionSig *sig = find_func_sig(cc, node->call.name);
-    return (sig && sig->ret_is_aggregate) ? sig : NULL;
+    if (sig) return sig->ret_is_aggregate ? sig->ret_size_bytes : 0;
+
+    const LocalInfo *li = find_local_info(cc, node->call.name);
+    if (!li) li = find_global_info(cc, node->call.name);
+    if (!li || !li->is_function || !li->function_type ||
+        li->function_type->type != AST_TYPE_FUNCTION) return 0;
+    return aggregate_type_size(cc,
+        (ASTNode *)li->function_type->function_type.return_type);
 }
 
 void emit_aggregate_copy(StringBuilder *sb, const char *dest_addr_reg, const char *src_addr_reg, int total_bytes) {

@@ -1,6 +1,7 @@
 package p;
+import { CodeAddress } from "../../../../MyStdLib/core/address.mln";
 // An annotation carries at most three arguments after (fn, type, size).
-void wide(i32 fn, char *type, i32 size, i32 a, i32 b, i32 c, i32 d);
+void wide(CodeAddress fn, char *type, i32 size, i32 a, i32 b, i32 c, i32 d);
 @wide(1, 2, 3, 4)
 void f() { }
 i32 main() { return 0; }

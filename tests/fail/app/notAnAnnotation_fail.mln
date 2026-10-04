@@ -1,5 +1,5 @@
 package p;
-// A function without the (i32 fn, char *type, i32 size) prefix is not usable as an annotation.
+// A function without the (CodeAddress fn, char *type, i32 size) prefix is not usable as an annotation.
 i32 twice(i32 x) { return x * 2; }
 @twice
 void f() { }

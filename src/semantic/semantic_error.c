@@ -38,6 +38,8 @@ SemanticLocation semantic_location_from_ast(ASTNode *node) {
         return semantic_location_from_ast(node->expr_stmt.expr);
     case AST_RETURN:
         return semantic_location_from_ast(node->ret.expr);
+    case AST_DEFER:
+        return semantic_location_from_ast(node->defer_stmt.body);
     default:
         return loc;
     }

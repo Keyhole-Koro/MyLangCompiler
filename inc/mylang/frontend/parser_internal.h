@@ -13,12 +13,12 @@
 
 typedef struct FunAlias FunAlias;
 
-/* `test` is reserved only so a top-level test declaration stays distinguishable
- * from a method definition (see TEST in lexer.h). Everywhere a plain name is
- * expected -- a package name, an import namespace, an expression -- it is still
- * just a name, and its token carries "test" as its value like any identifier. */
+/* `test` marks top-level tests, and `fn` introduces a function type when the
+ * parser expects a type. Outside those positions they remain ordinary names.
+ * Keeping these words contextual preserves useful identifiers such as a test
+ * target called `fn` without making function types ambiguous. */
 static inline int token_is_name(const Token *tok) {
-    return tok && (tok->kind == IDENTIFIER || tok->kind == TEST);
+    return tok && (tok->kind == IDENTIFIER || tok->kind == TEST || tok->kind == FN);
 }
 
 static inline void set_node_loc_from_tokens(ASTNode *node, Token *primary, Token *fallback) {
@@ -52,6 +52,7 @@ void parse_error(ParserContext *context, const char *msg, Token *cur);
 void parse_error_code(ParserContext *context, const char *code, const char *msg, Token *cur);
 int expect(Token **cur, TokenKind kind);
 int is_type(ParserContext *context, TokenKind kind, Token *cur);
+int looks_like_function_type_declaration(ParserContext *context, Token *cur);
 ASTNode *parse_expr_until_arrow(ParserContext *context, Token **cur);
 int looks_like_function(ParserContext *context, Token *cur);
 int looks_like_generic_function(ParserContext *context, Token *cur);
@@ -64,6 +65,7 @@ void parse_struct_members(ParserContext *context, Token **cur, ASTNode ***member
 ASTNode *parse_struct(ParserContext *context, Token **cur);
 ASTNode *parse_enum(ParserContext *context, Token **cur);
 ASTNode *parse_typedef(ParserContext *context, Token **cur, int want_export);
+ASTNode *parse_newtype(ParserContext *context, Token **cur, int want_export);
 ASTNode *parse_type(ParserContext *context, Token **cur);
 ASTNode *parse_primary(ParserContext *context, Token **cur);
 ASTNode *parse_postfix(ParserContext *context, Token **cur);

@@ -122,6 +122,9 @@ static void lower_fun_literals_node(ParserContext *context, ASTNode *node,
     case AST_RETURN:
         lower_fun_literals_node(context, node->ret.expr, func_prefix, aliases, alias_count);
         break;
+    case AST_DEFER:
+        lower_fun_literals_node(context, node->defer_stmt.body, func_prefix, aliases, alias_count);
+        break;
     case AST_YIELD:
         lower_fun_literals_node(context, node->yield_stmt.expr, func_prefix, aliases, alias_count);
         break;

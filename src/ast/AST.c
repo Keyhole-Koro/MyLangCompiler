@@ -11,6 +11,7 @@ char *astType2str(ASTNodeType type) {
         case AST_TYPE: return "AST_TYPE";
         case AST_TYPE_GENERIC: return "AST_TYPE_GENERIC";
         case AST_TYPE_ARRAY: return "AST_TYPE_ARRAY";
+        case AST_TYPE_FUNCTION: return "AST_TYPE_FUNCTION";
         case AST_VAR_DECL: return "AST_VAR_DECL";
         case AST_BORROW: return "AST_BORROW";
         case AST_BORROW_MUT: return "AST_BORROW_MUT";
@@ -47,6 +48,7 @@ char *astType2str(ASTNodeType type) {
         case AST_YIELD: return "AST_YIELD";
         case AST_STMT_EXPR: return "AST_STMT_EXPR";
         case AST_CASE: return "AST_CASE";
+        case AST_DEFER: return "AST_DEFER";
         case AST_UNCHECKED: return "AST_UNCHECKED";
         case AST_DOM_ELEMENT: return "AST_DOM_ELEMENT";
     }
@@ -66,6 +68,10 @@ void ast_visit_children(ASTNode *n, void (*visit)(ASTNode **, void *), void *ctx
     case AST_TYPE: CHILD(type_node.base_type); break;
     case AST_TYPE_GENERIC: CHILDREN(generic_type.args, generic_type.arg_count); break;
     case AST_TYPE_ARRAY: CHILD(type_array.element_type); break;
+    case AST_TYPE_FUNCTION:
+        CHILDREN(function_type.param_types, function_type.param_count);
+        CHILD(function_type.return_type);
+        break;
     case AST_VAR_DECL: CHILD(var_decl.var_type); CHILD(var_decl.init); break;
     case AST_TYPEDEF: CHILD(typedef_stmt.src_type); break;
     case AST_CAST: CHILD(cast.type); CHILD(cast.expr); break;
@@ -75,6 +81,7 @@ void ast_visit_children(ASTNode *n, void (*visit)(ASTNode **, void *), void *ctx
     case AST_EXPR_STMT: CHILD(expr_stmt.expr); break;
     case AST_IF: CHILD(if_stmt.cond); CHILD(if_stmt.then_stmt); CHILD(if_stmt.else_stmt); break;
     case AST_RETURN: CHILD(ret.expr); break;
+    case AST_DEFER: CHILD(defer_stmt.body); break;
     case AST_YIELD: CHILD(yield_stmt.expr); break;
     case AST_BLOCK: CHILDREN(block.stmts, block.count); break;
     case AST_UNCHECKED: CHILD(unchecked_block.body); break;
@@ -159,8 +166,9 @@ ASTNode *ast_clone(const ASTNode *src) {
     case AST_IDENTIFIER: STR(identifier.name); break;
     case AST_TYPE_GENERIC: STR(generic_type.name); ARRAY(generic_type.args, generic_type.arg_count); break;
     case AST_TYPE_ARRAY: STR(type_array.array_size_param); break;
+    case AST_TYPE_FUNCTION: ARRAY(function_type.param_types, function_type.param_count); break;
     case AST_VAR_DECL: STR(var_decl.name); STR(var_decl.package); break;
-    case AST_TYPEDEF: STR(typedef_stmt.alias); break;
+    case AST_TYPEDEF: STR(typedef_stmt.alias); STR(typedef_stmt.package); break;
     case AST_BLOCK: ARRAY(block.stmts, block.count); break;
     case AST_FUN_LITERAL: ARRAY(fun_literal.params, fun_literal.param_count); break;
     case AST_CASE: ARRAY(case_expr.cases, case_expr.case_count); break;

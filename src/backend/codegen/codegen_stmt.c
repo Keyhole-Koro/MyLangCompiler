@@ -5,6 +5,30 @@ static int is_mock_call_original(ASTNode *node) {
            strcmp(node->call.name, "mock_call_original") == 0;
 }
 
+void push_active_defer(CompilerContext *cc, ASTNode *body) {
+    cc->active_defers = realloc(cc->active_defers,
+        sizeof(ASTNode *) * (size_t)(cc->active_defer_count + 1));
+    cc->active_defers[cc->active_defer_count++] = body;
+}
+
+void emit_defer_active_from(CompilerContext *cc, int first, StringBuilder *sb,
+                            char **params, int param_count,
+                            char **locals, int local_count) {
+    if (first < 0) first = 0;
+    for (int i = cc->active_defer_count - 1; i >= first; i--) {
+        sb_append(sb, "  ; defer\n");
+        gen_stmt_internal(cc, cc->active_defers[i], sb,
+                          params, param_count, locals, local_count, NULL, NULL);
+    }
+}
+
+void pop_defer_scope(CompilerContext *cc, int mark, StringBuilder *sb,
+                     char **params, int param_count,
+                     char **locals, int local_count) {
+    emit_defer_active_from(cc, mark, sb, params, param_count, locals, local_count);
+    cc->active_defer_count = mark;
+}
+
 // Forward the hidden result buffer of an aggregate fake to the original
 // intercepted function. `mock.call_original` is normally a variadic,
 // word-returning facade function, so routing this particular direct-return
@@ -191,7 +215,7 @@ void gen_struct_literal_into_addr(CompilerContext *cc, ASTNode *literal,
                 continue;
             }
 
-            if (call_returns_aggregate(cc, literal->init_list.elements[i])) {
+            if (call_return_aggregate_size(cc, literal->init_list.elements[i]) > 0) {
                 sb_append(sb, "  push %s\n", dest_addr_reg);
                 sb_append(sb, "  mov r1, %s\n", dest_addr_reg);
                 if (member->offset) sb_append(sb, "  addis r1, %d\n", member->offset);
@@ -308,7 +332,7 @@ static void gen_stmt_labeled(CompilerContext *cc, ASTNode *node, StringBuilder *
                                  params, param_count, locals, local_count);
                 gen_struct_literal_into_addr(cc, node->var_decl.init, sb, "r3",
                                              params, param_count, locals, local_count);
-            } else if (call_returns_aggregate(cc, node->var_decl.init)) {
+            } else if (call_return_aggregate_size(cc, node->var_decl.init) > 0) {
                 // `T y = callee(args);` where callee returns a struct or array
                 // by value: y's own slot (just reserved by this declaration)
                 // is where it belongs, so pass its address as the hidden
@@ -341,6 +365,8 @@ static void gen_stmt_labeled(CompilerContext *cc, ASTNode *node, StringBuilder *
         break;
     case AST_BREAK:
         if (break_label) {
+            emit_defer_active_from(cc, cc->loop_defer_base, sb,
+                                   params, param_count, locals, local_count);
             emit_drop_active_from(cc, cc->loop_drop_base, sb,
                                   params, param_count, locals, local_count);
             sb_append(sb, "  jmp %s\n", break_label);
@@ -349,6 +375,8 @@ static void gen_stmt_labeled(CompilerContext *cc, ASTNode *node, StringBuilder *
         break;
     case AST_CONTINUE:
         if (continue_label) {
+            emit_defer_active_from(cc, cc->loop_defer_base, sb,
+                                   params, param_count, locals, local_count);
             emit_drop_active_from(cc, cc->loop_drop_base, sb,
                                   params, param_count, locals, local_count);
             sb_append(sb, "  jmp %s\n", continue_label);
@@ -388,7 +416,7 @@ static void gen_stmt_labeled(CompilerContext *cc, ASTNode *node, StringBuilder *
                 sb_append(sb, "  ; forward aggregate Spy fake to original\n");
                 gen_mock_call_original_sret(cc, node->ret.expr, sb, params,
                                             param_count, locals, local_count);
-            } else if (call_returns_aggregate(cc, node->ret.expr)) {
+            } else if (call_return_aggregate_size(cc, node->ret.expr) > 0) {
                 // `return callee(args);` can forward this function's hidden
                 // destination directly to another aggregate-returning call.
                 // There is no need to materialize a temporary only to copy it
@@ -432,6 +460,9 @@ static void gen_stmt_labeled(CompilerContext *cc, ASTNode *node, StringBuilder *
             sb_append(sb, "  addis r3, %d\n", cc->drop_return_offset);
             sb_append(sb, "  store r3, r1\n");
         }
+        if (node->ret.expr && !cc->sret_active) sb_append(sb, "  push r1\n");
+        emit_defer_active_from(cc, 0, sb, params, param_count, locals, local_count);
+        if (node->ret.expr && !cc->sret_active) sb_append(sb, "  pop r1\n");
         sb_append(sb, "  \n; return\n");
         if (cc->return_label)
             sb_append(sb, "  jmp %s\n", cc->return_label);
@@ -442,6 +473,7 @@ static void gen_stmt_labeled(CompilerContext *cc, ASTNode *node, StringBuilder *
     case AST_BLOCK:
     {
         int drop_mark = cc->active_drop_count;
+        int defer_mark = cc->active_defer_count;
         for (int i = 0; i < node->block.count; i++)
         {
             gen_stmt_internal(cc, node->block.stmts[i], sb, params, param_count, locals, local_count,
@@ -450,9 +482,13 @@ static void gen_stmt_labeled(CompilerContext *cc, ASTNode *node, StringBuilder *
             if (stmt && stmt->type == AST_VAR_DECL)
                 push_active_drop_binding(cc, find_drop_binding(cc, stmt->var_decl.name));
         }
+        pop_defer_scope(cc, defer_mark, sb, params, param_count, locals, local_count);
         pop_drop_scope(cc, drop_mark, sb, params, param_count, locals, local_count);
         break;
     }
+    case AST_DEFER:
+        push_active_defer(cc, node->defer_stmt.body);
+        break;
     case AST_UNCHECKED:
         gen_stmt_internal(cc, node->unchecked_block.body, sb, params, param_count, locals, local_count,
                           break_label, continue_label);

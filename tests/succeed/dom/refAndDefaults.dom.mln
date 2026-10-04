@@ -17,7 +17,7 @@ i32 build() {
 
 i32 main() {
     i32 root = build();
-    i32 h = dom.last_click();
+    fn(i32 owner, i32 id, i32 arg) -> void h = dom.last_click();
     h(0, dom.last_id(), 0);
     return root * 100 + g_win * 10 + g_clicked;   // 1*100 + 1*10 + 3 = 113
 }

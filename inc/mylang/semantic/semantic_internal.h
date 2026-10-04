@@ -48,6 +48,7 @@ typedef struct {
 } SemanticBinding;
 
 typedef struct { const char *name; long value; } SemanticEnumValue;
+typedef struct { const char *name; ASTNode *base_type; } SemanticNewtype;
 
 typedef struct {
     const char *name;
@@ -61,6 +62,7 @@ typedef struct {
     SemanticTypeInfo param_types[SEMANTIC_MAX_FUNCTION_PARAMS];
     const char *param_names[SEMANTIC_MAX_FUNCTION_PARAMS];
     int param_borrow_kinds[SEMANTIC_MAX_FUNCTION_PARAMS];
+    ASTNode *declaration;
     SemanticLocation decl_loc;
 } SemanticFunctionSig;
 
@@ -88,6 +90,7 @@ typedef struct {
     SemanticDiagnostic diagnostics[512];
     int scope_depth;
     int function_depth;
+    int defer_depth;
     ASTNode *current_function;
     int binding_count;
     SemanticBinding bindings[256];
@@ -102,6 +105,8 @@ typedef struct {
     SemanticFunctionSig function_sigs[512];
     int user_type_count;
     const char *user_types[256];
+    int newtype_count;
+    SemanticNewtype newtypes[128];
     /* Struct layouts, so a member access can be given a type. Without them
      * `p.a = "no"` had no left-hand type to compare against and the assignment
      * check returned early, which also let an entirely unknown field through. */

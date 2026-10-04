@@ -30,9 +30,9 @@ static int gen_str_addr(CompilerContext *cc, ASTNode *expr, StringBuilder *sb,
         sb_append(sb, "  movi %s, %s\n", target_reg, view);
         return 0;
     }
-    const FunctionSig *result = call_returns_aggregate(cc, expr);
-    if (result) {
-        int bytes = ((result->ret_size_bytes + SLOT_SIZE - 1) / SLOT_SIZE) * SLOT_SIZE;
+    int result_bytes = call_return_aggregate_size(cc, expr);
+    if (result_bytes > 0) {
+        int bytes = ((result_bytes + SLOT_SIZE - 1) / SLOT_SIZE) * SLOT_SIZE;
         sb_append(sb, "  ; materialize str comparison operand\n");
         sb_append(sb, "  addis sp, -%d\n", bytes);
         sb_append(sb, "  mov r1, sp\n  push r1\n");

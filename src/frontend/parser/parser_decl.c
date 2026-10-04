@@ -5,7 +5,7 @@ ASTNode* parse_param(ParserContext *context, Token **cur) {
     if ((*cur)->kind == REST) {
         Token *rest_tok = *cur;
         *cur = (*cur)->next;
-        if ((*cur)->kind != IDENTIFIER) parse_error(context, "expected rest parameter name", *cur);
+        if (!token_is_name(*cur)) parse_error(context, "expected rest parameter name", *cur);
         Token *name_tok = *cur;
         char *name = name_tok->value;
         *cur = (*cur)->next;
@@ -23,7 +23,7 @@ ASTNode* parse_param(ParserContext *context, Token **cur) {
         start = *cur;
     }
     ASTNode *type = parse_type(context, cur);
-    if ((*cur)->kind != IDENTIFIER) parse_error(context, "expected param name", *cur);
+    if (!token_is_name(*cur)) parse_error(context, "expected param name", *cur);
     Token *name_tok = *cur;
     char *name = name_tok->value;
     *cur = (*cur)->next;
@@ -118,7 +118,7 @@ ASTNode** parse_param_list(ParserContext *context, Token **cur, int *out_count, 
 ASTNode* parse_fundef(ParserContext *context, Token **cur) {
     Token *start = *cur;
     ASTNode *ret_type = parse_type(context, cur);
-    if ((*cur)->kind != IDENTIFIER) parse_error(context, "expected function name", *cur);
+    if (!token_is_name(*cur)) parse_error(context, "expected function name", *cur);
     Token *name_tok = *cur;
     char *name = name_tok->value;
     *cur = (*cur)->next;
@@ -269,7 +269,7 @@ ASTNode *parse_method(ParserContext *context, Token **cur) {
     if (!recv_type) parse_error(context, "method receiver must name a type", start);
     int generic_receiver = recv->param.type->type_node.base_type->type == AST_TYPE_GENERIC;
 
-    if ((*cur)->kind != IDENTIFIER) parse_error(context, "expected method name", *cur);
+    if (!token_is_name(*cur)) parse_error(context, "expected method name", *cur);
     Token *name_tok = *cur;
     char *method_name = name_tok->value;
     *cur = (*cur)->next;

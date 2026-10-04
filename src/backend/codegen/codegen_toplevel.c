@@ -26,6 +26,7 @@ static void append_typedef_info(CompilerContext *cc, ASTNode *node) {
     cg_typedefs[cg_typedef_count].info.is_array = tmp.is_array;
     cg_typedefs[cg_typedef_count].info.dims_count = tmp.dims_count;
     for (int k = 0; k < 8; k++) cg_typedefs[cg_typedef_count].info.dims[k] = tmp.dims[k];
+    cg_typedefs[cg_typedef_count].is_newtype = node->typedef_stmt.is_newtype != 0;
     cg_typedef_count++;
 }
 
@@ -38,6 +39,7 @@ static void append_type_alias(CompilerContext *cc, const char *alias, const char
     cg_typedefs[cg_typedef_count].info.is_array = 0;
     cg_typedefs[cg_typedef_count].info.dims_count = 0;
     for (int k = 0; k < 8; k++) cg_typedefs[cg_typedef_count].info.dims[k] = 0;
+    cg_typedefs[cg_typedef_count].is_newtype = false;
     cg_typedef_count++;
 }
 
@@ -136,6 +138,7 @@ static void append_func_sig(CompilerContext *cc, ASTNode *node) {
     sig->is_variadic = fn->fundef.is_variadic;
     sig->ret_size_bytes = fn->fundef.ret_type ? aggregate_type_size(cc, fn->fundef.ret_type) : 0;
     sig->ret_is_aggregate = sig->ret_size_bytes > 0;
+    sig->function_type = NULL;
     sig->has_return_type = fn->fundef.ret_type &&
                            typeinfo_from_type_ast(cc, fn->fundef.ret_type, &sig->return_type);
     sig->param_is_aggregate = NULL;
@@ -166,6 +169,7 @@ static void append_imported_func_sig(CompilerContext *cc, const char *name,
     sig->is_variadic = fn_info->is_variadic;
     sig->ret_size_bytes = aggregate_type_size(cc, fn_info->ret_type_ast);
     sig->ret_is_aggregate = sig->ret_size_bytes > 0;
+    sig->function_type = NULL;
     sig->has_return_type = fn_info->ret_type_ast &&
                            typeinfo_from_type_ast(cc, fn_info->ret_type_ast, &sig->return_type);
     sig->param_is_aggregate = NULL;

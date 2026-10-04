@@ -107,6 +107,12 @@ ASTNode *new_typedef(ASTNode *src_type, char *alias) {
     return node;
 }
 
+ASTNode *new_newtype(ASTNode *src_type, char *name) {
+    ASTNode *node = new_typedef(src_type, name);
+    node->typedef_stmt.is_newtype = 1;
+    return node;
+}
+
 ASTNode *new_typedef_struct(char *struct_name, ASTNode **members, int member_count, char *typedef_name) {
     ASTNode *node = calloc(1, sizeof(ASTNode));
     node->type = AST_TYPEDEF_STRUCT;

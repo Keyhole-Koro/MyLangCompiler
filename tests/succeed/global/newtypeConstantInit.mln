@@ -1,0 +1,7 @@
+newtype ChannelId = i32;
+
+ChannelId REQUESTS = ChannelId(1 + 2);
+
+i32 main() {
+    return (i32)REQUESTS - 3;
+}

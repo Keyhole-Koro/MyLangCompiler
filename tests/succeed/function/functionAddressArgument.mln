@@ -1,0 +1,12 @@
+import { CodeAddress } from "../../../../MyStdLib/core/address.mln";
+
+// A function value may be supplied directly to an API that stores a nominal
+// code address, then recovered at an explicitly typed call site.
+i32 increment(i32 value) { return value + 1; }
+
+i32 apply_address(CodeAddress address, i32 value) {
+    fn(i32) -> i32 callback = (fn(i32) -> i32)address;
+    return callback(value);
+}
+
+i32 main() { return apply_address(increment, 41); }

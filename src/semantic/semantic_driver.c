@@ -35,12 +35,14 @@ int semantic_check_with_session(ASTNode *root, FrontendSession *session) {
     ctx.diagnostic_count = 0;
     ctx.scope_depth = 0;
     ctx.function_depth = 0;
+    ctx.defer_depth = 0;
     ctx.current_function = NULL;
     ctx.binding_count = 0;
     ctx.enum_type_count = 0;
     ctx.enum_value_count = 0;
     ctx.function_sig_count = 0;
     ctx.user_type_count = 0;
+    ctx.newtype_count = 0;
     ctx.struct_layout_count = 0;
     ctx.imported_package_count = 0;
 

@@ -89,7 +89,7 @@ ASTNode *parse_postfix(ParserContext *context, Token **cur) {
             int line = node->line;
             int col = node->col;
             *cur = (*cur)->next;
-            if ((*cur)->kind != IDENTIFIER)
+            if (!token_is_name(*cur))
                 parse_error(context, "expected identifier after '::'", *cur);
 
             Token *member_tok = *cur;
