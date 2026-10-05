@@ -1,5 +1,5 @@
 package annotations;
-import { CodeAddress } from "../../../../MyStdLib/core/address.mln";
+import { CodeAddress } from "@std/core/address.mln";
 // Annotation declarations for the @app cases: name and argument shape only.
 // The compiler records uses in a table; nothing ever calls these.
 // Declarations only: name and argument shape. Never called.

@@ -1,4 +1,4 @@
-import { CodeAddress } from "../../../../MyStdLib/core/address.mln";
+import { CodeAddress } from "@std/core/address.mln";
 
 // A function value may be supplied directly to an API that stores a nominal
 // code address, then recovered at an explicitly typed call site.
