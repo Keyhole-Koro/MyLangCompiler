@@ -185,7 +185,7 @@ static bool format_expected_category_message(const SyntaxResult *result, const T
     };
     static const char *stmt_start[] = {
         "L_BRACE", "IF", "WHILE", "DO", "FOR", "RETURN", "BREAK", "CONTINUE",
-        "YIELD", "UNCHECKED", "SEMICOLON"
+        "YIELD", "DEFER", "UNCHECKED", "SEMICOLON"
     };
 
     if (count_expected_tokens(result, expr_start, sizeof(expr_start) / sizeof(expr_start[0])) >= 5) {
