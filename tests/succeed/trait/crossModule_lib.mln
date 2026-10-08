@@ -1,0 +1,27 @@
+import { Eq } from "@std/core/cmp.mln";
+import { From } from "@std/core/convert.mln";
+import { Iterator } from "@std/core/iter.mln";
+import { Option } from "@std/core/option.mln";
+
+export struct P { i32 x; i32 y; };
+export enum LibErr { Bad(i32), Worse }
+export enum RawErr { R1, R2 }
+export struct Counter { i32 n; };
+
+export impl Eq for P {
+    bool (P *self) eq(P *other) { return self->x == other->x && self->y == other->y; }
+}
+
+export impl From<RawErr> for LibErr {
+    LibErr from(RawErr e) {
+        return case e of { RawErr::R1 -> LibErr::Worse; RawErr::R2 -> LibErr::Bad(42); };
+    }
+}
+
+export impl Iterator<i32> for Counter {
+    Option<i32> (Counter *self) next() {
+        if (self->n == 0) { return None; }
+        self->n = self->n - 1;
+        return Some(self->n);
+    }
+}

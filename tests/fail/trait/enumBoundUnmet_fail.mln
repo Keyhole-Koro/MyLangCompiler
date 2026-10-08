@@ -1,0 +1,10 @@
+// A generic enum's bound is checked when an instance is created.
+import { Eq } from "@std/core/cmp.mln";
+
+struct Point { i32 x; };
+enum Maybe<T: Eq> { Just(T), Nothing };
+
+i32 main() {
+    Maybe<Point> m = Nothing;
+    return 0;
+}

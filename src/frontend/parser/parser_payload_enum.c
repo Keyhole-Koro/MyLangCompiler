@@ -1,6 +1,7 @@
 #include "mylang/frontend/parser_internal.h"
 #include "mylang/frontend/parser_ast_internal.h"
 #include "mylang/frontend/module.h"
+#include "mylang/frontend/parser_trait_internal.h"
 
 /* Lowers payload enum *uses* onto the struct layout parser_instantiate.c gives
  * their declarations.
@@ -566,6 +567,21 @@ static const char *result_error_type_key(ASTNode *type) {
     return skip_encoded_type_key(first);
 }
 
+/* `_p0_r0_m0_n8_SsdError` (one key of an instance name) back to a type. */
+static ASTNode *decode_type_key(const char *key) {
+    int pointer_level = 0, ref_kind = 0, modifiers = 0;
+    size_t length = 0;
+    int consumed = 0;
+    if (sscanf(key, "_p%d_r%d_m%d_n%zu_%n", &pointer_level, &ref_kind, &modifiers, &length,
+               &consumed) != 4 || consumed == 0 || strlen(key + consumed) < length)
+        return NULL;
+    char name[256];
+    if (length >= sizeof(name)) return NULL;
+    memcpy(name, key + consumed, length);
+    name[length] = '\0';
+    return new_type_node(new_identifier(name), pointer_level, modifiers, ref_kind);
+}
+
 static int is_generated_try_case(ASTNode *node) {
     if (!node || node->type != AST_CASE || node->case_expr.case_count != 2) return 0;
     ASTNode *key = node->case_expr.cases[0].key;
@@ -587,8 +603,46 @@ static void check_try_error_type(VariantTable *table, ASTNode *node) {
         payload_error(table->context, node,
                       "'?' can only be used in a function returning Result");
     if (strcmp(source_error, target_error) == 0) return;
-    payload_error(table->context, node,
-                  "'?' can only propagate the function's Result error type; handle or convert this error explicitly");
+
+    /* A different error type propagates through `impl From<Source> for
+     * Target`: the generated arm returns `Err(Target::from(error))`. */
+    ASTNode *source = decode_type_key(source_error);
+    ASTNode *target = decode_type_key(target_error);
+    ImplDef *impl = source && target ? find_impl(table->context, "From", &source, 1, target) : NULL;
+    if (!impl) {
+        char *source_name = source ? trait_type_display(source) : strdup("the source error");
+        char *target_name = target ? trait_type_display(target) : strdup("the function's error");
+        fprintf(stderr, "%s:%d:%d: error: '?' cannot convert %s into %s\n",
+                table->context->module.filename ? table->context->module.filename : "<input>",
+                node->line, node->col, source_name, target_name);
+        fprintf(stderr, "  note: add `impl From<%s> for %s`, or handle the error explicitly\n",
+                source_name, target_name);
+        exit(1);
+    }
+    /* The error return trace names the conversion on this hop. */
+    char *source_name = trait_type_display(source);
+    char *target_name = trait_type_display(target);
+    size_t note_len = strlen(source_name) + strlen(target_name) + 8;
+    char *note = malloc(note_len);
+    snprintf(note, note_len, "%s -> %s", source_name, target_name);
+    free(source_name);
+    free(target_name);
+    free_ast(source);
+    free_ast(target);
+
+    ASTNode *arm = node->case_expr.cases[1].expr;
+    ASTNode *ret = arm && arm->type == AST_STMT_EXPR ? arm->stmt_expr.block->block.stmts[0] : NULL;
+    ASTNode *err = ret && ret->type == AST_RETURN ? ret->ret.expr : NULL;
+    if (!err || err->type != AST_CALL || err->call.arg_count != 1)
+        payload_error(table->context, node, "internal error: unexpected '?' expansion");
+    free(ret->ret.trace_note);
+    ret->ret.trace_note = note;
+    ASTNode **args = malloc(sizeof(ASTNode *));
+    args[0] = err->call.args[0];
+    ASTNode *convert = new_call((char *)impl_item_mangled(impl, "from"), args, 1);
+    convert->line = node->line;
+    convert->col = node->col;
+    err->call.args[0] = convert;
 }
 
 /* `case r of { Ok(x) -> E; ... }` becomes `case r.__tag of { 0 -> E[x := r.Ok]; ... }`.
@@ -882,6 +936,38 @@ static VariantTag *case_result_variant(VariantTable *table, ASTNode *node) {
     return case_result_variant(table, node->case_expr.default_expr);
 }
 
+/* A struct, or a payload enum (still an AST_ENUM until this pass finishes),
+ * held by value: a case producing one must store into its destination, since
+ * an arm's value is otherwise carried as a single word. */
+static int is_aggregate_type(VariantTable *table, ASTNode *type) {
+    const char *name = type_base_name(type);
+    if (!name || type->type_node.pointer_level || type->type_node.ref_kind != REFKIND_NONE) return 0;
+    for (int i = 0; i < table->program->block.count; i++) {
+        ASTNode *node = table->program->block.stmts[i];
+        if (!node) continue;
+        if (node->type == AST_STRUCT && node->struct_stmt.name &&
+            strcmp(node->struct_stmt.name, name) == 0)
+            return 1;
+        if (node->type == AST_TYPEDEF_STRUCT && node->typedef_struct.typedef_name &&
+            strcmp(node->typedef_struct.typedef_name, name) == 0)
+            return 1;
+        if (node->type == AST_ENUM && node->enum_stmt.has_payloads && node->enum_stmt.name &&
+            strcmp(node->enum_stmt.name, name) == 0)
+            return 1;
+    }
+    return 0;
+}
+
+/* `({ ...; return x; })`, `({ break; })`: an arm that leaves instead of
+ * producing a value has nothing to store. */
+static int arm_diverges(ASTNode *expr) {
+    if (!expr || expr->type != AST_STMT_EXPR || !expr->stmt_expr.block ||
+        expr->stmt_expr.block->type != AST_BLOCK || expr->stmt_expr.block->block.count == 0)
+        return 0;
+    ASTNode *last = expr->stmt_expr.block->block.stmts[expr->stmt_expr.block->block.count - 1];
+    return last && (last->type == AST_RETURN || last->type == AST_BREAK || last->type == AST_CONTINUE);
+}
+
 static ASTNode *case_result_store(ASTNode *dest, ASTNode *value) {
     ASTNode **statements = malloc(sizeof(ASTNode *) * 2);
     statements[0] = new_expr_stmt(new_assign(ast_clone(dest), value));
@@ -912,6 +998,7 @@ static void lower_case_result_into(VariantTable *table, ASTNode *node, ASTNode *
             lower_case_result_into(table, arm->expr, dest, expected_type, expected_enum);
             continue;
         }
+        if (arm_diverges(arm->expr)) continue;
 
         VariantTag *variant = variant_use(table, arm->expr);
         if (variant) {
@@ -938,7 +1025,7 @@ static void lower_case_result_into(VariantTable *table, ASTNode *node, ASTNode *
         ASTNode *expr = node->case_expr.default_expr;
         if (expr->type == AST_CASE) {
             lower_case_result_into(table, expr, dest, expected_type, expected_enum);
-        } else {
+        } else if (!arm_diverges(expr)) {
             VariantTag *variant = variant_use(table, expr);
             if (variant) {
                 check_unambiguous(table, variant, expr);
@@ -957,6 +1044,17 @@ static void lower_case_result_into(VariantTable *table, ASTNode *node, ASTNode *
             node->case_expr.default_expr = case_result_store(dest, expr);
         }
     }
+}
+
+/* `x = case ...;` where x is a local or parameter of aggregate type. */
+static int assigned_aggregate(VariantTable *table, ASTNode *lhs) {
+    if (!lhs || lhs->type != AST_IDENTIFIER || !table->current_function) return 0;
+    ASTNode *fn = table->current_function;
+    ASTNode *type = NULL;
+    for (int i = 0; i < fn->fundef.param_count && !type; i++)
+        type = find_local_type(fn->fundef.params[i], lhs->identifier.name);
+    if (!type) type = find_local_type(fn->fundef.body, lhs->identifier.name);
+    return type && is_aggregate_type(table, type);
 }
 
 /* Statements are rewritten as a list because a construction expands into two
@@ -981,6 +1079,8 @@ static void rewrite_payload_block(VariantTable *table, ASTNode *block) {
         ASTNode *expected_type = NULL;
         int is_return = 0;
         char temp_name[32];
+        int trace_kind = RET_TRACE_NONE, trace_line = 0, trace_col = 0;
+        char *trace_note = NULL;
 
         /* A carrying constructor may be the direct result of a case arm.  The
          * case itself needs the same concrete destination as a direct
@@ -988,7 +1088,8 @@ static void rewrite_payload_block(VariantTable *table, ASTNode *block) {
          * construction cases below. */
         if (stmt && stmt->type == AST_VAR_DECL &&
             stmt->var_decl.init && stmt->var_decl.init->type == AST_CASE &&
-            case_result_variant(table, stmt->var_decl.init)) {
+            (case_result_variant(table, stmt->var_decl.init) ||
+             is_aggregate_type(table, stmt->var_decl.var_type))) {
             case_value = stmt->var_decl.init;
             stmt->var_decl.init = NULL;
             dest = new_identifier(stmt->var_decl.name);
@@ -997,13 +1098,15 @@ static void rewrite_payload_block(VariantTable *table, ASTNode *block) {
                    stmt->expr_stmt.expr->type == AST_ASSIGN &&
                    stmt->expr_stmt.expr->assign.right &&
                    stmt->expr_stmt.expr->assign.right->type == AST_CASE &&
-                   case_result_variant(table, stmt->expr_stmt.expr->assign.right)) {
+                   (case_result_variant(table, stmt->expr_stmt.expr->assign.right) ||
+                    assigned_aggregate(table, stmt->expr_stmt.expr->assign.left))) {
             case_value = stmt->expr_stmt.expr->assign.right;
             stmt->expr_stmt.expr->assign.right = NULL;
             dest = ast_clone(stmt->expr_stmt.expr->assign.left);
         } else if (stmt && stmt->type == AST_RETURN && stmt->ret.expr &&
                    stmt->ret.expr->type == AST_CASE && table->current_return_type &&
-                   case_result_variant(table, stmt->ret.expr)) {
+                   (case_result_variant(table, stmt->ret.expr) ||
+                    is_aggregate_type(table, table->current_return_type))) {
             is_return = 1;
             case_value = stmt->ret.expr;
             stmt->ret.expr = NULL;
@@ -1056,6 +1159,11 @@ static void rewrite_payload_block(VariantTable *table, ASTNode *block) {
             stmt->ret.expr = NULL;
             snprintf(temp_name, sizeof(temp_name), "__mlg_ret_%d", table->temp_counter++);
             dest = new_identifier(temp_name);
+            trace_kind = stmt->ret.trace_kind;
+            trace_note = stmt->ret.trace_note;
+            stmt->ret.trace_note = NULL;
+            trace_line = stmt->line;
+            trace_col = stmt->col;
         }
 
         if (!call) {
@@ -1104,7 +1212,14 @@ static void rewrite_payload_block(VariantTable *table, ASTNode *block) {
         }
         out[count++] = tag_store;
         if (payload_store) out[count++] = payload_store;
-        if (is_return) out[count++] = new_return(ast_clone(dest));
+        if (is_return) {
+            ASTNode *ret = new_return(ast_clone(dest));
+            ret->ret.trace_kind = trace_kind;
+            ret->ret.trace_note = trace_note;
+            ret->line = trace_line;
+            ret->col = trace_col;
+            out[count++] = ret;
+        }
         free_ast(dest);
     }
 

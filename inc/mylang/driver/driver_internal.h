@@ -31,6 +31,7 @@ typedef struct {
     const char *depfile_path;
     int include_masm;
     int warnings_as_errors;
+    int error_trace;
     int dump_tokens;
     int dump_ast;
 } DriverOptions;

@@ -1,0 +1,12 @@
+package holders;
+
+import { Eq } from "@std/core/cmp.mln";
+
+export struct Box<T> { T value; };
+
+export impl<T: Eq> Eq for Box<T> {
+    bool (Self *self) eq(Self *other) { return self->value == other->value; }
+}
+
+// Box<i32> reaches importers as a field of Holder, already an instance.
+export struct Holder { Box<i32> first; Box<i32> second; };

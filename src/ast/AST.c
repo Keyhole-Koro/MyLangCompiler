@@ -162,7 +162,7 @@ ASTNode *ast_clone(const ASTNode *src) {
 #define ARRAY(field, count) n->field = copy_array(src->field, sizeof(*src->field) * src->count)
 #define STRINGS(field, count) do { ARRAY(field, count); for (int i = 0; i < src->count; i++) STR(field[i]); } while (0)
     switch (n->type) {
-    case AST_NUMBER: STR(number.value); break;
+    case AST_NUMBER: STR(number.value); STR(number.enum_name); break;
     case AST_IDENTIFIER: STR(identifier.name); break;
     case AST_TYPE_GENERIC: STR(generic_type.name); ARRAY(generic_type.args, generic_type.arg_count); break;
     case AST_TYPE_ARRAY: STR(type_array.array_size_param); break;
@@ -179,6 +179,11 @@ ASTNode *ast_clone(const ASTNode *src) {
         if (src->fundef.type_param_is_const)
             n->fundef.type_param_is_const = copy_array(src->fundef.type_param_is_const,
                                                        (size_t)src->fundef.type_param_count);
+        if (src->fundef.type_param_bounds) {
+            n->fundef.type_param_bounds = calloc((size_t)src->fundef.type_param_count, sizeof(ASTNode *));
+            for (int i = 0; i < src->fundef.type_param_count; i++)
+                n->fundef.type_param_bounds[i] = ast_clone(src->fundef.type_param_bounds[i]);
+        }
         break;
     case AST_PARAM: STR(param.name); break;
     case AST_CALL:
@@ -193,6 +198,11 @@ ASTNode *ast_clone(const ASTNode *src) {
         if (src->struct_stmt.type_param_is_const)
             n->struct_stmt.type_param_is_const = copy_array(src->struct_stmt.type_param_is_const,
                                                             (size_t)src->struct_stmt.type_param_count);
+        if (src->struct_stmt.type_param_bounds) {
+            n->struct_stmt.type_param_bounds = calloc((size_t)src->struct_stmt.type_param_count, sizeof(ASTNode *));
+            for (int i = 0; i < src->struct_stmt.type_param_count; i++)
+                n->struct_stmt.type_param_bounds[i] = ast_clone(src->struct_stmt.type_param_bounds[i]);
+        }
         break;
     case AST_STRUCT_MEMBER: STR(struct_member.type); STR(struct_member.name); break;
     case AST_TYPEDEF_STRUCT:
@@ -204,6 +214,11 @@ ASTNode *ast_clone(const ASTNode *src) {
         if (src->enum_stmt.type_param_is_const)
             n->enum_stmt.type_param_is_const = copy_array(src->enum_stmt.type_param_is_const,
                                                           (size_t)src->enum_stmt.type_param_count);
+        if (src->enum_stmt.type_param_bounds) {
+            n->enum_stmt.type_param_bounds = calloc((size_t)src->enum_stmt.type_param_count, sizeof(ASTNode *));
+            for (int i = 0; i < src->enum_stmt.type_param_count; i++)
+                n->enum_stmt.type_param_bounds[i] = ast_clone(src->enum_stmt.type_param_bounds[i]);
+        }
         break;
     case AST_ENUM_MEMBER: STR(enum_member.name); break;
     case AST_CHAR_LITERAL: STR(char_literal.value); break;
@@ -221,6 +236,7 @@ ASTNode *ast_clone(const ASTNode *src) {
             STRINGS(init_list.field_names, init_list.count);
         break;
     case AST_IMPORT: STR(import_stmt.path); STRINGS(import_stmt.symbols, import_stmt.symbol_count); break;
+    case AST_RETURN: STR(ret.trace_note); break;
     default: break;
     }
 #undef STR

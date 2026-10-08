@@ -1,0 +1,13 @@
+// An imported trait's default is instantiated in the importing module.
+import { Describe } from "defaultCross_lib.mln";
+
+struct Item { i32 n; };
+
+impl Describe for Item {
+    i32 (Item *self) id() { return self->n; }
+}
+
+i32 main() {
+    Item it = Item { n: 42 };
+    return it.tagged();
+}

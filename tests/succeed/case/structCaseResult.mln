@@ -1,0 +1,38 @@
+// A case that produces a struct stores it into its destination, for a
+// declaration, an assignment, a return, and `?` on a struct-carrying Result.
+// Each arm starts from the state before the case, so an arm may move a value
+// another arm also reads.
+import { Result } from "@std/core/result.mln";
+import { Option } from "@std/core/option.mln";
+
+struct Pair { i32 a; i32 b; };
+enum E { Bad }
+
+Result<Pair, E> make(i32 x) {
+    if (x == 0) { return Err(E::Bad); }
+    return Ok(Pair { a: x, b: x * 10 });
+}
+
+Result<i32, E> total(i32 x) {
+    Pair p = make(x)?;
+    return Ok(p.a + p.b);
+}
+
+Pair pick(Option<Pair> o, Pair other) {
+    return case o of { Some(p) -> p; None -> other; };
+}
+
+Pair fallback(i32 b) { return Pair { a: 0, b: b }; }
+
+i32 main() {
+    Option<Pair> some = Some(Pair { a: 2, b: 3 });
+    Option<Pair> none = None;
+    Option<Pair> again = Some(Pair { a: 5, b: 6 });
+    Pair first = case some of { Some(p) -> p; None -> fallback(1); };
+    Pair second = fallback(2);
+    second = case none of { Some(p) -> p; None -> fallback(9); };
+    Pair third = pick(again, fallback(4));
+    i32 t = case total(4) of { Ok(n) -> n; Err(_) -> 0; };
+    i32 bad = case total(0) of { Ok(_) -> 1; Err(_) -> 0; };
+    return first.b * 10000 + second.b * 1000 + third.a * 100 + t + bad;  // 39544
+}

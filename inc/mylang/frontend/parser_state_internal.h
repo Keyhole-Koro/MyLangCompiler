@@ -78,6 +78,36 @@ typedef struct GenericMethodTable {
     int count;
 } GenericMethodTable;
 
+typedef struct TraitDef TraitDef;
+typedef struct ImplDef ImplDef;
+
+/* Declared and imported traits, and the impls visible in this module
+ * (parser_trait.c). */
+typedef struct TraitTable {
+    TraitDef **traits;
+    int count;
+} TraitTable;
+
+typedef struct ImplTable {
+    ImplDef **impls;
+    int count;
+} ImplTable;
+
+/* One `dyn Trait<Args>` spelling used in this module (parser_trait_dyn.c).
+ * Every occurrence was rewritten to the one `placeholder` type name; the
+ * trait reference is kept as tokens until the module's traits are known. */
+typedef struct DynUse {
+    char *placeholder;
+    char *trait_name;
+    Token *trait_args;   /* owned copy of `<...>`, ending in EOT; NULL if none */
+    /* The arguments, parsed once the module's types are known and made
+     * concrete with the program's (instantiate_generics()). */
+    ASTNode **args;
+    int arg_count;
+    int line;
+    int col;
+} DynUse;
+
 typedef struct ParserSymbolState {
     StructTable structs;
     FunctionTable functions;
@@ -99,6 +129,20 @@ typedef struct ParserSymbolState {
     GenericTemplateTable exported_payload_enums;
     EnumConstant *enum_constants;
     int enum_constant_count;
+    TraitTable traits;
+    ImplTable impls;
+    /* Names imported through an `@alias/...` path. A trait or type among them
+     * belongs to another source tree, which the orphan rule consults. */
+    char **foreign_names;
+    int foreign_name_count;
+    /* Exported impls of imported modules, borrowed from their Module. Each
+     * becomes visible once parsing has seen every import, if its type is
+     * visible here (resolve_imported_impls). */
+    struct Module **pending_impl_modules;
+    ImplDef **pending_impls;
+    int pending_impl_count;
+    DynUse *dyn_uses;
+    int dyn_use_count;
 } ParserSymbolState;
 
 typedef struct ParserModuleState {

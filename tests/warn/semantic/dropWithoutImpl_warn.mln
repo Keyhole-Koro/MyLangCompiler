@@ -1,0 +1,13 @@
+// A drop() method still runs automatically, but `impl Drop` should say so.
+struct Resource {
+    i32 handle;
+};
+
+void (Resource *self) drop() {
+    self->handle = 0;
+}
+
+i32 main() {
+    Resource r = Resource { handle: 1 };
+    return r.handle;
+}

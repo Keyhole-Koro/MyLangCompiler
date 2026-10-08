@@ -523,6 +523,59 @@ static void tag_enum_roles(Token **tokens, size_t token_count, int *source_roles
     free((void *)enum_names);
 }
 
+/* The engine records declarations only outside braces, so the items of an
+ * `impl`/`trait` body would be missing from the outline. Add the method and
+ * function names declared directly in such a body, in source order. */
+static int symbol_index_order(const void *a, const void *b) {
+    const SyntaxSymbol *x = a, *y = b;
+    return (x->token_index > y->token_index) - (x->token_index < y->token_index);
+}
+
+static void add_trait_body_symbols(const SyntaxTable *table, Token **tokens, size_t token_count,
+                                   const int *roles, SyntaxSymbol *symbols, size_t capacity,
+                                   size_t *symbol_count) {
+    int depth = 0;
+    int in_body = 0;
+    TokenKind head = EOT;
+    size_t added = 0;
+    for (size_t i = 0; i < token_count; i++) {
+        TokenKind kind = tokens[i]->kind;
+        if (depth == 0 && head == EOT && kind != EXPORT) head = kind;
+        if (kind == L_BRACE) {
+            if (depth == 0) in_body = head == IMPL || head == TRAIT;
+            depth++;
+            continue;
+        }
+        if (kind == R_BRACE) {
+            if (depth > 0) depth--;
+            if (depth == 0) head = EOT;
+            continue;
+        }
+        if (depth == 0 && kind == SEMICOLON) {
+            head = EOT;
+            continue;
+        }
+        if (!in_body || depth != 1 || !roles[i] || i + 1 >= token_count ||
+            tokens[i + 1]->kind != L_PARENTHESES)
+            continue;
+        const char *role = syntax_label_name(table, roles[i]);
+        if (!role || (strcmp(role, "method") != 0 && strcmp(role, "function") != 0)) continue;
+        if (*symbol_count >= capacity) break;
+        symbols[*symbol_count].token_index = (int)i;
+        symbols[*symbol_count].kind = roles[i];
+        (*symbol_count)++;
+        added++;
+    }
+    if (added) qsort(symbols, *symbol_count, sizeof(SyntaxSymbol), symbol_index_order);
+}
+
+/* `dyn Trait`: `dyn` is an ordinary identifier to the lexer; before a trait
+ * name it makes a type of it, so the grammar sees only the trait name. */
+static int is_dyn_prefix(Token **tokens, size_t token_count, size_t i) {
+    return i + 1 < token_count && tokens[i]->kind == IDENTIFIER && tokens[i]->value &&
+           strcmp(tokens[i]->value, "dyn") == 0 && tokens[i + 1]->kind == IDENTIFIER;
+}
+
 static AngleKind *classify_generic_angles(Token **tokens, size_t token_count) {
     AngleKind *angles = calloc(token_count ? token_count : 1, sizeof(AngleKind));
     const char **generic_names = NULL;
@@ -547,6 +600,22 @@ static AngleKind *classify_generic_angles(Token **tokens, size_t token_count) {
         if (tokens[i]->kind == L_BRACE) brace_depth++;
         else if (tokens[i]->kind == R_BRACE && brace_depth > 0) brace_depth--;
 
+        /* `dyn Iterator<i32>`: the trait reference reads as a type. */
+        if (is_dyn_prefix(tokens, token_count, i) && i + 2 < token_count && tokens[i + 2]->kind == LT) {
+            size_t close_index = 0;
+            if (find_angle_close(tokens, token_count, i + 2, &close_index))
+                mark_generic_span(tokens, angles, i + 2, close_index);
+            continue;
+        }
+
+        /* `impl<T: Eq> Eq for Box<T>` */
+        if (tokens[i]->kind == IMPL && i + 1 < token_count && tokens[i + 1]->kind == LT) {
+            size_t close_index = 0;
+            if (find_angle_close(tokens, token_count, i + 1, &close_index))
+                mark_generic_span(tokens, angles, i + 1, close_index);
+            continue;
+        }
+
         if (i + 2 >= token_count || tokens[i]->kind != IDENTIFIER || tokens[i + 1]->kind != LT)
             continue;
 
@@ -554,10 +623,13 @@ static AngleKind *classify_generic_angles(Token **tokens, size_t token_count) {
         if (!find_angle_close(tokens, token_count, i + 1, &close_index)) continue;
         TokenKind next_kind = close_index + 1 < token_count ? tokens[close_index + 1]->kind : EOT;
         int is_type_declaration = i > 0 &&
-            (tokens[i - 1]->kind == STRUCT || tokens[i - 1]->kind == ENUM) &&
+            (tokens[i - 1]->kind == STRUCT || tokens[i - 1]->kind == ENUM ||
+             tokens[i - 1]->kind == TRAIT) &&
             next_kind == L_BRACE;
+        /* `impl From<SsdError> for FsError` */
+        int is_impl_trait = i > 0 && tokens[i - 1]->kind == IMPL && next_kind == FOR;
         int is_function_declaration = brace_depth == 0 && next_kind == L_PARENTHESES;
-        if (!is_type_declaration && !is_function_declaration) continue;
+        if (!is_type_declaration && !is_function_declaration && !is_impl_trait) continue;
 
         generic_name_add(&generic_names, &generic_name_count, tokens[i]->value);
         mark_generic_span(tokens, angles, i + 1, close_index);
@@ -674,6 +746,7 @@ static int check_tokens(
             i = cast_end;
             continue;
         }
+        if (generic_depth == 0 && is_dyn_prefix(source_tokens, source_count, i)) continue;
         if (angles[i] == ANGLE_GENERIC_OPEN) {
             generic_depth++;
             continue;
@@ -690,6 +763,9 @@ static int check_tokens(
 
     SyntaxResult result = syntax_parse_token_ids_ex(
         table, token_ids, token_count, roles, symbols, parse_capacity, &symbol_count);
+
+    add_trait_body_symbols(table, token_refs, token_count, roles, symbols, parse_capacity,
+                           &symbol_count);
 
     for (size_t i = 0; i < token_count; i++) {
         if (roles[i] != 0) source_roles[token_source_indices[i]] = roles[i];

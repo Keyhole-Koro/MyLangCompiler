@@ -16,6 +16,8 @@ Certain types are considered "Copy" and are duplicated instead of moved:
 - Booleans
 - Enumerations
 - Pointers and Shared References (`&T`)
+- Structs with an explicit `impl Copy`, when every field is Copy and the type
+  does not implement `Drop`
 
 ## 2. Borrowing
 

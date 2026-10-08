@@ -1,0 +1,6 @@
+// `dyn` names a trait.
+struct Shape { i32 area; };
+i32 main() {
+    dyn Shape s;
+    return 0;
+}

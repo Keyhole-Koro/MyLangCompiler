@@ -1,0 +1,37 @@
+// Sibling and nested blocks may declare the same name with different types.
+// Each declaration is its own variable: its own type, size, and storage.
+
+struct Small {
+    i32 a;
+    i32 b;
+};
+
+struct Large {
+    i32 x;
+    i32 y;
+    i32 z;
+};
+
+i32 pick(i32 which) {
+    if (which == 0) {
+        Large request = Large { x: 1, y: 2, z: 3 };
+        return request.x + request.y + request.z;
+    }
+    if (which == 1) {
+        Small request = Small { a: 10, b: 20 };
+        i32 guard = 7;
+        request.b = request.b + guard;
+        return request.a + request.b;
+    }
+    i32 request = 100;
+    {
+        Large request = Large { x: 4, y: 5, z: 6 };
+        if (request.z != 6) { return -1; }
+    }
+    return request;
+}
+
+i32 main() {
+    // 6 + 37 + 100
+    return pick(0) + pick(1) + pick(2);
+}

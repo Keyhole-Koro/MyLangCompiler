@@ -86,6 +86,15 @@ int collect_local_type_info(CompilerContext *cc, ASTNode *node, LocalInfo *arr) 
     case AST_SIZEOF:
         n += collect_local_type_info(cc, node->sizeof_expr.expr, arr ? (arr + n) : NULL);
         break;
+    /* Kept in step with collect_locals(): the two walks must find the same
+     * declarations in the same order. */
+    case AST_CAST:
+        n += collect_local_type_info(cc, node->cast.expr, arr ? (arr + n) : NULL);
+        break;
+    case AST_INIT_LIST:
+        for (int i = 0; i < node->init_list.count; i++)
+            n += collect_local_type_info(cc, node->init_list.elements[i], arr ? (arr + n) : NULL);
+        break;
     default:
         break;
     }

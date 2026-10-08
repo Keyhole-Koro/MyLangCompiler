@@ -1,0 +1,12 @@
+package dupboxes;
+import { Eq } from "@std/core/cmp.mln";
+export struct Box<T> { T value; };
+export impl<T: Eq> Eq for Box<T> {
+    bool (Self *self) eq(Self *other) { return self->value == other->value; }
+}
+export i32 lib_same(i32 x) {
+    Box<i32> a = Box<i32> { value: x };
+    Box<i32> b = Box<i32> { value: 3 };
+    if (a == b) { return 1; }
+    return 0;
+}

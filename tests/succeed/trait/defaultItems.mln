@@ -1,0 +1,61 @@
+// A trait item with a body is a default: an impl that leaves it out gets the
+// body with Self (and the trait's parameters) spelled as the impl's types.
+import { Option } from "@std/core/option.mln";
+
+trait Shape {
+    i32 (Self *self) area();
+    // Defaults may call the trait's other items through self or Self.
+    i32 (Self *self) double_area() { return self.area() * 2; }
+    i32 (Self *self) sides() { return 0; }
+    Self unit() { return Self::make(1); }
+    Self make(i32 n);
+}
+
+struct Square { i32 side; };
+struct Tri { i32 base; i32 height; };
+
+impl Shape for Square {
+    i32 (Square *self) area() { return self->side * self->side; }
+    i32 (Square *self) sides() { return 4; }
+    Square make(i32 n) { return Square { side: n }; }
+}
+
+impl Shape for Tri {
+    i32 (Tri *self) area() { return self->base * self->height / 2; }
+    Tri make(i32 n) { return Tri { base: n, height: n }; }
+}
+
+trait Counter<T> {
+    Option<T> (Self *self) next();
+    // A default written against the trait's own parameter T.
+    i32 (Self *self) count() {
+        i32 n = 0;
+        while (1) {
+            Option<T> item = self.next();
+            i32 more = case item of { Some(_) -> 1; None -> 0; };
+            if (more == 0) { break; }
+            n++;
+        }
+        return n;
+    }
+}
+
+struct Upto { i32 at; i32 end; };
+
+impl Counter<i32> for Upto {
+    Option<i32> (Upto *self) next() {
+        if (self->at >= self->end) { return None; }
+        self->at = self->at + 1;
+        return Some(self->at);
+    }
+}
+
+i32 main() {
+    Square s = Square { side: 3 };
+    Tri t = Tri { base: 4, height: 5 };
+    Square one = Square::unit();
+    Upto u = Upto { at: 0, end: 6 };
+    // 18 + 4 + 20 + 0 + 1 + 6
+    return s.double_area() * 1000000 + s.sides() * 100000 + t.double_area() * 1000
+         + t.sides() * 100 + one.side * 10 + u.count();
+}

@@ -166,6 +166,21 @@ static int infer_recv_shape(ParserContext *ctx, MethodScope *scope, ASTNode *exp
     }
     case AST_CAST:
         return shape_from_type_ast(expr->cast.type, out);
+    case AST_BINARY: {
+        /* `items[i]` is `*(items + i)`: pointer arithmetic keeps the
+         * pointer's shape. */
+        if (expr->binary.op != ADD && expr->binary.op != SUB) return 0;
+        RecvShape side;
+        if (infer_recv_shape(ctx, scope, expr->binary.left, &side) && side.pointer_level > 0) {
+            *out = side;
+            return 1;
+        }
+        if (infer_recv_shape(ctx, scope, expr->binary.right, &side) && side.pointer_level > 0) {
+            *out = side;
+            return 1;
+        }
+        return 0;
+    }
     case AST_UNARY:
         if (expr->unary.op == ASTARISK) {
             RecvShape inner;

@@ -21,6 +21,13 @@ static inline int token_is_name(const Token *tok) {
     return tok && (tok->kind == IDENTIFIER || tok->kind == TEST || tok->kind == FN);
 }
 
+/* `from` is the `import ... from` keyword, but it is also the natural name of
+ * the conversion function of the `From` trait. It is accepted as a name
+ * wherever a member, method, or associated function is spelled. */
+static inline int token_is_member_name(const Token *tok) {
+    return token_is_name(tok) || (tok && tok->kind == FROM);
+}
+
 static inline void set_node_loc_from_tokens(ASTNode *node, Token *primary, Token *fallback) {
     Token *tok = primary ? primary : fallback;
     if (!node) return;
@@ -59,6 +66,7 @@ int looks_like_generic_function(ParserContext *context, Token *cur);
 Token *generic_function_type_params_start(ParserContext *context, Token *cur);
 int looks_like_fun_literal(ParserContext *context, Token *cur);
 int looks_like_method(ParserContext *context, Token *cur);
+int looks_like_for_in(ParserContext *context, Token *cur);
 
 ASTNode *parse_base_type(ParserContext *context, Token **cur);
 void parse_struct_members(ParserContext *context, Token **cur, ASTNode ***members, int *member_count);
@@ -101,12 +109,20 @@ ASTNode *parse_stmt(ParserContext *context, Token **cur);
 ASTNode *parse_fundef(ParserContext *context, Token **cur);
 ASTNode *parse_method(ParserContext *context, Token **cur);
 ASTNode *parse_generic_fundef(ParserContext *context, Token **cur);
+/* `out_bounds` receives the per-parameter bound lists (see
+ * fundef.type_param_bounds), or NULL when nothing is bounded. Pass NULL to
+ * discard them. */
 char **parse_type_params(ParserContext *context, Token **cur, int *out_count,
-                         unsigned char **out_is_const, int add_to_scope);
+                         unsigned char **out_is_const, int add_to_scope,
+                         ASTNode ***out_bounds);
 ASTNode **parse_type_args(ParserContext *context, Token **cur, int *out_count);
 void instantiate_generics(ParserContext *context, ASTNode *program);
 void load_imported_generic_templates(ParserContext *context, ASTNode *import_node, const char *source_path);
 void load_imported_plain_types(ParserContext *context, ASTNode *import_node, const char *source_path);
+/* Copies the declaration of a type that `mod` names in a signature (and the
+ * types its fields name) into this module, unless it is already visible. */
+struct Module;
+void import_type_dependency(ParserContext *context, struct Module *mod, const char *type_name);
 ASTNode *parse_import(ParserContext *context, Token **cur);
 ASTNode *parse_toplevel(ParserContext *context, Token **cur);
 ASTNode *parse_program_syntax(ParserContext *context, Token **cur);

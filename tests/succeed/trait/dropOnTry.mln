@@ -1,0 +1,43 @@
+// An owner with `impl Drop` is dropped on every exit path, including the early
+// return of `?` and a conversion through From.
+import { Result } from "@std/core/result.mln";
+import { Drop } from "@std/core/drop.mln";
+import { From } from "@std/core/convert.mln";
+
+i32 g_log = 0;
+
+struct Guard { i32 id; };
+
+impl Drop for Guard {
+    void (Self *self) drop() { g_log = g_log * 10 + self->id; }
+}
+
+enum LowError { Broken }
+enum HighError { Low(i32) }
+
+impl From<LowError> for HighError = HighError::Low(7);
+
+Result<i32, LowError> step(i32 x) {
+    if (x == 0) { return Err(LowError::Broken); }
+    return Ok(x);
+}
+
+Result<i32, HighError> work(i32 x) {
+    Guard a = Guard { id: 1 };
+    i32 v = step(x)?;
+    Guard b = Guard { id: 2 };
+    i32 w = step(x - 1)?;
+    return Ok(v + w);
+}
+
+i32 main() {
+    Result<i32, HighError> ok = work(3);       // drops b then a: 21
+    i32 after_ok = g_log;
+    g_log = 0;
+    Result<i32, HighError> first = work(0);    // fails before b: 1
+    i32 after_first = g_log;
+    g_log = 0;
+    Result<i32, HighError> second = work(1);   // fails after b: 21
+    i32 code = case second of { Ok(_) -> 0; Err(HighError::Low(c)) -> c; };
+    return after_ok * 10000 + after_first * 1000 + g_log * 10 + code;  // 211217
+}

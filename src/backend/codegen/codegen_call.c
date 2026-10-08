@@ -626,6 +626,43 @@ void gen_call_sret(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
     int argc = node->call.arg_count;
     note_direct_call_import(cc, node->call.name);
 
+    /* An argument that is itself an aggregate-returning call leaves its
+     * temporary on the stack, between the argument pushes and the
+     * destination slot the caller pushed. Reserve the register argument
+     * slots first and address them, and the destination, past every
+     * accumulated temporary -- the same layout gen_call uses. */
+    if (has_direct_aggregate_return_argument(cc, node, sig)) {
+        if (argc > 3 || (sig && sig->is_variadic)) {
+            fprintf(stderr,
+                    "Codegen error: direct aggregate call results can only be passed to a non-variadic call with at most three arguments; bind it to a variable first\n");
+            exit(1);
+        }
+        int slot_bytes = argc * SLOT_SIZE;
+        int aggregate_temp_bytes = 0;
+        sb_append(sb, "  ; reserve register argument slots (sret call)\n");
+        sb_append(sb, "  addis sp, -%d\n", slot_bytes);
+        for (int i = 0; i < argc; i++) {
+            aggregate_temp_bytes += gen_arg_word(
+                cc, node->call.args[i], sb, "r1", params, param_count,
+                locals, local_count, sig_arg_is_aggregate(cc, sig, i),
+                node->call.name, i);
+            sb_append(sb, "  mov r2, sp\n  addis r2, %d\n  store r2, r1\n",
+                      aggregate_temp_bytes + i * SLOT_SIZE);
+        }
+        for (int i = 0; i < argc; i++) {
+            sb_append(sb, "  mov r2, sp\n  addis r2, %d\n  load %s, r2\n",
+                      aggregate_temp_bytes + i * SLOT_SIZE, arg_regs[i]);
+        }
+        sb_append(sb, "  ; load hidden out-pointer for by-value return\n");
+        sb_append(sb, "  mov r4, sp\n  addis r4, %d\n  load r4, r4\n",
+                  aggregate_temp_bytes + slot_bytes);
+        sb_append(sb, "  call %s\n", direct_call_target(node->call.name));
+        clear_moved_call_args(cc, node, sig, sb);
+        sb_append(sb, "  ; release aggregate call arguments, slots, and destination\n");
+        sb_append(sb, "  addis sp, %d\n", aggregate_temp_bytes + slot_bytes + SLOT_SIZE);
+        return;
+    }
+
     int stack_args = argc > 3 ? (argc - 3) : 0;
     if (stack_args > 0)
     {

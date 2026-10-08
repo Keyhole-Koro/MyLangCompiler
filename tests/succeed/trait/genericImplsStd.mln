@@ -1,0 +1,48 @@
+// Generic impls of the language traits: Drop runs for every Guard<T>,
+// for-in walks any Cursor<T>, and From builds a Wrapper<T> from a T.
+import { Option } from "@std/core/option.mln";
+import { Iterator } from "@std/core/iter.mln";
+import { From } from "@std/core/convert.mln";
+import { Drop } from "@std/core/drop.mln";
+
+i32 g_dropped = 0;
+
+struct Guard<T> { T value; i32 id; };
+
+impl<T> Drop for Guard<T> {
+    void (Self *self) drop() { g_dropped = g_dropped * 10 + self->id; }
+}
+
+struct Cursor<T> { T *items; i32 at; i32 len; };
+
+impl<T> Iterator<T> for Cursor<T> {
+    Option<T> (Self *self) next() {
+        if (self->at >= self->len) { return None; }
+        T item = self->items[self->at];
+        self->at = self->at + 1;
+        return Some(item);
+    }
+}
+
+struct Wrapper<T> { T inner; };
+
+impl<T> From<T> for Wrapper<T> {
+    Self from(T value) { return Self { inner: value }; }
+}
+
+void scope() {
+    Guard<i32> a = Guard<i32> { value: 1, id: 1 };
+    Guard<u8> b = Guard<u8> { value: (u8)2, id: 2 };
+}
+
+i32 main() {
+    scope();
+    i32 values[3];
+    values[0] = 4; values[1] = 5; values[2] = 6;
+    Cursor<i32> c = Cursor<i32> { items: &values[0], at: 0, len: 3 };
+    i32 sum = 0;
+    for (i32 v in c) { sum = sum + v; }
+    Wrapper<i32> w = Wrapper<i32>::from(7);
+    // drops: b then a -> 21
+    return g_dropped * 10000 + sum * 100 + w.inner;
+}

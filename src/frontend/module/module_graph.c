@@ -1,4 +1,5 @@
 #include "mylang/frontend/module.h"
+#include "mylang/frontend/parser_trait_internal.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -39,6 +40,14 @@ static void module_destroy(Module *module) {
         module->generic_methods = NULL;
         module->generic_method_count = 0;
     }
+    for (int i = 0; i < module->trait_count; i++) trait_def_free(module->traits[i]);
+    free(module->traits);
+    module->traits = NULL;
+    module->trait_count = 0;
+    for (int i = 0; i < module->impl_count; i++) impl_def_free(module->impls[i]);
+    free(module->impls);
+    module->impls = NULL;
+    module->impl_count = 0;
     if (module->symbols) {
         for (int i = 0; i < module->symbol_count; i++) {
             free(module->symbols[i].source_name);

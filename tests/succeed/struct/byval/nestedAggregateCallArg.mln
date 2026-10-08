@@ -1,0 +1,14 @@
+// An aggregate-returning call passed straight to another aggregate-returning
+// call keeps its temporary clear of the argument slots and the destination.
+struct Pair { i32 a; i32 b; };
+
+Pair make(i32 v) { Pair p = Pair { a: v, b: v * 2 }; return p; }
+Pair same(i32 tag, Pair p) { return p; }
+Pair swap(Pair p, i32 add) { Pair q = Pair { a: p.b + add, b: p.a + add }; return q; }
+
+i32 main() {
+    Pair r = same(1, make(7));            // 7, 14
+    Pair s = swap(make(3), 1);            // 7, 4
+    Pair t = same(2, swap(make(1), 0));   // 2, 1
+    return r.a * 1000000 + r.b * 10000 + s.a * 1000 + s.b * 100 + t.a * 10 + t.b;  // 7147421
+}

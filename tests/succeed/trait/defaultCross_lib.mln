@@ -1,0 +1,6 @@
+package shapes;
+
+export trait Describe {
+    i32 (Self *self) id();
+    i32 (Self *self) tagged() { return 1000 + self.id(); }
+}

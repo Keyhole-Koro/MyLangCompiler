@@ -1,0 +1,12 @@
+// A named literal nested in another initializes its field in place,
+// whatever the field's size.
+struct Point { i32 x; };
+struct Pair { Point a; Point b; i32 tag; };
+struct Wide { i32 p; i32 q; };
+struct Outer { Wide w; Point c; };
+
+i32 main() {
+    Pair pair = Pair { a: Point { x: 3 }, b: Point { x: 4 }, tag: 5 };
+    Outer o = Outer { w: Wide { p: 6, q: 7 }, c: Point { x: 8 } };
+    return pair.a.x * 10000 + pair.b.x * 1000 + pair.tag * 100 + o.w.q * 10 + o.c.x;
+}

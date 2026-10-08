@@ -1,0 +1,44 @@
+// `?` propagates an error of another type through `impl From<Source> for
+// Target`, and `Target::from(value)` calls the conversion directly.
+import { Result } from "@std/core/result.mln";
+import { From } from "@std/core/convert.mln";
+
+enum SsdError { DeviceError, Timeout }
+enum FsError { NotFound, IoError(i32), BadFd(i32) }
+
+impl From<SsdError> for FsError {
+    FsError from(SsdError e) {
+        return case e of {
+            SsdError::DeviceError -> FsError::IoError(1);
+            SsdError::Timeout -> FsError::IoError(2);
+        };
+    }
+}
+
+Result<i32, SsdError> device(i32 x) {
+    if (x == 0) { return Err(SsdError::Timeout); }
+    return Ok(x);
+}
+
+Result<_, SsdError> flush(i32 x) {
+    if (x < 0) { return Err(SsdError::DeviceError); }
+    return Ok(_);
+}
+
+Result<i32, FsError> read(i32 x) {
+    flush(x)?;
+    i32 v = device(x)?;
+    return Ok(v * 2);
+}
+
+i32 main() {
+    Result<i32, FsError> a = read(5);
+    Result<i32, FsError> b = read(0);
+    Result<i32, FsError> c = read(-1);
+    FsError direct = FsError::from(SsdError::DeviceError);
+    i32 x = case a of { Ok(v) -> v; Err(_) -> 1000; };
+    i32 y = case b of { Ok(_) -> 2000; Err(FsError::IoError(code)) -> code; Err(_) -> 3000; };
+    i32 z = case c of { Ok(_) -> 4000; Err(FsError::IoError(code)) -> code; Err(_) -> 5000; };
+    i32 w = case direct of { FsError::IoError(code) -> code; _ -> 9; };
+    return x * 1000 + y * 100 + z * 10 + w;   // 10211
+}

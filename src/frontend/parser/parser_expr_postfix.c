@@ -36,10 +36,15 @@ static ASTNode *new_try_expr(ParserContext *context, ASTNode *target) {
     arms[1].key = new_call("Err", err_pattern_args, 1);
     ASTNode **return_args = malloc(sizeof(ASTNode *));
     return_args[0] = new_identifier(error_name);
-    ASTNode **statements = malloc(sizeof(ASTNode *) * 2);
+    /* A diverging arm needs no value, as with `None -> ({ break; })`; a
+     * placeholder yield after the return would only be reported as
+     * unreachable. */
+    ASTNode **statements = malloc(sizeof(ASTNode *));
     statements[0] = new_return(new_call("Err", return_args, 1));
-    statements[1] = new_yield(new_number("0")); // unreachable, fixes arm shape
-    arms[1].expr = new_stmt_expr(new_block(statements, 2));
+    statements[0]->ret.trace_kind = RET_TRACE_PROPAGATED;
+    statements[0]->line = target->line;
+    statements[0]->col = target->col;
+    arms[1].expr = new_stmt_expr(new_block(statements, 1));
 
     ASTNode *node = new_case_expr(target, arms, 2, NULL, 0);
     node->line = target->line;
@@ -68,7 +73,7 @@ ASTNode *parse_postfix(ParserContext *context, Token **cur) {
                              is_imported_package(context, node->identifier.name) &&
                              strcmp(node->identifier.name, "mock") == 0 &&
                              (*cur)->kind == OF;
-            if (!token_is_name(*cur) && !is_mock_of)
+            if (!token_is_member_name(*cur) && !is_mock_of)
                 parse_error(context, "expected identifier after '.'", *cur);
             char *member_name = is_mock_of ? "target" : (*cur)->value;
             *cur = (*cur)->next;
@@ -89,7 +94,7 @@ ASTNode *parse_postfix(ParserContext *context, Token **cur) {
             int line = node->line;
             int col = node->col;
             *cur = (*cur)->next;
-            if (!token_is_name(*cur))
+            if (!token_is_member_name(*cur))
                 parse_error(context, "expected identifier after '::'", *cur);
 
             Token *member_tok = *cur;
@@ -104,6 +109,7 @@ ASTNode *parse_postfix(ParserContext *context, Token **cur) {
                 char text[32];
                 snprintf(text, sizeof(text), "%ld", enum_value);
                 node = new_number(text);
+                node->number.enum_name = strndup(qualified, strcspn(qualified, ":"));
             } else {
                 node = new_identifier(qualified);
             }

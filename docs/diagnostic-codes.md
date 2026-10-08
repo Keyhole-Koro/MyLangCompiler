@@ -51,6 +51,7 @@ Bands `E06xx` and above are unused and reserved for future categories.
 | Code | Category | Meaning | Example message |
 | --- | --- | --- | --- |
 | `W0001` | Warning | Unreachable statement | `unreachable statement` |
+| `W0002` | Warning | `drop()` method without `impl Drop` | `T has drop() without `impl Drop`; ...` |
 
 Warnings can be promoted to errors with warnings-as-errors mode.
 

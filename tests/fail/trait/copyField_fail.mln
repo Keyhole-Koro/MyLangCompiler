@@ -1,0 +1,8 @@
+import { Copy } from "@std/core/copy.mln";
+
+struct Inner { i32 value; };
+struct Outer { Inner inner; };
+
+/* A Copy marker must be structural: a non-Copy field cannot be smuggled into
+ * a Copy outer value. */
+impl Copy for Outer {}

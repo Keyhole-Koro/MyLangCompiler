@@ -223,6 +223,21 @@ static void import_member_types(ParserContext *context, Module *mod, ASTNode *de
     } else if (decl->type == AST_TYPEDEF_STRUCT) {
         members = decl->typedef_struct.members;
         member_count = decl->typedef_struct.member_count;
+    } else if (decl->type == AST_ENUM) {
+        /* A payload enum is laid out with one field per variant, so each
+         * payload's type is part of its size: `Filesystem(SpawnFilesystemError)`
+         * needs SpawnFilesystemError here, or the importer sizes that field as
+         * one word and disagrees with the defining module about the whole
+         * enum (and every Result carrying it). */
+        for (int i = 0; i < decl->enum_stmt.member_count; i++) {
+            ASTNode *m = decl->enum_stmt.members[i];
+            ASTNode *type = m && m->type == AST_ENUM_MEMBER ? m->enum_member.payload_type : NULL;
+            if (!type || type->type != AST_TYPE || !type->type_node.base_type ||
+                type->type_node.base_type->type != AST_IDENTIFIER)
+                continue;
+            import_plain_dependency(context, mod, type->type_node.base_type->identifier.name);
+        }
+        return;
     } else {
         return;
     }
@@ -242,6 +257,21 @@ static void import_member_types(ParserContext *context, Module *mod, ASTNode *de
  * This is also used by generic templates: for example importing
  * FsSeekArgs<Out> must carry its SeekWhence enum into the instantiating
  * module, even though SeekWhence was not named in that module's import list. */
+static ASTNode *preserved_payload_enum(ParserContext *context, const char *name) {
+    FrontendSession *session = context->session;
+    if (!session || !session->graph) return NULL;
+    for (int m = 0; m < session->graph->module_count; m++) {
+        Module *module = session->graph->modules[m];
+        for (int i = 0; module && i < module->exported_payload_enum_count; i++) {
+            ASTNode *candidate = module->exported_payload_enums[i];
+            if (candidate && candidate->type == AST_ENUM && candidate->enum_stmt.name &&
+                strcmp(candidate->enum_stmt.name, name) == 0)
+                return candidate;
+        }
+    }
+    return NULL;
+}
+
 static void import_plain_dependency(ParserContext *context, Module *mod,
                                     const char *type_name) {
     if (!context || !mod || !type_name || mylang_type_is_builtin(type_name) ||
@@ -269,12 +299,24 @@ static void import_plain_dependency(ParserContext *context, Module *mod,
     }
     if (!dep) return; /* a type parameter, or declared in another module */
 
+    /* A payload enum in a module's program is already lowered to its tagged
+     * struct, which has lost the variant table this module's own lowering
+     * needs for `Code(x)` and `Code(c) -> ...`. Use the pre-lowering clone
+     * its declaring module kept (see Module.exported_payload_enums); it may
+     * be a module other than `mod`, which only carries a copy. */
+    ASTNode *preserved = preserved_payload_enum(context, type_name);
+    if (preserved) dep = preserved;
+
     ASTNode *copy = ast_clone(dep);
     if (copy->type == AST_STRUCT && strncmp(type_name, "__mlg_", 6) == 0)
         copy->struct_stmt.is_imported_instance = 1;
     add_typename(context, type_name);            /* before recursing: closes cycles */
     import_member_types(context, mod, copy);     /* its own fields' types first */
     add_imported_plain_type(context, copy);
+}
+
+void import_type_dependency(ParserContext *context, Module *mod, const char *type_name) {
+    import_plain_dependency(context, mod, type_name);
 }
 
 void load_imported_plain_types(ParserContext *context, ASTNode *import_node,

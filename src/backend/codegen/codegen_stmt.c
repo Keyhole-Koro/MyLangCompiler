@@ -193,6 +193,20 @@ void gen_struct_literal_into_addr(CompilerContext *cc, ASTNode *literal,
             exit(1);
         }
 
+        /* A nested named literal has its own destination: this member's
+         * address, whatever its size.  Its recursive initializer will zero
+         * and populate the complete aggregate, including omitted fields. */
+        if (literal->init_list.elements[i]->type == AST_INIT_LIST &&
+            literal->init_list.elements[i]->init_list.struct_type_name) {
+            sb_append(sb, "  push %s\n", dest_addr_reg);
+            sb_append(sb, "  mov r3, %s\n", dest_addr_reg);
+            if (member->offset) sb_append(sb, "  addis r3, %d\n", member->offset);
+            gen_struct_literal_into_addr(cc, literal->init_list.elements[i], sb, "r3",
+                                         params, param_count, locals, local_count);
+            sb_append(sb, "  pop %s\n", dest_addr_reg);
+            continue;
+        }
+
         if (member->total_size_bytes > SLOT_SIZE) {
             if (literal->init_list.elements[i]->type == AST_STRING_LITERAL &&
                 member->base_type && strcmp(member->base_type, "str") == 0) {
@@ -201,20 +215,6 @@ void gen_struct_literal_into_addr(CompilerContext *cc, ASTNode *literal,
                 emit_string_literal_into_addr(cc, literal->init_list.elements[i], sb, "r3");
                 continue;
             }
-            /* A nested named literal has its own destination: this member's
-             * address.  Its recursive initializer will zero and populate the
-             * complete aggregate, including any omitted fields. */
-            if (literal->init_list.elements[i]->type == AST_INIT_LIST &&
-                literal->init_list.elements[i]->init_list.struct_type_name) {
-                sb_append(sb, "  push %s\n", dest_addr_reg);
-                sb_append(sb, "  mov r3, %s\n", dest_addr_reg);
-                if (member->offset) sb_append(sb, "  addis r3, %d\n", member->offset);
-                gen_struct_literal_into_addr(cc, literal->init_list.elements[i], sb, "r3",
-                                             params, param_count, locals, local_count);
-                sb_append(sb, "  pop %s\n", dest_addr_reg);
-                continue;
-            }
-
             if (call_return_aggregate_size(cc, literal->init_list.elements[i]) > 0) {
                 sb_append(sb, "  push %s\n", dest_addr_reg);
                 sb_append(sb, "  mov r1, %s\n", dest_addr_reg);
@@ -260,6 +260,30 @@ void gen_struct_literal_into_addr(CompilerContext *cc, ASTNode *literal,
             emit_store_width_to_addr(sb, "r2", "r1", member->total_size_bytes);
         }
     }
+}
+
+/* `--error-trace`: records this return in @std/debug/error_trace.mln as
+ * `file.mln:line function`, plus the From conversion on a `?` hop. Runs after
+ * the returned value is stored (sret) or pushed (r1), so the call may clobber
+ * every scratch register. */
+static void emit_error_trace_note(CompilerContext *cc, ASTNode *node, StringBuilder *sb) {
+    const char *path = codegen_current_source_path();
+    const char *file = path ? strrchr(path, '/') : NULL;
+    file = file ? file + 1 : (path ? path : "<input>");
+    const char *func = cc->current_func && cc->current_func->type == AST_FUNDEF
+        ? cc->current_func->fundef.name : "?";
+    char site[512];
+    if (node->ret.trace_note)
+        snprintf(site, sizeof(site), "%s:%d %s (%s)", file, node->line, func, node->ret.trace_note);
+    else
+        snprintf(site, sizeof(site), "%s:%d %s", file, node->line, func);
+    const char *label = intern_string_literal(cc, site);
+    sb_append(sb, "  ; error trace: %s\n", node->ret.trace_kind == RET_TRACE_ORIGIN ? "origin" : "propagated");
+    sb_append(sb, "  movi  r5, %s\n", label);
+    sb_append(sb, "  movi  r6, %d\n", node->ret.trace_kind);
+    sb_append(sb, "  call error_trace_note\n");
+    note_import_func(cc, "error_trace_note");
+    codegen_note_error_trace_used();
 }
 
 void gen_stmt(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
@@ -461,6 +485,8 @@ static void gen_stmt_labeled(CompilerContext *cc, ASTNode *node, StringBuilder *
             sb_append(sb, "  store r3, r1\n");
         }
         if (node->ret.expr && !cc->sret_active) sb_append(sb, "  push r1\n");
+        if (node->ret.trace_kind != RET_TRACE_NONE && codegen_error_trace_enabled())
+            emit_error_trace_note(cc, node, sb);
         emit_defer_active_from(cc, 0, sb, params, param_count, locals, local_count);
         if (node->ret.expr && !cc->sret_active) sb_append(sb, "  pop r1\n");
         sb_append(sb, "  \n; return\n");

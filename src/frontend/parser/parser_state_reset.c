@@ -1,4 +1,5 @@
 #include "mylang/frontend/parser_internal.h"
+#include "mylang/frontend/parser_trait_internal.h"
 #include "mylang/frontend/module.h"
 
 /* Clears the active parser context so declarations cannot leak between
@@ -106,6 +107,32 @@ void parser_context_reset(ParserContext *context) {
         context->symbols.generic_methods.methods = NULL;
         context->symbols.generic_methods.count = 0;
     }
+
+    for (int i = 0; i < context->symbols.traits.count; i++)
+        trait_def_free(context->symbols.traits.traits[i]);
+    free(context->symbols.traits.traits);
+    context->symbols.traits.traits = NULL;
+    context->symbols.traits.count = 0;
+    for (int i = 0; i < context->symbols.impls.count; i++)
+        impl_def_free(context->symbols.impls.impls[i]);
+    free(context->symbols.impls.impls);
+    context->symbols.impls.impls = NULL;
+    context->symbols.impls.count = 0;
+    for (int i = 0; i < context->symbols.foreign_name_count; i++)
+        free(context->symbols.foreign_names[i]);
+    free(context->symbols.foreign_names);
+    context->symbols.foreign_names = NULL;
+    context->symbols.foreign_name_count = 0;
+    for (int i = 0; i < context->symbols.dyn_use_count; i++)
+        dyn_use_free(&context->symbols.dyn_uses[i]);
+    free(context->symbols.dyn_uses);
+    context->symbols.dyn_uses = NULL;
+    context->symbols.dyn_use_count = 0;
+    free(context->symbols.pending_impl_modules);
+    free(context->symbols.pending_impls);
+    context->symbols.pending_impl_modules = NULL;
+    context->symbols.pending_impls = NULL;
+    context->symbols.pending_impl_count = 0;
 
     if (context->module.exports) {
         for (int i = 0; i < context->module.export_count; i++) {

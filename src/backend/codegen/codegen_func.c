@@ -137,7 +137,10 @@ void gen_func(CompilerContext *cc, ASTNode *node, StringBuilder *sb)
         sb_append(sb, "  addis r3, %d\n", cc->drop_return_offset);
         sb_append(sb, "  load r1, r3\n");
     }
-    sb_append(sb, "  addis sp, %d\n", frame_slots * SLOT_SIZE);
+    /* Restore sp from bp rather than by the frame size: a `return` reached
+     * mid-expression -- `?` inside a call argument or a struct literal field
+     * -- jumps here with that expression's temporaries still pushed. */
+    sb_append(sb, "  mov sp, bp\n");
     sb_append(sb, "; epilogue\n  pop  bp\n  pop  lr\n");
 
     if (strcmp(fname, "__START__") != 0)

@@ -1,0 +1,57 @@
+import { Option } from "@std/core/option.mln";
+import { From } from "@std/core/convert.mln";
+
+trait Eq {
+    bool (Self *self) eq(Self *other);
+    bool (Self *self) ne(Self *other) { return !self.eq(other); }
+}
+
+export trait Iterator<T> {
+    Option<T> (Self *self) next();
+}
+
+enum SsdError { DeviceError }
+enum FsError { IoError, NotFound }
+struct Counter { i32 n; };
+
+impl From<SsdError> for FsError = FsError::IoError;
+
+export impl Iterator<i32> for Counter {
+    Option<i32> (Counter *self) next() { return None; }
+}
+
+T convert<T: From<S> + Eq, S>(S value) {
+    return T::from(value);
+}
+
+i32 sum(Counter c) {
+    i32 total = 0;
+    for (i32 x in c) { total = total + x; }
+    return total;
+}
+
+struct Box<T> { T value; };
+
+impl<T: Eq> Eq for Box<T> {
+    bool (Self *self) eq(Box<T> *other) { return self->value == other->value; }
+}
+
+impl From<i32> for Box<i32> {
+    Self from(i32 v) { return Self { value: v }; }
+}
+
+i32 use_box() {
+    Box<i32> b = Box<i32>::from(3);
+    return b.value;
+}
+
+trait Shape {
+    i32 (Self *self) area();
+}
+
+i32 total(dyn Shape *shapes, i32 n) {
+    dyn Iterator<i32> it;
+    i32 sum = 0;
+    for (i32 i = 0; i < n; i++) { sum = sum + shapes[i].area(); }
+    return sum;
+}

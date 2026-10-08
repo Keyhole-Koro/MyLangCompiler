@@ -60,6 +60,7 @@ int main(int argc, char *argv[]) {
     }
     codegen_set_call_redirects(opts.call_redirects, opts.call_redirect_count);
     semantic_set_warnings_as_errors(opts.warnings_as_errors);
+    codegen_set_error_trace(opts.error_trace);
 
     int rc = path_is_dir(opts.input_path)
         ? run_directory_mode(&opts)

@@ -1,0 +1,10 @@
+// Both modules instantiate Eq for Box<i32>; each keeps its own copy.
+import { Box } from "genericImplDup_lib.mln";
+import dupboxes from "genericImplDup_lib.mln";
+i32 main() {
+    Box<i32> a = Box<i32> { value: 3 };
+    Box<i32> b = Box<i32> { value: 3 };
+    i32 r = dupboxes.lib_same(3) * 10;
+    if (a == b) { r = r + 1; }
+    return r;
+}

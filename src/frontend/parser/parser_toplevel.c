@@ -3,6 +3,7 @@
 #include "mylang/frontend/lexer.h"
 #include "mylang/frontend/module.h"
 #include "mylang/frontend/resolver.h"
+#include "mylang/frontend/parser_trait_internal.h"
 #include <limits.h>
 
 /* Returns 1 if the .mln file at `rel_path` declares `package <pkg>;` at its top.
@@ -19,8 +20,38 @@ static int import_path_declares_package(ParserContext *context, const char *rel_
     return strcmp(mod->package_name, pkg) == 0;
 }
 
+static int module_declares(const Module *module, const char *name) {
+    for (int i = 0; i < module->symbol_count; i++)
+        if (module->symbols[i].source_name && strcmp(module->symbols[i].source_name, name) == 0)
+            return 1;
+    for (int i = 0; i < module->trait_count; i++)
+        if (strcmp(module->traits[i]->name, name) == 0) return 1;
+    return 0;
+}
+
+/* `import X from "f.mln";` imports the package when f.mln declares
+ * `package X;` and otherwise the symbol X. A name that is neither -- an
+ * attempt to give the package another name -- would silently import nothing
+ * and leave every `X.f()` unresolved, so it is rejected here. */
+static void check_imported_names(ParserContext *context, Module *module, const char *path,
+                                 char **symbols, int count, Token *at) {
+    for (int i = 0; i < count; i++) {
+        if (module_declares(module, symbols[i])) continue;
+        char message[512];
+        if (module->package_name && count == 1) {
+            snprintf(message, sizeof(message),
+                     "'%s' declares package '%s' and nothing named '%s'; a package is imported "
+                     "by its own name: import %s from \"%s\";",
+                     path, module->package_name, symbols[i], module->package_name, path);
+        } else {
+            snprintf(message, sizeof(message), "'%s' declares nothing named '%s'", path, symbols[i]);
+        }
+        parse_error(context, message, at);
+    }
+}
+
 static ASTNode *make_import_node_with_templates(ParserContext *context, char *path,
-                                                char **symbols, int count) {
+                                                char **symbols, int count, Token *at) {
     ASTNode *node = new_import_stmt(path, symbols, count);
     if (!module_loader_is_mylang_source(path)) return node;
 
@@ -32,12 +63,20 @@ static ASTNode *make_import_node_with_templates(ParserContext *context, char *pa
     if (!module || module->state == MODULE_FAILED) {
         parse_error(context, "failed to load imported MyLang module", context->token_head);
     }
+    /* A module still loading is part of an import cycle; its symbols are not
+     * collected yet. */
+    if (module->state == MODULE_LOADED) check_imported_names(context, module, path, symbols, count, at);
+    /* Traits first: they take their own names out of the import list, and
+     * an `@alias/...` import marks every listed name foreign before the type
+     * loaders below remove the names they handle. */
+    load_imported_traits(context, node, path, module);
     load_imported_generic_templates(context, node, path);
     load_imported_plain_types(context, node, path);
     return node;
 }
 
 ASTNode *parse_import(ParserContext *context, Token **cur) {
+    Token *import_tok = *cur;
     if (!expect(cur, IMPORT)) parse_error(context, "expected 'import'", *cur);
 
     if (token_is_name(*cur) && (*cur)->next && (*cur)->next->kind == SEMICOLON) {
@@ -72,12 +111,12 @@ ASTNode *parse_import(ParserContext *context, Token **cur) {
                 frontend_session_add_root_imported_package(context->session, ident);
             }
             char **symbols = NULL;
-            return make_import_node_with_templates(context, path, symbols, 0);
+            return make_import_node_with_templates(context, path, symbols, 0, import_tok);
         }
 
         char **symbols = malloc(sizeof(char *));
         symbols[0] = ident;
-        return make_import_node_with_templates(context, path, symbols, 1);
+        return make_import_node_with_templates(context, path, symbols, 1, import_tok);
     }
 
     if (!expect(cur, L_BRACE)) parse_error(context, "expected '{'", *cur);
@@ -108,7 +147,7 @@ ASTNode *parse_import(ParserContext *context, Token **cur) {
 
     if (!expect(cur, SEMICOLON)) parse_error(context, "expected ';'", *cur);
 
-    return make_import_node_with_templates(context, path, symbols, count);
+    return make_import_node_with_templates(context, path, symbols, count, import_tok);
 }
 
 /* `@name`, `@name(arg, key = literal, ...)`. The parser only records
@@ -205,6 +244,8 @@ static ASTNode *parse_toplevel_decl(ParserContext *context, Token **cur) {
     }
 
     if ((*cur)->kind == IMPORT) return parse_import(context, cur);
+    if ((*cur)->kind == TRAIT) return parse_trait(context, cur, want_export);
+    if ((*cur)->kind == IMPL) return parse_impl(context, cur, want_export);
     if ((*cur)->kind == TYPEDEF) return parse_typedef(context, cur, want_export);
     if ((*cur)->kind == NEWTYPE) return parse_newtype(context, cur, want_export);
     if ((*cur)->kind == STRUCT) {
@@ -322,13 +363,27 @@ static ASTNode *parse_toplevel_decl(ParserContext *context, Token **cur) {
 
 ASTNode *parse_program_syntax(ParserContext *context, Token **cur) {
     context->token_head = cur ? *cur : NULL;
+    if (cur) rewrite_dyn_types(context, *cur);
     ASTNode **nodes = NULL;
     int count = 0;
     while ((*cur)->kind != EOT) {
+        int is_impl = (*cur)->kind == IMPL ||
+                      ((*cur)->kind == EXPORT && (*cur)->next && (*cur)->next->kind == IMPL);
         ASTNode *node = parse_toplevel(context, cur);
         if (!node) continue;
+        if (is_impl) {
+            /* An impl's items are ordinary top-level functions from here on. */
+            nodes = realloc(nodes, sizeof(ASTNode*) * (count + node->block.count));
+            for (int i = 0; i < node->block.count; i++) nodes[count++] = node->block.stmts[i];
+            free(node->block.stmts);
+            free(node);
+            continue;
+        }
         nodes = realloc(nodes, sizeof(ASTNode*) * (count + 1));
         nodes[count++] = node;
     }
-    return new_block(nodes, count);
+    resolve_imported_impls(context);
+    ASTNode *program = new_block(nodes, count);
+    synthesize_dyn_types(context, program);
+    return program;
 }

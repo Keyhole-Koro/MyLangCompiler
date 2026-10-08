@@ -71,6 +71,8 @@ typedef enum {
 typedef struct ASTNode ASTNode;
 
 
+enum { RET_TRACE_NONE = 0, RET_TRACE_ORIGIN = 1, RET_TRACE_PROPAGATED = 2 };
+
 typedef struct {
     ASTNode *key;
     ASTNode *expr;
@@ -117,7 +119,14 @@ struct ASTNode {
     Attribute *attrs;
     int attr_count;
     union {
-        struct { char *value; } number;
+        struct {
+            char *value;
+            /* `Code::A` of a numeric enum folds to its value at parse time;
+             * the enum's name is kept for passes that dispatch on type
+             * (an associated-function call choosing between From<Code> and
+             * From<i32>). NULL for a written number. */
+            char *enum_name;
+        } number;
         struct { char *name; } identifier;
         struct { TokenKind op; ASTNode *left, *right; } binary;
         struct { ASTNode *left, *right; } assign;
@@ -173,7 +182,15 @@ struct ASTNode {
         struct { TokenKind op; ASTNode *operand; } unary;
         struct { ASTNode *expr; } expr_stmt;
         struct { ASTNode *cond, *then_stmt, *else_stmt; } if_stmt;
-        struct { ASTNode *expr; } ret;
+        struct {
+            ASTNode *expr;
+            /* Error return trace (`mlc --error-trace`): RET_TRACE_ORIGIN for a
+             * written `return Err(...)`, RET_TRACE_PROPAGATED for the return
+             * a `?` expands to. `trace_note` names a From conversion on that
+             * hop ("SsdError -> FsError"), or is NULL. */
+            int trace_kind;
+            char *trace_note;
+        } ret;
         struct { ASTNode *expr; } yield_stmt;
         struct { ASTNode **stmts; int count; } block;
         struct { ASTNode *body; } defer_stmt;
@@ -207,6 +224,11 @@ struct ASTNode {
              * argument is an integer constant rather than a type. */
             unsigned char *type_param_is_const;
             int type_param_count;
+            /* Parallel to type_params, or NULL when no parameter is bounded:
+             * `<T: Eq + From<S>>` stores an AST_BLOCK whose statements are
+             * the bound trait references (AST_TYPE), NULL for an unbounded
+             * parameter. Checked when the template is instantiated. */
+            ASTNode **type_param_bounds;
             /* Non-NULL only for a method (`void (ref User u) display()`):
              * the receiver's base type name. The receiver itself already
              * lives in params[0] by the time parsing finishes -- this field
@@ -271,6 +293,10 @@ struct ASTNode {
             char **type_params;
             unsigned char *type_param_is_const;
             int type_param_count;
+            /* Parallel to type_params, or NULL: `struct Set<T: Hash + Eq>`
+             * stores each parameter's bounds as fundef.type_param_bounds
+             * does. Checked when an instance is created. */
+            ASTNode **type_param_bounds;
             int is_exported;
             char *package;
             /* A generic instantiation (`__mlg_s_...`) copied in from an
@@ -300,6 +326,10 @@ struct ASTNode {
             char **type_params;
             unsigned char *type_param_is_const;
             int type_param_count;
+            /* Parallel to type_params, or NULL: `struct Set<T: Hash + Eq>`
+             * stores each parameter's bounds as fundef.type_param_bounds
+             * does. Checked when an instance is created. */
+            ASTNode **type_param_bounds;
             int is_exported;
             char *package;
             int has_payloads;

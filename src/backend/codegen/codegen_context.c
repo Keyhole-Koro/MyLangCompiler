@@ -2,6 +2,8 @@
 
 static const char *g_entry_name = "main";
 static const char *g_source_path = NULL;
+static int g_error_trace = 0;
+static int g_error_trace_used = 0;
 static const char **g_call_redirects = NULL;
 static int g_call_redirect_count = 0;
 
@@ -15,6 +17,22 @@ void codegen_set_entry(const char *name) {
 
 void codegen_set_source_path(const char *path) {
     g_source_path = path;
+}
+
+void codegen_set_error_trace(int enabled) {
+    g_error_trace = enabled;
+}
+
+int codegen_error_trace_enabled(void) {
+    return g_error_trace;
+}
+
+void codegen_note_error_trace_used(void) {
+    g_error_trace_used = 1;
+}
+
+int codegen_error_trace_used(void) {
+    return g_error_trace_used;
 }
 
 void codegen_set_call_redirects(const char **redirects, int count) {

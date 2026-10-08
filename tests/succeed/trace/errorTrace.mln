@@ -1,0 +1,47 @@
+// Built with --error-trace: every `return Err(...)` starts a trace and every
+// `?` adds the hop it returned through, including a From conversion.
+import { Result } from "@std/core/result.mln";
+import { From } from "@std/core/convert.mln";
+import error_trace from "@std/debug/error_trace.mln";
+
+enum DiskError { Timeout, }
+enum FsError { Io, }
+
+impl From<DiskError> for FsError = FsError::Io;
+
+Result<i32, DiskError> wait() {
+    return Err(DiskError::Timeout);
+}
+
+Result<i32, DiskError> read_block() {
+    i32 v = wait()?;
+    return Ok(v);
+}
+
+Result<i32, FsError> read_file() {
+    i32 v = read_block()?;
+    return Ok(v);
+}
+
+Result<i32, FsError> open_and_read() {
+    i32 v = read_file()?;
+    return Ok(v + 1);
+}
+
+bool same(char *a, char *b) {
+    if (a == 0 || b == 0) { return false; }
+    i32 i = 0;
+    while (a[i] != 0 && a[i] == b[i]) { i++; }
+    return a[i] == b[i];
+}
+
+i32 main() {
+    Result<i32, FsError> r = open_and_read();
+    i32 failed = case r of { Ok(_) -> 0; Err(_) -> 1; };
+    i32 score = failed * 100000 + error_trace.depth() * 10000;
+    if (same(error_trace.site(0), "errorTrace.mln:13 wait")) { score = score + 1000; }
+    if (same(error_trace.site(1), "errorTrace.mln:17 read_block")) { score = score + 100; }
+    if (same(error_trace.site(2), "errorTrace.mln:22 read_file (DiskError -> FsError)")) { score = score + 10; }
+    if (same(error_trace.site(3), "errorTrace.mln:27 open_and_read")) { score = score + 1; }
+    return score;
+}

@@ -15,6 +15,7 @@ char *codegen_with_session(ASTNode *root, FrontendSession *session)
             ASTNode *fn = cg_as_fundef(block->block.stmts[i]);
             if (fn && fn->fundef.name && fn->fundef.body) {
                 note_defined_func(cc, fn->fundef.name);
+                codegen_give_locals_unique_names(fn);
             }
         }
     }

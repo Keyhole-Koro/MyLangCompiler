@@ -60,6 +60,8 @@ The main groups are:
 - `parser_ast_*.c`: AST node construction helpers
 - `parser_rewrite*.c`: export name rewrite passes
 - `parser_lower*.c`: function literal lowering
+- `parser_trait.c`: `trait`/`impl` declarations, impl records, and their import ([Traits](traits.md))
+- `parser_trait_lower.c`: trait-backed lowering (`Type::name(...)`, `==` via Eq, for-in iterators)
 - `parser_check.c`: parser-side validation after lowering
 - `parser_print*.c`: AST printing helpers
 - `parser_free.c`: AST cleanup
@@ -138,6 +140,7 @@ It is grouped around the shape of the code being emitted.
 - `codegen_binop*.c`: binary operator emission split by logic/pointer/math behavior
 - `codegen_slots.c`: frame slot calculations
 - `codegen_locals.c`: local collection and stack lookups
+- `codegen_scope_names.c`: gives locals redeclared in nested or sibling scopes function-unique names before emission
 - `codegen_func.c`: function prologue/body/epilogue emission
 - `codegen_type_*.c`: type inference, type collection, typedef/struct lookup
 

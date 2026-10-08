@@ -60,8 +60,10 @@ ordered by their layout dependencies before the existing backend sees them.
   `import identity from "math.mln";` allows `identity<i32>(...)`. The
   specialization is emitted by the importing translation unit, not the library.
   Package-qualified generic imports and re-exporting imported templates are not
-  supported yet. No implicit type-argument inference, constraints, or overloads
-  are introduced here.
+  supported yet. No implicit type-argument inference or overloads are
+  introduced here. Trait bounds on a generic function's parameters
+  (`<T: Eq + From<S>, S>`) are checked per instantiation; see
+  [Traits](traits.md).
 - Existing concrete-type semantics and calling conventions still apply.
   This pass does not add aggregate return/copy support, value-carrying enums,
   `Result`, destructors, or error propagation.

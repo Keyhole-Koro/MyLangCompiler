@@ -46,5 +46,6 @@
 
 /* W00xx: warnings */
 #define SEMCODE_UNREACHABLE_STATEMENT "W0001"
+#define SEMCODE_DROP_WITHOUT_IMPL "W0002"
 
 #endif

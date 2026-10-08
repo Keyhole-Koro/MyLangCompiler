@@ -1,0 +1,4 @@
+// impl names a trait, which must be declared or imported.
+struct P { i32 x; };
+impl Hash for P { }
+i32 main() { return 0; }

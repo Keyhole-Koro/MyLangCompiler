@@ -2,6 +2,7 @@
 #include "mylang/frontend/parser_rewrite_internal.h"
 #include "mylang/frontend/parser_internal.h"
 #include "mylang/frontend/parser_state_internal.h"
+#include "mylang/frontend/parser_trait_internal.h"
 
 #include <limits.h>
 #include <stdio.h>
@@ -341,6 +342,10 @@ Module *module_loader_load(ModuleLoader *loader, const char *importer_path, cons
         ctx.symbols.exported_payload_enums.declarations = NULL;
         ctx.symbols.exported_payload_enums.count = 0;
     }
+
+    /* Traits and exported impls outlive this parser context the same way:
+     * an importer copies them out of the module (load_imported_traits). */
+    transfer_traits_to_module(&ctx, module);
 
     /* Collect symbol declarations and exports */
     collect_module_symbols(module, &ctx);

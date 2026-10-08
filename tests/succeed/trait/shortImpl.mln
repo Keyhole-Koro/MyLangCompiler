@@ -1,0 +1,26 @@
+// `impl Trait for Type = value;` implements a trait's one associated
+// function with a fixed result, and a type may implement From<A> and From<B>.
+import { From } from "@std/core/convert.mln";
+
+enum Code { A, B }
+enum Level { Low, Mid, High }
+
+impl From<Code> for Level = Level::High;
+impl From<i32> for Level {
+    Level from(i32 n) {
+        if (n > 5) { return Level::Mid; }
+        return Level::Low;
+    }
+}
+
+T convert<T: From<S>, S>(S value) {
+    return T::from(value);
+}
+
+i32 main() {
+    Level a = Level::from(Code::A);
+    Level b = Level::from(9);
+    Level c = convert<Level, i32>(1);
+    Level d = convert<Level, Code>(Code::B);
+    return a * 1000 + b * 100 + c * 10 + d;   // 2102
+}

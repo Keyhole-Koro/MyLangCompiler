@@ -1,0 +1,23 @@
+// `impl Drop` gives a type deterministic cleanup, exactly like the legacy
+// method named drop().
+import { Drop } from "@std/core/drop.mln";
+
+i32 g_dropped = 0;
+
+struct Guard { i32 id; };
+
+impl Drop for Guard {
+    void (Guard *self) drop() {
+        g_dropped = g_dropped * 10 + self->id;
+    }
+}
+
+void scope() {
+    Guard a = Guard { id: 1 };
+    Guard b = Guard { id: 2 };
+}
+
+i32 main() {
+    scope();
+    return g_dropped;   // reverse declaration order: 21
+}

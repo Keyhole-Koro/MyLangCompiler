@@ -1,0 +1,25 @@
+// Bounds on a generic struct and enum: the methods may rely on them.
+import { Eq } from "@std/core/cmp.mln";
+
+struct Point { i32 x; i32 y; };
+
+impl Eq for Point {
+    bool (Point *self) eq(Point *other) { return self->x == other->x && self->y == other->y; }
+}
+
+struct Pair<T: Eq> { T left; T right; };
+
+bool (Pair<T> *self) same() { return self->left == self->right; }
+
+enum Slot<T: Eq> { Full(T), Empty };
+
+i32 main() {
+    Pair<Point> a = Pair<Point> { left: Point { x: 1, y: 2 }, right: Point { x: 1, y: 2 } };
+    Pair<i32> b = Pair<i32> { left: 3, right: 4 };
+    Slot<Point> s = Full(Point { x: 5, y: 6 });
+    i32 r = 0;
+    if (a.same()) { r = r + 100; }
+    if (!b.same()) { r = r + 10; }
+    r = r + case s of { Full(p) -> p.x; Empty -> 0; };
+    return r;
+}

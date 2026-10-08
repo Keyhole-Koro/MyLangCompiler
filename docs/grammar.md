@@ -17,6 +17,7 @@ A program consists of a sequence of top-level declarations and definitions.
     - `enum_decl`
     - `fundef`
     - `var_decl`
+    - `trait_decl`, `impl_decl` (see [Traits](traits.md))
 
 ## 2. Modules and Imports
 MyLang uses a package-based module system.
@@ -26,6 +27,12 @@ MyLang uses a package-based module system.
     - `import IDENTIFIER ;` (Import entire package)
     - `import IDENTIFIER from STRING_LITERAL ;` (Import specific symbol from a file)
     - `import { IDENTIFIER ( , IDENTIFIER )* } from STRING_LITERAL ;` (Import multiple symbols)
+
+`import X from "f.mln";` imports the package when `f.mln` declares
+`package X;`, and otherwise the symbol `X` that `f.mln` declares. A package
+cannot be imported under another name: a name that is neither the package nor
+a declared symbol is an error that suggests the package's own name. Every name
+in `import { ... }` must likewise be declared by the imported file.
 - `export_decl` -> `export ( fundef | var_decl | typedef_stmt | struct_decl | enum_decl )`
 - `extern_decl` -> `extern ( fundef | var_decl )`
 
@@ -94,8 +101,16 @@ U (ref Box<U> box) get() { return box.value; }
 
 When `Box<i32>` is used, the compiler specializes both the struct and this
 method, then resolves `box.get()` to the concrete method. Receiver-bound type
-arguments must currently be distinct identifiers; method-level type parameters
-cannot be combined with a generic receiver yet.
+arguments must be distinct identifiers. A list after the method name attaches
+trait bounds to that same receiver-bound list; it must repeat every parameter
+in the same order:
+
+```mylang
+bool (HashMap<K, V> *map) put<K: Hash + Eq, V>(K key, V value) { ... }
+```
+
+This is not a second, method-local set of type parameters. The bounds are
+checked whenever `HashMap<K, V>` is specialized.
 
 #### The built-in `str` type
 
@@ -287,9 +302,10 @@ Each newtype has nominal identity while keeping its base scalar's size,
 alignment, and calling convention. Construction and extraction are explicit;
 arithmetic requires extracting the base value first.
 - `type` -> `const* ( ref mut? )? base_type ( * )*`
-- `base_type` -> `primitive_type` | `IDENTIFIER type_args?`
+- `base_type` -> `primitive_type` | `IDENTIFIER type_args?` | `dyn IDENTIFIER type_args?` (a trait object; see [Traits](traits.md))
 - `generic_params` -> `< generic_param ( , generic_param )* >`
-- `generic_param` -> `IDENTIFIER` | `const IDENTIFIER`
+- `generic_param` -> `IDENTIFIER ( : bound ( + bound )* )?` | `const IDENTIFIER`
+- `bound` -> `IDENTIFIER type_args?` (a trait; see [Traits](traits.md))
 - `type_args` -> `< generic_arg ( , generic_arg )* >`
 - `generic_arg` -> `type` | `NUMBER`
 - `primitive_type` -> `u8` | `u16` | `i32` | `u32` | `bool` | `char` | `float` | `double` | `void` | `long` | `short`
@@ -307,6 +323,7 @@ Generic uses are concretely instantiated before semantic analysis. See
     - `while ( expr ) stmt`
     - `do stmt while ( expr ) ;`
     - `for ( (var_decl | expr)? ; expr? ; expr? ) stmt`
+    - `for ( type IDENTIFIER in expr ) stmt` (over an `Iterator`; `in` is contextual)
     - `return expr? ;`
     - `break ;`
     - `continue ;`
@@ -335,10 +352,19 @@ Expressions are listed in order of decreasing precedence.
 | 11 | `+`, `-` | Addition / Subtraction |
 | 12 | `*`, `/`, `%` | Multiplication / Division / Modulo |
 | 13 | `!`, `~`, `-`, `*`, `&`, `++`, `--`, `(type)`, `sizeof` | Unary operators |
-| 14 | `++`, `--`, `.`, `->`, `(args)`, `type_args (args)` | Postfix operators / Function call |
+| 14 | `++`, `--`, `.`, `->`, `(args)`, `type_args (args)`, `?` | Postfix operators / Function call / Result propagation |
 | 15 | `( expr )`, literals, `IDENTIFIER`, `Type { fields }`, `Type<T...> { fields }`, `case`, lambdas | Primary expressions |
 
 ### Special Expressions
+- **Result propagation**: `expr?` on a `Result<T, E>` yields the `Ok` value or
+  returns `Err` from the enclosing function, converting the error through
+  `impl From<E> for F` when the function returns `Result<_, F>`. A `?` is
+  postfix only where it ends the expression (before `;`, `,`, `)`, `]`, `}`);
+  elsewhere it is the ternary.
+- **Associated function call**: `Type::name(args)` calls an associated
+  function of a trait impl for `Type`, e.g. `FsError::from(e)`.
+- **Equality through Eq**: `a == b` and `a != b` call `Eq::eq` when `a`'s type
+  implements `Eq`. See [Traits](traits.md).
 - **Named Struct Literal**: `Point { x: 1, y: 2 }` or `Box<i32> { value: 42 }`.
   Generic type arguments specialize the struct before member validation and
   code generation; omitted fields are zero-initialized.

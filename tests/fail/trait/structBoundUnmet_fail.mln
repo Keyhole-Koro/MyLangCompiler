@@ -1,0 +1,10 @@
+// A generic struct's bound is checked when an instance is created.
+import { Eq } from "@std/core/cmp.mln";
+
+struct Point { i32 x; };
+struct Box<T: Eq> { T value; };
+
+i32 main() {
+    Box<Point> b;
+    return 0;
+}

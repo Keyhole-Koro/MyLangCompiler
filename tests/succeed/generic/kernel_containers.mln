@@ -14,6 +14,10 @@ import { Result, result_take_err }
     from "@std/core/result.mln";
 import { HashMap }
     from "@std/collections/hashmap.mln";
+import { Eq }
+    from "@std/core/cmp.mln";
+import { Hash }
+    from "@std/core/hash.mln";
 
 struct Node {
     i32 value;
@@ -70,11 +74,13 @@ i32 main() {
 
     i32 keys[8];
     i32 map_values[8];
-    HashMap<i32> map;
-    map.init(&keys[0], &map_values[0], keys.length);
-    map.put("answer", 11);
+    u8 map_used[8];
+    HashMap<i32, i32> map;
+    map.init(&keys[0], &map_values[0], &map_used[0], keys.length);
+    map.put(42, 11);
     i32 mapped = 0;
-    map.get("answer", &mapped);
+    i32 answer = 42;
+    map.get(&answer, &mapped);
 
     return value + *slice_value + *allocated + ring_value + option_value + error + front->value + mapped;
 }

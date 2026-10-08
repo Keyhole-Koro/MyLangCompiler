@@ -1,0 +1,55 @@
+import { Eq } from "@std/core/cmp.mln";
+import { Hash } from "@std/core/hash.mln";
+import { Copy } from "@std/core/copy.mln";
+import { HashMap } from "@std/collections/hashmap.mln";
+
+struct Pid { i32 value; };
+
+impl Eq for Pid {
+    bool (Pid *self) eq(Pid *other) {
+        return self->value == other->value;
+    }
+}
+
+/* Deliberately make every key collide, so the test exercises probing rather
+ * than only the primary bucket. */
+impl Hash for Pid {
+    u32 (Pid *self) hash() { return 0; }
+}
+
+impl Copy for Pid {}
+
+i32 main() {
+    Pid keys[4];
+    i32 values[4];
+    u8 used[4];
+    HashMap<Pid, i32> map;
+    map.init(&keys[0], &values[0], &used[0], 4);
+
+    Pid zero = Pid { value: 0 };
+    Pid one = Pid { value: 1 };
+    Pid two = Pid { value: 2 };
+    map.put(zero, 10);
+    map.put(one, 20);
+    map.put(two, 30);
+    map.put(one, 25);
+
+    i32 result = 0;
+    i32 value = 0;
+    Pid missing = Pid { value: 3 };
+    if (map.get(&zero, &value) && value == 10) { result = result + 1; }
+    if (map.get(&one, &value) && value == 25) { result = result + 10; }
+    if (map.get(&two, &value) && value == 30) { result = result + 100; }
+    if (!map.get(&missing, &value)) { result = result + 1000; }
+    if (map.len == 3) { result = result + 10000; }
+
+    str names_keys[4];
+    i32 names_values[4];
+    u8 names_used[4];
+    HashMap<str, i32> names;
+    names.init(&names_keys[0], &names_values[0], &names_used[0], 4);
+    names.put("app", 7);
+    str app = "app";
+    if (names.get(&app, &value) && value == 7) { result = result + 100000; }
+    return result;
+}

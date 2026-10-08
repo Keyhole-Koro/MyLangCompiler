@@ -138,6 +138,38 @@ static ASTNode *parse_identifier_primary(ParserContext *context, Token **cur) {
         return parse_struct_literal(context, cur, tok, type_args, type_arg_count);
     }
 
+    /* `Box<i32>::make(5)`: an associated function of a generic struct's
+     * instance. The call keeps its type arguments; instantiation names the
+     * instance (`<instance>::make`) for trait lowering to resolve. */
+    if ((*cur)->kind == LT && generic_type && generic_type->type == AST_STRUCT &&
+        after_args && after_args->kind == COLONCOLON) {
+        int type_arg_count = 0;
+        ASTNode **type_args = parse_type_args(context, cur, &type_arg_count);
+        if (!expect(cur, COLONCOLON)) parse_error(context, "expected '::'", *cur);
+        if (!token_is_member_name(*cur)) parse_error(context, "expected identifier after '::'", *cur);
+        char qualified[256];
+        snprintf(qualified, sizeof(qualified), "%s::%s", name, (*cur)->value);
+        *cur = (*cur)->next;
+        if (!expect(cur, L_PARENTHESES))
+            parse_error(context, "expected '(' after an associated function of a generic type", *cur);
+        ASTNode **args = NULL;
+        int arg_count = 0;
+        if ((*cur)->kind != R_PARENTHESES) {
+            while (1) {
+                args = realloc(args, sizeof(ASTNode *) * (size_t)(arg_count + 1));
+                args[arg_count++] = parse_expr(context, cur);
+                if ((*cur)->kind != COMMA) break;
+                *cur = (*cur)->next;
+            }
+        }
+        Token *end_tok = *cur;
+        if (!expect(cur, R_PARENTHESES)) parse_error(context, "expected ')' after args", *cur);
+        ASTNode *call = new_generic_call(qualified, type_args, type_arg_count, args, arg_count);
+        set_node_loc_from_tokens(call, tok, NULL);
+        set_node_end_from_token(call, end_tok);
+        return call;
+    }
+
     ASTNode **type_args = NULL;
     int type_arg_count = 0;
     ASTNode *generic_declaration = find_generic_function_template(context, name);

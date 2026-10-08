@@ -2,6 +2,7 @@
 #include "mylang/semantic/diagnostic_codes.h"
 #include "mylang/frontend/module.h"
 #include "mylang/frontend/resolver.h"
+#include "mylang/frontend/parser_trait_internal.h"
 
 typedef enum {
     EXPRCTX_READ = 0,
@@ -425,6 +426,7 @@ static int semantic_typeinfo_is_copy(SemanticContext *ctx, const SemanticTypeInf
     if (!base_type) return 0;
     if (semantic_enum_type_exists(ctx, base_type)) return 1;
     if (find_newtype(ctx, base_type)) return 1;
+    if (find_impl_for_name(parser_context_current(), "Copy", base_type)) return 1;
     return semantic_is_builtin_type(base_type);
 }
 
@@ -432,6 +434,65 @@ static int semantic_type_is_copy(SemanticContext *ctx, ASTNode *type_node) {
     if (!type_node) return 1;
     SemanticTypeInfo info;
     return semantic_typeinfo_from_type_ast(type_node, &info) && semantic_typeinfo_is_copy(ctx, &info);
+}
+
+static SemanticLocation semantic_location_from_impl(const ImplDef *impl) {
+    return (SemanticLocation){
+        .line = impl ? impl->line : 0,
+        .col = impl ? impl->col : 0,
+        .end_line = impl ? impl->line : 0,
+        .end_col = impl ? impl->col : 0,
+    };
+}
+
+/* A Copy impl is a marker, but it affects every ownership decision.  Check its
+ * structural promise after the parser has collected the layouts of local and
+ * imported structs. */
+static void semantic_validate_copy_impls(SemanticContext *ctx) {
+    ParserContext *parser = parser_context_current();
+    if (!parser) return;
+    for (int i = 0; i < impl_count(parser); i++) {
+        ImplDef *impl = impl_at(parser, i);
+        if (!impl || impl->is_template || strcmp(impl->trait_name, "Copy") != 0) continue;
+        if (find_impl_for_name(parser, "Drop", impl->self_name) ||
+            find_method(parser, impl->self_name, "drop")) {
+            semantic_error_at(ctx, semantic_location_from_impl(impl),
+                              "a type with drop() cannot implement Copy");
+            continue;
+        }
+        StructDef *def = find_structdef(parser, impl->self_name);
+        if (!def) continue; /* enums and newtypes are already Copy values. */
+        for (int f = 0; f < def->member_count; f++) {
+            ASTNode *member = def->members[f];
+            SemanticTypeInfo field;
+            if (member && member->type == AST_VAR_DECL &&
+                semantic_typeinfo_from_type_ast(member->var_decl.var_type, &field) &&
+                semantic_typeinfo_is_copy(ctx, &field)) continue;
+            semantic_error_at(ctx, semantic_location_from_impl(impl),
+                              "field '%s' is not Copy", member && member->type == AST_VAR_DECL
+                                  ? member->var_decl.name : "<unknown>");
+        }
+    }
+}
+
+/* A `drop()` method still runs automatically without `impl Drop` (the
+ * compatibility path), but the impl is what says so. Generic instances are
+ * skipped: impls for them are not supported yet. */
+static void semantic_warn_drop_without_impl(SemanticContext *ctx, ASTNode *root) {
+    ParserContext *parser = parser_context_current();
+    if (!parser || !root || root->type != AST_BLOCK) return;
+    for (int i = 0; i < root->block.count; i++) {
+        ASTNode *fn = root->block.stmts[i];
+        if (!fn || fn->type != AST_FUNDEF || !fn->fundef.body || !fn->fundef.recv_type_name) continue;
+        const char *recv = fn->fundef.recv_type_name;
+        size_t len = strlen(recv);
+        if (recv[0] == '_' && recv[1] == '_') continue;
+        if (strncmp(fn->fundef.name, recv, len) != 0 || strcmp(fn->fundef.name + len, "__drop") != 0) continue;
+        if (find_impl_for_name(parser, "Drop", recv)) continue;
+        semantic_warning_code_at(ctx, semantic_location_from_ast(fn), SEMCODE_DROP_WITHOUT_IMPL,
+                                 "%s has drop() without `impl Drop`; write `impl Drop for %s { ... }`",
+                                 recv, recv);
+    }
 }
 
 static const char *semantic_type_base_name(ASTNode *type_node) {
@@ -1662,26 +1723,55 @@ static void check_call_signature(SemanticContext *ctx, ASTNode *node) {
     }
 }
 
+/* `({ ...; return x; })` and the like leave instead of producing a value, so
+ * whatever they move is not moved for the code after the case. */
+static int case_arm_diverges(ASTNode *expr) {
+    if (!expr || expr->type != AST_STMT_EXPR || !expr->stmt_expr.block ||
+        expr->stmt_expr.block->type != AST_BLOCK || expr->stmt_expr.block->block.count == 0)
+        return 0;
+    ASTNode *last = expr->stmt_expr.block->block.stmts[expr->stmt_expr.block->block.count - 1];
+    return last && (last->type == AST_RETURN || last->type == AST_BREAK || last->type == AST_CONTINUE);
+}
+
+/* Each arm starts from the state before the case: only one of them runs, so
+ * a value moved by one arm is still available to the others. After the case,
+ * a value counts as moved if any arm that falls through moved it. */
 static void walk_case_items(SemanticContext *ctx, ASTNode *node, int allow_noop) {
-    for (int i = 0; i < node->case_expr.case_count; i++) {
-        semantic_walk_expr(ctx, node->case_expr.cases[i].key, EXPRCTX_READ);
-        if (node->case_expr.cases[i].is_noop) {
+    SemanticBindingSnapshot *base = malloc(sizeof(SemanticBindingSnapshot));
+    SemanticBindingSnapshot *merged = malloc(sizeof(SemanticBindingSnapshot));
+    SemanticBindingSnapshot *arm = malloc(sizeof(SemanticBindingSnapshot));
+    int have_merged = 0;
+    snapshot_bindings(ctx, base);
+
+    int arm_count = node->case_expr.case_count + 1;
+    for (int i = 0; i < arm_count; i++) {
+        int is_default = i == node->case_expr.case_count;
+        ASTNode *expr = is_default ? node->case_expr.default_expr : node->case_expr.cases[i].expr;
+        int is_noop = is_default ? node->case_expr.default_is_noop : node->case_expr.cases[i].is_noop;
+        restore_bindings(ctx, base);
+        if (!is_default) semantic_walk_expr(ctx, node->case_expr.cases[i].key, EXPRCTX_READ);
+        if (is_noop) {
             if (!allow_noop) {
                 semantic_error_at(ctx, semantic_location_from_ast(node),
                                   "a `-> _` case arm is only valid when the case is used as a statement");
             }
         } else {
-            semantic_walk_expr(ctx, node->case_expr.cases[i].expr, EXPRCTX_READ);
+            semantic_walk_expr(ctx, expr, EXPRCTX_READ);
+        }
+        if (case_arm_diverges(expr)) continue;
+        snapshot_bindings(ctx, arm);
+        if (!have_merged) {
+            *merged = *arm;
+            have_merged = 1;
+        } else {
+            merge_if_binding_states(ctx, base, merged, arm);
+            snapshot_bindings(ctx, merged);
         }
     }
-    if (node->case_expr.default_is_noop) {
-        if (!allow_noop) {
-            semantic_error_at(ctx, semantic_location_from_ast(node),
-                              "a `-> _` case arm is only valid when the case is used as a statement");
-        }
-    } else {
-        semantic_walk_expr(ctx, node->case_expr.default_expr, EXPRCTX_READ);
-    }
+    restore_bindings(ctx, have_merged ? merged : base);
+    free(base);
+    free(merged);
+    free(arm);
 }
 
 static void semantic_walk_case(SemanticContext *ctx, ASTNode *node, int allow_noop) {
@@ -2285,5 +2375,7 @@ void semantic_walk_ast(SemanticContext *ctx, ASTNode *node) {
     semantic_collect_user_types(ctx, node);
     semantic_collect_function_sigs(ctx, node);
     semantic_collect_imported_globals(ctx, node);
+    semantic_validate_copy_impls(ctx);
+    semantic_warn_drop_without_impl(ctx, node);
     semantic_walk_stmt(ctx, node);
 }

@@ -1,0 +1,12 @@
+// `?` converts an error only through `impl From<Source> for Target`; with the
+// trait declared but no impl, the propagation is rejected.
+import { Result } from "@std/core/result.mln";
+import { From } from "@std/core/convert.mln";
+
+enum SourceError { Source }
+enum TargetError { Target }
+
+Result<i32, SourceError> source() { return Err(SourceError::Source); }
+Result<i32, TargetError> target() { i32 v = source()?; return Ok(v); }
+
+i32 main() { return 0; }

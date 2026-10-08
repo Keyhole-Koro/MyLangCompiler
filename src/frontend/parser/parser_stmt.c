@@ -39,9 +39,99 @@ ASTNode *parse_do_while_stmt(ParserContext *context, Token **cur) {
     return new_do_while(cond, body);
 }
 
+/* `for (T x in iter) body` asks `iter` for items until its Iterator's next()
+ * returns None:
+ *
+ *     {
+ *         <iter type> __mlg_for_iter_N = iter;        // unless iter is a local
+ *         while (1) {
+ *             Option<T> __mlg_for_next_N = __mlg_for_iter_N.next();
+ *             case __mlg_for_next_N of {
+ *                 Option::Some(__mlg_for_item_N) -> 0;
+ *                 Option::None -> ({ break; });
+ *             };
+ *             T x = __mlg_for_next_N.Some;
+ *             body
+ *         }
+ *     }
+ *
+ * The item is read from the Some payload's field (Option lowers to a tagged
+ * struct with one field per variant) rather than yielded by the case: a case
+ * that yields a struct does not copy it into its destination yet.
+ *
+ * The iterator temporary's type is filled in by lower_trait_uses(), which
+ * also requires an Iterator impl for it. A local is iterated in place, so it
+ * is advanced by the loop just as next() calls would advance it. */
+static ASTNode *parse_for_in(ParserContext *context, Token **cur, Token *for_tok) {
+    ASTNode *item_type = parse_type(context, cur);
+    Token *name_tok = *cur;
+    *cur = (*cur)->next; /* loop variable */
+    *cur = (*cur)->next; /* in */
+    ASTNode *iter = parse_expr(context, cur);
+    if (!expect(cur, R_PARENTHESES)) parse_error(context, "expected ')' after for-in iterator", *cur);
+    ASTNode *body = parse_stmt(context, cur);
+    if (!find_generic_type_template(context, "Option"))
+        parse_error(context, "for-in needs Option: import { Option } from \"@std/core/option.mln\";",
+                    for_tok);
+
+    int id = context->lowering.payload_case_counter++;
+    char iter_name[48], next_name[48], item_name[48];
+    snprintf(iter_name, sizeof(iter_name), "__mlg_for_iter_%d", id);
+    snprintf(next_name, sizeof(next_name), "__mlg_for_next_%d", id);
+    snprintf(item_name, sizeof(item_name), "__mlg_for_item_%d", id);
+
+    ASTNode **outer = malloc(sizeof(ASTNode *) * 2);
+    int outer_count = 0;
+    ASTNode *iter_ref = iter;
+    if (iter->type != AST_IDENTIFIER || strstr(iter->identifier.name, "::")) {
+        ASTNode *placeholder = new_type_node(new_identifier("__mlg_for_iter_type"), 0, 0, REFKIND_NONE);
+        ASTNode *decl = new_var_decl_mut(placeholder, iter_name, iter, 1);
+        set_node_loc_from_tokens(decl, for_tok, NULL);
+        outer[outer_count++] = decl;
+        iter_ref = new_identifier(iter_name);
+    }
+
+    ASTNode **option_args = malloc(sizeof(ASTNode *));
+    option_args[0] = ast_clone(item_type);
+    ASTNode *option_type = new_type_node(new_generic_type("Option", option_args, 1), 0, 0, REFKIND_NONE);
+    ASTNode *next_call = new_call("next", NULL, 0);
+    next_call->call.recv = iter_ref;
+    set_node_loc_from_tokens(next_call, for_tok, NULL);
+    ASTNode *next_decl = new_var_decl(option_type, next_name, next_call);
+    set_node_loc_from_tokens(next_decl, for_tok, NULL);
+
+    CaseItem *arms = calloc(2, sizeof(CaseItem));
+    ASTNode **some_args = malloc(sizeof(ASTNode *));
+    some_args[0] = new_identifier(item_name);
+    arms[0].key = new_call("Option::Some", some_args, 1);
+    arms[0].expr = new_number("0");
+    arms[1].key = new_identifier("Option::None");
+    ASTNode **break_stmt = malloc(sizeof(ASTNode *));
+    break_stmt[0] = new_break();
+    arms[1].expr = new_stmt_expr(new_block(break_stmt, 1));
+    ASTNode *match = new_case_expr(new_identifier(next_name), arms, 2, NULL, 0);
+    set_node_loc_from_tokens(match, for_tok, NULL);
+    ASTNode *stop = new_expr_stmt(match);
+    ASTNode *item = new_member_access(new_identifier(next_name), "Some");
+    ASTNode *item_decl = new_var_decl(item_type, name_tok->value, item);
+    set_node_loc_from_tokens(item_decl, name_tok, NULL);
+
+    ASTNode **loop_stmts = malloc(sizeof(ASTNode *) * 4);
+    loop_stmts[0] = next_decl;
+    loop_stmts[1] = stop;
+    loop_stmts[2] = item_decl;
+    loop_stmts[3] = body;
+    ASTNode *loop = new_while(new_number("1"), new_block(loop_stmts, 4));
+    set_node_loc_from_tokens(loop, for_tok, NULL);
+    outer[outer_count++] = loop;
+    return new_block(outer, outer_count);
+}
+
 ASTNode *parse_for_stmt(ParserContext *context, Token **cur) {
+    Token *for_tok = *cur;
     if (!expect(cur, FOR)) parse_error(context, "expected 'for'", *cur);
     if (!expect(cur, L_PARENTHESES)) parse_error(context, "expected '(' after for", *cur);
+    if (looks_like_for_in(context, *cur)) return parse_for_in(context, cur, for_tok);
 
     // for (init; cond; inc)
     ASTNode *init = NULL, *cond = NULL, *inc = NULL;
@@ -95,6 +185,9 @@ ASTNode *parse_return_stmt(ParserContext *context, Token **cur) {
     if (!expect(cur, SEMICOLON)) parse_error(context, "expected ';' after return", *cur);
     ASTNode *node = new_return(expr);
     set_node_loc_from_tokens(node, start, NULL);
+    // `return Err(...)` is where an error return trace starts.
+    if (expr && expr->type == AST_CALL && expr->call.name && strcmp(expr->call.name, "Err") == 0)
+        node->ret.trace_kind = RET_TRACE_ORIGIN;
     if (expr) {
         set_node_range_from_children(node, node, expr);
     } else {

@@ -1,0 +1,10 @@
+import { Copy } from "@std/core/copy.mln";
+import { Drop } from "@std/core/drop.mln";
+
+struct Owner { i32 handle; };
+
+impl Drop for Owner {
+    void (Owner *self) drop() { self->handle = 0; }
+}
+
+impl Copy for Owner {}

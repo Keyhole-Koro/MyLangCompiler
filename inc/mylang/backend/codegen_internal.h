@@ -188,6 +188,8 @@ static inline ASTNode *cg_as_type_array(ASTNode *node) {
 
 void codegen_set_entry(const char *name);
 void codegen_set_source_path(const char *path);
+int codegen_error_trace_enabled(void);
+void codegen_note_error_trace_used(void);
 const char *codegen_current_source_path(void);
 int is_entry_name(const char *name);
 int next_label(CompilerContext *cc);
@@ -250,6 +252,9 @@ int typeinfo_from_type_ast(CompilerContext *cc, ASTNode *type_node, TypeInfo *ou
 int collect_local_type_info(CompilerContext *cc, ASTNode *node, LocalInfo *arr);
 int slots_for_type(CompilerContext *cc, ASTNode *type_node);
 int collect_locals(CompilerContext *cc, ASTNode *node, char **locals);
+/* Renames each local declared again in a nested or sibling scope to a
+ * function-unique spelling, so name-keyed slots never collide. */
+void codegen_give_locals_unique_names(ASTNode *fn);
 int find_var_offset(const char *name, char **params, int param_count, char **locals, int local_count, int *is_param);
 int is_comparison_op(TokenKind op);
 

@@ -99,6 +99,12 @@ int collect_locals(CompilerContext *cc, ASTNode *node, char **locals)
     case AST_SIZEOF:
         count += collect_locals(cc, node->sizeof_expr.expr, locals ? (locals + count) : NULL);
         break;
+    case AST_INIT_LIST:
+        /* `FileHandle { fd: open(path)? }`: a field value may declare the
+         * temporaries of a statement expression. */
+        for (int i = 0; i < node->init_list.count; i++)
+            count += collect_locals(cc, node->init_list.elements[i], locals ? (locals + count) : NULL);
+        break;
     default:
         break;
     }

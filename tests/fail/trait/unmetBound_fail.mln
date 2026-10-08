@@ -1,0 +1,5 @@
+// A bounded type parameter only accepts types that implement the bound.
+trait Eq { bool (Self *self) eq(Self *other); }
+struct P { i32 x; };
+bool same<T: Eq>(T *a, T *b) { return *a == *b; }
+i32 main() { P a; P b; return same<P>(&a, &b) ? 1 : 0; }

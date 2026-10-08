@@ -68,6 +68,13 @@ ASTNode *parse_expr_until_arrow(ParserContext *context, Token **cur) {
     return node;
 }
 
+// `for (T x in iter)`: a type, the loop variable, then the contextual `in`.
+int looks_like_for_in(ParserContext *context, Token *cur) {
+    Token *t = skip_type_tokens(context, cur);
+    return t && t->kind == IDENTIFIER && t->next && t->next->kind == IDENTIFIER &&
+           t->next->value && strcmp(t->next->value, "in") == 0;
+}
+
 // Look ahead to see if the current tokens form a function declaration/defn.
 int looks_like_function(ParserContext *context, Token *cur) {
     Token *t = skip_type_tokens(context, cur);
@@ -124,7 +131,22 @@ int looks_like_method(ParserContext *context, Token *cur) {
     }
     if (depth != 0) return 0;
 
-    return token_is_name(t) && t->next && t->next->kind == L_PARENTHESES;
+    if (!token_is_member_name(t)) return 0;
+    t = t->next;
+    /* A generic receiver may repeat its receiver-bound parameters here to
+     * attach trait bounds: `Box<T>::put<T: Eq>(...)`. */
+    if (t && t->kind == LT) {
+        int generic_depth = 1;
+        t = t->next;
+        while (t && generic_depth > 0) {
+            if (t->kind == LT) generic_depth++;
+            else if (t->kind == GT) generic_depth--;
+            else if (t->kind == RSH) generic_depth -= 2;
+            t = t->next;
+        }
+        if (generic_depth != 0) return 0;
+    }
+    return t && t->kind == L_PARENTHESES;
 }
 
 Token *generic_function_type_params_start(ParserContext *context, Token *cur) {
@@ -152,6 +174,36 @@ Token *generic_function_type_params_start(ParserContext *context, Token *cur) {
     if (!p || p->kind != IDENTIFIER) return NULL;
     while (p && p->kind == IDENTIFIER) {
         p = p->next;
+        /* `T: Eq + From<S>`: skip the bound list, including the bound's own
+         * type arguments. */
+        if (p && p->kind == COLON) {
+            p = p->next;
+            while (p && p->kind == IDENTIFIER) {
+                p = p->next;
+                if (p && p->kind == LT) {
+                    int depth = 1;
+                    p = p->next;
+                    while (p && depth > 0) {
+                        if (p->kind == LT) depth++;
+                        else if (p->kind == GT) depth--;
+                        else if (p->kind == RSH) depth -= 2;
+                        if (depth > 0) p = p->next;
+                    }
+                    /* `>>` closing both the bound and the parameter list. */
+                    if (!p) return NULL;
+                    if (p->kind == RSH) {
+                        if (!p->next || p->next->kind != L_PARENTHESES) return NULL;
+                        return params_start;
+                    }
+                    p = p->next;
+                }
+                if (p && p->kind == ADD) {
+                    p = p->next;
+                    continue;
+                }
+                break;
+            }
+        }
         if (p && p->kind == COMMA) {
             p = p->next;
             continue;

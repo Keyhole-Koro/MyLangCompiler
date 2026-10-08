@@ -20,6 +20,7 @@ void free_ast(ASTNode *node) {
     switch (node->type) {
         case AST_NUMBER:
             free(node->number.value);
+            free(node->number.enum_name);
             break;
         case AST_IDENTIFIER:
             free(node->identifier.name);
@@ -96,6 +97,7 @@ void free_ast(ASTNode *node) {
             break;
             case AST_RETURN:
                     free_ast(node->ret.expr);
+                    free(node->ret.trace_note);
                     break;
             case AST_DEFER:
                     free_ast(node->defer_stmt.body);
@@ -136,6 +138,11 @@ void free_ast(ASTNode *node) {
                 free(node->fundef.type_params[i]);
             free(node->fundef.type_params);
             free(node->fundef.type_param_is_const);
+            if (node->fundef.type_param_bounds) {
+                for (int i = 0; i < node->fundef.type_param_count; i++)
+                    free_ast(node->fundef.type_param_bounds[i]);
+                free(node->fundef.type_param_bounds);
+            }
             for (int i = 0; i < node->fundef.param_count; i++)
                 free_ast(node->fundef.params[i]);
             free(node->fundef.params);
@@ -165,6 +172,11 @@ void free_ast(ASTNode *node) {
                 free(node->struct_stmt.type_params[i]);
             free(node->struct_stmt.type_params);
             free(node->struct_stmt.type_param_is_const);
+            if (node->struct_stmt.type_param_bounds) {
+                for (int i = 0; i < node->struct_stmt.type_param_count; i++)
+                    free_ast(node->struct_stmt.type_param_bounds[i]);
+                free(node->struct_stmt.type_param_bounds);
+            }
             for (int i = 0; i < node->struct_stmt.member_count; i++)
                 free_ast(node->struct_stmt.members[i]);
             free(node->struct_stmt.members);
@@ -193,6 +205,11 @@ void free_ast(ASTNode *node) {
                 free(node->enum_stmt.type_params[i]);
             free(node->enum_stmt.type_params);
             free(node->enum_stmt.type_param_is_const);
+            if (node->enum_stmt.type_param_bounds) {
+                for (int i = 0; i < node->enum_stmt.type_param_count; i++)
+                    free_ast(node->enum_stmt.type_param_bounds[i]);
+                free(node->enum_stmt.type_param_bounds);
+            }
             for (int i = 0; i < node->enum_stmt.member_count; i++)
                 free_ast(node->enum_stmt.members[i]);
             free(node->enum_stmt.members);

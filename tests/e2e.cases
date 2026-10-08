@@ -1,4 +1,4 @@
-# name | expected R1 (decimal or 0x...) | comma-separated sources relative to this directory
+# name | expected R1 (decimal or 0x...) | comma-separated sources relative to this directory [| compiler flags]
 globalConstantExpressions|366|succeed/global/constantExpressions.mln
 ternaryMoveIsolation|14|succeed/semantic/ternaryMoveIsolation.mln
 automaticDrop|1166|succeed/semantic/automaticDrop.mln
@@ -14,7 +14,7 @@ genericInlineCString|82|succeed/generic/inlineCString.mln,../../MyStdLib/text/st
 genericNestedStruct|57|succeed/generic/nestedStruct.mln
 genericRecursive|15|succeed/generic/recursive.mln
 genericImportedTemplates|13|succeed/generic/imported_templates_main.mln,succeed/generic/imported_templates_lib.mln
-genericKernelContainers|63|succeed/generic/kernel_containers.mln
+genericKernelContainers|63|succeed/generic/kernel_containers.mln,../../MyStdLib/collections/hashmap.mln,../../MyStdLib/core/cmp.mln,../../MyStdLib/core/hash.mln
 genericFieldReceiver|169|succeed/generic/fieldReceiver.mln
 genericModuleIsolation|33|succeed/generic/modules_main.mln,succeed/generic/modules_one.mln,succeed/generic/modules_two.mln
 crossModuleResultReturn|149|succeed/enum/cross_module_result_main.mln,succeed/enum/cross_module_result_lib.mln
@@ -109,3 +109,27 @@ breakInCaseArm|562|succeed/enum/breakInCaseArm.mln
 refMutWriteBack|1212|succeed/semantic/refMutWriteBack.mln
 globalPointerInit|104710106|succeed/data/globalPointerInit.mln
 indirectVoidGlobal|43|succeed/function/indirectVoidGlobal.mln
+traitFromTry|10211|succeed/trait/fromTry.mln
+traitShortImpl|2102|succeed/trait/shortImpl.mln
+traitEqBounds|11111111|succeed/trait/eqBounds.mln
+traitHashMap|111111|succeed/trait/hashmap.mln,../../MyStdLib/collections/hashmap.mln,../../MyStdLib/core/cmp.mln,../../MyStdLib/core/hash.mln
+traitForIn|7061210|succeed/trait/forIn.mln
+traitImplDrop|21|succeed/trait/implDrop.mln
+traitCrossModule|10606421|succeed/trait/crossModule_main.mln,succeed/trait/crossModule_lib.mln
+traitDropOnTry|211217|succeed/trait/dropOnTry.mln
+structCaseResult|39544|succeed/case/structCaseResult.mln
+nestedAggregateCallArg|7147421|succeed/struct/byval/nestedAggregateCallArg.mln
+traitTryInStructLiteral|4028304|succeed/trait/tryInStructLiteral.mln
+siblingShadowTypes|143|succeed/scope/siblingShadowTypes.mln
+errorTrace|141111|succeed/trace/errorTrace.mln,../../MyStdLib/debug/error_trace.mln|--error-trace
+traitDefaultItems|18420016|succeed/trait/defaultItems.mln
+traitDefaultCrossModule|1042|succeed/trait/defaultCross_main.mln,succeed/trait/defaultCross_lib.mln
+traitStructBounds|115|succeed/trait/structBounds.mln
+nestedSmallLiteral|34578|succeed/struct/nestedSmallLiteral.mln
+traitGenericImpls|11600|succeed/trait/genericImpls.mln
+traitGenericImplsStd|211507|succeed/trait/genericImplsStd.mln
+traitGenericImplCrossModule|11|succeed/trait/genericImplCross_main.mln,succeed/trait/genericImplCross_lib.mln
+traitGenericImplBothModules|11|succeed/trait/genericImplDup_main.mln,succeed/trait/genericImplDup_lib.mln
+traitGenericImplImportedInstance|1|succeed/trait/genericImplImportedInstance_main.mln,succeed/trait/genericImplImportedInstance_lib.mln
+traitDynDispatch|19301906|succeed/trait/dynDispatch.mln
+traitDynCrossModule|29|succeed/trait/dynCross_main.mln,succeed/trait/dynCross_lib.mln

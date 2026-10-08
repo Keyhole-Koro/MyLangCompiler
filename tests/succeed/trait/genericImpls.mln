@@ -1,0 +1,47 @@
+// Impls for generic types: `impl<T: Eq> Eq for Box<T>` covers every Box
+// whose element meets the bound; `impl Show for Box<i32>` only that instance.
+import { Eq } from "@std/core/cmp.mln";
+
+struct Point { i32 x; };
+impl Eq for Point {
+    bool (Point *self) eq(Point *other) { return self->x == other->x; }
+}
+struct Opaque { i32 v; };   // no Eq: Box<Opaque> gets no Eq impl
+
+struct Box<T> { T value; i32 tag; };
+
+impl<T: Eq> Eq for Box<T> {
+    bool (Self *self) eq(Box<T> *other) {
+        return self->value == other->value && self->tag == other->tag;
+    }
+}
+
+trait Make {
+    Self make(i32 n);
+    i32 (Self *self) weight();
+    i32 (Self *self) heavy() { return self.weight() * 10; }
+}
+
+impl Make for Box<i32> {
+    Self make(i32 n) { return Self { value: n, tag: 1 }; }
+    i32 (Self *self) weight() { return self->value + self->tag; }
+}
+
+i32 same<T: Eq>(T *a, T *b) {
+    if (*a == *b) { return 1; }
+    return 0;
+}
+
+i32 main() {
+    Box<Point> a = Box<Point> { value: Point { x: 3 }, tag: 1 };
+    Box<Point> b = Box<Point> { value: Point { x: 3 }, tag: 1 };
+    Box<Point> c = Box<Point> { value: Point { x: 4 }, tag: 1 };
+    Box<i32> n = Box<i32>::make(5);
+    Box<Opaque> o = Box<Opaque> { value: Opaque { v: 1 }, tag: 0 };
+    i32 r = 0;
+    if (a == b) { r = r + 1000; }
+    if (a != c) { r = r + 100; }
+    r = r + same<Box<Point>>(&a, &c) * 10;
+    r = r + n.heavy();   // (5 + 1) * 10
+    return r * 10 + o.tag;
+}

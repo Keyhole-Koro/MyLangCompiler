@@ -1,0 +1,5 @@
+// `import X from "f.mln";` imports the package only when X is its declared
+// package name; another name imports nothing, so it is rejected.
+import other_name from "../../succeed/package/importedMethods_lib.mln";
+
+i32 main() { return 0; }

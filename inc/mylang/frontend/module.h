@@ -73,6 +73,10 @@ typedef struct ModuleGenericMethod {
  *   lowers the one actually left in `program` into its backing struct (which
  *   erases the variant table an importer's own lowering pass needs; see
  *   load_imported_plain_types() in parser_import_generics.c).
+ * - traits: owned TraitDefs this module declares (exported or not; an
+ *   importer only takes exported ones).
+ * - impls: owned ImplDefs of this module's exported impls. Their items are
+ *   ordinary exported fundefs in `program`.
  * - symbols: owned array of ModuleSymbol structs
  * - All owned memory is freed when the enclosing ModuleGraph is destroyed.
  */
@@ -86,6 +90,10 @@ typedef struct Module {
     int generic_method_count;
     ASTNode **exported_payload_enums;
     int exported_payload_enum_count;
+    struct TraitDef **traits;
+    int trait_count;
+    struct ImplDef **impls;
+    int impl_count;
     ModuleSymbol *symbols;
     int symbol_count;
     int symbol_capacity;

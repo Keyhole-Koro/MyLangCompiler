@@ -165,8 +165,11 @@ void gen_lvalue_addr(CompilerContext *cc, ASTNode *node, StringBuilder *sb, cons
         }
         const MemberInfo *mi = find_member_info(cc, lhs_type.base_type, node->member_access.member);
         if (!mi) {
-            sb_append(sb, "  ; unknown member %s of %s\n", node->member_access.member, lhs_type.base_type);
-            break;
+            // Reaching here means an earlier pass lost the operand's real
+            // type; emitting a comment instead read the wrong offset.
+            fprintf(stderr, "Codegen error at %d:%d: %s has no member '%s'\n",
+                    node->line, node->col, lhs_type.base_type, node->member_access.member);
+            exit(1);
         }
         // `s.v` on a `ref S` / `ref mut S` (a pointer underneath: the type
         // layer folds ref into pointer_level) reads through the reference,
@@ -190,8 +193,11 @@ void gen_lvalue_addr(CompilerContext *cc, ASTNode *node, StringBuilder *sb, cons
         }
         const MemberInfo *mi = find_member_info(cc, lhs_type.base_type, node->arrow_access.member);
         if (!mi) {
-            sb_append(sb, "  ; unknown member %s of %s\n", node->arrow_access.member, lhs_type.base_type);
-            break;
+            // Reaching here means an earlier pass lost the operand's real
+            // type; emitting a comment instead read the wrong offset.
+            fprintf(stderr, "Codegen error at %d:%d: %s has no member '%s'\n",
+                    node->line, node->col, lhs_type.base_type, node->arrow_access.member);
+            exit(1);
         }
         gen_expr(cc, node->arrow_access.lhs, sb, target_reg, params, param_count, locals, local_count);
         sb_append(sb, "  addis %s, %d\n", target_reg, mi->offset);

@@ -1,0 +1,72 @@
+// `==` and `!=` call Eq::eq for a type with an Eq impl, including inside a
+// bounded generic function; operands that are not places are bound first.
+trait Eq {
+    bool (Self *self) eq(Self *other);
+}
+
+trait From<S> {
+    Self from(S source);
+}
+
+enum Shape { Circle(i32), Square(i32), Empty }
+
+impl Eq for Shape {
+    bool (Self *self) eq(Self *other) {
+        return case *self of {
+            Circle(a) -> case *other of { Circle(b) -> a == b; _ -> false; };
+            Square(a) -> case *other of { Square(b) -> a == b; _ -> false; };
+            Empty -> case *other of { Empty -> true; _ -> false; };
+        };
+    }
+}
+
+struct Point { i32 x; i32 y; };
+
+impl Eq for Point {
+    bool (Point *self) eq(Point *other) {
+        return self->x == other->x && self->y == other->y;
+    }
+}
+
+enum Code { A, B }
+impl From<Code> for Shape = Shape::Empty;
+impl From<i32> for Shape {
+    Shape from(i32 r) { return Shape::Circle(r); }
+}
+
+bool contains<T: Eq>(T *items, i32 len, T *needle) {
+    for (i32 i = 0; i < len; i++) {
+        if (items[i] == *needle) { return true; }
+    }
+    return false;
+}
+
+T convert<T: From<S>, S>(S value) {
+    return T::from(value);
+}
+
+Shape make(i32 r) { return Shape::Circle(r); }
+
+i32 main() {
+    Shape a = Shape::Circle(3);
+    Shape b = Shape::Circle(3);
+    Shape c = Shape::Square(3);
+    i32 r = 0;
+    if (a == b) { r = r + 1; }
+    if (a != c) { r = r + 10; }
+    if (a == make(3)) { r = r + 100; }
+    if (c == Shape::Square(3)) { r = r + 1000; }
+    Point p = Point { x: 1, y: 2 };
+    Point q = Point { x: 1, y: 2 };
+    if (p == q) { r = r + 10000; }
+    Point pts[3];
+    pts[0] = Point { x: 0, y: 0 };
+    pts[1] = Point { x: 5, y: 6 };
+    pts[2] = Point { x: 1, y: 2 };
+    if (contains<Point>(pts, 3, &q)) { r = r + 100000; }
+    Shape e = convert<Shape, Code>(Code::B);
+    if (e == Shape::Empty) { r = r + 1000000; }
+    Shape f = Shape::from(7);
+    if (f == Shape::Circle(7)) { r = r + 10000000; }
+    return r;
+}

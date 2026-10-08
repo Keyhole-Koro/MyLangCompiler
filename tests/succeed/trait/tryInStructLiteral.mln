@@ -1,0 +1,40 @@
+// `?` inside a struct literal's field or a call argument: its temporaries are
+// locals of the enclosing function, the early return leaves the stack
+// balanced, and an owner built this way is still dropped.
+import { Result } from "@std/core/result.mln";
+import { Drop } from "@std/core/drop.mln";
+
+i32 g_closed = 0;
+
+struct Handle { i32 fd; };
+
+impl Drop for Handle {
+    void (Self *self) drop() { g_closed = g_closed + self->fd; }
+}
+
+enum E { Missing }
+
+Result<i32, E> open(i32 n) {
+    if (n == 0) { return Err(E::Missing); }
+    return Ok(n);
+}
+
+i32 add3(i32 a, i32 b, i32 c) { return a + b + c; }
+
+Result<i32, E> sum(i32 n) {
+    i32 total = add3(1, open(n)?, 2);
+    return Ok(total);
+}
+
+Result<i32, E> use(i32 n) {
+    Handle h = Handle { fd: open(n)? };
+    return Ok(h.fd * 10);
+}
+
+i32 main() {
+    i32 a = case use(4) of { Ok(v) -> v; Err(_) -> 0; };      // 40, closes 4
+    i32 b = case use(0) of { Ok(_) -> 1; Err(_) -> 2; };      // 2, nothing opened
+    i32 c = case sum(5) of { Ok(v) -> v; Err(_) -> 0; };       // 8
+    i32 d = case sum(0) of { Ok(_) -> 1; Err(_) -> 3; };       // 3
+    return a * 100000 + b * 10000 + c * 1000 + d * 100 + g_closed;  // 4028304
+}

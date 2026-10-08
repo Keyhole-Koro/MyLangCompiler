@@ -201,6 +201,53 @@ static void free_source_dependencies(SourceDependency *dependencies, int count) 
     free(dependencies);
 }
 
+/* Resolves one import path from `input_path` and adds it to the list unless
+ * it is already there. */
+static int add_source_dependency(FrontendSession *session, const char *input_path,
+                                 const char *import_path,
+                                 SourceDependency **dependencies, int *dependency_count) {
+    char canonical[PATH_MAX];
+    if (!module_loader_resolve_import_path(session->loader, input_path,
+                                           import_path, canonical, sizeof(canonical))) {
+        fprintf(stderr, "failed to resolve import dependency '%s' from '%s'\n",
+                import_path, input_path);
+        return 0;
+    }
+
+    const char *kind = NULL;
+    if (has_ext(canonical, ".mln")) kind = "mln";
+    else if (has_ext(canonical, ".masm")) kind = "masm";
+    else {
+        fprintf(stderr, "unsupported import dependency type: %s\n", canonical);
+        return 0;
+    }
+    if (strchr(canonical, '\n') || strchr(canonical, '\r') || strchr(canonical, '\t')) {
+        fprintf(stderr, "dependency path contains unsupported control characters: %s\n",
+                canonical);
+        return 0;
+    }
+
+    for (int j = 0; j < *dependency_count; j++) {
+        if (strcmp((*dependencies)[j].canonical_path, canonical) == 0) return 1;
+    }
+
+    SourceDependency *grown = realloc(
+        *dependencies, sizeof(SourceDependency) * (*dependency_count + 1));
+    if (!grown) {
+        fprintf(stderr, "out of memory while collecting dependencies\n");
+        return 0;
+    }
+    *dependencies = grown;
+    grown[*dependency_count].canonical_path = strdup(canonical);
+    grown[*dependency_count].kind = kind;
+    if (!grown[*dependency_count].canonical_path) {
+        fprintf(stderr, "out of memory while collecting dependencies\n");
+        return 0;
+    }
+    (*dependency_count)++;
+    return 1;
+}
+
 static int write_dependency_file(const char *depfile_path,
                                  const char *input_path,
                                  ASTNode *root,
@@ -213,57 +260,19 @@ static int write_dependency_file(const char *depfile_path,
     for (int i = 0; i < root->block.count; i++) {
         ASTNode *node = root->block.stmts[i];
         if (!node || node->type != AST_IMPORT || !node->import_stmt.path) continue;
-
-        char canonical[PATH_MAX];
-        if (!module_loader_resolve_import_path(session->loader, input_path,
-                                               node->import_stmt.path,
-                                               canonical, sizeof(canonical))) {
-            fprintf(stderr, "failed to resolve import dependency '%s' from '%s'\n",
-                    node->import_stmt.path, input_path);
+        if (!add_source_dependency(session, input_path, node->import_stmt.path,
+                                   &dependencies, &dependency_count)) {
             free_source_dependencies(dependencies, dependency_count);
             return 0;
         }
-
-        const char *kind = NULL;
-        if (has_ext(canonical, ".mln")) kind = "mln";
-        else if (has_ext(canonical, ".masm")) kind = "masm";
-        else {
-            fprintf(stderr, "unsupported import dependency type: %s\n", canonical);
-            free_source_dependencies(dependencies, dependency_count);
-            return 0;
-        }
-        if (strchr(canonical, '\n') || strchr(canonical, '\r') || strchr(canonical, '\t')) {
-            fprintf(stderr, "dependency path contains unsupported control characters: %s\n",
-                    canonical);
-            free_source_dependencies(dependencies, dependency_count);
-            return 0;
-        }
-
-        int duplicate = 0;
-        for (int j = 0; j < dependency_count; j++) {
-            if (strcmp(dependencies[j].canonical_path, canonical) == 0) {
-                duplicate = 1;
-                break;
-            }
-        }
-        if (duplicate) continue;
-
-        SourceDependency *grown = realloc(
-            dependencies, sizeof(SourceDependency) * (dependency_count + 1));
-        if (!grown) {
-            fprintf(stderr, "out of memory while collecting dependencies\n");
-            free_source_dependencies(dependencies, dependency_count);
-            return 0;
-        }
-        dependencies = grown;
-        dependencies[dependency_count].canonical_path = strdup(canonical);
-        dependencies[dependency_count].kind = kind;
-        if (!dependencies[dependency_count].canonical_path) {
-            fprintf(stderr, "out of memory while collecting dependencies\n");
-            free_source_dependencies(dependencies, dependency_count);
-            return 0;
-        }
-        dependency_count++;
+    }
+    /* `--error-trace` calls into the trace module, which this source may never
+     * import; the build links it through this manifest. */
+    if (codegen_error_trace_used() &&
+        !add_source_dependency(session, input_path, "@std/debug/error_trace.mln",
+                               &dependencies, &dependency_count)) {
+        free_source_dependencies(dependencies, dependency_count);
+        return 0;
     }
 
     FILE *file = fopen(depfile_path, "wb");
