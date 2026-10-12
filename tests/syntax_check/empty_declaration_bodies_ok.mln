@@ -1,0 +1,6 @@
+struct Empty {};
+struct Generic<T> {};
+
+trait Marker {}
+
+impl Marker for Empty {}

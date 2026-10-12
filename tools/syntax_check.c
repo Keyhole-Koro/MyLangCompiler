@@ -380,6 +380,13 @@ static size_t named_struct_literal_end(Token **tokens, size_t token_count, Angle
     if (start + 1 >= token_count || tokens[start]->kind != IDENTIFIER)
         return token_count;
 
+    int declaration_body = 0;
+    if (start > 0) {
+        TokenKind previous = tokens[start - 1]->kind;
+        declaration_body = previous == STRUCT || previous == ENUM || previous == UNION ||
+                           previous == TRAIT || previous == FOR;
+    }
+
     size_t brace = start + 1;
     if (tokens[brace]->kind == LT && angles && angles[brace] == ANGLE_GENERIC_OPEN) {
         int depth = 0;
@@ -394,6 +401,13 @@ static size_t named_struct_literal_end(Token **tokens, size_t token_count, Angle
             if (tokens[i]->kind == IDENTIFIER && source_roles && type_role)
                 source_roles[i] = type_role;
     }
+
+    /* A declaration type/name can have the same `IDENTIFIER ... {}` shape as
+     * a struct literal, especially when its body is empty. Preserve generic
+     * parameter roles above, but leave the declaration body intact for the
+     * grammar instead of collapsing it into one expression token. */
+    if (declaration_body) return token_count;
+
     if (tokens[brace]->kind != L_BRACE || brace + 1 >= token_count)
         return token_count;
 
@@ -429,6 +443,98 @@ static size_t named_struct_literal_end(Token **tokens, size_t token_count, Angle
         if (tokens[i]->kind == R_BRACE) return i; /* trailing comma */
     }
     return token_count;
+}
+
+/* Parse a collapsed `({ ... })` as the body of a synthetic function and copy
+ * the grammar-assigned roles back to the original source tokens. The outer
+ * parse still sees one NUMBER primary, keeping statement expressions out of
+ * the canonical LR table, while highlighting inside the block remains as
+ * precise as an ordinary function body. Nested statement expressions are
+ * analyzed first and collapsed in the synthetic parse for the same reason. */
+static void tag_statement_expression_roles(
+    SyntaxTable *table,
+    const int *token_map,
+    Token **tokens,
+    size_t token_count,
+    AngleKind *angles,
+    size_t start,
+    size_t end,
+    int *source_roles,
+    int type_role,
+    int property_role
+) {
+    if (!table || !token_map || !tokens || !source_roles || end <= start + 2)
+        return;
+
+    size_t capacity = end - start + 5;
+    int *token_ids = calloc(capacity, sizeof(int));
+    size_t *source_indices = calloc(capacity, sizeof(size_t));
+    int *roles = calloc(capacity, sizeof(int));
+    if (!token_ids || !source_indices || !roles) {
+        free(token_ids);
+        free(source_indices);
+        free(roles);
+        return;
+    }
+
+    size_t count = 0;
+    const TokenKind prefix[] = {VOID, IDENTIFIER, L_PARENTHESES, R_PARENTHESES};
+    for (size_t i = 0; i < sizeof(prefix) / sizeof(prefix[0]); i++) {
+        token_ids[count] = token_map[prefix[i]];
+        source_indices[count++] = token_count;
+    }
+
+    int generic_depth = 0;
+    for (size_t i = start + 1; i < end; i++) {
+        size_t nested_end = statement_expression_end(tokens, end, i);
+        if (nested_end != end) {
+            tag_statement_expression_roles(table, token_map, tokens, token_count, angles,
+                                           i, nested_end, source_roles,
+                                           type_role, property_role);
+            token_ids[count] = token_map[NUMBER];
+            source_indices[count++] = i;
+            i = nested_end;
+            continue;
+        }
+
+        size_t struct_literal_end = named_struct_literal_end(
+            tokens, end, angles, i, source_roles, type_role, property_role);
+        if (struct_literal_end != end) {
+            token_ids[count] = token_map[NUMBER];
+            source_indices[count++] = i;
+            i = struct_literal_end;
+            continue;
+        }
+
+        size_t cast_end = named_pointer_cast_end(tokens, end, i);
+        if (cast_end != end) {
+            i = cast_end;
+            continue;
+        }
+
+        if (angles[i] == ANGLE_GENERIC_OPEN) {
+            generic_depth++;
+            continue;
+        }
+        if (generic_depth > 0) {
+            if (angles[i] == ANGLE_GENERIC_CLOSE) generic_depth--;
+            else if (angles[i] == ANGLE_GENERIC_DOUBLE_CLOSE) generic_depth -= 2;
+            continue;
+        }
+
+        token_ids[count] = token_map[tokens[i]->kind];
+        source_indices[count++] = i;
+    }
+
+    SyntaxResult result = syntax_parse_token_ids_roles(table, token_ids, count, roles);
+    for (size_t i = 0; i < count; i++) {
+        if (roles[i] != 0 && source_indices[i] < token_count)
+            source_roles[source_indices[i]] = roles[i];
+    }
+    syntax_result_free(&result);
+    free(token_ids);
+    free(source_indices);
+    free(roles);
 }
 
 /* `mmu.map_page(...)` -- a qualified call, this codebase's dominant style for
@@ -722,6 +828,9 @@ static int check_tokens(
         Token *t = source_tokens[i];
         size_t statement_expr_end = statement_expression_end(source_tokens, source_count, i);
         if (statement_expr_end != source_count) {
+            tag_statement_expression_roles(table, token_map, source_tokens, source_count, angles,
+                                           i, statement_expr_end, source_roles,
+                                           type_role, property_role);
             // A number is an unambiguous primary expression in the grammar.
             // Keep the opening paren as the diagnostic anchor.
             token_ids[token_count] = token_map[NUMBER];
