@@ -124,26 +124,6 @@ void require_bound(ParserContext *context, ASTNode *use, const char *template_na
  * inside instantiate_generics(), before payload enum uses are lowered. */
 void lower_trait_uses(ParserContext *context, ASTNode *program);
 
-/* `dyn Trait<Args>` (parser_trait_dyn.c). A trait object is a struct of
- * the object's address and one function pointer per method; `s.m()` calls
- * a generated dispatch method, and a `T *` becomes one through a generated
- * conversion where a dyn value is expected.
- *
- * Rewrites every `dyn Trait<Args>` in the token list to one placeholder type
- * name per spelling, before the module is parsed. */
-void rewrite_dyn_types(ParserContext *context, Token *head);
-/* Declares each placeholder's struct and dispatch methods once the module's
- * traits are known (end of parse_program_syntax()). */
-void synthesize_dyn_types(ParserContext *context, ASTNode *program);
-/* The dyn type `type` names, or NULL. */
-DynUse *dyn_use_for_type(ParserContext *context, ASTNode *type);
-/* Wraps `*slot`, a `T *`, in the conversion to dyn type `target` when T
- * implements the trait; leaves anything else alone. `source` is the
- * expression's inferred type (borrowed). */
-void coerce_to_dyn(ParserContext *context, ASTNode *program, ASTNode **slot, ASTNode *source,
-                   ASTNode *target);
-void dyn_use_free(DynUse *use);
-
 void trait_def_free(TraitDef *trait);
 void impl_def_free(ImplDef *impl);
 TraitDef *trait_def_clone(const TraitDef *trait);

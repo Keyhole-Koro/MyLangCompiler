@@ -1,0 +1,10 @@
+package lookups;
+
+import { Option } from "@std/core/option.mln";
+
+export Option<fn(i32) -> i32> pick(i32 which) {
+    if (which == 0) { return None; }
+    return Some(twice);
+}
+
+i32 twice(i32 n) { return n * 2; }

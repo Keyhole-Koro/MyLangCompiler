@@ -302,7 +302,7 @@ Each newtype has nominal identity while keeping its base scalar's size,
 alignment, and calling convention. Construction and extraction are explicit;
 arithmetic requires extracting the base value first.
 - `type` -> `const* ( ref mut? )? base_type ( * )*`
-- `base_type` -> `primitive_type` | `IDENTIFIER type_args?` | `dyn IDENTIFIER type_args?` (a trait object; see [Traits](traits.md))
+- `base_type` -> `primitive_type` | `IDENTIFIER type_args?`
 - `generic_params` -> `< generic_param ( , generic_param )* >`
 - `generic_param` -> `IDENTIFIER ( : bound ( + bound )* )?` | `const IDENTIFIER`
 - `bound` -> `IDENTIFIER type_args?` (a trait; see [Traits](traits.md))

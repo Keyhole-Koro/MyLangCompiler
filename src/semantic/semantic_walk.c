@@ -1199,6 +1199,12 @@ static int semantic_infer_identifier_type(SemanticContext *ctx, ASTNode *expr, S
         semantic_typeinfo_make_scalar(out, "i32");
         return 1;
     }
+    /* A local or parameter shadows a function of the same name. */
+    binding = find_binding(ctx, expr->identifier.name);
+    if (binding && binding->has_type) {
+        *out = binding->type_info;
+        return 1;
+    }
     SemanticFunctionSig *function = find_function_sig(ctx, expr->identifier.name);
     if (function && function->declaration) {
         semantic_typeinfo_clear(out);
@@ -1209,11 +1215,6 @@ static int semantic_infer_identifier_type(SemanticContext *ctx, ASTNode *expr, S
     }
     if (function) {
         semantic_typeinfo_make_scalar(out, "i32");
-        return 1;
-    }
-    binding = find_binding(ctx, expr->identifier.name);
-    if (binding && binding->has_type) {
-        *out = binding->type_info;
         return 1;
     }
     if (call_may_be_package_import(ctx, expr->identifier.name)) {

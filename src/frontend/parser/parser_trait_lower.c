@@ -25,7 +25,6 @@ typedef struct {
     ASTNode *program;
     TypeScope scope;
     int temp_counter;
-    ASTNode *return_type; /* of the function being lowered; borrowed */
 } TraitLowering;
 
 static void scope_push(TypeScope *scope, const char *name, ASTNode *type) {
@@ -375,51 +374,22 @@ static void lower_var_decl(TraitLowering *L, ASTNode *decl) {
     }
 }
 
-/* ---- dyn conversions -------------------------------------------------------- */
-
-/* A `T *` where a dyn value is expected becomes one (coerce_to_dyn). */
-static void coerce(TraitLowering *L, ASTNode **slot, ASTNode *target) {
-    if (!*slot || !dyn_use_for_type(L->context, target)) return;
-    ASTNode *source = infer_type(L, *slot);
-    coerce_to_dyn(L->context, L->program, slot, source, target);
-    free_ast(source);
-}
-
-static ASTNode *callee_of(TraitLowering *L, ASTNode *call, int *first_arg) {
-    *first_arg = 0;
-    if (call->call.recv) {
-        ASTNode *recv = infer_type(L, call->call.recv);
-        const char *name = named_type(recv);
-        const MethodDef *method = name ? find_method(L->context, name, call->call.name) : NULL;
-        free_ast(recv);
-        *first_arg = 1; /* params[0] is the receiver */
-        return method ? method->fundef : NULL;
+/* `Err(e) -> ...`: the payload type of variant `variant` of the enum `type`
+ * names, while payload enums are still enums (before their lowering). */
+static ASTNode *variant_payload_type(TraitLowering *L, ASTNode *type, const char *variant) {
+    const char *name = named_type(type);
+    if (!name || type->type_node.pointer_level) return NULL;
+    const char *bare = strstr(variant, "::");
+    bare = bare ? bare + 2 : variant;
+    for (int i = 0; i < L->program->block.count; i++) {
+        ASTNode *node = L->program->block.stmts[i];
+        if (!node || node->type != AST_ENUM || strcmp(node->enum_stmt.name, name) != 0) continue;
+        for (int m = 0; m < node->enum_stmt.member_count; m++) {
+            ASTNode *member = node->enum_stmt.members[m];
+            if (member && strcmp(member->enum_member.name, bare) == 0) return member->enum_member.payload_type;
+        }
     }
-    ASTNode *fn = find_function(L->context, call->call.name);
-    if (!fn) {
-        const char *mangled = find_export_mangled(L->context, call->call.name);
-        if (mangled) fn = find_function(L->context, mangled);
-    }
-    return fn && fn->type == AST_FUNDEF ? fn : NULL;
-}
-
-static void coerce_call_args(TraitLowering *L, ASTNode *call) {
-    int first = 0;
-    ASTNode *fn = callee_of(L, call, &first);
-    if (!fn) return;
-    for (int a = 0; a < call->call.arg_count && a + first < fn->fundef.param_count; a++) {
-        ASTNode *param = fn->fundef.params[a + first];
-        if (param && param->type == AST_PARAM) coerce(L, &call->call.args[a], param->param.type);
-    }
-}
-
-static void coerce_literal_fields(TraitLowering *L, ASTNode *literal) {
-    if (!literal->init_list.struct_type_name || !literal->init_list.field_names) return;
-    for (int i = 0; i < literal->init_list.count; i++) {
-        ASTNode *field = find_struct_member_type(L, literal->init_list.struct_type_name,
-                                                 literal->init_list.field_names[i]);
-        coerce(L, &literal->init_list.elements[i], field);
-    }
+    return NULL;
 }
 
 /* ---- walk ---------------------------------------------------------------- */
@@ -440,9 +410,7 @@ static void lower_node(TraitLowering *L, ASTNode **slot) {
             ASTNode *p = node->fundef.params[i];
             if (p && p->type == AST_PARAM) scope_push(&L->scope, p->param.name, p->param.type);
         }
-        L->return_type = node->fundef.ret_type;
         lower_node(L, &node->fundef.body);
-        L->return_type = NULL;
         L->scope.count = mark;
         return;
     }
@@ -471,28 +439,31 @@ static void lower_node(TraitLowering *L, ASTNode **slot) {
     case AST_VAR_DECL:
         lower_node(L, &node->var_decl.init);
         lower_var_decl(L, node);
-        coerce(L, &node->var_decl.init, node->var_decl.var_type);
         return;
     case AST_CALL:
         ast_visit_children(node, lower_child, L);
         lower_assoc_call(L, node);
-        coerce_call_args(L, node);
         return;
-    case AST_ASSIGN: {
-        ast_visit_children(node, lower_child, L);
-        ASTNode *target = infer_type(L, node->assign.left);
-        coerce(L, &node->assign.right, target);
+    case AST_CASE: {
+        lower_node(L, &node->case_expr.target);
+        ASTNode *target = infer_type(L, node->case_expr.target);
+        for (int i = 0; i < node->case_expr.case_count; i++) {
+            CaseItem *item = &node->case_expr.cases[i];
+            int mark = L->scope.count;
+            /* An arm `Err(e)` binds e to the variant's payload. */
+            ASTNode *key = item->key;
+            if (key && key->type == AST_CALL && key->call.arg_count == 1 &&
+                key->call.args[0] && key->call.args[0]->type == AST_IDENTIFIER) {
+                ASTNode *payload = variant_payload_type(L, target, key->call.name);
+                if (payload) scope_push(&L->scope, key->call.args[0]->identifier.name, payload);
+            }
+            lower_node(L, &item->expr);
+            L->scope.count = mark;
+        }
+        lower_node(L, &node->case_expr.default_expr);
         free_ast(target);
         return;
     }
-    case AST_RETURN:
-        ast_visit_children(node, lower_child, L);
-        coerce(L, &node->ret.expr, L->return_type);
-        return;
-    case AST_INIT_LIST:
-        ast_visit_children(node, lower_child, L);
-        coerce_literal_fields(L, node);
-        return;
     case AST_BINARY:
         ast_visit_children(node, lower_child, L);
         lower_equality(L, slot);

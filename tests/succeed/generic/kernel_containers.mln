@@ -35,7 +35,7 @@ i32 main() {
 
     Slice<i32> slice;
     slice.init(&storage[0], storage.length);
-    i32 *slice_value = slice.at(1);
+    i32 *slice_value = slice.at(1).unwrap_or(&value);
 
     i32 arena_storage[4];
     Arena<i32> arena;
@@ -78,9 +78,9 @@ i32 main() {
     HashMap<i32, i32> map;
     map.init(&keys[0], &map_values[0], &map_used[0], keys.length);
     map.put(42, 11);
-    i32 mapped = 0;
+    i32 none = 0;
     i32 answer = 42;
-    map.get(&answer, &mapped);
+    i32 mapped = *map.get(&answer).unwrap_or(&none);
 
     return value + *slice_value + *allocated + ring_value + option_value + error + front->value + mapped;
 }

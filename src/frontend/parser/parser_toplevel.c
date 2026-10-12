@@ -363,7 +363,6 @@ static ASTNode *parse_toplevel_decl(ParserContext *context, Token **cur) {
 
 ASTNode *parse_program_syntax(ParserContext *context, Token **cur) {
     context->token_head = cur ? *cur : NULL;
-    if (cur) rewrite_dyn_types(context, *cur);
     ASTNode **nodes = NULL;
     int count = 0;
     while ((*cur)->kind != EOT) {
@@ -383,7 +382,5 @@ ASTNode *parse_program_syntax(ParserContext *context, Token **cur) {
         nodes[count++] = node;
     }
     resolve_imported_impls(context);
-    ASTNode *program = new_block(nodes, count);
-    synthesize_dyn_types(context, program);
-    return program;
+    return new_block(nodes, count);
 }

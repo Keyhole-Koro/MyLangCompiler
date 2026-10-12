@@ -3,8 +3,7 @@
 A trait names behaviour that several types share. MyLang has no classes:
 data lives in `struct` and `enum`, a type's own behaviour in receiver methods,
 and behaviour across types in traits. Dispatch is static -- a bounded generic
-is specialized per type, so a trait costs nothing at run time -- unless a
-value is a `dyn Trait`, which picks the impl at run time.
+is specialized per type, so a trait costs nothing at run time.
 
 ```mylang
 import { From } from "@std/core/convert.mln";
@@ -67,6 +66,7 @@ The standard traits live in MyStdLib's `core/`:
 | `Iterator<T>` | `@std/core/iter.mln` | `for (T x in it)` |
 | `Drop` | `@std/core/drop.mln` | automatic cleanup |
 | `Copy` | `@std/core/copy.mln` | explicit copy semantics for safe structs |
+| `Describe` | `@std/core/describe.mln` | a short message for a value (errors), as `describe()` |
 
 ## Implementing a trait
 
@@ -192,47 +192,6 @@ A generic receiver method may also bound the receiver's parameters itself,
 `HashMap<K, V>::put<K: Hash + Eq, V>`, checked when the receiver type is
 instantiated.
 
-## Dynamic dispatch: `dyn Trait`
-
-- `base_type` -> `dyn IDENTIFIER type_args?`
-
-```mylang
-i32 total(dyn Shape *shapes, i32 n) {
-    i32 sum = 0;
-    for (i32 i = 0; i < n; i++) { sum = sum + shapes[i].area(); }
-    return sum;
-}
-
-dyn Shape shapes[2];
-shapes[0] = &square;          // Square implements Shape
-shapes[1] = &rect;
-total(&shapes[0], 2);
-```
-
-A `dyn Trait` value refers to an object of some type implementing the trait
-and calls that type's impl. A `T *` becomes one wherever a `dyn Trait` is
-expected -- an initializer, an assignment, an argument, a return value, a
-struct literal field -- when `impl Trait for T` is visible; otherwise:
-
-```
-app.mln:6:20: error: Circle does not implement Shape, so a Circle * cannot be a dyn Shape
-  note: add `impl Shape for Circle`
-```
-
-The value is copied freely and does not own the object: it is a pointer to
-the object plus the impl's methods, so the object must outlive it. Every
-item of the trait must be a method taking `Self *self` and naming `Self`
-nowhere else; associated functions cannot be called without a type. A
-generic trait takes its arguments, `dyn Iterator<i32>`, and default items
-dispatch like the rest.
-
-Layout: `dyn Shape` is the struct `__dyn_5_Shape { u8 *data; fn(u8 *) ->
-i32 __m_area; ... }` with one function pointer per method. Each module that
-uses a dyn type declares it and its dispatch methods (`__dyn_5_Shape__area`)
-and its conversions (`__dyn_5_Shape__from_Square`) for itself, as object-
-local functions; the same spelling is the same layout everywhere, so dyn
-values cross module boundaries.
-
 ## Language features backed by traits
 
 ### `?` and From
@@ -248,6 +207,10 @@ fs.mln:284:38: error: '?' cannot convert SsdError into FsError
 ```
 
 `?` never converts in any other way, and conversions do not chain.
+
+In a function returning an `Option`, `expr?` on an `Option` gives the value
+or returns `None`. A Result joins in through `ok()`: `parse(s).ok()?`. `?`
+on an Option in a function returning a Result is an error.
 
 Built with `--error-trace`, each `?` hop is also recorded; see
 [Error return trace](error-trace.md).
@@ -283,7 +246,14 @@ compatibility, with warning W0002; new code writes `impl Drop`.
 
 ## Not supported yet
 
+- dynamic dispatch (`dyn Trait`). It was implemented and removed again
+  (2026-10-12): every use so far was served as well by passing what the
+  trait computes (`e.describe()`) or by a function pointer. Its design is in
+  MyComputer's `issues/completed/MLC-021_traits-and-try-conversion.md`.
 - associated types
+- `a[i]` for user types (an `Index` trait). Without a panic, an index out of
+  range could only be ignored; checked lookups return an Option instead
+  (`v.at(i)`, `map.get(&k)`), and iterators never go out of range.
 - the `= expr` impl form for generic types; overlap checks between impl templates
 
 ## Implementation
@@ -295,8 +265,7 @@ compatibility, with warning W0002; new code writes `impl Drop`.
 | parse | `parser_stmt.c` | for-in desugars to a `while` over `next()` |
 | import | `parser_trait.c` | traits named by an import; exported impls whose type is visible, with item prototypes (`resolve_imported_impls`) |
 | instantiate | `parser_instantiate.c` | bound checks (functions, methods, structs, enums), `T::name` in templates, concrete impl types, impl templates applied to each matching instance |
-| lower | `parser_trait_lower.c` | `Type::name(...)`, `==` via Eq, for-in iterator types, conversions to dyn values |
+| lower | `parser_trait_lower.c` | `Type::name(...)`, `==` via Eq, for-in iterator types |
 | lower | `parser_payload_enum.c` | `?` through From |
-| parse/lower | `parser_trait_dyn.c` | `dyn Trait` spellings become one struct type each, with dispatch methods; conversions from `T *` where a dyn value is expected |
 
 Semantic analysis and codegen see only ordinary functions and calls.

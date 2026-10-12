@@ -123,11 +123,6 @@ void parser_context_reset(ParserContext *context) {
     free(context->symbols.foreign_names);
     context->symbols.foreign_names = NULL;
     context->symbols.foreign_name_count = 0;
-    for (int i = 0; i < context->symbols.dyn_use_count; i++)
-        dyn_use_free(&context->symbols.dyn_uses[i]);
-    free(context->symbols.dyn_uses);
-    context->symbols.dyn_uses = NULL;
-    context->symbols.dyn_use_count = 0;
     free(context->symbols.pending_impl_modules);
     free(context->symbols.pending_impls);
     context->symbols.pending_impl_modules = NULL;

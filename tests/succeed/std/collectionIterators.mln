@@ -1,0 +1,42 @@
+// for-in over the standard collections.
+import { Option } from "@std/core/option.mln";
+import { Vec } from "@std/collections/vec.mln";
+import { Slice } from "@std/memory/slice.mln";
+import { RingBuffer } from "@std/collections/ringbuf.mln";
+import { HashMap, MapEntry } from "@std/collections/hashmap.mln";
+import { Eq } from "@std/core/cmp.mln";
+import { Hash } from "@std/core/hash.mln";
+
+i32 main() {
+    i32 storage[4];
+    Vec<i32> v;
+    v.init(&storage[0], 4);
+    v.push(1); v.push(2); v.push(3);
+    i32 vsum = 0;
+    for (i32 *x in v.iter()) { vsum = vsum + *x; *x = *x * 10; }   // 6, then 10,20,30
+
+    Slice<i32> s;
+    s.init(&storage[0], 3);
+    i32 ssum = 0;
+    for (i32 *x in s.iter()) { ssum = ssum + *x; }                   // 60
+
+    char cells[8];
+    RingBuffer<char> r;
+    r.init(&cells[0], 8);
+    r.push('a'); r.push('b'); r.push('c');
+    i32 drained = 0;
+    for (char c in r.drain()) { drained = drained * 10 + (i32)(c - 'a' + 1); }   // 123
+    i32 left = r.count();
+
+    i32 keys[8];
+    i32 vals[8];
+    u8 used[8];
+    HashMap<i32, i32> map;
+    map.init(&keys[0], &vals[0], &used[0], 8);
+    map.put(3, 30);
+    map.put(5, 50);
+    i32 msum = 0;
+    for (MapEntry<i32, i32> e in map.entries()) { msum = msum + *e.key + *e.value; }   // 88
+
+    return vsum * 1000000 + ssum * 10000 + drained * 10 + left + msum * 0 + (msum == 88 ? 0 : 5);
+}

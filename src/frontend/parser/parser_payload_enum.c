@@ -532,6 +532,14 @@ static ASTNode *find_local_type(ASTNode *node, const char *name) {
 }
 
 static ASTNode *try_source_type(VariantTable *table, ASTNode *target) {
+    if (target && target->type == AST_CALL && target->call.recv) {
+        /* `r.ok()?`: the method of the receiver's type (methods are resolved
+         * only after this pass). */
+        ASTNode *recv_type = try_source_type(table, target->call.recv);
+        const char *recv_name = type_base_name(recv_type);
+        const MethodDef *method = recv_name ? find_method(table->context, recv_name, target->call.name) : NULL;
+        return method ? method->fundef->fundef.ret_type : NULL;
+    }
     ASTNode *type = call_result_type(table, target, NULL);
     if (type) return type;
     if (target && target->type == AST_IDENTIFIER && table->current_function) {
@@ -591,9 +599,39 @@ static int is_generated_try_case(ASTNode *node) {
            strncmp(binding->identifier.name, "__mlg_try_value_", 16) == 0;
 }
 
+static int is_option_type(ASTNode *type) {
+    const char *name = type_base_name(type);
+    return name && strncmp(name, "__mlg_s_6_Option", 16) == 0;
+}
+
+/* `opt?` in a function returning an Option: `Some(v)` gives v, `None`
+ * returns None. The expansion was written for Result; re-key its arms. */
+static void lower_option_try(VariantTable *table, ASTNode *node) {
+    if (!is_option_type(table->current_return_type)) {
+        payload_error(table->context, node,
+                      "'?' on an Option can only be used in a function returning Option "
+                      "(match None explicitly, or turn it into a Result first)");
+    }
+    ASTNode *some = node->case_expr.cases[0].key;
+    free(some->call.name);
+    some->call.name = strdup("Some");
+    free_ast(node->case_expr.cases[1].key);
+    node->case_expr.cases[1].key = new_identifier("None");
+    free_ast(node->case_expr.cases[1].expr);
+    ASTNode **stmts = malloc(sizeof(ASTNode *));
+    stmts[0] = new_return(new_identifier("None"));
+    stmts[0]->line = node->line;
+    stmts[0]->col = node->col;
+    node->case_expr.cases[1].expr = new_stmt_expr(new_block(stmts, 1));
+}
+
 static void check_try_error_type(VariantTable *table, ASTNode *node) {
     if (!is_generated_try_case(node) || !table->current_return_type) return;
     ASTNode *source_type = try_source_type(table, node->case_expr.target);
+    if (is_option_type(source_type)) {
+        lower_option_try(table, node);
+        return;
+    }
     const char *source_error = result_error_type_key(source_type);
     const char *target_error = result_error_type_key(table->current_return_type);
     if (!source_error)
@@ -819,6 +857,8 @@ static void rewrite_payload_case(VariantTable *table, ASTNode *node) {
     if (!is_repeatable_target(target)) {
         Module *provider = NULL;
         ASTNode *result_type = call_result_type(table, target, &provider);
+        if (!result_type && target && target->type == AST_CALL && target->call.recv)
+            result_type = try_source_type(table, target); /* `case r.ok() of` */
         if (!result_type)
             payload_error(table->context, target,
                           "a payload enum can only be matched on a variable or a field of one, "

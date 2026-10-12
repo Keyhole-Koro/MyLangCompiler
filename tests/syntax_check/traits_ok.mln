@@ -44,14 +44,3 @@ i32 use_box() {
     Box<i32> b = Box<i32>::from(3);
     return b.value;
 }
-
-trait Shape {
-    i32 (Self *self) area();
-}
-
-i32 total(dyn Shape *shapes, i32 n) {
-    dyn Iterator<i32> it;
-    i32 sum = 0;
-    for (i32 i = 0; i < n; i++) { sum = sum + shapes[i].area(); }
-    return sum;
-}

@@ -93,21 +93,6 @@ typedef struct ImplTable {
     int count;
 } ImplTable;
 
-/* One `dyn Trait<Args>` spelling used in this module (parser_trait_dyn.c).
- * Every occurrence was rewritten to the one `placeholder` type name; the
- * trait reference is kept as tokens until the module's traits are known. */
-typedef struct DynUse {
-    char *placeholder;
-    char *trait_name;
-    Token *trait_args;   /* owned copy of `<...>`, ending in EOT; NULL if none */
-    /* The arguments, parsed once the module's types are known and made
-     * concrete with the program's (instantiate_generics()). */
-    ASTNode **args;
-    int arg_count;
-    int line;
-    int col;
-} DynUse;
-
 typedef struct ParserSymbolState {
     StructTable structs;
     FunctionTable functions;
@@ -141,8 +126,6 @@ typedef struct ParserSymbolState {
     struct Module **pending_impl_modules;
     ImplDef **pending_impls;
     int pending_impl_count;
-    DynUse *dyn_uses;
-    int dyn_use_count;
 } ParserSymbolState;
 
 typedef struct ParserModuleState {

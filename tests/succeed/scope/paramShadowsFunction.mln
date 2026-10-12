@@ -1,0 +1,8 @@
+// A parameter or local named like a function is the variable in its scope.
+i32 fallback(i32 b) { return 100; }
+i32 pick(i32 fallback) { return fallback + 1; }
+i32 local_case() {
+    i32 fallback = 20;
+    return fallback * 2;
+}
+i32 main() { return pick(5) + fallback(0) + local_case() * 1000; }

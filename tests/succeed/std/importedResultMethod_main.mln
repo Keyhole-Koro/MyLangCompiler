@@ -1,0 +1,14 @@
+// A method on the result of another module's function: this module never
+// names the Option instance, yet calls its methods.
+import { Option } from "@std/core/option.mln";
+import lookups from "importedResultMethod_lib.mln";
+
+i32 zero(i32 n) { return 0; }
+
+i32 main() {
+    fn(i32) -> i32 f = lookups.pick(1).unwrap_or(zero);
+    fn(i32) -> i32 g = lookups.pick(0).unwrap_or(zero);
+    i32 none = 0;
+    if (lookups.pick(0).is_none()) { none = 1; }
+    return f(21) * 10 + g(5) + none;
+}

@@ -1,0 +1,12 @@
+// `T a = *f();` copies the struct f's result points to: the call runs before
+// the destination's address is computed, so it cannot clobber it.
+struct Point { i32 x; i32 y; };
+Point g[2];
+Point *at(i32 i) { return &g[0] + i; }
+i32 main() {
+    g[0].x = 7; g[0].y = 8;
+    Point a = *at(0);
+    Point *p = at(0);
+    Point b = *p;
+    return a.x * 100 + b.x * 10 + a.y - 8;
+}

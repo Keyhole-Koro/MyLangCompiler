@@ -1,0 +1,10 @@
+// `?` on an Option needs a function returning Option.
+import { Option } from "@std/core/option.mln";
+import { Result } from "@std/core/result.mln";
+enum Fail { Bad, }
+Option<i32> half(i32 n) { if (n % 2 != 0) { return None; } return Some(n / 2); }
+Result<i32, Fail> use(i32 n) {
+    i32 h = half(n)?;
+    return Ok(h);
+}
+i32 main() { return 0; }

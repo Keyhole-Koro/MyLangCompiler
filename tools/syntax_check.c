@@ -675,13 +675,6 @@ static void add_trait_body_symbols(const SyntaxTable *table, Token **tokens, siz
     if (added) qsort(symbols, *symbol_count, sizeof(SyntaxSymbol), symbol_index_order);
 }
 
-/* `dyn Trait`: `dyn` is an ordinary identifier to the lexer; before a trait
- * name it makes a type of it, so the grammar sees only the trait name. */
-static int is_dyn_prefix(Token **tokens, size_t token_count, size_t i) {
-    return i + 1 < token_count && tokens[i]->kind == IDENTIFIER && tokens[i]->value &&
-           strcmp(tokens[i]->value, "dyn") == 0 && tokens[i + 1]->kind == IDENTIFIER;
-}
-
 static AngleKind *classify_generic_angles(Token **tokens, size_t token_count) {
     AngleKind *angles = calloc(token_count ? token_count : 1, sizeof(AngleKind));
     const char **generic_names = NULL;
@@ -705,14 +698,6 @@ static AngleKind *classify_generic_angles(Token **tokens, size_t token_count) {
     for (size_t i = 0; i < token_count; i++) {
         if (tokens[i]->kind == L_BRACE) brace_depth++;
         else if (tokens[i]->kind == R_BRACE && brace_depth > 0) brace_depth--;
-
-        /* `dyn Iterator<i32>`: the trait reference reads as a type. */
-        if (is_dyn_prefix(tokens, token_count, i) && i + 2 < token_count && tokens[i + 2]->kind == LT) {
-            size_t close_index = 0;
-            if (find_angle_close(tokens, token_count, i + 2, &close_index))
-                mark_generic_span(tokens, angles, i + 2, close_index);
-            continue;
-        }
 
         /* `impl<T: Eq> Eq for Box<T>` */
         if (tokens[i]->kind == IMPL && i + 1 < token_count && tokens[i + 1]->kind == LT) {
@@ -855,7 +840,6 @@ static int check_tokens(
             i = cast_end;
             continue;
         }
-        if (generic_depth == 0 && is_dyn_prefix(source_tokens, source_count, i)) continue;
         if (angles[i] == ANGLE_GENERIC_OPEN) {
             generic_depth++;
             continue;

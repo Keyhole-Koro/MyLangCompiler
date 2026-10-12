@@ -1,0 +1,21 @@
+// A value bound by a case arm (`Err(e)`) has the variant's payload type, so
+// `==` on it uses the type's Eq impl.
+import { Eq } from "@std/core/cmp.mln";
+import { Result } from "@std/core/result.mln";
+
+struct Code { i32 major; i32 minor; };
+
+impl Eq for Code {
+    bool (Code *self) eq(Code *other) { return self->major == other->major; }
+}
+
+Result<i32, Code> fail(i32 minor) { return Err(Code { major: 4, minor: minor }); }
+
+i32 main() {
+    Code expected = Code { major: 4, minor: 0 };
+    i32 r = case fail(7) of {
+        Ok(v) -> v;
+        Err(e) -> ({ i32 same = 0; if (e == expected) { same = 1; } same; });
+    };
+    return r;
+}

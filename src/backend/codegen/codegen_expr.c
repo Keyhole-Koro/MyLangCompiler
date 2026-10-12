@@ -295,7 +295,10 @@ void _gen_expr(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char
             emit_load_const(cc, sb, target_reg, 0);
         } else if (find_enum_value(cc, node->identifier.name)) {
             emit_load_const(cc, sb, target_reg, find_enum_value(cc, node->identifier.name)->value);
-        } else if (find_func_sig(cc, node->identifier.name)) {
+        } else if (find_func_sig(cc, node->identifier.name) &&
+                   /* a parameter or local shadows the function */
+                   param_index(node->identifier.name, params, param_count) < 0 &&
+                   local_index_last(node->identifier.name, locals, local_count) < 0) {
             note_import_func(cc, node->identifier.name);
             sb_append(sb, "  \n; load function pointer '%s'\n", node->identifier.name);
             sb_append(sb, "  movi %s, %s\n", target_reg, node->identifier.name);

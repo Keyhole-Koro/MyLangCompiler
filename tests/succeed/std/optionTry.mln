@@ -1,0 +1,35 @@
+// `?` on an Option returns None from a function returning Option; a Result
+// joins in through `.ok()?`.
+import { Option } from "@std/core/option.mln";
+import { Result } from "@std/core/result.mln";
+
+enum Fail { Bad, }
+
+Option<i32> half(i32 n) {
+    if (n % 2 != 0) { return None; }
+    return Some(n / 2);
+}
+
+Result<i32, Fail> checked(i32 n) {
+    if (n < 0) { return Err(Fail::Bad); }
+    return Ok(n);
+}
+
+Option<i32> quarter(i32 n) {
+    i32 h = half(n)?;
+    return Some(half(h)?);
+}
+
+Option<i32> checked_half(i32 n) {
+    Result<i32, Fail> r = checked(n);
+    i32 v = r.ok()?;
+    return half(v);
+}
+
+i32 main() {
+    i32 a = quarter(12).unwrap_or(0);        // 3
+    i32 b = quarter(6).unwrap_or(9);         // 6/2 = 3 is odd -> None -> 9
+    i32 c = checked_half(8).unwrap_or(0);    // 4
+    i32 d = checked_half(-2).unwrap_or(7);   // Err -> None -> 7
+    return a * 1000 + b * 100 + c * 10 + d;
+}

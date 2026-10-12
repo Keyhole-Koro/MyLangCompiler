@@ -276,7 +276,24 @@ static void resolve_method_call(ParserContext *ctx, MethodScope *scope, ASTNode 
         method_error(ctx, call, "internal error: method '%s' has no receiver type", m->mangled);
     }
 
-    ASTNode *arg0 = convert_receiver(ctx, call, call->call.recv, &actual, &expected);
+    ASTNode *recv = call->call.recv;
+    int is_place = recv->type == AST_IDENTIFIER || recv->type == AST_MEMBER_ACCESS ||
+                   recv->type == AST_ARROW_ACCESS ||
+                   (recv->type == AST_UNARY && recv->unary.op == ASTARISK);
+    ASTNode *temp_decl = NULL;
+    if (!is_place && actual.pointer_level == 0 && actual.ref_kind == REFKIND_NONE &&
+        (expected.pointer_level > 0 || expected.ref_kind != REFKIND_NONE)) {
+        /* `half(3).is_none()` borrows a value that has no storage: give it a
+         * temporary first, `({ T __mlg_recv_N = half(3); is_none(&__mlg_recv_N) })`. */
+        char temp[48];
+        snprintf(temp, sizeof(temp), "__mlg_recv_%d", ctx->lowering.payload_case_counter++);
+        ASTNode *type = new_type_node(new_identifier((char *)actual.base_name), 0, TYPEMOD_NONE, REFKIND_NONE);
+        temp_decl = new_var_decl(type, temp, recv);
+        temp_decl->line = recv->line;
+        temp_decl->col = recv->col;
+        recv = new_identifier(temp);
+    }
+    ASTNode *arg0 = convert_receiver(ctx, call, recv, &actual, &expected);
 
     ASTNode **new_args = malloc(sizeof(ASTNode *) * (call->call.arg_count + 1));
     new_args[0] = arg0;
@@ -288,6 +305,23 @@ static void resolve_method_call(ParserContext *ctx, MethodScope *scope, ASTNode 
     free(call->call.name);
     call->call.name = strdup(m->mangled);
     call->call.recv = NULL;
+
+    if (temp_decl) {
+        /* The call node becomes the statement expression that holds it. */
+        ASTNode *inner = malloc(sizeof(ASTNode));
+        *inner = *call;
+        ASTNode **stmts = malloc(sizeof(ASTNode *) * 2);
+        stmts[0] = temp_decl;
+        stmts[1] = new_yield(inner);
+        ASTNode *wrapped = new_stmt_expr(new_block(stmts, 2));
+        int line = call->line, col = call->col, end_line = call->end_line, end_col = call->end_col;
+        *call = *wrapped;
+        free(wrapped);
+        call->line = line;
+        call->col = col;
+        call->end_line = end_line;
+        call->end_col = end_col;
+    }
 }
 
 static void resolve_calls_block(ParserContext *context, MethodScope *outer, ASTNode *block) {

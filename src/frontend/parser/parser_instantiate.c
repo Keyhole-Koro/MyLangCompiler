@@ -2,6 +2,7 @@
 #include "mylang/frontend/parser_ast_internal.h"
 #include "mylang/support/stringBuilder.h"
 #include "mylang/frontend/parser_trait_internal.h"
+#include "mylang/frontend/parser_annot_internal.h"
 
 /* Templates remain parser-owned. Each concrete declaration is an independent
  * AST owned by the program, so the existing semantic and backend passes see
@@ -21,6 +22,10 @@ typedef struct {
     int imported_count;
     char **impls_done;    /* instances whose impl templates were applied */
     int impls_done_count;
+    /* Method names any code in the unit may call (collect_called_methods);
+     * a generic type's receiver methods are made concrete only for these. */
+    char **called_methods;
+    int called_method_count;
 } Instantiation;
 
 typedef struct {
@@ -31,6 +36,8 @@ typedef struct {
 } Substitution;
 
 static void concrete_node(ASTNode **slot, void *user_data);
+static const char *instantiate(Instantiation *ctx, ASTNode *use, const char *name,
+                               ASTNode **args, int count, int is_function);
 static void check_bounds(Instantiation *ctx, ASTNode *use, const char *name,
                          char **type_params, ASTNode **bounds, ASTNode **args, int count);
 
@@ -161,6 +168,56 @@ static void append_type_key(ParserContext *context, StringBuilder *key, ASTNode 
               arg->type_node.ref_kind, arg->type_node.type_modifiers, strlen(name), name);
 }
 
+static int method_is_called(Instantiation *ctx, const char *name) {
+    for (int i = 0; i < ctx->called_method_count; i++)
+        if (strcmp(ctx->called_methods[i], name) == 0) return 1;
+    return 0;
+}
+
+static void note_called_method(Instantiation *ctx, const char *name) {
+    if (!name || method_is_called(ctx, name)) return;
+    ctx->called_methods = realloc(ctx->called_methods,
+                                  sizeof(char *) * (size_t)(ctx->called_method_count + 1));
+    ctx->called_methods[ctx->called_method_count++] = strdup(name);
+}
+
+static void collect_called_in(ASTNode **slot, void *user_data) {
+    ASTNode *node = *slot;
+    if (!node) return;
+    if (node->type == AST_CALL && node->call.recv) note_called_method(user_data, node->call.name);
+    ast_visit_children(node, collect_called_in, user_data);
+}
+
+/* Every `x.name(...)` in the unit, in templates as well as concrete code,
+ * plus what later passes call without a written call: trait items (`==`
+ * calls eq, for-in calls next) and drop. A name being called somewhere is
+ * enough; this only keeps unused methods of every instance from being
+ * emitted (Option<T> has several, and there are many Options). */
+static void collect_called_methods(Instantiation *ctx, ASTNode *program) {
+    ParserContext *context = ctx->parser_context;
+    collect_called_in(&program, ctx);
+    for (int i = 0; i < generic_template_count(context); i++) {
+        ASTNode *tpl = generic_template_at(context, i);
+        collect_called_in(&tpl, ctx);
+    }
+    for (int i = 0; i < generic_method_count(context); i++) {
+        ASTNode *fn = generic_method_at(context, i)->fundef;
+        collect_called_in(&fn, ctx);
+    }
+    for (int i = 0; i < impl_count(context); i++) {
+        ImplDef *impl = impl_at(context, i);
+        for (int k = 0; impl->template_items && k < impl->item_count; k++) {
+            ASTNode *fn = impl->template_items[k];
+            collect_called_in(&fn, ctx);
+        }
+    }
+    for (int i = 0; i < context->symbols.traits.count; i++) {
+        TraitDef *trait = context->symbols.traits.traits[i];
+        for (int k = 0; k < trait->item_count; k++) note_called_method(ctx, trait->items[k]->fundef.name);
+    }
+    note_called_method(ctx, "drop");
+}
+
 static void instantiate_receiver_methods(Instantiation *ctx, const char *template_name,
                                          const char *concrete_type_name,
                                          ASTNode **args, int count) {
@@ -173,10 +230,12 @@ static void instantiate_receiver_methods(Instantiation *ctx, const char *templat
                           "generic method receiver type argument count mismatch");
 
         /* Receiver-bound parameters are method parameters too.  Validate
-         * their bounds when the receiver is specialized, before lowering the
-         * method body into ordinary concrete code. */
+         * their bounds when the receiver is specialized -- whether or not
+         * the method is called -- before lowering its body. */
         check_bounds(ctx, entry->fundef, entry->method_name, entry->fundef->fundef.type_params,
                      entry->fundef->fundef.type_param_bounds, args, count);
+        if (!method_is_called(ctx, entry->method_name)) continue;
+        if (find_method(context, concrete_type_name, entry->method_name)) continue;
 
         ASTNode *method = ast_clone(entry->fundef);
         Substitution sub = {
@@ -404,9 +463,63 @@ static void instantiate_impl_templates(Instantiation *ctx, const char *template_
     }
 }
 
-/* The template name and arguments an instance key spells (append_type_key):
+/* One argument of an instance key (append_type_key), advancing *p; NULL
+ * when the key does not read back. */
+static ASTNode *decode_key_arg(const char **p) {
+    const char *s = *p;
+    char *end;
+    if (strncmp(s, "_c", 2) == 0) {
+        long digits = strtol(s + 2, &end, 10);
+        if (*end != '_') return NULL;
+        char *value = strndup(end + 1, (size_t)digits);
+        ASTNode *arg = new_number(value);
+        free(value);
+        *p = end + 1 + digits;
+        return arg;
+    }
+    if (strncmp(s, "_f", 2) == 0) {
+        int count = 0, variadic = 0, used = 0;
+        if (sscanf(s, "_f%d_v%d%n", &count, &variadic, &used) < 2 || used == 0) return NULL;
+        s += used;
+        ASTNode **params = count ? malloc(sizeof(ASTNode *) * (size_t)count) : NULL;
+        for (int i = 0; i < count; i++) {
+            params[i] = decode_key_arg(&s);
+            if (!params[i]) {
+                for (int k = 0; k < i; k++) free_ast(params[k]);
+                free(params);
+                return NULL;
+            }
+        }
+        if (strncmp(s, "_ret", 4) != 0) {
+            for (int k = 0; k < count; k++) free_ast(params[k]);
+            free(params);
+            return NULL;
+        }
+        s += 4;
+        ASTNode *ret = decode_key_arg(&s);
+        if (!ret) {
+            for (int k = 0; k < count; k++) free_ast(params[k]);
+            free(params);
+            return NULL;
+        }
+        *p = s;
+        return new_function_type(params, count, ret, variadic != 0);
+    }
+    int ptr = 0, ref = 0, mods = 0, used = 0;
+    if (sscanf(s, "_p%d_r%d_m%d_n%n", &ptr, &ref, &mods, &used) < 3 || used == 0) return NULL;
+    s += used;
+    long name_len = strtol(s, &end, 10);
+    if (*end != '_' || name_len <= 0) return NULL;
+    char *arg_name = strndup(end + 1, (size_t)name_len);
+    ASTNode *arg = new_type_node(new_identifier(arg_name), ptr, mods, ref);
+    free(arg_name);
+    *p = end + 1 + name_len;
+    return arg;
+}
+
+/* The template name and arguments an instance key spells:
  * `__mlg_s_3_Box_p0_r0_m0_n3_i32` is Box with `i32`. Returns 0 for a key
- * this cannot read back (function-type arguments). */
+ * this cannot read back. */
 static int decode_instance_key(const char *key, char **out_name, ASTNode ***out_args, int *out_count) {
     if (strncmp(key, "__mlg_s_", 8) != 0) return 0;
     const char *s = key + 8;
@@ -418,25 +531,8 @@ static int decode_instance_key(const char *key, char **out_name, ASTNode ***out_
     ASTNode **args = NULL;
     int count = 0;
     while (*s) {
-        ASTNode *arg = NULL;
-        if (strncmp(s, "_c", 2) == 0) {
-            long digits = strtol(s + 2, &end, 10);
-            if (*end != '_') break;
-            char *value = strndup(end + 1, (size_t)digits);
-            arg = new_number(value);
-            free(value);
-            s = end + 1 + digits;
-        } else {
-            int ptr = 0, ref = 0, mods = 0, used = 0;
-            if (sscanf(s, "_p%d_r%d_m%d_n%n", &ptr, &ref, &mods, &used) < 3 || used == 0) break;
-            s += used;
-            long name_len = strtol(s, &end, 10);
-            if (*end != '_' || name_len <= 0) break;
-            char *arg_name = strndup(end + 1, (size_t)name_len);
-            arg = new_type_node(new_identifier(arg_name), ptr, mods, ref);
-            free(arg_name);
-            s = end + 1 + name_len;
-        }
+        ASTNode *arg = decode_key_arg(&s);
+        if (!arg) break;
         args = realloc(args, sizeof(ASTNode *) * (size_t)(count + 1));
         args[count++] = arg;
     }
@@ -452,20 +548,66 @@ static int decode_instance_key(const char *key, char **out_name, ASTNode ***out_
     return 1;
 }
 
-/* Instances that came in with imported types get their impls too: this unit
- * may compare or drop one without ever naming the generic type. */
+/* Instances that came in with imported types get their called receiver
+ * methods and their impls here too: this unit may call, compare, or drop
+ * one without ever naming the generic type. */
 static void instantiate_imported_instance_impls(Instantiation *ctx) {
+    /* A payload enum instance arrives as the enum itself (its declaring
+     * module kept it unlowered), so it is found by its instance name. */
+    for (int i = 0; i < ctx->program->block.count; i++) {
+        ASTNode *node = ctx->program->block.stmts[i];
+        if (!node || node->type != AST_ENUM || strncmp(node->enum_stmt.name, "__mlg_s_", 8) != 0) continue;
+        char *template_name = NULL;
+        ASTNode **args = NULL;
+        int count = 0;
+        if (!decode_instance_key(node->enum_stmt.name, &template_name, &args, &count)) continue;
+        instantiate_receiver_methods(ctx, template_name, node->enum_stmt.name, args, count);
+        instantiate_impl_templates(ctx, template_name, node->enum_stmt.name, args, count);
+        for (int a = 0; a < count; a++) free_ast(args[a]);
+        free(args);
+        free(template_name);
+    }
     for (int i = 0; i < ctx->imported_count; i++) {
         const char *key = ctx->imported[i]->struct_stmt.name;
         char *template_name = NULL;
         ASTNode **args = NULL;
         int count = 0;
         if (!decode_instance_key(key, &template_name, &args, &count)) continue;
+        instantiate_receiver_methods(ctx, template_name, key, args, count);
         instantiate_impl_templates(ctx, template_name, key, args, count);
         for (int a = 0; a < count; a++) free_ast(args[a]);
         free(args);
         free(template_name);
     }
+}
+
+/* `dom.key_filter().unwrap_or(0)`: a function of another module returns an
+ * instance this unit never names, so nothing here would make its methods.
+ * Instantiate the type of every call result used as a method receiver. */
+static void instantiate_receiver_results(ASTNode **slot, void *user_data) {
+    ASTNode *node = *slot;
+    Instantiation *ctx = user_data;
+    if (!node) return;
+    ast_visit_children(node, instantiate_receiver_results, user_data);
+    if (node->type != AST_CALL || !node->call.recv || node->call.recv->type != AST_CALL ||
+        node->call.recv->call.recv || !node->call.recv->call.name)
+        return;
+    ASTNode *callee = callee_declaration(ctx->parser_context, ctx->program, node->call.recv->call.name);
+    ASTNode *ret = callee && callee->type == AST_FUNDEF ? callee->fundef.ret_type : NULL;
+    if (!ret || ret->type != AST_TYPE || ret->type_node.pointer_level || !ret->type_node.base_type ||
+        ret->type_node.base_type->type != AST_IDENTIFIER)
+        return;
+    const char *key = ret->type_node.base_type->identifier.name;
+    if (strncmp(key, "__mlg_s_", 8) != 0) return;
+    char *template_name = NULL;
+    ASTNode **args = NULL;
+    int count = 0;
+    if (!decode_instance_key(key, &template_name, &args, &count)) return;
+    if (find_generic_type_template(ctx->parser_context, template_name))
+        instantiate(ctx, node, template_name, args, count, 0);
+    for (int a = 0; a < count; a++) free_ast(args[a]);
+    free(args);
+    free(template_name);
 }
 
 /* Impl records name their types the way the source did; make them concrete
@@ -532,9 +674,12 @@ static const char *instantiate(Instantiation *ctx, ASTNode *use, const char *nam
     for (int i = 0; i < ctx->imported_count; i++) {
         if (strcmp(ctx->imported[i]->struct_stmt.name, key.buf) == 0) {
             sb_free(&key);
-            /* Its impls are this unit's to instantiate, as for its own. */
-            if (!is_function)
+            /* Its called methods and impls are this unit's to instantiate,
+             * as for its own. */
+            if (!is_function) {
+                instantiate_receiver_methods(ctx, name, ctx->imported[i]->struct_stmt.name, args, count);
                 instantiate_impl_templates(ctx, name, ctx->imported[i]->struct_stmt.name, args, count);
+            }
             return ctx->imported[i]->struct_stmt.name;
         }
     }
@@ -604,7 +749,7 @@ static const char *instantiate(Instantiation *ctx, ASTNode *use, const char *nam
     if (is_function) {
         add_function(context, decl);
     } else {
-        if (!is_enum) instantiate_receiver_methods(ctx, name, concrete_name, args, count);
+        instantiate_receiver_methods(ctx, name, concrete_name, args, count);
         instantiate_impl_templates(ctx, name, concrete_name, args, count);
     }
     return concrete_name;
@@ -814,13 +959,10 @@ void instantiate_generics(ParserContext *context, ASTNode *program) {
             ctx.imported[ctx.imported_count++] = node;
         }
     }
+    collect_called_methods(&ctx, program);
     concretize_impls(&ctx);
-    /* `dyn Iterator<Box<i32>>` looks its impls up by concrete arguments. */
-    for (int i = 0; i < context->symbols.dyn_use_count; i++) {
-        DynUse *use = &context->symbols.dyn_uses[i];
-        for (int a = 0; a < use->arg_count; a++) concrete_node(&use->args[a], &ctx);
-    }
     instantiate_imported_instance_impls(&ctx);
+    instantiate_receiver_results(&program, &ctx);
     for (int i = 0; i < program->block.count; i++) {
         ASTNode *node = program->block.stmts[i];
         const char *name = struct_name(node);
@@ -870,4 +1012,6 @@ void instantiate_generics(ParserContext *context, ASTNode *program) {
     free(ctx.imported);
     for (int i = 0; i < ctx.impls_done_count; i++) free(ctx.impls_done[i]);
     free(ctx.impls_done);
+    for (int i = 0; i < ctx.called_method_count; i++) free(ctx.called_methods[i]);
+    free(ctx.called_methods);
 }

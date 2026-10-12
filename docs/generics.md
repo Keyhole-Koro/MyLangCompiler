@@ -48,6 +48,18 @@ Structs may contain pointers to themselves; direct or indirect by-value
 containment cycles are rejected as infinitely sized. Generated structs are
 ordered by their layout dependencies before the existing backend sees them.
 
+A generic struct's or enum's receiver methods (`T (Opt<T> *self) get()`)
+are made concrete for an instance only when a method of that name is called
+somewhere in the translation unit (or is a trait item, or `drop`), so an
+`Option<T>` with several methods costs nothing for the instances that never
+call them. Their bounds are checked for every instance all the same. This
+includes instances that arrive with imported types or as the return type of
+another module's function (`dom.key_filter().unwrap_or(0)`).
+
+A method whose receiver is a pointer or reference may be called on a value
+with no storage, such as a call result: `half(3).is_none()` keeps the result
+in a temporary for the call.
+
 ## Boundaries
 
 - Definitions must be available in the current translation unit or through a

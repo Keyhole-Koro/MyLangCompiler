@@ -366,10 +366,14 @@ static void gen_stmt_labeled(CompilerContext *cc, ASTNode *node, StringBuilder *
                 gen_call_sret(cc, node->var_decl.init, sb, params, param_count, locals, local_count);
             } else if (aggregate_type_size(cc, vtype) > SLOT_SIZE &&
                        is_addressable_expr(node->var_decl.init)) {
-                emit_addr_of_var(cc, sb, node->var_decl.name, "r3",
-                                 params, param_count, locals, local_count);
+                /* The source first: `*at(0)` calls, which clobbers every
+                 * scratch register, so the destination is computed after. */
                 gen_lvalue_addr(cc, node->var_decl.init, sb, "r2",
                                 params, param_count, locals, local_count);
+                sb_append(sb, "  push r2\n");
+                emit_addr_of_var(cc, sb, node->var_decl.name, "r3",
+                                 params, param_count, locals, local_count);
+                sb_append(sb, "  pop r2\n");
                 emit_aggregate_copy(sb, "r3", "r2", aggregate_type_size(cc, vtype));
             } else {
                 gen_expr(cc, node->var_decl.init, sb, "r1", params, param_count, locals, local_count);

@@ -131,5 +131,10 @@ traitGenericImplsStd|211507|succeed/trait/genericImplsStd.mln
 traitGenericImplCrossModule|11|succeed/trait/genericImplCross_main.mln,succeed/trait/genericImplCross_lib.mln
 traitGenericImplBothModules|11|succeed/trait/genericImplDup_main.mln,succeed/trait/genericImplDup_lib.mln
 traitGenericImplImportedInstance|1|succeed/trait/genericImplImportedInstance_main.mln,succeed/trait/genericImplImportedInstance_lib.mln
-traitDynDispatch|19301906|succeed/trait/dynDispatch.mln
-traitDynCrossModule|29|succeed/trait/dynCross_main.mln,succeed/trait/dynCross_lib.mln
+optionResultMethods|118715411|succeed/std/optionResultMethods.mln
+paramShadowsFunction|40106|succeed/scope/paramShadowsFunction.mln
+importedResultMethod|421|succeed/std/importedResultMethod_main.mln,succeed/std/importedResultMethod_lib.mln
+collectionIterators|6601230|succeed/std/collectionIterators.mln,../../MyStdLib/collections/vec.mln,../../MyStdLib/memory/slice.mln,../../MyStdLib/collections/ringbuf.mln,../../MyStdLib/collections/hashmap.mln,../../MyStdLib/core/hash.mln,../../MyStdLib/core/cmp.mln
+optionTry|3947|succeed/std/optionTry.mln
+eqOnCaseBinding|1|succeed/trait/eqOnCaseBinding.mln
+initFromCallDeref|770|succeed/struct/byval/initFromCallDeref.mln

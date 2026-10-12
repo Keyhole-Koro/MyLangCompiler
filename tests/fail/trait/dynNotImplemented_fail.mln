@@ -1,8 +1,0 @@
-// A `T *` becomes a dyn value only when T implements the trait.
-trait Shape { i32 (Self *self) area(); }
-struct Circle { i32 r; };
-i32 main() {
-    Circle c = Circle { r: 1 };
-    dyn Shape s = &c;
-    return s.area();
-}

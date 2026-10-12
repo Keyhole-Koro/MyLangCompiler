@@ -1,9 +1,0 @@
-// An associated function cannot be called through a dyn value.
-trait Make { Self make(i32 n); }
-struct Box { i32 v; };
-impl Make for Box { Box make(i32 n) { return Box { v: n }; } }
-i32 main() {
-    Box b = Box { v: 1 };
-    dyn Make m = &b;
-    return 0;
-}

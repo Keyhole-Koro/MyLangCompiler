@@ -1,0 +1,36 @@
+// Option and Result query and fallback methods.
+import { Option } from "@std/core/option.mln";
+import { Result } from "@std/core/result.mln";
+
+enum Fail { Bad, }
+
+Result<i32, Fail> parse(i32 n) {
+    if (n < 0) { return Err(Fail::Bad); }
+    return Ok(n * 2);
+}
+
+Result<_, Fail> check(i32 n) {
+    if (n < 0) { return Err(Fail::Bad); }
+    return Ok(_);
+}
+
+Option<i32> half(i32 n) {
+    if (n % 2 != 0) { return None; }
+    return Some(n / 2);
+}
+
+i32 main() {
+    i32 r = 0;
+    Option<i32> some = half(8);
+    if (some.is_some() && !some.is_none()) { r = r + 1; }
+    if (half(3).is_none()) { r = r + 10; }
+    r = r + half(8).unwrap_or(0) * 100;          // 4
+    r = r + half(3).unwrap_or(5) * 1000;         // 5
+    Result<i32, Fail> ok = parse(3);
+    if (ok.is_ok() && !ok.is_err()) { r = r + 10000; }
+    r = r + parse(-1).unwrap_or(7) * 100000;     // 7
+    r = r + parse(4).ok().unwrap_or(0) * 1000000; // 8
+    if (parse(-1).err().is_some()) { r = r + 10000000; }
+    if (check(-1).is_err()) { r = r + 100000000; }
+    return r;
+}
