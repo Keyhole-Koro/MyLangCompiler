@@ -1,0 +1,21 @@
+import str from "@std/text/str.mln";
+import { Text } from "@std/text/text.mln";
+
+i32 main() {
+    Text<8> text;
+    text.init();
+    if (text.capacity() != 7 || !text.is_empty()) { return 1; }
+    if (!text.append("ab")) { return 2; }
+    if (text.append("c\0d")) { return 3; }        // embedded NUL is rejected
+    if (!text.append("cde")) { return 4; }
+    if (text.as_str() != "abcde") { return 5; }
+    if (text.append("wxyz")) { return 6; }        // does not fit: unchanged
+    if (text.as_str() != "abcde") { return 7; }
+    if (!text.push((u8)'!')) { return 8; }
+    if (text.len() != 6 || text.remaining() != 1) { return 9; }
+    text.truncate(2);
+    if (text.as_str() != "ab") { return 10; }
+    text.clear();
+    if (!text.is_empty()) { return 11; }
+    return 81;
+}

@@ -1,8 +1,8 @@
 import str from "@std/text/str.mln";
-import { InlineCString } from "@std/text/inline_c_string.mln";
+import { Text } from "@std/text/text.mln";
 
 i32 main() {
-    InlineCString<8> text = InlineCString<8> {};
+    Text<8> text = Text<8> {};
     if (text.capacity() != 7 || text.as_ptr()[0] != 0) { return 1; }
     if (!text.append("abc")) { return 2; }
     if (text.append("12345")) { return 3; }

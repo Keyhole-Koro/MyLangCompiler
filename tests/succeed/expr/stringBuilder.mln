@@ -1,15 +1,15 @@
 import str from "@std/text/str.mln";
-import { InlineString } from "@std/text/inline_string.mln";
+import { Text } from "@std/text/text.mln";
 
 i32 main() {
-    InlineString<16> line = InlineString<16> {};
+    Text<16> line = Text<16> {};
     if (!line.is_empty()) { return 1; }
     if (!line.append("pid=")) { return 2; }
 
-    InlineString<12> digits = 42.to_string();
+    Text<12> digits = 42.to_string();
     if (!line.append(digits.as_str())) { return 3; }
     if (line.as_str() != "pid=42") { return 4; }
-    if (line.len() != 6 || line.remaining() != 10) { return 5; }
+    if (line.len() != 6 || line.remaining() != 9) { return 5; }
 
     if (line.append("01234567890")) { return 6; }
     if (line.as_str() != "pid=42") { return 7; }
@@ -18,8 +18,8 @@ i32 main() {
     if (line.as_str() != "pid=42!") { return 9; }
 
     line.clear();
-    if (!line.append("a\0b")) { return 10; }
-    if (line.len() != 3 || line.as_str() != "a\0b") { return 11; }
+    if (line.append("a\0b")) { return 10; }      // embedded NUL is rejected
+    if (line.len() != 0) { return 11; }
 
     line.clear();
     i32 minimum = -2147483647 - 1;

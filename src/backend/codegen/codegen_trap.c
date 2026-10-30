@@ -12,12 +12,17 @@ void emit_trap(CompilerContext *cc, StringBuilder *sb, int kind, int line) {
     sb_append(sb, "  halt\n");
 }
 
-/* Traps unless 0 <= index < length, comparing unsigned so a negative index
- * fails too. `index_reg` is left unchanged; `keep_reg` is the other register
- * the caller still needs, so the scratch register is chosen around both and
- * restored before the branch (`pop` leaves the carry flag alone). */
+/* Traps unless 0 <= index < length. `chk` compares unsigned, so a negative
+ * index fails too, and on failure stops like a trap: r1 = 0x1BAD01 and r2 =
+ * the address of the `chk` instead of the line (the map file names the
+ * function). A length too large for its 21-bit immediate falls back to the
+ * longer sequence. */
 void emit_index_check(CompilerContext *cc, StringBuilder *sb, const char *index_reg,
                       const char *keep_reg, int length, int line) {
+    if (length > 0 && length <= 0x1FFFFF) {
+        sb_append(sb, "  chk %s, %d\n", index_reg, length);
+        return;
+    }
     static const char *candidates[] = { "r3", "r4", "r2", "r5" };
     const char *scratch = "r3";
     for (size_t i = 0; i < sizeof(candidates) / sizeof(candidates[0]); i++) {

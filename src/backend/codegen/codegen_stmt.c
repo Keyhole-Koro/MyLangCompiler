@@ -295,19 +295,19 @@ static void emit_zero_local(CompilerContext *cc, ASTNode *decl, StringBuilder *s
     int slots = slots_for_type(cc, decl->var_decl.var_type);
     if (slots < 1) slots = 1;
     sb_append(sb, "  ; zero '%s' (%d slot%s)\n", decl->var_decl.name, slots, slots == 1 ? "" : "s");
+    /* r0 is always zero (codegen_call.c relies on it too). */
     emit_addr_of_var(cc, sb, decl->var_decl.name, "r3", params, param_count, locals, local_count);
-    sb_append(sb, "  movi r1, 0\n");
     if (slots <= 8) {
         for (int i = 0; i < slots; i++) {
             if (i) sb_append(sb, "  addis r3, %d\n", SLOT_SIZE);
-            sb_append(sb, "  store r3, r1\n");
+            sb_append(sb, "  store r3, r0\n");
         }
         return;
     }
     int label = next_label(cc);
     sb_append(sb, "  movi r2, %d\n", slots);
     sb_append(sb, "b_L_zero_%d:\n", label);
-    sb_append(sb, "  store r3, r1\n");
+    sb_append(sb, "  store r3, r0\n");
     sb_append(sb, "  addis r3, %d\n", SLOT_SIZE);
     sb_append(sb, "  addis r2, -1\n");
     sb_append(sb, "  jnz b_L_zero_%d\n", label);

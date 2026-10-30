@@ -7,10 +7,10 @@ callBorrowLifetime|6|succeed/semantic/callBorrowLifetime.mln
 smallAndLiteralReturn|23|succeed/struct/byval/smallAndLiteralReturn.mln
 genericInstantiation|45|succeed/generic/instantiation.mln
 genericConstCapacity|10|succeed/generic/constCapacity.mln
-genericInlineString|81|succeed/generic/inlineString.mln,../../MyStdLib/text/str.mln,../../MyStdLib/core/option.mln,../../MyStdLib/text/inline_string.mln,../../MyStdLib/text/ascii.mln,../../MyStdLib/text/bytes.mln,../../MyStdLib/core/int32.mln
-genericInlineStringZeroValue|4|succeed/generic/inlineStringZeroValue.mln,../../MyStdLib/text/str.mln,../../MyStdLib/core/option.mln,../../MyStdLib/text/inline_string.mln,../../MyStdLib/text/ascii.mln,../../MyStdLib/text/bytes.mln,../../MyStdLib/core/int32.mln
-genericI32ToString|22|succeed/generic/i32ToString.mln,../../MyStdLib/text/str.mln,../../MyStdLib/core/option.mln,../../MyStdLib/text/inline_string.mln,../../MyStdLib/text/ascii.mln,../../MyStdLib/text/bytes.mln,../../MyStdLib/core/int32.mln
-genericInlineCString|82|succeed/generic/inlineCString.mln,../../MyStdLib/text/str.mln,../../MyStdLib/core/option.mln,../../MyStdLib/text/inline_string.mln,../../MyStdLib/text/inline_c_string.mln,../../MyStdLib/text/ascii.mln,../../MyStdLib/text/bytes.mln,../../MyStdLib/core/int32.mln
+genericTextEditing|81|succeed/generic/textEditing.mln,../../MyStdLib/text/str.mln,../../MyStdLib/core/option.mln,../../MyStdLib/text/text.mln,../../MyStdLib/text/ascii.mln,../../MyStdLib/text/bytes.mln,../../MyStdLib/core/int32.mln
+genericTextZeroValue|4|succeed/generic/textZeroValue.mln,../../MyStdLib/text/str.mln,../../MyStdLib/core/option.mln,../../MyStdLib/text/text.mln,../../MyStdLib/text/ascii.mln,../../MyStdLib/text/bytes.mln,../../MyStdLib/core/int32.mln
+genericI32ToString|22|succeed/generic/i32ToString.mln,../../MyStdLib/text/str.mln,../../MyStdLib/core/option.mln,../../MyStdLib/text/text.mln,../../MyStdLib/text/ascii.mln,../../MyStdLib/text/bytes.mln,../../MyStdLib/core/int32.mln
+genericTextCString|82|succeed/generic/textCString.mln,../../MyStdLib/text/str.mln,../../MyStdLib/core/option.mln,../../MyStdLib/text/text.mln,../../MyStdLib/text/ascii.mln,../../MyStdLib/text/bytes.mln,../../MyStdLib/core/int32.mln
 genericNestedStruct|57|succeed/generic/nestedStruct.mln
 genericRecursive|15|succeed/generic/recursive.mln
 genericImportedTemplates|13|succeed/generic/imported_templates_main.mln,succeed/generic/imported_templates_lib.mln
@@ -34,7 +34,7 @@ complexWhile|16|succeed/control/complexWhile.mln
 simpleChar|72|succeed/expr/simpleChar.mln
 stringEscape|10|succeed/expr/stringEscape.mln
 stringView|47|succeed/expr/stringView.mln,../../MyStdLib/text/str.mln,../../MyStdLib/core/option.mln,../../MyStdLib/text/ascii.mln,../../MyStdLib/text/bytes.mln,../../MyStdLib/core/int32.mln
-inlineStringFormatting|73|succeed/expr/stringBuilder.mln,../../MyStdLib/text/str.mln,../../MyStdLib/core/option.mln,../../MyStdLib/text/inline_string.mln,../../MyStdLib/text/ascii.mln,../../MyStdLib/text/bytes.mln,../../MyStdLib/core/int32.mln
+textFormatting|73|succeed/expr/stringBuilder.mln,../../MyStdLib/text/str.mln,../../MyStdLib/core/option.mln,../../MyStdLib/text/text.mln,../../MyStdLib/text/ascii.mln,../../MyStdLib/text/bytes.mln,../../MyStdLib/core/int32.mln
 intWidth32|20|succeed/expr/intWidth32.mln
 uintWidthSmall|69|succeed/expr/uintWidthSmall.mln
 sizeofType|13244|succeed/expr/sizeofType.mln

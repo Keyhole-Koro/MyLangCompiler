@@ -133,15 +133,19 @@ memory, the program stops where the check fails.
   have a `_` arm, as payload enums already must; otherwise an unmatched value
   would silently yield zero.
 
-A failed check *traps*: codegen emits `movi r1, 0x1BAD00 | kind`,
-`movi r2, <line>`, `halt` (`codegen_trap.c`). In kernel mode `halt` stops the
-machine with r1/r2 in the register dump; in a user process it is a privilege
-violation, and the kernel ends the process. No runtime library is linked for
-this.
+A failed check *traps*: the program stops with r1 = `0x1BAD00 | kind`. In
+kernel mode the machine halts with r1/r2 in the register dump; in a user
+process the stop is a privilege violation, and the kernel ends the process.
+No runtime library is linked for this (`codegen_trap.c`).
 
-| kind | r1 | meaning |
-| --- | --- | --- |
-| `0x01` | `0x1BAD01` | index out of range |
+An index check is the single instruction `chk reg, N`, which traps unless
+`reg < N` (unsigned, so a negative index fails too) and puts the address of
+the `chk` in r2; the linker's `.map` names the function. Other traps are
+`movi r1, code`, `movi r2, <line>`, `halt`.
+
+| kind | r1 | r2 | meaning |
+| --- | --- | --- | --- |
+| `0x01` | `0x1BAD01` | address of the `chk` | index out of range |
 
 ## Scope cleanup with `defer`
 
