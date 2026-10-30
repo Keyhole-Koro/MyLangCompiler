@@ -28,6 +28,8 @@ Covered by semantic failure tests:
   argument (`tests/fail/borrow/`)
 - returned borrow not taken from the first borrow parameter
 - `Option<borrow T>` returned from a local
+- constant index outside a fixed-size array, including a negative one (E0304)
+- match on a plain enum that leaves out a member without a `_` arm
 - moving or mutating a receiver while a method's returned borrow is in scope
 
 Still thin / future work:

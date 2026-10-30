@@ -1,0 +1,12 @@
+// A computed index past the end traps: the program stops with
+// r1 = 0x1BAD01 (index out of range) instead of writing past the array.
+i32 pick(i32 i) {
+    i32 a[4];
+    a[0] = 7;
+    return a[i];
+}
+
+i32 main() {
+    i32 seven = pick(0);
+    return pick(seven);
+}

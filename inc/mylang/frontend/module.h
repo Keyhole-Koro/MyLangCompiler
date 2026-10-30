@@ -83,6 +83,9 @@ typedef struct ModuleGenericMethod {
 typedef struct Module {
     char *canonical_path;
     char *package_name;
+    /* The file's source profile is `.unsafe.mln`: an importer checks the
+     * generic code it copies from this module under that profile. */
+    int is_unsafe;
     ASTNode *program;
     ASTNode **generic_templates;
     int generic_template_count;

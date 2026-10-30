@@ -198,6 +198,7 @@ ASTNode *parse_postfix(ParserContext *context, Token **cur) {
             if (!expect(cur, R_BRACKET))
                 parse_error(context, "expected ']' after array index", *cur);
             ASTNode *add = new_binary(ADD, node, index);
+            add->binary.subscript = 1;
             node = new_unary(ASTARISK, add);
             node->line = line;
             node->col = col;

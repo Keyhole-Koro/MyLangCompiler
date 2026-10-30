@@ -139,3 +139,6 @@ optionTry|3947|succeed/std/optionTry.mln
 eqOnCaseBinding|1|succeed/trait/eqOnCaseBinding.mln
 initFromCallDeref|770|succeed/struct/byval/initFromCallDeref.mln
 optionBorrowResult|71|succeed/borrow/optionBorrowResult.mln
+arrayIndexCheck|34|succeed/array/indexCheck.mln
+arrayIndexCheckTrap|0x1BAD01|succeed/array/indexCheckTrap.mln
+zeroInitLocals|1333|succeed/scope/zeroInitLocals.mln

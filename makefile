@@ -27,6 +27,7 @@ test-component: mlc syntax-check
 	$(MAKE) -C ../MyLangTester all
 	$(MYTEST) --compiler tests
 	python3 tests/check_depfile.py
+	python3 tests/check_generic_origin.py
 
 test-e2e: mlc
 	$(MAKE) -C ../MyLangTester all

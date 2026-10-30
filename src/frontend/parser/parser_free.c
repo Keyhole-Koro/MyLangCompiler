@@ -132,6 +132,7 @@ void free_ast(ASTNode *node) {
             free(node->fundef.name);
             free(node->fundef.package);
             free(node->fundef.recv_type_name);
+            free(node->fundef.origin_path);
             for (int i = 0; i < node->fundef.type_param_count; i++)
                 free(node->fundef.type_params[i]);
             free(node->fundef.type_params);

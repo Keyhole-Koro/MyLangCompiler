@@ -181,6 +181,7 @@ static void semantic_register_enum(SemanticContext *ctx, ASTNode *node) {
         }
         ctx->enum_values[ctx->enum_value_count].name = member->enum_member.name;
         ctx->enum_values[ctx->enum_value_count].value = member->enum_member.resolved_value;
+        ctx->enum_values[ctx->enum_value_count].enum_name = node->enum_stmt.name;
         ctx->enum_value_count++;
     }
 }
@@ -1988,8 +1989,52 @@ static void walk_case_items(SemanticContext *ctx, ASTNode *node, int allow_noop)
     free(arm);
 }
 
+static int case_key_matches(SemanticContext *ctx, ASTNode *key, long value) {
+    long key_value = 0;
+    if (!key) return 0;
+    if (key->type == AST_NUMBER && key->number.value)
+        return strtol(key->number.value, NULL, 10) == value;
+    if (key->type == AST_IDENTIFIER && semantic_find_enum_value(ctx, key->identifier.name, &key_value))
+        return key_value == value;
+    return 0;
+}
+
+/* A match on a plain enum without a `_` arm must name every member: an
+ * unmatched value would otherwise yield zero, a silently wrong answer.
+ * Payload enums get the same check when their arms are lowered
+ * (parser_payload_enum.c). */
+static void check_enum_case_coverage(SemanticContext *ctx, ASTNode *node) {
+    if (node->case_expr.default_expr || node->case_expr.default_is_noop) return;
+    SemanticTypeInfo type;
+    if (!semantic_infer_expr_type(ctx, node->case_expr.target, &type)) return;
+    if (!type.base_type || type.pointer_level > 0 || type.is_array) return;
+
+    char missing[192];
+    size_t used = 0;
+    int count = 0;
+    missing[0] = '\0';
+    for (int i = 0; i < ctx->enum_value_count; i++) {
+        SemanticEnumValue *member = &ctx->enum_values[i];
+        if (!member->enum_name || strcmp(member->enum_name, type.base_type) != 0) continue;
+        int seen = 0;
+        for (int c = 0; c < node->case_expr.case_count && !seen; c++)
+            seen = case_key_matches(ctx, node->case_expr.cases[c].key, member->value);
+        if (seen) continue;
+        int written = snprintf(missing + used, sizeof(missing) - used, "%s%s",
+                               count ? ", " : "", member->name);
+        if (written > 0 && used + (size_t)written < sizeof(missing)) used += (size_t)written;
+        count++;
+    }
+    if (!count) return;
+    semantic_error_at(ctx, semantic_location_from_ast(node),
+                      "this match does not cover %s of '%s': %s. Add %s, or a `_` arm",
+                      count == 1 ? "one member" : "every member", type.base_type, missing,
+                      count == 1 ? "an arm for it" : "arms for them");
+}
+
 static void semantic_walk_case(SemanticContext *ctx, ASTNode *node, int allow_noop) {
     semantic_walk_expr(ctx, node->case_expr.target, EXPRCTX_READ);
+    check_enum_case_coverage(ctx, node);
     walk_case_items(ctx, node, allow_noop);
 }
 
@@ -2010,6 +2055,13 @@ static void walk_params(SemanticContext *ctx, ASTNode **params, int param_count)
 
 #define UNSAFE_OPERATIONS_REPORTED 8
 
+/* The code being walked was written in an `.unsafe.mln` file: this file, or
+ * for a generic copied from another module, the file it came from. */
+static int semantic_in_unsafe_source(SemanticContext *ctx) {
+    if (ctx->origin_path) return ctx->origin_unsafe;
+    return ctx->safety_profile == SEMANTIC_SAFETY_UNSAFE;
+}
+
 static int semantic_is_raw_pointer(SemanticContext *ctx, ASTNode *expr) {
     SemanticTypeInfo type;
     if (!semantic_infer_expr_type(ctx, expr, &type)) return 0;
@@ -2025,17 +2077,43 @@ static int semantic_type_ast_is_raw_pointer(ASTNode *type_node) {
 }
 
 static void report_unsafe_operation(SemanticContext *ctx, ASTNode *at, const char *what) {
-    if (ctx->safety_profile == SEMANTIC_SAFETY_UNSAFE) return;
+    if (semantic_in_unsafe_source(ctx)) return;
     if (ctx->unsafe_operation_count++ >= UNSAFE_OPERATIONS_REPORTED) return;
     semantic_warning_code_at(ctx, semantic_location_from_ast(at), SEMCODE_UNSAFE_OPERATION,
                              "%s outside an .unsafe.mln file", what);
+}
+
+/* `a[3]` on a fixed-size array is checked here. A computed index is
+ * checked when the program runs: codegen emits a trap (codegen_trap.c). */
+static void check_constant_index(SemanticContext *ctx, ASTNode *node) {
+    if (!node || node->type != AST_UNARY || node->unary.op != ASTARISK) return;
+    ASTNode *add = node->unary.operand;
+    if (!add || add->type != AST_BINARY || !add->binary.subscript) return;
+    ASTNode *index = add->binary.right;
+    long value = 0;
+    if (index && index->type == AST_NUMBER && index->number.value) {
+        value = strtol(index->number.value, NULL, 10);
+    } else if (index && index->type == AST_UNARY && index->unary.op == SUB &&
+               index->unary.operand && index->unary.operand->type == AST_NUMBER &&
+               index->unary.operand->number.value) {
+        value = -strtol(index->unary.operand->number.value, NULL, 10);
+    } else {
+        return;
+    }
+    SemanticTypeInfo type;
+    if (!semantic_infer_expr_type(ctx, add->binary.left, &type)) return;
+    if (!type.is_array || type.pointer_level > 0 || type.dims_count <= 0 || type.dims[0] <= 0) return;
+    if (value >= 0 && value < type.dims[0]) return;
+    semantic_error_code_at(ctx, semantic_location_from_ast(index), SEMCODE_INDEX_OUT_OF_RANGE,
+                           "index %ld is out of range for an array of %d elements",
+                           value, type.dims[0]);
 }
 
 /* `*p`, `p[i]`, `p->x` through a raw pointer, `p + n`, and casts to or from
  * a pointer are unchecked memory access. A `borrow` and an array are not raw
  * pointers. */
 static void check_unsafe_operation(SemanticContext *ctx, ASTNode *node) {
-    if (ctx->safety_profile == SEMANTIC_SAFETY_UNSAFE || !node) return;
+    if (!node || semantic_in_unsafe_source(ctx)) return;
     switch (node->type) {
     case AST_UNARY: {
         if (node->unary.op != ASTARISK) return;
@@ -2136,6 +2214,7 @@ static void semantic_walk_expr(SemanticContext *ctx, ASTNode *node, ExprContext 
         /* Checked before the operand, which it marks when it is the
          * `p + i` of an index. */
         check_unsafe_operation(ctx, node);
+        check_constant_index(ctx, node);
         semantic_walk_expr(ctx, node->unary.operand, EXPRCTX_READ);
         break;
     case AST_CAST:
@@ -2376,7 +2455,13 @@ static void semantic_walk_stmt(SemanticContext *ctx, ASTNode *node) {
     case AST_FUNDEF:
     {
         ASTNode *prev_function = ctx->current_function;
+        const char *prev_origin = ctx->origin_path;
+        int prev_origin_unsafe = ctx->origin_unsafe;
         ctx->current_function = node;
+        if (node->fundef.origin_path) {
+            ctx->origin_path = node->fundef.origin_path;
+            ctx->origin_unsafe = node->fundef.origin_unsafe;
+        }
         ctx->function_depth++;
         enter_scope(ctx);
         semantic_walk_stmt(ctx, node->fundef.ret_type);
@@ -2385,6 +2470,8 @@ static void semantic_walk_stmt(SemanticContext *ctx, ASTNode *node) {
         leave_scope(ctx);
         ctx->function_depth--;
         ctx->current_function = prev_function;
+        ctx->origin_path = prev_origin;
+        ctx->origin_unsafe = prev_origin_unsafe;
         break;
     }
     case AST_PARAM:

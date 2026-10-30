@@ -1,0 +1,29 @@
+// Declarations without an initializer start at zero, even when an earlier
+// call left other values in the same stack slots.
+struct Pair {
+    i32 x;
+    i32 y;
+};
+
+i32 dirty() {
+    i32 a = 1234;
+    i32 b[10];
+    i32 i = 0;
+    while (i < 10) {
+        b[i] = 99;
+        i++;
+    }
+    return a + b[3];
+}
+
+i32 clean() {
+    i32 v;
+    i32 w[10];
+    Pair p;
+    return v + w[3] + w[9] + p.x + p.y;
+}
+
+i32 main() {
+    i32 d = dirty();
+    return clean() * 1000 + d;
+}

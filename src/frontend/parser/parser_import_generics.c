@@ -52,6 +52,16 @@ typedef struct GenericImportClosure {
 } GenericImportClosure;
 
 static void import_generic_template_closure(GenericImportClosure *closure, ASTNode *template);
+
+/* A generic function copied into this unit keeps the file it was written
+ * in: its instances report diagnostics there and follow that file's safety
+ * profile. A template imported again through another module keeps the first
+ * stamp, which names where it was actually written. */
+static void stamp_template_origin(ASTNode *fundef, Module *module) {
+    if (!fundef || fundef->type != AST_FUNDEF || !module || fundef->fundef.origin_path) return;
+    fundef->fundef.origin_path = strdup(module->canonical_path);
+    fundef->fundef.origin_unsafe = module->is_unsafe;
+}
 static void import_plain_dependency(ParserContext *context, Module *mod,
                                     const char *type_name);
 
@@ -105,6 +115,7 @@ static void import_generic_template_closure(GenericImportClosure *closure, ASTNo
         generic_template_is_already_imported(closure->context, template)) return;
 
     ASTNode *copy = ast_clone(template);
+    stamp_template_origin(copy, closure->module);
     /* Register before traversing methods/dependencies: a generic type is
      * allowed to refer to itself through a pointer or a method signature. */
     add_generic_template(closure->context, copy);
@@ -118,8 +129,10 @@ static void import_generic_template_closure(GenericImportClosure *closure, ASTNo
                 strcmp(method->receiver_template_name, type_name) != 0 ||
                 generic_method_is_already_imported(closure->context, type_name,
                                                    method->method_name)) continue;
+            ASTNode *method_copy = ast_clone(method->fundef);
+            stamp_template_origin(method_copy, closure->module);
             add_generic_method(closure->context, method->receiver_template_name,
-                               method->method_name, ast_clone(method->fundef));
+                               method->method_name, method_copy);
             ast_visit_children(method->fundef, import_generic_dependency, closure);
         }
     }

@@ -115,6 +115,34 @@ one, pointer arithmetic, and casts to or from pointers therefore belong in
 There is no block-level escape: an `unchecked { }` block existed and was
 removed (2026-10-12) in favour of whole `.unsafe.mln` files.
 
+## Run-time checks
+
+Some mistakes cannot be seen before the program runs. Rather than corrupting
+memory, the program stops where the check fails.
+
+- **Array index.** `a[i]` on a fixed-size array (a local, global, or struct
+  field declared `T a[N]`) checks `0 <= i < N`. A constant index outside the
+  range is error E0304 at compile time; a computed one is compared when it
+  runs. Only the first dimension of a multi-dimensional array is checked
+  yet. Raw-pointer indexing `p[i]` has no length to check against and stays
+  an unsafe operation (W0003).
+- **Zero values.** A local declared without an initializer starts at zero,
+  slot by slot (structs and arrays entirely), so reading it before the first
+  assignment yields 0 rather than whatever an earlier frame left there.
+- **Exhaustive matches.** A `case` on a plain enum must name every member or
+  have a `_` arm, as payload enums already must; otherwise an unmatched value
+  would silently yield zero.
+
+A failed check *traps*: codegen emits `movi r1, 0x1BAD00 | kind`,
+`movi r2, <line>`, `halt` (`codegen_trap.c`). In kernel mode `halt` stops the
+machine with r1/r2 in the register dump; in a user process it is a privilege
+violation, and the kernel ends the process. No runtime library is linked for
+this.
+
+| kind | r1 | meaning |
+| --- | --- | --- |
+| `0x01` | `0x1BAD01` | index out of range |
+
 ## Scope cleanup with `defer`
 
 `defer expression;` and `defer { ... }` register cleanup for the current

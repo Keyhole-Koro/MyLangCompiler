@@ -127,7 +127,9 @@ struct ASTNode {
             char *enum_name;
         } number;
         struct { char *name; } identifier;
-        struct { TokenKind op; ASTNode *left, *right; } binary;
+        // `subscript` marks the `a + i` that `a[i]` lowers to, so the index of
+        // a fixed-size array can be range-checked.
+        struct { TokenKind op; ASTNode *left, *right; int subscript; } binary;
         struct { ASTNode *left, *right; } assign;
         struct {
             ASTNode *base_type;
@@ -235,6 +237,12 @@ struct ASTNode {
              * the method table (parser_state_tables.c's add_method /
              * find_method). */
             char *recv_type_name;
+            /* Set on a generic function or method copied from another
+             * module (parser_import_generics.c), and on every instance made
+             * from it: diagnostics in its body name that file, and its
+             * operations are checked under that file's safety profile. */
+            char *origin_path;
+            int origin_unsafe;
         } fundef;
         struct {
             ASTNode *type;

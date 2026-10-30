@@ -286,6 +286,33 @@ static void emit_error_trace_note(CompilerContext *cc, ASTNode *node, StringBuil
     codegen_note_error_trace_used();
 }
 
+/* Every declared variable without an initializer starts at zero, so a
+ * read before the first assignment sees 0 rather than whatever an earlier
+ * frame left in the slot. Short values are cleared slot by slot; arrays and
+ * large structs with a loop. */
+static void emit_zero_local(CompilerContext *cc, ASTNode *decl, StringBuilder *sb,
+                            char **params, int param_count, char **locals, int local_count) {
+    int slots = slots_for_type(cc, decl->var_decl.var_type);
+    if (slots < 1) slots = 1;
+    sb_append(sb, "  ; zero '%s' (%d slot%s)\n", decl->var_decl.name, slots, slots == 1 ? "" : "s");
+    emit_addr_of_var(cc, sb, decl->var_decl.name, "r3", params, param_count, locals, local_count);
+    sb_append(sb, "  movi r1, 0\n");
+    if (slots <= 8) {
+        for (int i = 0; i < slots; i++) {
+            if (i) sb_append(sb, "  addis r3, %d\n", SLOT_SIZE);
+            sb_append(sb, "  store r3, r1\n");
+        }
+        return;
+    }
+    int label = next_label(cc);
+    sb_append(sb, "  movi r2, %d\n", slots);
+    sb_append(sb, "b_L_zero_%d:\n", label);
+    sb_append(sb, "  store r3, r1\n");
+    sb_append(sb, "  addis r3, %d\n", SLOT_SIZE);
+    sb_append(sb, "  addis r2, -1\n");
+    sb_append(sb, "  jnz b_L_zero_%d\n", label);
+}
+
 void gen_stmt(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
               char **params, int param_count,
               char **locals, int local_count)
@@ -383,6 +410,8 @@ static void gen_stmt_labeled(CompilerContext *cc, ASTNode *node, StringBuilder *
                 activate_drop_binding(cc, node->var_decl.name, sb);
                 clear_moved_drop_binding(cc, node->var_decl.init, sb);
             }
+        } else {
+            emit_zero_local(cc, node, sb, params, param_count, locals, local_count);
         }
         break;
     case AST_UNARY:

@@ -257,6 +257,7 @@ static ASTNode *parse_identifier_primary(ParserContext *context, Token **cur) {
             parse_error(context, "expected ']' after array index", *cur);
 
         ASTNode *add = new_binary(ADD, node, index);
+        add->binary.subscript = 1;
         node = new_unary(ASTARISK, add);
         set_node_end_from_token(node, end_tok);
     }

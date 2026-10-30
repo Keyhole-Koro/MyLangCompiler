@@ -25,6 +25,9 @@ typedef struct {
     SemanticDiagnosticSeverity severity;
     SemanticLocation loc;
     const char *code;
+    /* The file the location is in, when it is not the one being compiled:
+     * the body of a generic copied from another module. */
+    const char *file;
     char message[256];
 } SemanticDiagnostic;
 
@@ -52,7 +55,8 @@ typedef struct {
     SemanticLocation last_mut_borrow_loc;
 } SemanticBinding;
 
-typedef struct { const char *name; long value; } SemanticEnumValue;
+/* `enum_name` is the declaring enum, so a match can list the members it misses. */
+typedef struct { const char *name; long value; const char *enum_name; } SemanticEnumValue;
 typedef struct { const char *name; ASTNode *base_type; } SemanticNewtype;
 
 typedef struct {
@@ -101,6 +105,11 @@ typedef struct {
     int function_depth;
     int defer_depth;
     ASTNode *current_function;
+    /* While walking a function copied from another module's generic, the
+     * file it was written in and whether that file is `.unsafe.mln`
+     * (fundef.origin_path / origin_unsafe); NULL otherwise. */
+    const char *origin_path;
+    int origin_unsafe;
     int binding_count;
     SemanticBinding bindings[256];
     int enum_type_count;

@@ -40,10 +40,18 @@ int gen_pointer_binop(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
     TypeInfo *ptr_t = lhs_ptr ? &lhs_t : &rhs_t;
     long step = pointer_step_bytes(cc, ptr_t);
     const char *ptr_reg = strcmp(target_reg, "r1") == 0 ? "r2" : target_reg;
+    /* `a[i]` on a fixed-size array: the index must be below its length. */
+    int length = 0;
+    int checked = node->binary.subscript && lhs_ptr &&
+                  array_length_of_expr(cc, ptr_expr, &length) && length > 0;
 
     if (idx_expr->type == AST_NUMBER) {
         long idx_val = strtol(idx_expr->number.value, NULL, 10);
         long offset = idx_val * step;
+        /* Semantic analysis rejects a constant index out of range; this
+         * covers the instances it cannot see, such as a generic's. */
+        if (checked && (idx_val < 0 || idx_val >= length))
+            emit_trap(cc, sb, MYLANG_TRAP_INDEX, node->line);
         if (node->binary.op == SUB && lhs_ptr) offset = -offset;
         gen_expr(cc, ptr_expr, sb, ptr_reg, params, param_count, locals, local_count);
         if (offset != 0) sb_append(sb, "  addis %s, %ld\n", ptr_reg, offset);
@@ -55,6 +63,7 @@ int gen_pointer_binop(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
     sb_append(sb, "  push %s\n", ptr_reg);
     gen_expr(cc, idx_expr, sb, "r1", params, param_count, locals, local_count);
     sb_append(sb, "  pop %s\n", ptr_reg);
+    if (checked) emit_index_check(cc, sb, "r1", ptr_reg, length, node->line);
     emit_scale_reg_const(cc, sb, "r1", step);
     if (node->binary.op == SUB && lhs_ptr) {
         sb_append(sb, "  sub %s, r1\n", ptr_reg);

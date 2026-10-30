@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "mylang/driver/source_spec.h"
 
 static void module_destroy(Module *module) {
     if (!module) return;
@@ -108,6 +109,8 @@ Module *module_graph_add(ModuleGraph *graph, const char *canonical_path) {
     Module *mod = calloc(1, sizeof(Module));
     if (!mod) return NULL;
     mod->canonical_path = strdup(canonical_path);
+    MyLangSourceSpecResult spec = mylang_source_spec_parse(canonical_path);
+    mod->is_unsafe = spec.ok && spec.spec.safety == MYLANG_SAFETY_UNSAFE;
     mod->state = MODULE_LOADING;
 
     graph->modules[graph->module_count++] = mod;

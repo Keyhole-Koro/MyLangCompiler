@@ -94,6 +94,7 @@ static void semantic_diagnostic_at(SemanticContext *ctx, SemanticDiagnosticSever
     diag->severity = severity;
     diag->loc = loc;
     diag->code = code;
+    diag->file = ctx->origin_path;
     vsnprintf(diag->message, sizeof(diag->message), fmt, ap);
     diag->message[sizeof(diag->message) - 1] = '\0';
     if (severity == SEMANTIC_DIAG_ERROR) ctx->error_count++;
@@ -134,7 +135,7 @@ void semantic_emit_diagnostics(SemanticContext *ctx) {
     for (int i = 0; i < ctx->diagnostic_count; i++) {
         SemanticDiagnostic *diag = &ctx->diagnostics[i];
         fprintf(stderr, "%s:%d:%d: ",
-                filename,
+                diag->file ? diag->file : filename,
                 diag->loc.line,
                 diag->loc.col);
         print_severity(stderr, diag->severity, diag->code);

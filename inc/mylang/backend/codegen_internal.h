@@ -11,6 +11,11 @@
 
 #define SLOT_SIZE 4
 
+/* Run-time check failures (codegen_trap.c). r1 holds MYLANG_TRAP_BASE | kind
+ * when the program stops; the value fits a 21-bit `movi`. */
+#define MYLANG_TRAP_BASE 0x1BAD00
+#define MYLANG_TRAP_INDEX 0x01
+
 typedef struct FrontendSession FrontendSession;
 
 typedef struct {
@@ -269,6 +274,9 @@ void emit_load_width_from_addr(StringBuilder *sb, const char *target_reg, const 
 void emit_store_to_addr(StringBuilder *sb, const char *addr_reg, const char *value_reg, int is_byte);
 void emit_store_width_to_addr(StringBuilder *sb, const char *addr_reg, const char *value_reg, int width_bytes);
 void emit_scale_reg_const(CompilerContext *cc, StringBuilder *sb, const char *reg, long factor);
+void emit_trap(CompilerContext *cc, StringBuilder *sb, int kind, int line);
+void emit_index_check(CompilerContext *cc, StringBuilder *sb, const char *index_reg,
+                      const char *keep_reg, int length, int line);
 void emit_unary_inc_dec(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char *target_reg, char **params, int param_count, char **locals, int local_count);
 void emit_load_var(CompilerContext *cc, StringBuilder *sb, const char *name, const char *target_reg, char **params, int param_count, char **locals, int local_count);
 void emit_store_var(CompilerContext *cc, StringBuilder *sb, const char *name, const char *src_reg, char **params, int param_count, char **locals, int local_count);

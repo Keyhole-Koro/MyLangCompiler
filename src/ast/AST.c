@@ -172,6 +172,7 @@ ASTNode *ast_clone(const ASTNode *src) {
     case AST_CASE: ARRAY(case_expr.cases, case_expr.case_count); break;
     case AST_FUNDEF:
         STR(fundef.name); STR(fundef.package); STR(fundef.recv_type_name);
+        STR(fundef.origin_path);
         ARRAY(fundef.params, fundef.param_count);
         STRINGS(fundef.type_params, fundef.type_param_count);
         if (src->fundef.type_param_is_const)
