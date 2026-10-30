@@ -1,0 +1,6 @@
+import { Option } from "@std/core/option.mln";
+Option<borrow i32> dangling() {
+    i32 x = 1;
+    return Some(&x); // x goes away when the function returns
+}
+i32 main() { return 0; }

@@ -23,9 +23,9 @@ static Token *first_dom_token(Token *tokens) {
 }
 
 static SemanticSafetyProfile semantic_profile_for_source(MyLangSafetyProfile profile) {
-    return profile == MYLANG_SAFETY_STRICT
-        ? SEMANTIC_SAFETY_STRICT
-        : SEMANTIC_SAFETY_DEFAULT;
+    return profile == MYLANG_SAFETY_UNSAFE
+        ? SEMANTIC_SAFETY_UNSAFE
+        : SEMANTIC_SAFETY_CHECKED;
 }
 
 static void destroy_compile_session(FrontendSession *session) {

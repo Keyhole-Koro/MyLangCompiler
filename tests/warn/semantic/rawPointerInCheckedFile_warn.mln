@@ -1,0 +1,7 @@
+// Raw-pointer operations belong in a .unsafe.mln file; here they warn.
+struct P { i32 x; };
+i32 read(P *p) { return p->x; }
+i32 main() {
+    P a = P { x: 1 };
+    return read(&a);
+}

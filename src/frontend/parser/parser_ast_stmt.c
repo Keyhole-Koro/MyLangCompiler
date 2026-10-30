@@ -101,10 +101,3 @@ ASTNode *new_block(ASTNode **stmts, int count) {
     node->block.count = count;
     return node;
 }
-
-ASTNode *new_unchecked_block(ASTNode *body) {
-    ASTNode *node = calloc(1, sizeof(ASTNode));
-    node->type = AST_UNCHECKED;
-    node->unchecked_block.body = body;
-    return node;
-}

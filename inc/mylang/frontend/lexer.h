@@ -53,7 +53,7 @@ typedef enum {
     CONST,    // const
     STATIC,   // static
     MUT,      // mut
-    REF,      // ref
+    BORROW,   // borrow
     EXTERN,   // extern
     AUTO,     // auto
     REGISTER, // register
@@ -71,7 +71,6 @@ typedef enum {
     RETURN,   // return
     YIELD,    // yield
     DEFER,    // defer
-    UNCHECKED, // unchecked
     OF,       // of
     UNDERSCORE, // _
     TYPEDEF,  // typedef
@@ -90,7 +89,7 @@ typedef enum {
     IMPL,     // impl
     /* `test` is reserved so a top-level test declaration -- `test("name", {...},
      * () => {...});` -- stays distinguishable from a method definition, whose
-     * return type may itself be a user type: `User (ref Config c) build()`.
+     * return type may itself be a user type: `User (borrow Config c) build()`.
      * Both would otherwise start `IDENTIFIER (` and one token of lookahead
      * cannot separate them. It still reads as a plain name wherever a namespace
      * is expected (`package test;`, `test.pass()`), so existing sources compile

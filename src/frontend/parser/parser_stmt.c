@@ -326,13 +326,6 @@ ASTNode *parse_stmt(ParserContext *context, Token **cur) {
     if ((*cur)->kind == DO) return parse_do_while_stmt(context, cur);
     if ((*cur)->kind == FOR) return parse_for_stmt(context, cur);
     if ((*cur)->kind == DEFER) return parse_defer_stmt(context, cur);
-    if ((*cur)->kind == UNCHECKED) {
-        *cur = (*cur)->next;
-        context->control.unchecked_depth++;
-        ASTNode *body = parse_block(context, cur);
-        context->control.unchecked_depth--;
-        return new_unchecked_block(body);
-    }
     if ((*cur)->kind == RETURN) return parse_return_stmt(context, cur);
     if ((*cur)->kind == YIELD) {
         *cur = (*cur)->next;

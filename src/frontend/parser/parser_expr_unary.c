@@ -27,14 +27,11 @@ ASTNode *parse_unary(ParserContext *context, Token **cur) {
     }
     if ((*cur)->kind == AMPERSAND) {
         *cur = (*cur)->next;
-        if (context->control.unchecked_depth == 0 && (*cur)->kind == MUT) {
+        if ((*cur)->kind == MUT) {
             *cur = (*cur)->next;
             return new_borrow_mut(parse_unary(context, cur));
         }
-        if (context->control.unchecked_depth == 0) {
-            return new_borrow(parse_unary(context, cur));
-        }
-        return new_unary(AMPERSAND, parse_unary(context, cur));
+        return new_borrow(parse_unary(context, cur));
     }
     if ((*cur)->kind == ASTARISK) {
         *cur = (*cur)->next;

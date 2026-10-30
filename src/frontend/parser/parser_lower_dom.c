@@ -101,7 +101,6 @@ static const char *find_decl_type_in(ASTNode *node, const char *name) {
         found = find_decl_type_in(node->for_stmt.init, name);
         if (!found) found = find_decl_type_in(node->for_stmt.body, name);
         break;
-    case AST_UNCHECKED: found = find_decl_type_in(node->unchecked_block.body, name); break;
     case AST_STMT_EXPR: found = find_decl_type_in(node->stmt_expr.block, name); break;
     default: break;
     }
@@ -139,7 +138,7 @@ static ASTNode *lower_handler_value(ParserContext *context, ASTNode *el, const D
                 int by_ref = rt && rt->type == AST_TYPE && rt->type_node.pointer_level == 0 && rt->type_node.ref_kind != REFKIND_NONE;
                 if (!by_pointer && !by_ref) {
                     dom_error(context, el, prop->line, prop->col,
-                              "handler method '%s' must take its receiver by pointer or reference, `(%s *self)` or `(ref mut %s self)`",
+                              "handler method '%s' must take its receiver by pointer or reference, `(%s *self)` or `(borrow mut %s self)`",
                               member, type_name, type_name);
                 }
                 if (m->fundef->fundef.param_count > 3) {
@@ -491,8 +490,6 @@ static void lower_nested_blocks(ParserContext *context, ASTNode *stmt) {
     case AST_DEFER:
         lower_nested_blocks(context, stmt->defer_stmt.body);
         break;
-    case AST_UNCHECKED:
-        lower_nested_blocks(context, stmt->unchecked_block.body);
         break;
     case AST_STMT_EXPR:
         lower_nested_blocks(context, stmt->stmt_expr.block);
@@ -616,8 +613,6 @@ void ensure_no_dom_elements(ParserContext *context, ASTNode *node) {
             ensure_no_dom_elements(context, node->block.stmts[i]);
         }
         break;
-    case AST_UNCHECKED:
-        ensure_no_dom_elements(context, node->unchecked_block.body);
         break;
     case AST_STMT_EXPR:
         ensure_no_dom_elements(context, node->stmt_expr.block);

@@ -65,7 +65,7 @@ static const char *expected_label(const char *token) {
         {"CONST", "const"},
         {"STATIC", "static"},
         {"MUT", "mut"},
-        {"REF", "ref"},
+        {"BORROW", "borrow"},
         {"EXTERN", "extern"},
         {"AUTO", "auto"},
         {"REGISTER", "register"},
@@ -82,7 +82,6 @@ static const char *expected_label(const char *token) {
         {"RETURN", "return"},
         {"YIELD", "yield"},
         {"DEFER", "defer"},
-        {"UNCHECKED", "unchecked"},
         {"OF", "of"},
         {"TYPEDEF", "typedef"},
         {"NEWTYPE", "newtype"},
@@ -181,11 +180,11 @@ static bool format_expected_category_message(const SyntaxResult *result, const T
     };
     static const char *type_start[] = {
         "IDENTIFIER", "BOOL", "I32", "U32", "CHAR", "FLOAT", "DOUBLE", "VOID",
-        "LONG", "SHORT", "CONST", "REF"
+        "LONG", "SHORT", "CONST", "BORROW"
     };
     static const char *stmt_start[] = {
         "L_BRACE", "IF", "WHILE", "DO", "FOR", "RETURN", "BREAK", "CONTINUE",
-        "YIELD", "DEFER", "UNCHECKED", "SEMICOLON"
+        "YIELD", "DEFER", "SEMICOLON"
     };
 
     if (count_expected_tokens(result, expr_start, sizeof(expr_start) / sizeof(expr_start[0])) >= 5) {

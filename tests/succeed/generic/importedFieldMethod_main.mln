@@ -1,0 +1,15 @@
+// A receiver method of an instance that arrived as an imported field type.
+// The method's own body names the instance again; it must reuse the one
+// being instantiated instead of re-entering it forever.
+import { Result } from "@std/core/result.mln";
+import { Reply, LibErr } from "importedFieldMethod_lib.mln";
+
+i32 main() {
+    Result<i32, LibErr> ok = Ok(7);
+    Result<i32, LibErr> err = Err(LibErr::Missing);
+    Reply reply = Reply { out: &ok };
+    i32 r = 0;
+    if (!reply.out->is_err()) { r = r + 10; }
+    if (err.is_err()) { r = r + 1; }
+    return r;   // 11
+}

@@ -334,7 +334,7 @@ ASTNode *parse_type(ParserContext *context, Token **cur) {
         *cur = (*cur)->next;
     }
 
-    if ((*cur)->kind == REF) {
+    if ((*cur)->kind == BORROW) {
         ref_kind = REFKIND_SHARED;
         *cur = (*cur)->next;
         if ((*cur)->kind == MUT) {
@@ -345,7 +345,7 @@ ASTNode *parse_type(ParserContext *context, Token **cur) {
 
     if ((*cur)->kind == FN) {
         if (modifiers != 0 || ref_kind != REFKIND_NONE)
-            parse_error(context, "function value types cannot have const or ref modifiers", *cur);
+            parse_error(context, "function value types cannot have const or borrow modifiers", *cur);
         *cur = (*cur)->next;
         if (!expect(cur, L_PARENTHESES))
             parse_error(context, "expected '(' after fn", *cur);

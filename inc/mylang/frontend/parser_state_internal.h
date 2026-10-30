@@ -64,7 +64,7 @@ typedef struct MethodTable {
 } MethodTable;
 
 /* A method declared on a generic receiver, such as
- * `T (ref Box<T> box) get()`.  It remains a template until `Box<T>` is
+ * `T (borrow Box<T> box) get()`.  It remains a template until `Box<T>` is
  * concretized; only then do we generate and register the ordinary MethodDef
  * that method-call lowering consumes. */
 typedef struct GenericMethodDef {
@@ -142,7 +142,6 @@ typedef struct ParserControlState {
     int generic_decl_depth;
     const char *current_generic_function_name;
     int stop_at_arrow;
-    int unchecked_depth;
 } ParserControlState;
 
 typedef struct ParserLoweringState {

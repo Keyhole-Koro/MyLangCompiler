@@ -1,0 +1,4 @@
+// A global cannot hold a borrow.
+i32 x = 1;
+borrow i32 g = &x;
+i32 main() { return 0; }

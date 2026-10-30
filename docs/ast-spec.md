@@ -124,9 +124,6 @@ Nodes are represented by the `ASTNode` struct, which contains a union of specifi
 ### AST_EXPR_STMT
 - `expr_stmt.expr`: `ASTNode*`
 
-### AST_UNCHECKED
-- `unchecked_block.body`: `ASTNode*` (A block node)
-
 ---
 
 ## 4. Declarations

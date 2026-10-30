@@ -6,7 +6,7 @@
 
 static const char *g_semantic_filename = NULL;
 static int g_warnings_as_errors = 0;
-static SemanticSafetyProfile g_safety_profile = SEMANTIC_SAFETY_DEFAULT;
+static SemanticSafetyProfile g_safety_profile = SEMANTIC_SAFETY_CHECKED;
 
 void semantic_set_filename(const char *name) {
     g_semantic_filename = name;

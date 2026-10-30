@@ -12,9 +12,6 @@ int collect_locals(CompilerContext *cc, ASTNode *node, char **locals)
         for (int i = 0; i < node->block.count; i++)
             count += collect_locals(cc, node->block.stmts[i], locals ? (locals + count) : NULL);
         break;
-    case AST_UNCHECKED:
-        count += collect_locals(cc, node->unchecked_block.body, locals ? (locals + count) : NULL);
-        break;
     case AST_DEFER:
         count += collect_locals(cc, node->defer_stmt.body, locals ? (locals + count) : NULL);
         break;

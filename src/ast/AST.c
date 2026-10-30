@@ -49,7 +49,6 @@ char *astType2str(ASTNodeType type) {
         case AST_STMT_EXPR: return "AST_STMT_EXPR";
         case AST_CASE: return "AST_CASE";
         case AST_DEFER: return "AST_DEFER";
-        case AST_UNCHECKED: return "AST_UNCHECKED";
         case AST_DOM_ELEMENT: return "AST_DOM_ELEMENT";
     }
     return "<unknown>";
@@ -84,7 +83,6 @@ void ast_visit_children(ASTNode *n, void (*visit)(ASTNode **, void *), void *ctx
     case AST_DEFER: CHILD(defer_stmt.body); break;
     case AST_YIELD: CHILD(yield_stmt.expr); break;
     case AST_BLOCK: CHILDREN(block.stmts, block.count); break;
-    case AST_UNCHECKED: CHILD(unchecked_block.body); break;
     case AST_STMT_EXPR: CHILD(stmt_expr.block); break;
     case AST_FUN_LITERAL:
         CHILDREN(fun_literal.params, fun_literal.param_count);

@@ -117,6 +117,9 @@ char **parse_type_params(ParserContext *context, Token **cur, int *out_count,
                          ASTNode ***out_bounds);
 ASTNode **parse_type_args(ParserContext *context, Token **cur, int *out_count);
 void instantiate_generics(ParserContext *context, ASTNode *program);
+/* Rejects a borrow in a field, payload, global, array element or generic
+ * argument (parser_borrow_positions.c). */
+void check_borrow_positions(ParserContext *context, ASTNode *program);
 void load_imported_generic_templates(ParserContext *context, ASTNode *import_node, const char *source_path);
 void load_imported_plain_types(ParserContext *context, ASTNode *import_node, const char *source_path);
 /* Copies the declaration of a type that `mod` names in a signature (and the

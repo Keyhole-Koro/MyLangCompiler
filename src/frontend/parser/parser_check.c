@@ -86,8 +86,6 @@ void ensure_no_fun_literals(ASTNode *node) {
             ensure_no_fun_literals(node->block.stmts[i]);
         }
         break;
-    case AST_UNCHECKED:
-        ensure_no_fun_literals(node->unchecked_block.body);
         break;
     case AST_STMT_EXPR:
         ensure_no_fun_literals(node->stmt_expr.block);

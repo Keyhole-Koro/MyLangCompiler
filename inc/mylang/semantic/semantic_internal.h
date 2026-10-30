@@ -39,8 +39,13 @@ typedef struct {
     SemanticTypeInfo type_info;
     SemanticLocation decl_loc;
     SemanticLocation move_loc;
-    const char *borrowed_from;
+    const char *borrowed_from;  /* root owner this local borrows, or NULL */
     int borrow_is_mut;
+    /* Derived from another borrow (`borrow T r2 = r1;`, `r1.at(0)`): the
+     * owner's counts belong to that borrow, not to this one. */
+    int borrow_is_reborrow;
+    /* Holds a borrow whose owner could not be determined. */
+    int borrow_origin_unknown;
     int shared_borrow_count;
     int mutable_borrow_active;
     SemanticLocation last_shared_borrow_loc;
@@ -83,6 +88,10 @@ typedef struct {
     const char *filename;
     FrontendSession *session;
     SemanticSafetyProfile safety_profile;
+    /* Raw-pointer operations in a checked source (W0003): the first few are
+     * reported where they are, the rest counted into one summary. */
+    int unsafe_operation_count;
+    const ASTNode *unsafe_index_operand; /* `p + i` already reported as `p[i]` */
     int error_count;
     int warning_count;
     int warnings_as_errors;

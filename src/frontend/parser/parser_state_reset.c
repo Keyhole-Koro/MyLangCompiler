@@ -176,7 +176,6 @@ void parser_context_reset(ParserContext *context) {
     context->session = NULL;
     context->is_root_module = 0;
     context->control.stop_at_arrow = 0;
-    context->control.unchecked_depth = 0;
     context->control.generic_decl_depth = 0;
     context->control.current_generic_function_name = NULL;
     context->module.filename = NULL;

@@ -216,8 +216,8 @@ static void append_type_key(StringBuilder *sb, ASTNode *type) {
     }
     switch (type->type) {
     case AST_TYPE: {
-        if (type->type_node.ref_kind == REFKIND_SHARED) sb_append(sb, "ref ");
-        else if (type->type_node.ref_kind == REFKIND_MUT) sb_append(sb, "ref mut ");
+        if (type->type_node.ref_kind == REFKIND_SHARED) sb_append(sb, "borrow ");
+        else if (type->type_node.ref_kind == REFKIND_MUT) sb_append(sb, "borrow mut ");
         if (type->type_node.type_modifiers) sb_append(sb, "m%d ", type->type_node.type_modifiers);
         append_type_key(sb, type->type_node.base_type);
         for (int i = 0; i < type->type_node.pointer_level; i++) sb_append(sb, "*");
@@ -292,8 +292,8 @@ static int demangle_instance(const char **p, StringBuilder *out) {
         int ptr = 0, ref = 0, mods = 0, used = 0;
         if (sscanf(s, "_p%d_r%d_m%d_n%n", &ptr, &ref, &mods, &used) < 3 || used == 0) return 0;
         s += used;
-        if (ref == REFKIND_SHARED) sb_append(out, "ref ");
-        else if (ref == REFKIND_MUT) sb_append(out, "ref mut ");
+        if (ref == REFKIND_SHARED) sb_append(out, "borrow ");
+        else if (ref == REFKIND_MUT) sb_append(out, "borrow mut ");
         if (!demangle_name(&s, out)) return 0;
         for (int i = 0; i < ptr; i++) sb_append(out, "*");
     }

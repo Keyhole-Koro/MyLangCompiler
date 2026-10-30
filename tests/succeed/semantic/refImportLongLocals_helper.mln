@@ -1,4 +1,4 @@
-void sink(ref char s, rest args) {
+void sink(borrow char s, rest args) {
     if (s) {
         i32 seen = args.len;
         seen = seen + 1;

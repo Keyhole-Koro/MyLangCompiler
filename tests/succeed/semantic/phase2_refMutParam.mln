@@ -1,4 +1,4 @@
-i32 bump(ref mut i32 rx) {
+i32 bump(borrow mut i32 rx) {
     *rx = *rx + 1;
     return *rx;
 }

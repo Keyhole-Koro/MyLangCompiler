@@ -14,6 +14,7 @@ genericInlineCString|82|succeed/generic/inlineCString.mln,../../MyStdLib/text/st
 genericNestedStruct|57|succeed/generic/nestedStruct.mln
 genericRecursive|15|succeed/generic/recursive.mln
 genericImportedTemplates|13|succeed/generic/imported_templates_main.mln,succeed/generic/imported_templates_lib.mln
+genericImportedFieldMethod|11|succeed/generic/importedFieldMethod_main.mln,succeed/generic/importedFieldMethod_lib.mln
 genericKernelContainers|63|succeed/generic/kernel_containers.mln,../../MyStdLib/collections/hashmap.mln,../../MyStdLib/core/cmp.mln,../../MyStdLib/core/hash.mln
 genericFieldReceiver|169|succeed/generic/fieldReceiver.mln
 genericModuleIsolation|33|succeed/generic/modules_main.mln,succeed/generic/modules_one.mln,succeed/generic/modules_two.mln
@@ -96,10 +97,9 @@ testGlobalScalar|105|succeed/global/testGlobalScalar.mln
 globalUninit|83|succeed/global/globalUninit.mln
 phase2_refBorrow|7|succeed/semantic/phase2_refBorrow.mln
 phase2_refMut|9|succeed/semantic/phase2_refMut.mln
-phase2_unchecked|9|succeed/semantic/phase2_unchecked.mln
+rawPointerWrite|9|succeed/unsafe/rawPointerWrite.unsafe.mln
 phase2_refParam|11|succeed/semantic/phase2_refParam.mln
 phase2_refMutParam|9|succeed/semantic/phase2_refMutParam.mln
-phase2_uncheckedNested|12|succeed/semantic/phase2_uncheckedNested.mln
 refImportLongLocals|49|succeed/semantic/refImportLongLocals_main.mln,succeed/semantic/refImportLongLocals_helper.mln
 phase_restParam|0|succeed/semantic/phase_restParam.mln
 annotationTable|4422313|succeed/app/annotated.mln,support/app/counter.mln,support/app/annotations.mln,../../MyStdLib/meta/annotations.mln,../../MyStdLib/memory/section.mln,../../MyStdLib/memory/slice.mln,../../MyStdLib/format/mbin.mln,../../MyStdLib/text/str.mln,../../MyStdLib/core/option.mln,../../MyStdLib/text/ascii.mln,../../MyStdLib/text/bytes.mln,../../MyStdLib/core/int32.mln
@@ -138,3 +138,4 @@ collectionIterators|6601230|succeed/std/collectionIterators.mln,../../MyStdLib/c
 optionTry|3947|succeed/std/optionTry.mln
 eqOnCaseBinding|1|succeed/trait/eqOnCaseBinding.mln
 initFromCallDeref|770|succeed/struct/byval/initFromCallDeref.mln
+optionBorrowResult|71|succeed/borrow/optionBorrowResult.mln

@@ -1,0 +1,9 @@
+// A struct whose field type is a generic instance; importers receive the
+// instance with it.
+import { Result } from "@std/core/result.mln";
+
+export enum LibErr { Missing }
+
+export struct Reply {
+    Result<i32, LibErr> *out;
+};

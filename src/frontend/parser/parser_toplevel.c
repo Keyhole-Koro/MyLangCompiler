@@ -313,7 +313,7 @@ static ASTNode *parse_toplevel_decl(ParserContext *context, Token **cur) {
     }
     /* Test a method before requiring the leading token to be an already-known
      * type.  Receiver-bound generic methods can start with their own formal
-     * parameter, e.g. `T (ref Box<T> self) get()`. */
+     * parameter, e.g. `T (borrow Box<T> self) get()`. */
     if (looks_like_method(context, *cur)) {
         ASTNode *fn = parse_method(context, cur);
         /* Unlike a plain exported function, an exported method is not

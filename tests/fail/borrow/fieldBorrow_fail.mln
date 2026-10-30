@@ -1,0 +1,5 @@
+// A struct field cannot hold a borrow: the struct could be kept or moved
+// while the borrowed value goes away. Keep an id or index instead.
+struct Node { i32 value; };
+struct Holder { borrow Node node; };
+i32 main() { return 0; }

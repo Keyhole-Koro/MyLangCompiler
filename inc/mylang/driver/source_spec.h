@@ -10,9 +10,12 @@ typedef enum {
     MYLANG_SYNTAX_DOM
 } MyLangSyntaxProfile;
 
+/* Every source is checked unless its name says `unsafe`: raw-pointer
+ * dereference, pointer arithmetic, and pointer casts belong in
+ * `name.unsafe.mln` files. */
 typedef enum {
-    MYLANG_SAFETY_DEFAULT = 0,
-    MYLANG_SAFETY_STRICT
+    MYLANG_SAFETY_CHECKED = 0,
+    MYLANG_SAFETY_UNSAFE
 } MyLangSafetyProfile;
 
 typedef struct {
@@ -31,12 +34,12 @@ typedef struct {
  *
  * Accepted forms:
  *   name.mln
- *   name.safe.mln
+ *   name.unsafe.mln
  *   name.dom.mln
- *   name.dom.safe.mln
+ *   name.dom.unsafe.mln
  *   name.contract.mln
- *   name.safe.contract.mln
  *   name.test.mln
+ *   name.unsafe.test.mln
  *   name.dom.test.mln
  *
  * Modifier order is canonical and enforced: syntax modifiers precede semantic

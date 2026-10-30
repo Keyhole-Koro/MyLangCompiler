@@ -1,0 +1,11 @@
+// The result of a method returning a borrow keeps the receiver borrowed.
+import { Option } from "@std/core/option.mln";
+struct Bag { i32 a; i32 b; };
+Option<borrow i32> (borrow Bag self) first() { return Some(&self.a); }
+void consume(Bag bag) { }
+i32 main() {
+    Bag bag = Bag { a: 3, b: 4 };
+    Option<borrow i32> a = bag.first();
+    consume(bag); // a still borrows bag
+    return 0;
+}

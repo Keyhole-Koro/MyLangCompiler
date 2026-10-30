@@ -25,11 +25,10 @@ static DomProp *parse_dom_props(ParserContext *context, Token **cur, int *out_co
     DomProp *props = NULL;
     int count = 0;
 
-    // `ref` is a keyword elsewhere, but as a property name it is the
-    // compiler-handled node-id binding (see parser_lower_dom.c).
-    while (token_is_name(*cur) || (*cur)->kind == REF) {
+    // `ref` is the compiler-handled node-id binding (see parser_lower_dom.c).
+    while (token_is_name(*cur)) {
         Token *name_tok = *cur;
-        char *name = name_tok->kind == REF ? "ref" : name_tok->value;
+        char *name = name_tok->value;
         *cur = (*cur)->next;
 
         if (!expect(cur, ASSIGN))

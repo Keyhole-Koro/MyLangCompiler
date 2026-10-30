@@ -24,6 +24,7 @@ static void append_hoisted_functions(ParserContext *context, ASTNode *program) {
 static void lower_program(ParserContext *context, ASTNode *program) {
     char *scope[128] = {0};
 
+    check_borrow_positions(context, program);
     instantiate_generics(context, program);
 
     /* `@name` uses are checked against their `annotation` declarations and

@@ -28,7 +28,7 @@ MyLangSourceSpecResult mylang_source_spec_parse(const char *path) {
     MyLangSourceSpecResult result;
     memset(&result, 0, sizeof(result));
     result.spec.syntax = MYLANG_SYNTAX_CORE;
-    result.spec.safety = MYLANG_SAFETY_DEFAULT;
+    result.spec.safety = MYLANG_SAFETY_CHECKED;
 
     const char *base = basename_of(path);
     if (!base || !*base) {
@@ -72,7 +72,7 @@ MyLangSourceSpecResult mylang_source_spec_parse(const char *path) {
     }
 
     bool saw_dom = false;
-    bool saw_safe = false;
+    bool saw_unsafe = false;
     bool saw_contract = false;
     bool saw_test = false;
     bool semantic_phase = false;
@@ -104,14 +104,14 @@ MyLangSourceSpecResult mylang_source_spec_parse(const char *path) {
             }
             saw_dom = true;
             result.spec.syntax = MYLANG_SYNTAX_DOM;
-        } else if (strcmp(modifier, "safe") == 0) {
-            if (saw_safe) {
+        } else if (strcmp(modifier, "unsafe") == 0) {
+            if (saw_unsafe) {
                 fail(&result, "duplicate source modifier '%s'", modifier);
                 return result;
             }
-            saw_safe = true;
+            saw_unsafe = true;
             semantic_phase = true;
-            result.spec.safety = MYLANG_SAFETY_STRICT;
+            result.spec.safety = MYLANG_SAFETY_UNSAFE;
         } else if (strcmp(modifier, "test") == 0) {
             /* Test selection belongs to MyLangTester. MLC accepts the
              * extension so a runner can compile the original test source
@@ -150,8 +150,8 @@ const char *mylang_syntax_profile_name(MyLangSyntaxProfile profile) {
 
 const char *mylang_safety_profile_name(MyLangSafetyProfile profile) {
     switch (profile) {
-        case MYLANG_SAFETY_DEFAULT: return "default";
-        case MYLANG_SAFETY_STRICT: return "safe";
+        case MYLANG_SAFETY_CHECKED: return "checked";
+        case MYLANG_SAFETY_UNSAFE: return "unsafe";
         default: return "unknown";
     }
 }

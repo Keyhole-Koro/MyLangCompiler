@@ -7,12 +7,12 @@ segments before `.mln` select syntax features and semantic policies.
 
 ```text
 main.mln
-main.safe.mln
+heap.unsafe.mln
 page.dom.mln
-page.dom.safe.mln
+page.dom.unsafe.mln
 schema.contract.mln
-schema.safe.contract.mln
 serial_rx.test.mln
+serial_rx.unsafe.test.mln
 page.dom.test.mln
 ```
 
@@ -22,9 +22,9 @@ The canonical order is:
 <name>.<syntax modifiers>.<semantic policy modifiers>.<role marker>.mln
 ```
 
-`dom` enables DOM expression syntax. `safe` selects the strict memory-safety
-profile. The two axes are independent, so DOM syntax can be compiled with or
-without the strict policy. `contract` and `test` are optional, mutually
+`dom` enables DOM expression syntax. `unsafe` allows raw-pointer operations;
+every other source is checked. The two axes are independent, so DOM syntax
+can be compiled checked or unsafe. `contract` and `test` are optional, mutually
 exclusive final role markers; neither changes the compiler profile. `test` is
 consumed by MyLangTester. Repository boundary checks enforce that contract
 sources contain declarations rather than implementations.
@@ -32,7 +32,8 @@ sources contain declarations rather than implementations.
 ## Rejected forms
 
 ```text
-page.safe.dom.mln   # syntax modifiers must come first
+page.unsafe.dom.mln # syntax modifiers must come first
+page.safe.mln       # `safe` was removed: checked is the default
 page.dom.dom.mln    # duplicate modifier
 page.web.mln        # unknown modifier
 page.mlx            # legacy extension is not supported
@@ -44,13 +45,13 @@ MyLang frontend feature rather than a source-to-source preprocessing stage.
 ## Driver behavior
 
 The driver resolves the filename before parsing and reports the selected source
-profile. DOM tokens in a plain `.mln` or `.safe.mln` file are rejected with a
+profile. DOM tokens in a plain `.mln` or `.unsafe.mln` file are rejected with a
 source-positioned diagnostic requiring `.dom.mln`.
 
 ```text
-page.dom.safe.mln
+page.dom.unsafe.mln
         -> syntax = DOM
-        -> safety = strict
+        -> safety = unsafe
 ```
 
 The parser consumes the syntax profile. Semantic passes consume the safety
@@ -59,6 +60,25 @@ profile. Neither subsystem should inspect the source filename directly.
 DOM nodes are lowered from extension AST nodes to core MyLang AST nodes. The
 normal semantic and code-generation pipeline then processes the lowered tree;
 no generated `.mln` intermediary is part of normal compilation.
+
+## Checked and unsafe sources
+
+A checked source (no `unsafe` modifier) reports each raw-pointer operation
+with warning W0003:
+
+- dereferencing a raw pointer: `*p`, `p->x`, `p[i]`
+- pointer arithmetic: `p + n`, `p - n`
+- a cast to or from a raw pointer: `(u8 *)p`, `(i32)p`, `(T *)address`
+
+A `borrow` / `borrow mut` and an array are not raw pointers: `r.x` through a
+reference and `arr[i]` on an array are checked code. Taking an address,
+`&x`, is a borrow. A file reports its first eight operations where they are
+and the rest as one count.
+
+The operations belong in `name.unsafe.mln` files, kept small, which give the
+rest of the program values, references, and Options rather than pointers to
+dereference. W0003 is a warning while the existing sources move over; it
+becomes an error once they have.
 
 ## DOM lowering contract
 

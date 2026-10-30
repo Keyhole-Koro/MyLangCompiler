@@ -1,7 +1,7 @@
 #include "mylang/frontend/parser_internal.h"
 
 int is_type(ParserContext *context, TokenKind kind, Token *cur) {
-    if (kind == CONST || kind == REF) return 1;
+    if (kind == CONST || kind == BORROW) return 1;
     if (kind == FN) return 1;
 
     /* Keep `str` context-sensitive instead of reserving the word: package
@@ -27,7 +27,7 @@ int is_type(ParserContext *context, TokenKind kind, Token *cur) {
 }
 
 static Token *skip_type_tokens(ParserContext *context, Token *t) {
-    while (t && (t->kind == CONST || t->kind == REF || t->kind == MUT)) t = t->next;
+    while (t && (t->kind == CONST || t->kind == BORROW || t->kind == MUT)) t = t->next;
     if (!t || !is_type(context, t->kind, t)) return NULL;
     if (t->kind == FN) {
         t = t->next;
@@ -93,14 +93,14 @@ int looks_like_function_type_declaration(ParserContext *context, Token *cur) {
 // Look ahead to see if the current tokens form a method: `type (recv)
 // name(...)`. The receiver parenthesis is what tells a method's return type
 // apart from a plain function's name -- `void display()` has an IDENTIFIER
-// right after the type, `void (ref User u) display()` has '('.
+// right after the type, `void (borrow User u) display()` has '('.
 int looks_like_method(ParserContext *context, Token *cur) {
     Token *t = cur;
-    while (t && (t->kind == CONST || t->kind == REF || t->kind == MUT)) {
+    while (t && (t->kind == CONST || t->kind == BORROW || t->kind == MUT)) {
         t = t->next;
     }
     /* A receiver-bound generic method may use its receiver's formal type
-     * parameter as the return type (`T (ref Box<T> self) get()`).  `T` is
+     * parameter as the return type (`T (borrow Box<T> self) get()`).  `T` is
      * deliberately not in the ordinary type table yet, so accept an
      * identifier here and let parse_method establish the short-lived scope
      * before parsing it for real. */
@@ -151,7 +151,7 @@ int looks_like_method(ParserContext *context, Token *cur) {
 
 Token *generic_function_type_params_start(ParserContext *context, Token *cur) {
     Token *t = cur;
-    while (t && (t->kind == CONST || t->kind == REF || t->kind == MUT)) t = t->next;
+    while (t && (t->kind == CONST || t->kind == BORROW || t->kind == MUT)) t = t->next;
     if (!t || !(is_type(context, t->kind, t) || t->kind == IDENTIFIER)) return NULL;
     t = t->next;
 
@@ -245,7 +245,7 @@ int looks_like_fun_literal(ParserContext *context, Token *cur) {
             return 0;
         }
         if (t && t->kind == MUT) t = t->next;
-        while (t && (t->kind == CONST || t->kind == REF)) {
+        while (t && (t->kind == CONST || t->kind == BORROW)) {
             t = t->next;
             if (t && t->kind == MUT) t = t->next;
         }

@@ -15,7 +15,7 @@ Certain types are considered "Copy" and are duplicated instead of moved:
 - Built-in numeric types (`i32`, `u32`, `float`, etc.)
 - Booleans
 - Enumerations
-- Pointers and Shared References (`&T`)
+- Pointers and shared borrows (`borrow T`)
 - Structs with an explicit `impl Copy`, when every field is Copy and the type
   does not implement `Drop`
 
@@ -23,13 +23,21 @@ Certain types are considered "Copy" and are duplicated instead of moved:
 
 Borrowing allows you to access a value without taking ownership.
 
-### Shared Borrows (`&T`)
+A borrow's type is written `borrow T` (shared) or `borrow mut T` (mutable),
+and its value is taken with `&x` / `&mut x`:
+
+```mylang
+borrow Node r = &n;
+void (borrow mut Counter c) click(i32 id) { ... }
+```
+
+### Shared Borrows (`borrow T`)
 - Created using the `&` operator.
 - Multiple shared borrows can exist simultaneously.
 - The underlying value cannot be modified through a shared borrow.
 - The owner cannot move or mutably borrow the value while shared borrows are active.
 
-### Mutable Borrows (`&mut T`)
+### Mutable Borrows (`borrow mut T`)
 - Created using the `&mut` operator (requires the variable to be declared as `mut`).
 - Only **one** mutable borrow can exist at a time for a particular piece of data.
 - No other borrows (shared or mutable) can exist while a mutable borrow is active.
@@ -46,22 +54,66 @@ The semantic analyzer (`semantic_walk.c`) enforces these rules:
 3. **Move while Borrowed**: Cannot move a variable if it currently has active borrows.
 4. **Reference Escape**: Cannot return a reference to a local variable from a function.
 
+### Where a borrow may live
+
+A borrow is checked only while the analyzer can see every use of it, so it
+may be held in exactly three places: a local, a parameter (including a method
+receiver), and a return value. Writing one anywhere else is an error before
+generics are instantiated (`parser_borrow_positions.c`):
+
+- a struct field (`struct Holder { borrow Node node; }`)
+- an enum payload, a typedef or a newtype
+- a global
+- an array element (`borrow i32 refs[2]`)
+- a generic type argument (`Box<borrow i32>`), except `Option` and `Result`
+
+Something that must refer to another value for longer is kept as an id or an
+index (the DOM keeps node ids), or as a raw pointer in an `.unsafe.mln` file.
+
+### Returning a borrow
+
+A function that returns a borrow -- `borrow T`, or `Option<borrow T>` /
+`Result` carrying one -- returns a borrow of its **first borrow parameter**:
+the receiver for a method, otherwise the first parameter that is a borrow, a
+pointer, or a value carrying a borrow. A borrow of a global is also allowed.
+
+```mylang
+Option<borrow T> (Vec<T> *v) at(i32 index);   // borrows from v
+borrow i32 first(borrow i32 a, borrow i32 b) { return a; }  // ok
+borrow i32 second(borrow i32 a, borrow i32 b) { return b; } // error
+```
+
+The caller then treats the result as borrowing whatever it passed in that
+position, so the usual rules apply until the result's scope ends:
+
+```mylang
+Option<borrow i32> a = v.at(0);   // v is borrowed while a is in scope
+v.push(4);                        // error: v is borrowed
+```
+
+`at_mut()` / `get_mut()` return `Option<borrow mut T>` and keep the
+collection mutably borrowed. A borrow taken through a raw pointer
+(`p->rows.at(i)`) has no owner to track. An instance of a generic written over
+`T` (`unwrap_or` with `T = borrow i32`) is only checked for borrows of its own
+locals.
+
 ## 4. Lifetimes and Scopes
 
 MyLang uses lexical scopes to manage borrow lifetimes.
 - When a scope ends, all borrows tied to bindings in that scope are released.
 - This allows the owner to be used again (or moved) in the parent scope.
 
-## 5. Unchecked Blocks
+## 5. Raw pointers and `.unsafe.mln`
 
-The `unchecked` keyword can be used to bypass certain ownership checks:
-```mylang
-unchecked {
-    // Ownership rules are relaxed here
-    // Useful for low-level pointer manipulation
-}
-```
-Inside an `unchecked` block, the compiler allows raw pointer operations and bypasses the borrow checker's strict exclusivity rules for references.
+The borrow rules above follow references (`borrow` / `borrow mut`, and `&x` while
+it is held as one). A raw pointer (`T *`) is not tracked: a pointer taken
+from a value stays usable after the value is moved or dropped. Dereferencing
+one, pointer arithmetic, and casts to or from pointers therefore belong in
+`.unsafe.mln` sources; elsewhere they raise warning W0003 (see
+[Source filename modifiers](source-modifiers.md)).
+
+There is no block-level escape: an `unchecked { }` block existed and was
+removed (2026-10-12) in favour of whole `.unsafe.mln` files.
 
 ## Scope cleanup with `defer`
 

@@ -6,8 +6,8 @@
 typedef struct FrontendSession FrontendSession;
 
 typedef enum {
-    SEMANTIC_SAFETY_DEFAULT = 0,
-    SEMANTIC_SAFETY_STRICT
+    SEMANTIC_SAFETY_CHECKED = 0, /* raw-pointer operations are reported */
+    SEMANTIC_SAFETY_UNSAFE       /* an `.unsafe.mln` source: they are allowed */
 } SemanticSafetyProfile;
 
 void semantic_set_filename(const char *name);

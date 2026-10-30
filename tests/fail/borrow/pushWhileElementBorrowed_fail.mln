@@ -1,0 +1,13 @@
+// at() keeps the vector borrowed while its result is in scope, so push(),
+// which takes the vector as `borrow mut`, conflicts with it.
+import { Option } from "@std/core/option.mln";
+import { Vec } from "@std/collections/vec.mln";
+i32 main() {
+    i32 storage[4];
+    Vec<i32> v;
+    v.init(&storage[0], 4);
+    v.push(1);
+    Option<borrow i32> first = v.at(0);
+    v.push(4);
+    return 0;
+}

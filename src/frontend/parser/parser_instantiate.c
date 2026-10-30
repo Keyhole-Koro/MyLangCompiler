@@ -46,6 +46,12 @@ static void append_instance(Instantiation *ctx, char *name, ASTNode *declaration
     ctx->instances[ctx->count++] = (Instance){name, declaration};
 }
 
+static int has_instance(Instantiation *ctx, const char *name) {
+    for (int i = 0; i < ctx->count; i++)
+        if (strcmp(ctx->instances[i].name, name) == 0) return 1;
+    return 0;
+}
+
 static void generic_error(ParserContext *context, ASTNode *node, const char *message) {
     Token location = {0};
     location.line = node ? node->line : 0;
@@ -237,11 +243,22 @@ static void instantiate_receiver_methods(Instantiation *ctx, const char *templat
         if (!method_is_called(ctx, entry->method_name)) continue;
         if (find_method(context, concrete_type_name, entry->method_name)) continue;
 
+        StringBuilder mangled;
+        sb_init(&mangled);
+        sb_append(&mangled, "%s__%s", concrete_type_name, entry->method_name);
+        /* The method is registered only after its body is walked.  A use of
+         * an imported instance inside that body arrives here again, so the
+         * published instance is what closes the recursion. */
+        if (has_instance(ctx, mangled.buf)) {
+            sb_free(&mangled);
+            continue;
+        }
+
         ASTNode *method = ast_clone(entry->fundef);
         Substitution sub = {
             /* The receiver binds the method's own formal names.  They need
              * not spell the struct template's names the same way: a valid
-             * `T (ref Box<U> self) get()` is just as generic as `Box<T>`. */
+             * `T (borrow Box<U> self) get()` is just as generic as `Box<T>`. */
             context, entry->fundef->fundef.type_params, args, count,
         };
         substitute(&method, &sub);
@@ -258,9 +275,6 @@ static void instantiate_receiver_methods(Instantiation *ctx, const char *templat
         }
         method->fundef.type_param_count = 0;
 
-        StringBuilder mangled;
-        sb_init(&mangled);
-        sb_append(&mangled, "%s__%s", concrete_type_name, entry->method_name);
         free(method->fundef.name);
         method->fundef.name = strdup(mangled.buf);
         free(method->fundef.recv_type_name);

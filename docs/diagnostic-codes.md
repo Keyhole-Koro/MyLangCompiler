@@ -52,6 +52,7 @@ Bands `E06xx` and above are unused and reserved for future categories.
 | --- | --- | --- | --- |
 | `W0001` | Warning | Unreachable statement | `unreachable statement` |
 | `W0002` | Warning | `drop()` method without `impl Drop` | `T has drop() without `impl Drop`; ...` |
+| `W0003` | Warning | Raw-pointer operation in a checked source | `dereferencing a raw pointer outside an .unsafe.mln file` |
 
 Warnings can be promoted to errors with warnings-as-errors mode.
 

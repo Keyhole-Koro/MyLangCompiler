@@ -519,10 +519,6 @@ static void gen_stmt_labeled(CompilerContext *cc, ASTNode *node, StringBuilder *
     case AST_DEFER:
         push_active_defer(cc, node->defer_stmt.body);
         break;
-    case AST_UNCHECKED:
-        gen_stmt_internal(cc, node->unchecked_block.body, sb, params, param_count, locals, local_count,
-                          break_label, continue_label);
-        break;
     case AST_IMPORT:
         break;
     default:

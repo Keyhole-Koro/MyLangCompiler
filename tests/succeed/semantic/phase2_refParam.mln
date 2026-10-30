@@ -1,4 +1,4 @@
-i32 load(ref i32 rx) {
+i32 load(borrow i32 rx) {
     return *rx;
 }
 

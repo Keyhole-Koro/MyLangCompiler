@@ -1,0 +1,4 @@
+// A returned borrow comes from the first borrow parameter, so a caller knows
+// which argument stays borrowed.
+borrow i32 second(borrow i32 a, borrow i32 b) { return b; }
+i32 main() { return 0; }

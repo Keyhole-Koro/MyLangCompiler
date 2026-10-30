@@ -70,23 +70,23 @@ this manifest instead of scanning MyLang source text independently.
 A `fundef` carrying a `receiver` is a **method** on the receiver's base type:
 
 ```mylang
-void (ref User u)      display()          { ... }
-void (ref mut User u)  rename(char* n)    { ... }
+void (borrow User u)      display()          { ... }
+void (borrow mut User u)  rename(char* n)    { ... }
 i32  (User* u)         raw_id()           { ... }
 User (User u)          into_admin()       { ... }   // value receiver: a move
 ```
 
 The receiver is one `param`, never a list, so its spelling is exactly a
-parameter's: `mut`, `ref`, `ref mut`, pointer, and array suffixes all read the
+parameter's: `mut`, `borrow`, `borrow mut`, pointer, and array suffixes all read the
 same as they do in `param_list`. Lowering prepends it to the parameter list, so
 a method is an ordinary function from the AST onward and the ownership rules
 apply to the receiver unchanged -- notably, **a value receiver moves**, which is
-why `ref` / `ref mut` are the usual forms.
+why `borrow` / `borrow mut` are the usual forms.
 
 Methods are called with `.` on any receiver expression, and `->` also works on a
 pointer. The address-of / dereference needed to match the declared receiver is
 inserted during resolution, so `u.display()` reads the same whether `display`
-takes `User`, `ref User`, or `User*`. The receiver may be a local, a parameter,
+takes `User`, `borrow User`, or `User*`. The receiver may be a local, a parameter,
 a global, a struct field (`it.rows.len()`, `t->hits.add(1)`), a call's result,
 a cast, or `*p` / `&v` of one of those.
 
@@ -96,7 +96,7 @@ type arguments. The formal names need not match those used by the struct:
 ```mylang
 struct Box<T> { T value; };
 
-U (ref Box<U> box) get() { return box.value; }
+U (borrow Box<U> box) get() { return box.value; }
 ```
 
 When `Box<i32>` is used, the compiler specializes both the struct and this
@@ -162,7 +162,7 @@ is typed from the imported declaration too.
 
 `test` is a keyword, which is what keeps a top-level test declaration
 (`test("name", { ... }, () => { ... });`, see MLT-002) separable from a method
-whose return type is itself a user type (`User (ref Config c) build()`). Both
+whose return type is itself a user type (`User (borrow Config c) build()`). Both
 would otherwise start `IDENTIFIER (`, and the LR(1) grammar the LSP builds from
 this specification has only one token of lookahead.
 
@@ -253,7 +253,7 @@ name or a surplus argument is an error. Annotations cannot be put on a
 struct or a generic declaration.
 
 An annotated method must take its receiver by pointer or reference
-(`T *self`, `ref mut T self`): the recorded function is called later with
+(`T *self`, `borrow mut T self`): the recorded function is called later with
 an instance's address as its first argument, and because the calling
 convention ignores trailing arguments, the DOM's uniform handler shape
 `(owner, id, arg)` reaches `(T *self, i32 id)` or `(T *self)` directly --
@@ -301,7 +301,7 @@ i32 raw_pid = (i32)pid;
 Each newtype has nominal identity while keeping its base scalar's size,
 alignment, and calling convention. Construction and extraction are explicit;
 arithmetic requires extracting the base value first.
-- `type` -> `const* ( ref mut? )? base_type ( * )*`
+- `type` -> `const* ( borrow mut? )? base_type ( * )*`
 - `base_type` -> `primitive_type` | `IDENTIFIER type_args?`
 - `generic_params` -> `< generic_param ( , generic_param )* >`
 - `generic_param` -> `IDENTIFIER ( : bound ( + bound )* )?` | `const IDENTIFIER`
@@ -330,7 +330,6 @@ Generic uses are concretely instantiated before semantic analysis. See
     - `yield expr ;`
     - `defer expression ;`
     - `defer block`
-    - `unchecked block` (Disables safety checks)
     - `var_decl`
     - `expr ;`
 

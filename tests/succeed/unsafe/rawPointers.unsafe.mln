@@ -1,0 +1,11 @@
+// An .unsafe.mln file may dereference, index, offset, and cast raw pointers.
+struct P { i32 x; };
+i32 read(P *p) { return p->x; }
+i32 main() {
+    P a = P { x: 1 };
+    i32 arr[3];
+    i32 *q = &arr[0];
+    q[1] = 2;
+    i32 *r = q + 1;
+    return read(&a) + *r + (i32)q * 0;
+}

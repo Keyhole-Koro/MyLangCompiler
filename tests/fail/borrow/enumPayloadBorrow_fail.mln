@@ -1,0 +1,4 @@
+// An enum payload cannot hold a borrow (Option and Result instances are the
+// exception, as generic arguments).
+enum Slot { Empty, Full(borrow i32) }
+i32 main() { return 0; }

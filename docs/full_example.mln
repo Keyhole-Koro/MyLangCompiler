@@ -28,7 +28,7 @@ export mut i32 global_counter = 0;
 extern void external_func();
 
 // 5. Functions with various parameter types
-export i32 process_data(mut i32 x, ref mut Point p, rest args) {
+export i32 process_data(mut i32 x, borrow mut Point p, rest args) {
     p->x = x;
     
     // Local variables and Ownership
@@ -56,8 +56,8 @@ export i32 process_data(mut i32 x, ref mut Point p, rest args) {
     } while (x > 80);
 
     // 7. Ownership: Borrowing and Moving
-    ref Point r = &p2; // Shared borrow
-    // ref mut Point rm = &mut p2; // Mutable borrow (error if 'r' is still active)
+    borrow Point r = &p2; // Shared borrow
+    // borrow mut Point rm = &mut p2; // Mutable borrow (error if 'r' is still active)
     
     // 8. Advanced Expressions
     
@@ -85,12 +85,6 @@ export i32 process_data(mut i32 x, ref mut Point p, rest args) {
     // Ternary
     mut i32 result = (status > 0) ? x : -1;
     
-    // 9. Unchecked block for low-level pointer ops
-    unchecked {
-        i32* ptr = (i32*)0x1234;
-        *ptr = 42;
-    }
-
     return result;
 }
 

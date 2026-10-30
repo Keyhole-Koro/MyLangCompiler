@@ -1,0 +1,32 @@
+// A method returns a borrow of its receiver; the receiver is usable again
+// once the result's scope ends, and at_mut() writes through to the element.
+import { Option } from "@std/core/option.mln";
+import { Slice } from "@std/memory/slice.mln";
+struct Bag { i32 a; i32 b; };
+Option<borrow i32> (borrow Bag self) pick(i32 i) {
+    if (i == 0) { return Some(&self.a); }
+    if (i == 1) { return Some(&self.b); }
+    return None;
+}
+borrow i32 first(borrow i32 a, borrow i32 b) { return a; }
+i32 total(Bag bag) { return bag.a + bag.b; }
+i32 main() {
+    Bag bag = Bag { a: 3, b: 4 };
+    i32 picked = 0;
+    {
+        Option<borrow i32> o = bag.pick(1);
+        picked = case o of { Some(v) -> *v; None -> 0; };
+    }
+    i32 x = 10; i32 y = 20;
+    borrow i32 r = first(&x, &y);
+    i32 storage[2];
+    storage[0] = 1; storage[1] = 2;
+    Slice<i32> s;
+    s.init(&storage[0], 2);
+    {
+        Option<borrow mut i32> slot = s.at_mut(1);
+        case slot of { Some(v) -> ({ *v = 50; }); None -> _; };
+    }
+    i32 read = *s.at(1).unwrap_or(&x);
+    return picked + *r + read + total(bag); // 4 + 10 + 50 + 7 = 71
+}

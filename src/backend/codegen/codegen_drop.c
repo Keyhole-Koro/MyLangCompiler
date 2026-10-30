@@ -105,9 +105,6 @@ void collect_drop_bindings(CompilerContext *cc, ASTNode *node, bool is_param,
     case AST_DO_WHILE:
         collect_drop_bindings(cc, node->do_while_stmt.body, false, param_count, local_count);
         break;
-    case AST_UNCHECKED:
-        collect_drop_bindings(cc, node->unchecked_block.body, false, param_count, local_count);
-        break;
     case AST_DEFER:
         collect_drop_bindings(cc, node->defer_stmt.body, false, param_count, local_count);
         break;

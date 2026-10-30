@@ -49,7 +49,6 @@ typedef enum {
     AST_STMT_EXPR,
     AST_CASE,
     AST_DEFER,
-    AST_UNCHECKED,
     // DOM syntax extension node. Only reachable in a .dom.mln source, and only
     // between parsing and DOM lowering; later passes never see one.
     AST_DOM_ELEMENT,
@@ -194,7 +193,6 @@ struct ASTNode {
         struct { ASTNode *expr; } yield_stmt;
         struct { ASTNode **stmts; int count; } block;
         struct { ASTNode *body; } defer_stmt;
-        struct { ASTNode *body; } unchecked_block;
         struct { ASTNode *block; } stmt_expr;
         struct {
             ASTNode **params;
@@ -229,7 +227,7 @@ struct ASTNode {
              * the bound trait references (AST_TYPE), NULL for an unbounded
              * parameter. Checked when the template is instantiated. */
             ASTNode **type_param_bounds;
-            /* Non-NULL only for a method (`void (ref User u) display()`):
+            /* Non-NULL only for a method (`void (borrow User u) display()`):
              * the receiver's base type name. The receiver itself already
              * lives in params[0] by the time parsing finishes -- this field
              * exists only so a method can still be told apart from a plain

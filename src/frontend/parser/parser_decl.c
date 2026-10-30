@@ -187,7 +187,7 @@ static const char *receiver_base_type_name(ASTNode *type_node) {
  * syntax. */
 static char **receiver_bound_type_params(Token *cur, int *out_count) {
     Token *t = cur;
-    while (t && (t->kind == CONST || t->kind == REF || t->kind == MUT)) t = t->next;
+    while (t && (t->kind == CONST || t->kind == BORROW || t->kind == MUT)) t = t->next;
     if (!t) return NULL;
     t = t->next; /* return type's base token */
     if (t && t->kind == LT) {
@@ -204,7 +204,7 @@ static char **receiver_bound_type_params(Token *cur, int *out_count) {
     if (!t || t->kind != L_PARENTHESES) return NULL;
 
     t = t->next;
-    while (t && (t->kind == CONST || t->kind == REF || t->kind == MUT)) t = t->next;
+    while (t && (t->kind == CONST || t->kind == BORROW || t->kind == MUT)) t = t->next;
     if (!t || t->kind != IDENTIFIER || !t->next || t->next->kind != LT) return NULL;
     t = t->next->next;
 

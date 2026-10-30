@@ -110,8 +110,6 @@ void free_ast(ASTNode *node) {
                         free_ast(node->block.stmts[i]);
                     free(node->block.stmts);
                     break;
-        case AST_UNCHECKED:
-            free_ast(node->unchecked_block.body);
             break;
         case AST_STMT_EXPR:
                 free_ast(node->stmt_expr.block);

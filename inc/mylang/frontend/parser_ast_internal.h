@@ -56,7 +56,6 @@ ASTNode *new_return(ASTNode *expr);
 ASTNode *new_defer(ASTNode *body);
 ASTNode *new_yield(ASTNode *expr);
 ASTNode *new_block(ASTNode **stmts, int count);
-ASTNode *new_unchecked_block(ASTNode *body);
 ASTNode *new_stmt_expr(ASTNode *block);
 ASTNode *new_case_expr(ASTNode *target, CaseItem *cases, int case_count,
                        ASTNode *default_expr, int default_is_noop);

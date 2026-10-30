@@ -1,0 +1,3 @@
+// `Box<borrow i32>` would put the borrow in Box's field.
+struct Box<T> { T value; };
+i32 main() { i32 x = 1; Box<borrow i32> b = Box<borrow i32> { value: &x }; return x; }

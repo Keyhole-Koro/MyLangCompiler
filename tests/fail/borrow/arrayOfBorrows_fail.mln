@@ -1,0 +1,2 @@
+// An array element cannot hold a borrow.
+i32 main() { i32 x = 1; borrow i32 refs[2]; return x; }

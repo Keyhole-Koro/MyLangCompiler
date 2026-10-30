@@ -56,7 +56,7 @@ static void method_scope_free(MethodScope *scope) {
 static ASTNode *resolving_program;
 
 /* A receiver's static shape: base type name (borrowed from the type AST) plus
- * pointer level and ref kind. Arrays and modifiers don't matter for method
+ * pointer level and borrow kind. Arrays and modifiers don't matter for method
  * dispatch, so they're not tracked here. */
 typedef struct {
     const char *base_name;
@@ -228,8 +228,9 @@ static void method_error(ParserContext *ctx, ASTNode *node, const char *fmt, ...
  * shape is `actual`) into what the method's declared receiver (`expected`)
  * needs -- see docs/grammar.md's receiver table. An exact match (including
  * both being plain values, which is a move) passes through unchanged.
- * Reconciling a raw pointer with a `ref`/`ref mut` receiver, or vice versa,
- * has no auto-conversion yet -- it needs an explicit local. */
+ * A raw pointer is dereferenced and borrowed for a `borrow`/`borrow mut`
+ * receiver; a borrow reaching a pointer receiver has no auto-conversion yet
+ * -- it needs an explicit local. */
 static ASTNode *convert_receiver(ParserContext *ctx, ASTNode *call, ASTNode *recv,
                                  const RecvShape *actual, const RecvShape *expected) {
     if (actual->pointer_level == expected->pointer_level && actual->ref_kind == expected->ref_kind) {
@@ -247,9 +248,15 @@ static ASTNode *convert_receiver(ParserContext *ctx, ASTNode *call, ASTNode *rec
     if (actual->pointer_level == 1 && actual->ref_kind == REFKIND_NONE && expected_plain_value) {
         return new_unary(ASTARISK, recv);
     }
+    /* `p.push(x)` with `Vec<T> *p` against a `borrow mut Vec<T>` receiver:
+     * borrow the pointee. Like any raw deref it is unchecked. */
+    if (actual->pointer_level == 1 && actual->ref_kind == REFKIND_NONE && expected->pointer_level == 0) {
+        if (expected->ref_kind == REFKIND_SHARED) return new_borrow(new_unary(ASTARISK, recv));
+        if (expected->ref_kind == REFKIND_MUT) return new_borrow_mut(new_unary(ASTARISK, recv));
+    }
 
     method_error(ctx, call,
-        "cannot call method '%s' on this receiver: its declared kind (value/ref/ref mut/pointer) "
+        "cannot call method '%s' on this receiver: its declared kind (value/borrow/borrow mut/pointer) "
         "doesn't match what the method expects, and auto-ref/deref doesn't bridge them -- bind it "
         "to a local of the exact receiver type first",
         call->call.name);
@@ -440,8 +447,6 @@ static void resolve_calls_node(ParserContext *context, MethodScope *scope, ASTNo
     case AST_STMT_EXPR:
         resolve_calls_node(context, scope, node->stmt_expr.block);
         break;
-    case AST_UNCHECKED:
-        resolve_calls_node(context, scope, node->unchecked_block.body);
         break;
     case AST_INIT_LIST:
         for (int i = 0; i < node->init_list.count; i++) resolve_calls_node(context, scope, node->init_list.elements[i]);

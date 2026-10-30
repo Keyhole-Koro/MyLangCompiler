@@ -25,8 +25,8 @@ static void fprint_ref_kind(FILE *out, ASTNode *node, int indent) {
     fprint_indent(out, indent);
     fprintf(out, "refkind: ");
     switch (node->type_node.ref_kind) {
-    case REFKIND_SHARED: fprintf(out, "ref\n"); break;
-    case REFKIND_MUT: fprintf(out, "ref mut\n"); break;
+    case REFKIND_SHARED: fprintf(out, "borrow\n"); break;
+    case REFKIND_MUT: fprintf(out, "borrow mut\n"); break;
     default: fprintf(out, "none\n"); break;
     }
 }

@@ -2,7 +2,7 @@ struct Box<T> {
     T value;
 };
 
-U (ref Box<U> self) get() {
+U (borrow Box<U> self) get() {
     return self.value;
 }
 
