@@ -1,0 +1,9 @@
+// Rule B4: replacing the whole owner while it is borrowed is a change too (E0602).
+struct P { i32 x; };
+
+i32 main() {
+    P p = P { x: 1 };
+    borrow P r = &p;
+    p = P { x: 2 };
+    return r.x;
+}

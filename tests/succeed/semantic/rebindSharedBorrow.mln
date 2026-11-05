@@ -1,0 +1,12 @@
+// Rule B4: assigning a shared borrow variable re-points it; it does not
+// write through it.
+struct P { i32 x; };
+
+i32 main() {
+    P a = P { x: 1 };
+    P b = P { x: 2 };
+    borrow P r = &a;
+    i32 first = r.x;
+    r = &b;
+    return first + r.x;
+}

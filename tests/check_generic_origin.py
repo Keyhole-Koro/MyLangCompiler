@@ -24,10 +24,13 @@ export T (Buf<T> *b) first() {
 }
 """
 
+# `storage` is a global: keeping `&storage[0]` in the struct is not itself a
+# raw-pointer operation, so every W0003 left comes from the template's body.
 MAIN = """import {{ Buf }} from "{lib}";
 
+i32 storage[2];
+
 i32 main() {{
-    i32 storage[2];
     storage[0] = 5;
     Buf<i32> b = Buf<i32> {{ data: &storage[0], len: 2 }};
     return b.first();

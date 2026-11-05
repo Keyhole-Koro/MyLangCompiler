@@ -2,6 +2,10 @@
 
 MyLang implements a resource management system based on ownership, moves, and borrows, similar to Rust, enforced during the semantic analysis phase.
 
+The normative rules, with their numbers (V2, B4, ...), are in
+`docs/design/mylang-memory-model.md` at the repository root. This document
+describes how the compiler implements them.
+
 ## 1. Core Concepts
 
 ### Ownership
@@ -16,6 +20,12 @@ Certain types are considered "Copy" and are duplicated instead of moved:
 - Booleans
 - Enumerations
 - Pointers and shared borrows (`borrow T`)
+- Structs without `drop()` whose fields are all data -- scalars, enums,
+  newtypes, function values, fixed-size arrays of those, and other such
+  structs -- with no `impl Copy` needed (rule V2). `Option<i32>` and
+  `Text<N>` are Copy this way. A raw pointer field keeps a struct non-Copy:
+  the struct may own what it points at (`Vec`) without a `drop()` that says
+  so.
 - Structs with an explicit `impl Copy`, when every field is Copy and the type
   does not implement `Drop`
 
@@ -38,7 +48,9 @@ void (borrow mut Counter c) click(i32 id) { ... }
 - The owner cannot move or mutably borrow the value while shared borrows are active.
 
 ### Mutable Borrows (`borrow mut T`)
-- Created using the `&mut` operator (requires the variable to be declared as `mut`).
+- Created using the `&mut` operator. Variables need no `mut` declaration:
+  every variable can be written, as in C. A `const` value cannot be borrowed
+  mutably (E0605).
 - Only **one** mutable borrow can exist at a time for a particular piece of data.
 - No other borrows (shared or mutable) can exist while a mutable borrow is active.
 - The owner cannot move or access the value while it is mutably borrowed.
@@ -48,11 +60,32 @@ void (borrow mut Counter c) click(i32 id) { ... }
 The semantic analyzer (`semantic_walk.c`) enforces these rules:
 
 1. **Use After Move**: Attempting to use a variable after its value has been moved results in a compiler error.
+   A branch that ends in `return`, `break` or `continue` does not carry its
+   moves past the `if`.
 2. **Borrow Conflicts**: 
    - Cannot mutably borrow a value if it is already borrowed (shared or mutably).
    - Cannot shared borrow a value if it is already mutably borrowed.
 3. **Move while Borrowed**: Cannot move a variable if it currently has active borrows.
 4. **Reference Escape**: Cannot return a reference to a local variable from a function.
+5. **Write through a shared borrow** (E0601): `p.x = 1`, `p.x++` and `&mut p.x`
+   are errors when `p` is a `borrow T`. Assigning `p = &other` re-points the
+   borrow and is allowed.
+6. **Change while borrowed** (E0602): the owner, or any field of it, cannot be
+   assigned or stepped (`++` / `--`) while a borrow of it is in scope.
+7. **Use while mutably borrowed** (E0603): while a local holds `&mut x`, `x`
+   itself cannot be read.
+8. **Reborrows lock what they go through**: a borrow taken through a
+   `borrow` parameter or a local holding one (`v.at_mut(0)` on
+   `borrow mut Vec<T> v`) keeps that parameter or local borrowed too, so
+   `v.push(..)` cannot reallocate under it.
+9. **Move inside a loop** (E0604): a variable declared outside a loop and
+   moved inside it must be assigned again before the next iteration, or the
+   loop must be left (`break`, `return`) after the move. The state at each
+   `continue` counts as reaching the next iteration.
+10. **Const** (E0605): fields of a `const` value cannot be written either.
+
+Writes through a raw pointer (`p->x`, `p[i]` on `T *p`) are not checked here;
+they are raw-pointer operations (W0003).
 
 ### Where a borrow may live
 
@@ -111,6 +144,14 @@ from a value stays usable after the value is moved or dropped. Dereferencing
 one, pointer arithmetic, and casts to or from pointers therefore belong in
 `.unsafe.mln` sources; elsewhere they raise warning W0003 (see
 [Source filename modifiers](source-modifiers.md)).
+
+Keeping a borrow as a raw pointer or an integer address -- initializing or
+assigning a pointer or integer variable or field from one, putting one in a
+struct literal, or returning one where a pointer is declared -- is reported
+the same way (rule B9): from then on nothing tracks what it borrows. A borrow
+of a global, and one taken through a raw pointer (`&p->x`), are not reported.
+Passing a borrow to a pointer parameter is not reported yet; MLC-023 moves
+those parameters to borrows first.
 
 There is no block-level escape: an `unchecked { }` block existed and was
 removed (2026-10-12) in favour of whole `.unsafe.mln` files.

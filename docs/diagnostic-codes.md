@@ -24,9 +24,10 @@ A code is `<prefix><4 digits>`.
 | `E03xx` | Expression type | assignment / binary / condition |
 | `E04xx` | Package / import | reserved for package symbol resolution (ISSUE-019) |
 | `E05xx` | Generics | type parameters / type arguments |
+| `E06xx` | Ownership and borrows | writes, moves, and borrows (`docs/design/mylang-memory-model.md`) |
 | `W00xx` | Warnings | unreachable statement, ... |
 
-Bands `E06xx` and above are unused and reserved for future categories.
+Bands `E07xx` and above are unused and reserved for future categories.
 
 ## Error codes
 
@@ -46,6 +47,11 @@ Bands `E06xx` and above are unused and reserved for future categories.
 | `E0304` | Expression type | Constant index outside a fixed-size array | `index 4 is out of range for an array of 4 elements` |
 | `E0501` | Generics | Type-argument count mismatch | `generic type 'Pair' expects 1 type argument but got 2` |
 | `E0502` | Generics | Generic name used without required type arguments | `generic type 'Pair' requires type arguments` |
+| `E0601` | Ownership and borrows | Write or `&mut` through a shared borrow (rule B4) | `cannot modify through 'p', a shared borrow` |
+| `E0602` | Ownership and borrows | Change to a value while it is borrowed (rules B4, B5) | `cannot modify 'p' while it is borrowed` |
+| `E0603` | Ownership and borrows | Use of a value while a local holds `&mut` of it (rule B5) | `cannot use 'q' while it is mutably borrowed` |
+| `E0604` | Ownership and borrows | Value from outside a loop moved inside it (rule V4) | `'q' is moved inside a loop, so the next iteration would use it after the move` |
+| `E0605` | Ownership and borrows | Write to, or `&mut` of, a `const` value (rule B1) | `cannot modify const value 'c'` |
 
 ## Warning codes
 
@@ -53,7 +59,7 @@ Bands `E06xx` and above are unused and reserved for future categories.
 | --- | --- | --- | --- |
 | `W0001` | Warning | Unreachable statement | `unreachable statement` |
 | `W0002` | Warning | `drop()` method without `impl Drop` | `T has drop() without `impl Drop`; ...` |
-| `W0003` | Warning | Raw-pointer operation in a checked source | `dereferencing a raw pointer outside an .unsafe.mln file` |
+| `W0003` | Warning | Raw-pointer operation in a checked source, including keeping a borrow as a raw pointer or an integer address (rule B9) | `dereferencing a raw pointer outside an .unsafe.mln file` |
 
 Warnings can be promoted to errors with warnings-as-errors mode.
 

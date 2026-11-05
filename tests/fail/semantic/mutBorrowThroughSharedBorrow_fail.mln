@@ -1,0 +1,16 @@
+// Rule B4: a shared borrow cannot hand out a mutable one (E0601).
+struct P { i32 x; };
+
+void bump(borrow mut i32 n) {
+    *n = *n + 1;
+}
+
+void via_shared(borrow P p) {
+    bump(&mut p.x);
+}
+
+i32 main() {
+    P a = P { x: 1 };
+    via_shared(&a);
+    return a.x;
+}

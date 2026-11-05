@@ -1,0 +1,8 @@
+// Rule B1: a const struct's fields cannot be written either (E0605).
+struct P { i32 x; };
+
+i32 main() {
+    const P c = P { x: 1 };
+    c.x = 2;
+    return c.x;
+}

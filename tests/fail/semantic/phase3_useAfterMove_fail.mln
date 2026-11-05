@@ -1,6 +1,11 @@
+import { Drop } from "@std/core/drop.mln";
 typedef struct {
     i32 x;
 } Box;
+
+/* A drop() makes Box an owned value, which moves instead of copying
+ * (rule V2 of docs/design/mylang-memory-model.md). */
+impl Drop for Box { void (Self *self) drop() { } }
 
 i32 main() {
     Box a;

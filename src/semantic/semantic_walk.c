@@ -418,6 +418,39 @@ static void check_mock_callback_signature(SemanticContext *ctx, ASTNode *call) {
     }
 }
 
+/* Rule V2 of docs/design/mylang-memory-model.md: a struct with no drop()
+ * whose fields are all data is data too, so it is copied without an
+ * `impl Copy`. A raw pointer field does not count as data here: the struct
+ * may own what it points at (Vec's buffer) without saying so in a drop(). */
+static int semantic_struct_is_data(SemanticContext *ctx, const char *name, int depth) {
+    ParserContext *parser = parser_context_current();
+    char drop_name[256];
+    if (!parser || !name || depth > 8) return 0;
+    snprintf(drop_name, sizeof(drop_name), "%s__drop", name);
+    if (find_impl_for_name(parser, "Drop", name) || find_method(parser, name, "drop") ||
+        find_function_sig(ctx, drop_name))
+        return 0;
+    StructDef *def = find_structdef(parser, name);
+    if (!def) return 0;
+    for (int i = 0; i < def->member_count; i++) {
+        ASTNode *member = def->members[i];
+        SemanticTypeInfo field;
+        if (!member || member->type != AST_VAR_DECL ||
+            !semantic_typeinfo_from_type_ast(member->var_decl.var_type, &field))
+            return 0;
+        if (field.is_function) continue;
+        if (field.pointer_level > 0 || field.ref_kind != REFKIND_NONE || !field.base_type) return 0;
+        if (semantic_enum_type_exists(ctx, field.base_type) || find_newtype(ctx, field.base_type)) continue;
+        if (semantic_is_builtin_type(field.base_type)) {
+            if (strcmp(field.base_type, "void") == 0) return 0;
+            continue;
+        }
+        if (find_impl_for_name(parser, "Copy", field.base_type)) continue;
+        if (!semantic_struct_is_data(ctx, field.base_type, depth + 1)) return 0;
+    }
+    return 1;
+}
+
 static int semantic_typeinfo_is_copy(SemanticContext *ctx, const SemanticTypeInfo *info) {
     if (info->is_function) return 1;
     if (info->ref_kind != REFKIND_NONE) return 1;
@@ -428,7 +461,8 @@ static int semantic_typeinfo_is_copy(SemanticContext *ctx, const SemanticTypeInf
     if (semantic_enum_type_exists(ctx, base_type)) return 1;
     if (find_newtype(ctx, base_type)) return 1;
     if (find_impl_for_name(parser_context_current(), "Copy", base_type)) return 1;
-    return semantic_is_builtin_type(base_type);
+    if (semantic_is_builtin_type(base_type)) return 1;
+    return semantic_struct_is_data(ctx, base_type, 0);
 }
 
 static int semantic_type_is_copy(SemanticContext *ctx, ASTNode *type_node) {
@@ -755,6 +789,62 @@ static void semantic_report_type_mismatch(SemanticContext *ctx, SemanticLocation
                            what ? what : "expression", expected_buf, actual_buf);
 }
 
+static void report_unsafe_operation(SemanticContext *ctx, ASTNode *at, const char *what);
+static SemanticBinding *find_binding(SemanticContext *ctx, const char *name);
+
+/* `&g` of a global lives as long as the program, and `&p->x` was taken
+ * through a raw pointer, whose dereference is already reported. */
+static int borrow_is_static_or_unchecked(SemanticContext *ctx, ASTNode *expr) {
+    if (!expr || (expr->type != AST_BORROW && expr->type != AST_BORROW_MUT)) return 0;
+    ASTNode *place = expr->type == AST_BORROW ? expr->borrow.expr : expr->borrow_mut.expr;
+    while (place) {
+        switch (place->type) {
+        case AST_IDENTIFIER: {
+            SemanticBinding *binding = find_binding(ctx, place->identifier.name);
+            return binding && binding->is_global;
+        }
+        case AST_MEMBER_ACCESS:
+            place = place->member_access.lhs;
+            break;
+        case AST_UNARY: {
+            if (place->unary.op != ASTARISK) return 0;
+            ASTNode *operand = place->unary.operand;
+            if (operand && operand->type == AST_BINARY &&
+                (operand->binary.op == ADD || operand->binary.op == SUB))
+                operand = operand->binary.left;
+            SemanticTypeInfo type;
+            if (operand && semantic_infer_expr_type(ctx, operand, &type) &&
+                type.pointer_level > 0 && type.ref_kind == REFKIND_NONE && !type.is_array)
+                return 1;
+            place = operand;
+            break;
+        }
+        case AST_ARROW_ACCESS:
+            return 1;
+        default:
+            return 0;
+        }
+    }
+    return 0;
+}
+
+/* Rule B9: a borrow kept as a raw pointer or an integer address is no longer
+ * tracked, so it can outlive what it borrows. Like the other raw-pointer
+ * operations it is warning W0003 until MLC-023 makes those errors. Passing a
+ * borrow to a pointer parameter is not reported yet: MLC-023 moves those
+ * parameters to borrows first. */
+static void check_borrow_kept_as_pointer(SemanticContext *ctx, const SemanticTypeInfo *expected,
+                                         const SemanticTypeInfo *actual, ASTNode *at) {
+    if (actual->ref_kind == REFKIND_NONE || actual->is_function ||
+        expected->ref_kind != REFKIND_NONE || expected->is_array || expected->is_function)
+        return;
+    int to_pointer = expected->pointer_level > 0;
+    if (!to_pointer && !semantic_typeinfo_is_integer_like_or_enum(ctx, expected)) return;
+    if (borrow_is_static_or_unchecked(ctx, at)) return;
+    report_unsafe_operation(ctx, at, to_pointer ? "keeping a borrow as a raw pointer"
+                                                : "keeping a borrow as an integer address");
+}
+
 static int expr_is_obviously_value(ASTNode *expr) {
     return expr != NULL;
 }
@@ -801,8 +891,9 @@ static void check_return_type(SemanticContext *ctx, ASTNode *return_node) {
         return;
     }
 
-    if (semantic_infer_expr_type(ctx, return_node->ret.expr, &actual) &&
-        !semantic_typeinfo_compatible(ctx, &expected, &actual) &&
+    if (!semantic_infer_expr_type(ctx, return_node->ret.expr, &actual)) return;
+    check_borrow_kept_as_pointer(ctx, &expected, &actual, return_node->ret.expr);
+    if (!semantic_typeinfo_compatible(ctx, &expected, &actual) &&
         !semantic_null_function_literal(&expected, return_node->ret.expr) &&
         !semantic_literal_to_legacy_c_string(&expected, &actual,
                                              return_node->ret.expr)) {
@@ -840,6 +931,15 @@ typedef struct {
     int binding_count;
     SemanticBinding bindings[256];
 } SemanticBindingSnapshot;
+
+/* The states around a two-way branch. Each is a copy of the whole binding
+ * table and branches nest as deep as the code does, so they live on the heap
+ * rather than the walker's stack. */
+typedef struct {
+    SemanticBindingSnapshot base;
+    SemanticBindingSnapshot then_state;
+    SemanticBindingSnapshot else_state;
+} BranchSnapshots;
 
 static void snapshot_bindings(SemanticContext *ctx, SemanticBindingSnapshot *snapshot) {
     if (!ctx || !snapshot) return;
@@ -893,22 +993,41 @@ static SemanticBinding *borrow_target_binding(SemanticContext *ctx, ASTNode *exp
     return NULL;
 }
 
+static void lock_borrowed(SemanticBinding *owner, int is_mut, SemanticLocation at) {
+    if (is_mut) {
+        owner->mutable_borrow_active = 1;
+        owner->mut_borrow_held = 1;
+        owner->last_mut_borrow_loc = at;
+    } else {
+        owner->shared_borrow_count++;
+        owner->last_shared_borrow_loc = at;
+    }
+}
+
+static void unlock_borrowed(SemanticBinding *owner, int is_mut) {
+    if (is_mut) {
+        owner->mutable_borrow_active = 0;
+        owner->mut_borrow_held = 0;
+        owner->last_mut_borrow_loc = semantic_location_unknown();
+    } else if (owner->shared_borrow_count > 0) {
+        owner->shared_borrow_count--;
+        if (owner->shared_borrow_count == 0) {
+            owner->last_shared_borrow_loc = semantic_location_unknown();
+        }
+    }
+}
+
 /* Ends the borrow `binding` holds, if any. */
 static void release_borrow(SemanticContext *ctx, SemanticBinding *binding) {
     if (!binding->borrowed_from) return;
     SemanticBinding *owner = binding->borrow_is_reborrow ? NULL : find_binding(ctx, binding->borrowed_from);
-    if (owner) {
-        if (binding->borrow_is_mut) {
-            owner->mutable_borrow_active = 0;
-            owner->last_mut_borrow_loc = semantic_location_unknown();
-        } else if (owner->shared_borrow_count > 0) {
-            owner->shared_borrow_count--;
-            if (owner->shared_borrow_count == 0) {
-                owner->last_shared_borrow_loc = semantic_location_unknown();
-            }
-        }
+    if (owner) unlock_borrowed(owner, binding->borrow_is_mut);
+    if (binding->reborrowed_via) {
+        SemanticBinding *via = find_binding(ctx, binding->reborrowed_via);
+        if (via && via != binding) unlock_borrowed(via, binding->borrow_is_mut);
     }
     binding->borrowed_from = NULL;
+    binding->reborrowed_via = NULL;
     binding->borrow_is_mut = 0;
     binding->borrow_is_reborrow = 0;
 }
@@ -969,8 +1088,10 @@ static void declare_binding(SemanticContext *ctx, const char *name, ASTNode *typ
     binding->borrow_is_mut = 0;
     binding->borrow_is_reborrow = 0;
     binding->borrow_origin_unknown = 0;
+    binding->reborrowed_via = NULL;
     binding->shared_borrow_count = 0;
     binding->mutable_borrow_active = 0;
+    binding->mut_borrow_held = 0;
     binding->last_shared_borrow_loc = semantic_location_unknown();
     binding->last_mut_borrow_loc = semantic_location_unknown();
 }
@@ -1125,9 +1246,12 @@ static SemanticBinding *assigned_binding(SemanticContext *ctx, ASTNode *target) 
 
 /* Which value the borrow `expr` evaluates to is taken from. `*reborrow` is
  * set when it is taken through another borrow, whose own borrow of the
- * owner already counts. */
+ * owner already counts; `*via` (when not NULL) is then that borrow -- a
+ * `borrow` parameter or a local holding one -- which must stay borrowed
+ * itself, or it could be used to change what the new borrow points into. */
 static BorrowOrigin borrow_origin(SemanticContext *ctx, ASTNode *expr,
-                                  SemanticBinding **owner, int *reborrow) {
+                                  SemanticBinding **owner, int *reborrow,
+                                  SemanticBinding **via) {
     *owner = NULL;
     if (!expr) return BORROW_ORIGIN_NONE;
     switch (expr->type) {
@@ -1145,6 +1269,7 @@ static BorrowOrigin borrow_origin(SemanticContext *ctx, ASTNode *expr,
         if (root->borrowed_from) {
             *owner = find_binding(ctx, root->borrowed_from);
             *reborrow = 1;
+            if (via) *via = root;
             return *owner ? BORROW_ORIGIN_BINDING : BORROW_ORIGIN_UNKNOWN;
         }
         if (root->borrow_origin_unknown) return BORROW_ORIGIN_UNKNOWN;
@@ -1153,8 +1278,10 @@ static BorrowOrigin borrow_origin(SemanticContext *ctx, ASTNode *expr,
             typeinfo_borrow_kind(ctx, &root->type_info) != REFKIND_NONE)
             return BORROW_ORIGIN_NONE;
         *owner = root;
-        if (root->is_param && root->has_type && root->type_info.ref_kind != REFKIND_NONE)
+        if (root->is_param && root->has_type && root->type_info.ref_kind != REFKIND_NONE) {
             *reborrow = 1;
+            if (via) *via = root;
+        }
         return BORROW_ORIGIN_BINDING;
     }
     case AST_CALL: {
@@ -1166,13 +1293,13 @@ static BorrowOrigin borrow_origin(SemanticContext *ctx, ASTNode *expr,
         for (int i = 0; i < count; i++) {
             if (!typeinfo_is_borrow_source(ctx, &sig->param_types[i])) continue;
             if (i >= expr->call.arg_count) return BORROW_ORIGIN_UNKNOWN;
-            return borrow_origin(ctx, expr->call.args[i], owner, reborrow);
+            return borrow_origin(ctx, expr->call.args[i], owner, reborrow, via);
         }
         /* No parameter to borrow from: the callee returns a global's. */
         return BORROW_ORIGIN_NONE;
     }
     case AST_CAST:
-        return borrow_origin(ctx, expr->cast.expr, owner, reborrow);
+        return borrow_origin(ctx, expr->cast.expr, owner, reborrow, via);
     default:
         return BORROW_ORIGIN_UNKNOWN;
     }
@@ -1192,12 +1319,18 @@ static void report_borrow_conflict(SemanticContext *ctx, SemanticBinding *owner,
     }
 }
 
+static int borrow_conflicts(const SemanticBinding *owner, int is_mut) {
+    return is_mut ? (owner->mutable_borrow_active || owner->shared_borrow_count > 0)
+                  : owner->mutable_borrow_active;
+}
+
 /* Makes `binding` (whose type carries a borrow of `kind`) hold the borrow
  * `expr` evaluates to. */
 static void hold_borrow(SemanticContext *ctx, SemanticBinding *binding, ASTNode *expr, int kind) {
     SemanticBinding *owner = NULL;
+    SemanticBinding *via = NULL;
     int reborrow = 0;
-    BorrowOrigin origin = borrow_origin(ctx, expr, &owner, &reborrow);
+    BorrowOrigin origin = borrow_origin(ctx, expr, &owner, &reborrow, &via);
 
     binding->borrow_origin_unknown = origin == BORROW_ORIGIN_UNKNOWN;
     if (origin != BORROW_ORIGIN_BINDING || !owner || owner == binding) return;
@@ -1208,19 +1341,23 @@ static void hold_borrow(SemanticContext *ctx, SemanticBinding *binding, ASTNode 
         return;
 
     int is_mut = expr->type == AST_BORROW_MUT ? 1 : expr->type == AST_BORROW ? 0 : kind == REFKIND_MUT;
+    SemanticLocation at = semantic_location_from_ast(expr);
     if (!reborrow) {
-        if (is_mut ? (owner->mutable_borrow_active || owner->shared_borrow_count > 0)
-                   : owner->mutable_borrow_active) {
+        if (borrow_conflicts(owner, is_mut)) {
             report_borrow_conflict(ctx, owner, expr, is_mut);
             return;
         }
-        if (is_mut) {
-            owner->mutable_borrow_active = 1;
-            owner->last_mut_borrow_loc = semantic_location_from_ast(expr);
-        } else {
-            owner->shared_borrow_count++;
-            owner->last_shared_borrow_loc = semantic_location_from_ast(expr);
+        lock_borrowed(owner, is_mut, at);
+    }
+    /* Taken through a `borrow` parameter or local: that one stays borrowed
+     * too, so it cannot change (`v.push(..)`) what this borrow points into. */
+    if (via && via != binding) {
+        if (borrow_conflicts(via, is_mut)) {
+            report_borrow_conflict(ctx, via, expr, is_mut);
+            return;
         }
+        lock_borrowed(via, is_mut, at);
+        binding->reborrowed_via = via->name;
     }
     binding->borrowed_from = owner->name;
     binding->borrow_is_mut = is_mut;
@@ -1264,7 +1401,7 @@ static void check_returned_borrow(SemanticContext *ctx, ASTNode *return_node) {
 
     SemanticBinding *owner = NULL;
     int reborrow = 0;
-    BorrowOrigin origin = borrow_origin(ctx, expr, &owner, &reborrow);
+    BorrowOrigin origin = borrow_origin(ctx, expr, &owner, &reborrow, NULL);
     if (origin == BORROW_ORIGIN_NONE) return;
     /* An instance of a generic written over `T` (`T (Option<T> self)
      * unwrap_or(T fallback)` with T = borrow i32) did not choose to return a
@@ -1351,6 +1488,17 @@ static void use_identifier(SemanticContext *ctx, ASTNode *node, ExprContext expr
                    semantic_location_is_known(binding->last_shared_borrow_loc)) {
             semantic_note_at(ctx, binding->last_shared_borrow_loc,
                              "shared borrow of '%s' starts here", binding->name);
+        }
+        return;
+    }
+
+    /* Rule B5: while a local holds `&mut x`, `x` is used only through it. */
+    if (expr_ctx != EXPRCTX_WRITE && binding->mut_borrow_held && !ctx->in_borrow_operand) {
+        semantic_error_code_at(ctx, semantic_location_from_ast(node), SEMCODE_USE_WHILE_MUT_BORROWED,
+                               "cannot use '%s' while it is mutably borrowed", ident->identifier.name);
+        if (semantic_location_is_known(binding->last_mut_borrow_loc)) {
+            semantic_note_at(ctx, binding->last_mut_borrow_loc,
+                             "mutable borrow of '%s' starts here", binding->name);
         }
         return;
     }
@@ -1692,6 +1840,7 @@ static void check_assignment_type(SemanticContext *ctx, ASTNode *node) {
     if (!ctx || !node || node->type != AST_ASSIGN) return;
     if (!semantic_infer_expr_type(ctx, node->assign.left, &left)) return;
     if (!semantic_infer_expr_type(ctx, node->assign.right, &right)) return;
+    check_borrow_kept_as_pointer(ctx, &left, &right, node->assign.right);
     if (semantic_typeinfo_compatible(ctx, &left, &right) ||
         semantic_null_function_literal(&left, node->assign.right) ||
         semantic_literal_to_legacy_c_string(&left, &right, node->assign.right)) return;
@@ -1720,6 +1869,7 @@ static void check_initializer_type(SemanticContext *ctx, ASTNode *node) {
         }
     }
     if (!semantic_infer_expr_type(ctx, node->var_decl.init, &actual)) return;
+    check_borrow_kept_as_pointer(ctx, &expected, &actual, node->var_decl.init);
     if (semantic_typeinfo_compatible(ctx, &expected, &actual) ||
         semantic_null_function_literal(&expected, node->var_decl.init) ||
         semantic_literal_to_legacy_c_string(&expected, &actual, node->var_decl.init)) return;
@@ -1777,8 +1927,9 @@ static void check_struct_literal(SemanticContext *ctx, ASTNode *node) {
             }
         }
         SemanticTypeInfo actual;
-        if (semantic_infer_expr_type(ctx, node->init_list.elements[i], &actual) &&
-            !semantic_typeinfo_compatible(ctx, &member->type, &actual) &&
+        if (!semantic_infer_expr_type(ctx, node->init_list.elements[i], &actual)) continue;
+        check_borrow_kept_as_pointer(ctx, &member->type, &actual, node->init_list.elements[i]);
+        if (!semantic_typeinfo_compatible(ctx, &member->type, &actual) &&
             !semantic_null_function_literal(&member->type, node->init_list.elements[i]) &&
             !semantic_literal_to_legacy_c_string(&member->type, &actual,
                                                  node->init_list.elements[i])) {
@@ -2162,6 +2313,162 @@ static void report_remaining_unsafe_operations(SemanticContext *ctx, ASTNode *ro
                              ctx->unsafe_operation_count - UNSAFE_OPERATIONS_REPORTED);
 }
 
+/* ---- writes, branches that leave, and loops ----------------------------
+ *
+ * Rules B1, B4, B5 and V4 of docs/design/mylang-memory-model.md.
+ */
+
+typedef enum { WRITE_ASSIGN, WRITE_STEP, WRITE_BORROW_MUT } WriteKind;
+
+/* A write to `place`: the left side of `=` (WRITE_ASSIGN), the operand of
+ * `++` / `--` (WRITE_STEP), or of `&mut` (WRITE_BORROW_MUT). The place is
+ * followed through fields, indexes and `*` of a borrow to the variable it is
+ * in. A write through a raw pointer (`p->x`, `p[i]`) is unchecked: W0003. */
+static void check_write_place(SemanticContext *ctx, ASTNode *place, WriteKind kind) {
+    ASTNode *at = place;
+    int whole = 1;
+    while (place && place->type != AST_IDENTIFIER) {
+        if (place->type == AST_MEMBER_ACCESS) {
+            place = place->member_access.lhs;
+        } else if (place->type == AST_UNARY && place->unary.op == ASTARISK) {
+            ASTNode *operand = place->unary.operand;
+            /* `a[i]` is `*(a + i)`. */
+            if (operand && operand->type == AST_BINARY &&
+                (operand->binary.op == ADD || operand->binary.op == SUB))
+                operand = operand->binary.left;
+            SemanticTypeInfo type;
+            if (!operand || !semantic_infer_expr_type(ctx, operand, &type) ||
+                (type.pointer_level > 0 && type.ref_kind == REFKIND_NONE && !type.is_array))
+                return;
+            place = operand;
+        } else {
+            return;
+        }
+        whole = 0;
+    }
+    if (!place) return;
+    SemanticBinding *binding = find_binding(ctx, place->identifier.name);
+    if (!binding) return;
+
+    /* `r = &other;` re-points a borrow instead of writing through it, and
+     * `c = 1;` on a const is reported where the name is written. */
+    if (kind != WRITE_ASSIGN || !whole) {
+        if (binding->has_type && binding->type_info.ref_kind == REFKIND_SHARED) {
+            semantic_error_code_at(ctx, semantic_location_from_ast(at),
+                                   SEMCODE_WRITE_THROUGH_SHARED_BORROW,
+                                   kind == WRITE_BORROW_MUT
+                                       ? "cannot borrow mutably through '%s', a shared borrow"
+                                       : "cannot modify through '%s', a shared borrow",
+                                   binding->name);
+            note_binding_decl_if_known(ctx, binding, "as `borrow`; take `borrow mut` to modify through it");
+            return;
+        }
+        if (binding->has_type && (binding->type_info.type_modifiers & TYPEMOD_CONST) != 0) {
+            semantic_error_code_at(ctx, semantic_location_from_ast(at), SEMCODE_WRITE_TO_CONST,
+                                   kind == WRITE_BORROW_MUT
+                                       ? "cannot borrow const value '%s' mutably"
+                                       : "cannot modify const value '%s'",
+                                   binding->name);
+            return;
+        }
+    }
+    /* A `&mut` that conflicts with another borrow is reported where the
+     * borrow is held or passed (hold_borrow, the call check). Reading the
+     * place to write into it already reported a value held by `&mut`. */
+    if (kind == WRITE_BORROW_MUT) return;
+    if (binding->mut_borrow_held && !(kind == WRITE_ASSIGN && whole)) return;
+    if (binding->shared_borrow_count > 0 || binding->mutable_borrow_active) {
+        semantic_error_code_at(ctx, semantic_location_from_ast(at), SEMCODE_WRITE_WHILE_BORROWED,
+                               "cannot modify '%s' while it is borrowed", binding->name);
+        if (binding->mutable_borrow_active && semantic_location_is_known(binding->last_mut_borrow_loc)) {
+            semantic_note_at(ctx, binding->last_mut_borrow_loc,
+                             "mutable borrow of '%s' starts here", binding->name);
+        } else if (semantic_location_is_known(binding->last_shared_borrow_loc)) {
+            semantic_note_at(ctx, binding->last_shared_borrow_loc,
+                             "borrow of '%s' starts here", binding->name);
+        }
+    }
+}
+
+/* The statement leaves on every path -- by `return`, `break` or `continue`
+ * -- so what it moves does not reach the code after it. A loop inside it is
+ * not looked into: its `break` leaves only that loop. */
+static int stmt_always_exits(ASTNode *node) {
+    if (!node) return 0;
+    switch (node->type) {
+    case AST_RETURN:
+    case AST_BREAK:
+    case AST_CONTINUE:
+        return 1;
+    case AST_BLOCK:
+        for (int i = 0; i < node->block.count; i++) {
+            if (stmt_always_exits(node->block.stmts[i])) return 1;
+        }
+        return 0;
+    case AST_IF:
+        return node->if_stmt.else_stmt && stmt_always_exits(node->if_stmt.then_stmt) &&
+               stmt_always_exits(node->if_stmt.else_stmt);
+    case AST_EXPR_STMT:
+        return stmt_always_exits(node->expr_stmt.expr);
+    case AST_STMT_EXPR:
+        return stmt_always_exits(node->stmt_expr.block);
+    default:
+        return 0;
+    }
+}
+
+static SemanticLoopFrame *loop_enter(SemanticContext *ctx) {
+    SemanticLoopFrame *frame = malloc(sizeof(*frame));
+    int count = ctx->binding_count < 256 ? ctx->binding_count : 256;
+    frame->binding_count = count;
+    for (int i = 0; i < count; i++) {
+        frame->moved_before[i] = (unsigned char)(ctx->bindings[i].moved != 0);
+        frame->moved_at_continue[i] = 0;
+        frame->continue_move_loc[i] = semantic_location_unknown();
+    }
+    frame->outer = ctx->loop;
+    ctx->loop = frame;
+    return frame;
+}
+
+/* A `continue` carries the state it is reached in to the next iteration. */
+static void loop_note_continue(SemanticContext *ctx) {
+    SemanticLoopFrame *frame = ctx->loop;
+    if (!frame) return;
+    for (int i = 0; i < frame->binding_count && i < ctx->binding_count; i++) {
+        if (ctx->bindings[i].moved && !frame->moved_at_continue[i]) {
+            frame->moved_at_continue[i] = 1;
+            frame->continue_move_loc[i] = ctx->bindings[i].move_loc;
+        }
+    }
+}
+
+/* Rule V4: a value from outside the loop that an iteration moves, and does
+ * not assign again, would be used after the move by the next iteration.
+ * `falls_through` is whether the end of the body can be reached at all. */
+static void loop_leave(SemanticContext *ctx, SemanticLoopFrame *frame, int falls_through) {
+    ctx->loop = frame->outer;
+    for (int i = 0; i < frame->binding_count && i < ctx->binding_count; i++) {
+        SemanticBinding *binding = &ctx->bindings[i];
+        SemanticLocation at;
+        if (frame->moved_before[i]) continue;
+        if (falls_through && binding->moved) {
+            at = binding->move_loc;
+        } else if (frame->moved_at_continue[i]) {
+            at = frame->continue_move_loc[i];
+        } else {
+            continue;
+        }
+        if (!semantic_location_is_known(at)) at = binding->decl_loc;
+        semantic_error_code_at(ctx, at, SEMCODE_MOVE_IN_LOOP,
+                               "'%s' is moved inside a loop, so the next iteration would use it after the move",
+                               binding->name);
+        note_binding_decl_if_known(ctx, binding,
+                                   "outside the loop; assign it again before the next iteration, or leave the loop after the move");
+    }
+    free(frame);
+}
+
 static void walk_block_items(SemanticContext *ctx, ASTNode **items, int count) {
     int unreachable = 0;
     for (int i = 0; i < count; i++) {
@@ -2200,15 +2507,21 @@ static void semantic_walk_expr(SemanticContext *ctx, ASTNode *node, ExprContext 
     case AST_ASSIGN:
         semantic_walk_expr(ctx, node->assign.right, EXPRCTX_MOVE);
         semantic_walk_expr(ctx, node->assign.left, EXPRCTX_WRITE);
+        check_write_place(ctx, node->assign.left, WRITE_ASSIGN);
         check_assignment_type(ctx, node);
         revive_binding_if_identifier(ctx, node->assign.left);
         reassign_borrow(ctx, node);
         break;
     case AST_BORROW:
+        ctx->in_borrow_operand++;
         semantic_walk_expr(ctx, node->borrow.expr, EXPRCTX_READ);
+        ctx->in_borrow_operand--;
         break;
     case AST_BORROW_MUT:
+        ctx->in_borrow_operand++;
         semantic_walk_expr(ctx, node->borrow_mut.expr, EXPRCTX_READ);
+        ctx->in_borrow_operand--;
+        check_write_place(ctx, node->borrow_mut.expr, WRITE_BORROW_MUT);
         break;
     case AST_UNARY:
         /* Checked before the operand, which it marks when it is the
@@ -2216,6 +2529,9 @@ static void semantic_walk_expr(SemanticContext *ctx, ASTNode *node, ExprContext 
         check_unsafe_operation(ctx, node);
         check_constant_index(ctx, node);
         semantic_walk_expr(ctx, node->unary.operand, EXPRCTX_READ);
+        if (node->unary.op == INC || node->unary.op == DEC ||
+            node->unary.op == POST_INC || node->unary.op == POST_DEC)
+            check_write_place(ctx, node->unary.operand, WRITE_STEP);
         break;
     case AST_CAST:
         semantic_walk_stmt(ctx, node->cast.type);
@@ -2237,7 +2553,11 @@ static void semantic_walk_expr(SemanticContext *ctx, ASTNode *node, ExprContext 
                 ? find_binding(ctx, arg->identifier.name) : NULL;
             if (reference && (!reference->has_type || reference->type_info.ref_kind == REFKIND_NONE))
                 reference = NULL;
+            /* Passing a named borrow on reborrows it: a conflict is reported
+             * below, as for `&x`. */
+            if (reference) ctx->in_borrow_operand++;
             semantic_walk_expr(ctx, arg, reference ? EXPRCTX_READ : EXPRCTX_MOVE);
+            if (reference) ctx->in_borrow_operand--;
             int is_mut = arg && arg->type == AST_BORROW_MUT;
             ASTNode *target = is_mut ? arg->borrow_mut.expr :
                 (arg && arg->type == AST_BORROW ? arg->borrow.expr : NULL);
@@ -2293,16 +2613,17 @@ static void semantic_walk_expr(SemanticContext *ctx, ASTNode *node, ExprContext 
         semantic_walk_expr(ctx, node->sizeof_expr.expr, EXPRCTX_READ);
         break;
     case AST_TERNARY: {
-        SemanticBindingSnapshot base_state, then_state, else_state;
+        BranchSnapshots *s = malloc(sizeof(*s));
         semantic_walk_expr(ctx, node->ternary.cond, EXPRCTX_READ);
         check_condition_type(ctx, node->ternary.cond);
-        snapshot_bindings(ctx, &base_state);
+        snapshot_bindings(ctx, &s->base);
         semantic_walk_expr(ctx, node->ternary.then_expr, expr_ctx);
-        snapshot_bindings(ctx, &then_state);
-        restore_bindings(ctx, &base_state);
+        snapshot_bindings(ctx, &s->then_state);
+        restore_bindings(ctx, &s->base);
         semantic_walk_expr(ctx, node->ternary.else_expr, expr_ctx);
-        snapshot_bindings(ctx, &else_state);
-        merge_if_binding_states(ctx, &base_state, &then_state, &else_state);
+        snapshot_bindings(ctx, &s->else_state);
+        merge_if_binding_states(ctx, &s->base, &s->then_state, &s->else_state);
+        free(s);
         break;
     }
     case AST_CASE:
@@ -2394,23 +2715,32 @@ static void semantic_walk_stmt(SemanticContext *ctx, ASTNode *node) {
         break;
     case AST_IF:
     {
-        SemanticBindingSnapshot base_state;
-        SemanticBindingSnapshot then_state;
-        SemanticBindingSnapshot else_state;
+        BranchSnapshots *s = malloc(sizeof(*s));
 
         semantic_walk_expr(ctx, node->if_stmt.cond, EXPRCTX_READ);
         check_condition_type(ctx, node->if_stmt.cond);
-        snapshot_bindings(ctx, &base_state);
+        snapshot_bindings(ctx, &s->base);
 
-        restore_bindings(ctx, &base_state);
+        restore_bindings(ctx, &s->base);
         semantic_walk_stmt(ctx, node->if_stmt.then_stmt);
-        snapshot_bindings(ctx, &then_state);
+        snapshot_bindings(ctx, &s->then_state);
 
-        restore_bindings(ctx, &base_state);
+        restore_bindings(ctx, &s->base);
         semantic_walk_stmt(ctx, node->if_stmt.else_stmt);
-        snapshot_bindings(ctx, &else_state);
+        snapshot_bindings(ctx, &s->else_state);
 
-        merge_if_binding_states(ctx, &base_state, &then_state, &else_state);
+        /* A branch that leaves (`return`, `break`, `continue`) does not reach
+         * the code after the `if`, so only the other branch's moves do. */
+        int then_exits = stmt_always_exits(node->if_stmt.then_stmt);
+        int else_exits = node->if_stmt.else_stmt && stmt_always_exits(node->if_stmt.else_stmt);
+        if (then_exits && !else_exits) {
+            restore_bindings(ctx, &s->else_state);
+        } else if (else_exits && !then_exits) {
+            restore_bindings(ctx, &s->then_state);
+        } else {
+            merge_if_binding_states(ctx, &s->base, &s->then_state, &s->else_state);
+        }
+        free(s);
         break;
     }
     case AST_RETURN:
@@ -2443,7 +2773,9 @@ static void semantic_walk_stmt(SemanticContext *ctx, ASTNode *node) {
     case AST_STMT_EXPR:
         semantic_walk_stmt(ctx, node->stmt_expr.block);
         break;
-    case AST_FUN_LITERAL:
+    case AST_FUN_LITERAL: {
+        SemanticLoopFrame *outer_loop = ctx->loop;
+        ctx->loop = NULL;
         ctx->function_depth++;
         enter_scope(ctx);
         walk_params(ctx, node->fun_literal.params, node->fun_literal.param_count);
@@ -2451,7 +2783,9 @@ static void semantic_walk_stmt(SemanticContext *ctx, ASTNode *node) {
         semantic_walk_stmt(ctx, node->fun_literal.body);
         leave_scope(ctx);
         ctx->function_depth--;
+        ctx->loop = outer_loop;
         break;
+    }
     case AST_FUNDEF:
     {
         ASTNode *prev_function = ctx->current_function;
@@ -2477,20 +2811,26 @@ static void semantic_walk_stmt(SemanticContext *ctx, ASTNode *node) {
     case AST_PARAM:
         semantic_walk_stmt(ctx, node->param.type);
         break;
-    case AST_WHILE:
+    case AST_WHILE: {
+        SemanticLoopFrame *frame = loop_enter(ctx);
         semantic_walk_expr(ctx, node->while_stmt.cond, EXPRCTX_READ);
         check_condition_type(ctx, node->while_stmt.cond);
         semantic_walk_stmt(ctx, node->while_stmt.body);
+        loop_leave(ctx, frame, !stmt_always_exits(node->while_stmt.body));
         break;
-    case AST_FOR:
+    }
+    case AST_FOR: {
         enter_scope(ctx);
         semantic_walk_stmt(ctx, node->for_stmt.init);
+        SemanticLoopFrame *frame = loop_enter(ctx);
         semantic_walk_expr(ctx, node->for_stmt.cond, EXPRCTX_READ);
         check_condition_type(ctx, node->for_stmt.cond);
         semantic_walk_stmt(ctx, node->for_stmt.inc);
         semantic_walk_stmt(ctx, node->for_stmt.body);
+        loop_leave(ctx, frame, !stmt_always_exits(node->for_stmt.body));
         leave_scope(ctx);
         break;
+    }
     case AST_TYPEDEF:
         semantic_walk_stmt(ctx, node->typedef_stmt.src_type);
         if (node->typedef_stmt.is_newtype) {
@@ -2529,14 +2869,18 @@ static void semantic_walk_stmt(SemanticContext *ctx, ASTNode *node) {
             semantic_error_at(ctx, semantic_location_from_ast(node),
                               "loop control is not allowed inside defer");
         }
+        if (node->type == AST_CONTINUE) loop_note_continue(ctx);
         break;
     case AST_IMPORT:
         break;
-    case AST_DO_WHILE:
+    case AST_DO_WHILE: {
+        SemanticLoopFrame *frame = loop_enter(ctx);
         semantic_walk_stmt(ctx, node->do_while_stmt.body);
         semantic_walk_expr(ctx, node->do_while_stmt.cond, EXPRCTX_READ);
         check_condition_type(ctx, node->do_while_stmt.cond);
+        loop_leave(ctx, frame, !stmt_always_exits(node->do_while_stmt.body));
         break;
+    }
     default:
         semantic_error_at(ctx, semantic_location_from_ast(node),
                           "semantic walker encountered unknown AST node type %d", node->type);

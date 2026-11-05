@@ -1,0 +1,14 @@
+// Rule B9: keeping a borrow as a raw pointer stops it from being tracked,
+// so it is a raw-pointer operation (W0003) outside an unsafe file.
+struct P { i32 x; };
+struct Holder { P *p; };
+
+Holder keep(borrow P r) {
+    return Holder { p: r };
+}
+
+i32 main() {
+    P a = P { x: 1 };
+    Holder h = keep(&a);
+    return 0;
+}

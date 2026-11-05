@@ -1,0 +1,20 @@
+// Rule V2: a struct made only of data is copied without `impl Copy`, so the
+// original stays usable, also inside a loop.
+import { Option } from "@std/core/option.mln";
+
+struct Point { i32 x; i32 y; };
+struct Line { Point start; Point end; char tag[4]; };
+
+Option<i32> g_slots[4];
+
+i32 main() {
+    Point a = Point { x: 1, y: 2 };
+    Point b = a;
+    Line l = Line { start: a, end: b };
+    Line m = l;
+    Option<i32> none = None;
+    for (i32 i = 0; i < 4; i++) {
+        g_slots[i] = none;
+    }
+    return a.x + b.y + l.end.x + m.start.y;
+}

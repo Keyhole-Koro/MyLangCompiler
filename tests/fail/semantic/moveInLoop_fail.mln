@@ -1,0 +1,17 @@
+// Rule V4: the second iteration would move `q` again (E0604).
+import { Drop } from "@std/core/drop.mln";
+
+struct Res { i32 handle; };
+impl Drop for Res { void (Self *self) drop() { } }
+
+void take(Res r) { }
+
+i32 main() {
+    Res q = Res { handle: 1 };
+    i32 i = 0;
+    while (i < 3) {
+        take(q);
+        i++;
+    }
+    return 0;
+}

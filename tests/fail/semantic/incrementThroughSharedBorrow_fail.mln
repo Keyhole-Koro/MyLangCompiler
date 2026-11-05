@@ -1,0 +1,9 @@
+// Rule B4: `++` writes, so it cannot go through a shared borrow (E0601).
+struct P { i32 x; };
+
+i32 main() {
+    P a = P { x: 1 };
+    borrow P r = &a;
+    r.x++;
+    return a.x;
+}

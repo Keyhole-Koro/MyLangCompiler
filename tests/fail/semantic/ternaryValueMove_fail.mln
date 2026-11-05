@@ -1,2 +1,4 @@
+import { Drop } from "@std/core/drop.mln";
 struct Box { i32 x; };
+impl Drop for Box { void (Self *self) drop() { } }
 i32 main() { Box a = Box { x: 7 }; Box b = Box { x: 3 }; i32 condition = 1; Box c = condition ? a : b; return a.x; }

@@ -1,0 +1,9 @@
+// Rule B4: the owner cannot change while a borrow of it lives (E0602).
+struct P { i32 x; };
+
+i32 main() {
+    P p = P { x: 1 };
+    borrow P r = &p;
+    p.x = 10;
+    return r.x;
+}

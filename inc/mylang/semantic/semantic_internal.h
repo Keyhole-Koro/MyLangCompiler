@@ -49,11 +49,30 @@ typedef struct {
     int borrow_is_reborrow;
     /* Holds a borrow whose owner could not be determined. */
     int borrow_origin_unknown;
+    /* The borrow this local's borrow was taken through (a `borrow` parameter
+     * or local), which stays borrowed for as long as this one does. */
+    const char *reborrowed_via;
     int shared_borrow_count;
     int mutable_borrow_active;
+    /* A local holds a mutable borrow of this value, so the value itself
+     * cannot be used until that local goes out of scope. Unlike
+     * mutable_borrow_active, the borrows a call argument takes for the
+     * duration of the call do not set it. */
+    int mut_borrow_held;
     SemanticLocation last_shared_borrow_loc;
     SemanticLocation last_mut_borrow_loc;
 } SemanticBinding;
+
+/* What a loop needs to know to reject a value moved by one iteration and used
+ * by the next: which bindings existed before it, which of those were already
+ * moved, and which were moved at a `continue`. */
+typedef struct SemanticLoopFrame {
+    int binding_count;
+    unsigned char moved_before[256];
+    unsigned char moved_at_continue[256];
+    SemanticLocation continue_move_loc[256];
+    struct SemanticLoopFrame *outer;
+} SemanticLoopFrame;
 
 /* `enum_name` is the declaring enum, so a match can list the members it misses. */
 typedef struct { const char *name; long value; const char *enum_name; } SemanticEnumValue;
@@ -104,6 +123,11 @@ typedef struct {
     int scope_depth;
     int function_depth;
     int defer_depth;
+    /* The innermost loop being walked, or NULL. */
+    SemanticLoopFrame *loop;
+    /* Walking the operand of `&` / `&mut`: the borrow checks report a
+     * conflict there, so a use of the operand is not reported again. */
+    int in_borrow_operand;
     ASTNode *current_function;
     /* While walking a function copied from another module's generic, the
      * file it was written in and whether that file is `.unsafe.mln`

@@ -1,0 +1,15 @@
+// Rule B4: a borrow taken through a `borrow mut` parameter keeps the
+// parameter borrowed, so push() cannot reallocate under it.
+import { Vec } from "@std/collections/vec.mln";
+import { Option } from "@std/core/option.mln";
+
+i32 first_then_grow(borrow mut Vec<i32> v) {
+    Option<borrow mut i32> first = v.at_mut(0);
+    v.push(1);
+    return case first of { Some(x) -> *x; None -> 0; };
+}
+
+i32 main() {
+    Vec<i32> v = Vec<i32> {};
+    return first_then_grow(&mut v);
+}

@@ -69,6 +69,8 @@ with warning W0003:
 - dereferencing a raw pointer: `*p`, `p->x`, `p[i]`
 - pointer arithmetic: `p + n`, `p - n`
 - a cast to or from a raw pointer: `(u8 *)p`, `(i32)p`, `(T *)address`
+- keeping a borrow as a raw pointer or an integer address: `T *p = &x;`,
+  `Holder { p: r }`, `return r;` from a function declared to return `T *`
 
 A `borrow` / `borrow mut` and an array are not raw pointers: `r.x` through a
 reference and `arr[i]` on an array are checked code. Taking an address,

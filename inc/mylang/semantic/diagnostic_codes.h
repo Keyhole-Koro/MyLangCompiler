@@ -14,6 +14,7 @@
  *   E03xx  expression type        (assignment / binary / condition)
  *   E04xx  package / import       (reserved for package symbol resolution)
  *   E05xx  generics               (type parameters / type arguments)
+ *   E06xx  ownership and borrows  (writes, moves, borrow escapes)
  *   W00xx  warnings               (unreachable statement, ...)
  *
  * When adding a code, keep it inside its category band and update
@@ -44,6 +45,13 @@
 /* E05xx: generics */
 #define SEMCODE_GENERIC_ARG_COUNT_MISMATCH "E0501"
 #define SEMCODE_GENERIC_ARGS_REQUIRED "E0502"
+
+/* E06xx: ownership and borrows (docs/design/mylang-memory-model.md) */
+#define SEMCODE_WRITE_THROUGH_SHARED_BORROW "E0601"
+#define SEMCODE_WRITE_WHILE_BORROWED "E0602"
+#define SEMCODE_USE_WHILE_MUT_BORROWED "E0603"
+#define SEMCODE_MOVE_IN_LOOP "E0604"
+#define SEMCODE_WRITE_TO_CONST "E0605"
 
 /* W00xx: warnings */
 #define SEMCODE_UNREACHABLE_STATEMENT "W0001"

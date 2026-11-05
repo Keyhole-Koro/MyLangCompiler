@@ -26,6 +26,7 @@ SemanticSafetyProfile semantic_get_safety_profile(void) {
 
 int semantic_check_with_session(ASTNode *root, FrontendSession *session) {
     SemanticContext ctx;
+    memset(&ctx, 0, sizeof(ctx));
     ctx.filename = g_semantic_filename;
     ctx.session = session;
     ctx.safety_profile = g_safety_profile;

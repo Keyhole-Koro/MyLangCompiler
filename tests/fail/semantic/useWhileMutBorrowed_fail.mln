@@ -1,0 +1,9 @@
+// Rule B5: while a local holds `&mut q`, q is used only through it (E0603).
+struct P { i32 x; };
+
+i32 main() {
+    P q = P { x: 1 };
+    borrow mut P m = &mut q;
+    m.x = 2;
+    return q.x;
+}

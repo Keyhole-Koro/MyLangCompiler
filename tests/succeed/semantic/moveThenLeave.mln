@@ -1,0 +1,50 @@
+// Rule V4: a move followed by leaving the loop or the function does not
+// reach the next iteration or the code after the branch, and a value
+// assigned again before the next iteration is fine.
+import { Drop } from "@std/core/drop.mln";
+
+struct Res { i32 handle; };
+impl Drop for Res { void (Self *self) drop() { } }
+
+i32 g_taken = 0;
+
+void take(Res r) { g_taken = g_taken + r.handle; }
+
+i32 leave_after_move(i32 n) {
+    Res q = Res { handle: 1 };
+    i32 i = 0;
+    while (i < n) {
+        if (i == 2) {
+            take(q);
+            break;
+        }
+        i++;
+    }
+    return i;
+}
+
+i32 return_after_move(i32 n) {
+    Res w = Res { handle: 10 };
+    if (n > 0) {
+        take(w);
+        return 1;
+    }
+    take(w);
+    return 0;
+}
+
+void refill_each_iteration() {
+    Res r = Res { handle: 100 };
+    for (i32 i = 0; i < 3; i++) {
+        take(r);
+        r = Res { handle: 100 };
+    }
+}
+
+i32 main() {
+    leave_after_move(5);
+    return_after_move(1);
+    return_after_move(0);
+    refill_each_iteration();
+    return g_taken;
+}

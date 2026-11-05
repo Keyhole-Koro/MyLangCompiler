@@ -1,0 +1,11 @@
+// Rule B4: the same through a local that holds the borrow.
+import { Vec } from "@std/collections/vec.mln";
+import { Option } from "@std/core/option.mln";
+
+i32 main() {
+    Vec<i32> v = Vec<i32> {};
+    borrow mut Vec<i32> r = &mut v;
+    Option<borrow mut i32> first = r.at_mut(0);
+    r.push(1);
+    return case first of { Some(x) -> *x; None -> 0; };
+}

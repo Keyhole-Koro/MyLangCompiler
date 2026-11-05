@@ -1,0 +1,18 @@
+// Rule V4: `continue` takes the moved `q` to the next iteration (E0604).
+import { Drop } from "@std/core/drop.mln";
+
+struct Res { i32 handle; };
+impl Drop for Res { void (Self *self) drop() { } }
+
+void take(Res r) { }
+
+i32 main() {
+    Res q = Res { handle: 1 };
+    for (i32 i = 0; i < 3; i++) {
+        if (i == 1) {
+            take(q);
+            continue;
+        }
+    }
+    return 0;
+}
