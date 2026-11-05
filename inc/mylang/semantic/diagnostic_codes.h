@@ -46,7 +46,7 @@
 #define SEMCODE_GENERIC_ARG_COUNT_MISMATCH "E0501"
 #define SEMCODE_GENERIC_ARGS_REQUIRED "E0502"
 
-/* E06xx: ownership and borrows (docs/design/mylang-memory-model.md) */
+/* E06xx: ownership and borrows (docs/design/mylang-values.md) */
 #define SEMCODE_WRITE_THROUGH_SHARED_BORROW "E0601"
 #define SEMCODE_WRITE_WHILE_BORROWED "E0602"
 #define SEMCODE_USE_WHILE_MUT_BORROWED "E0603"

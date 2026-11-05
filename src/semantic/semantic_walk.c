@@ -418,7 +418,7 @@ static void check_mock_callback_signature(SemanticContext *ctx, ASTNode *call) {
     }
 }
 
-/* Rule V2 of docs/design/mylang-memory-model.md: a struct with no drop()
+/* Rule V2 of docs/design/mylang-values.md: a struct with no drop()
  * whose fields are all data is data too, so it is copied without an
  * `impl Copy`. A raw pointer field does not count as data here: the struct
  * may own what it points at (Vec's buffer) without saying so in a drop(). */
@@ -2315,7 +2315,7 @@ static void report_remaining_unsafe_operations(SemanticContext *ctx, ASTNode *ro
 
 /* ---- writes, branches that leave, and loops ----------------------------
  *
- * Rules B1, B4, B5 and V4 of docs/design/mylang-memory-model.md.
+ * Rules B1, B4, B5 and V4 of docs/design/mylang-values.md.
  */
 
 typedef enum { WRITE_ASSIGN, WRITE_STEP, WRITE_BORROW_MUT } WriteKind;

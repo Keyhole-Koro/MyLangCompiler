@@ -3,7 +3,7 @@
 MyLang implements a resource management system based on ownership, moves, and borrows, similar to Rust, enforced during the semantic analysis phase.
 
 The normative rules, with their numbers (V2, B4, ...), are in
-`docs/design/mylang-memory-model.md` at the repository root. This document
+`docs/design/mylang-values.md` at the repository root. This document
 describes how the compiler implements them.
 
 ## 1. Core Concepts

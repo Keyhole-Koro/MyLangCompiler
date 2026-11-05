@@ -24,7 +24,7 @@ A code is `<prefix><4 digits>`.
 | `E03xx` | Expression type | assignment / binary / condition |
 | `E04xx` | Package / import | reserved for package symbol resolution (ISSUE-019) |
 | `E05xx` | Generics | type parameters / type arguments |
-| `E06xx` | Ownership and borrows | writes, moves, and borrows (`docs/design/mylang-memory-model.md`) |
+| `E06xx` | Ownership and borrows | writes, moves, and borrows (`docs/design/mylang-values.md`) |
 | `W00xx` | Warnings | unreachable statement, ... |
 
 Bands `E07xx` and above are unused and reserved for future categories.
