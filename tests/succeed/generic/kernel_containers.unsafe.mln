@@ -42,7 +42,7 @@ i32 main() {
     i32 arena_storage[4];
     Arena<i32> arena;
     arena.init(&arena_storage[0], arena_storage.length);
-    i32 *allocated = arena.alloc(1);
+    i32 *allocated = arena.alloc(1).unwrap_or(&value);
     *allocated = 20;
 
     i32 ring_storage[4];
@@ -72,7 +72,7 @@ i32 main() {
     list.init();
     list.push_front(&first, &first.next);
     list.push_front(&second, &second.next);
-    Node *front = list.pop_front(&second.next);
+    Node *front = list.pop_front(&second.next).unwrap_or(&first);
 
     i32 keys[8];
     i32 map_values[8];
