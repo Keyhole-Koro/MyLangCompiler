@@ -88,6 +88,7 @@ static const char *loop_counter_reg(const char *a, const char *b) {
 
 void emit_aggregate_copy(StringBuilder *sb, const char *dest_addr_reg, const char *src_addr_reg, int total_bytes) {
     sb_append(sb, "  ; copy %d bytes (aggregate)\n", total_bytes);
+    codegen_cost_begin(sb, "copy");
     int off = 0;
     if (total_bytes > AGGREGATE_UNROLL_BYTES &&
         strcmp(dest_addr_reg, "sp") != 0 && strcmp(src_addr_reg, "sp") != 0) {
@@ -126,4 +127,5 @@ void emit_aggregate_copy(StringBuilder *sb, const char *dest_addr_reg, const cha
         if (off) sb_append(sb, "  addis r4, %d\n", off);
         sb_append(sb, "  storeb r4, r1\n");
     }
+    codegen_cost_end(sb);
 }

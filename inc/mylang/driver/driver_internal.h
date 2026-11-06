@@ -32,6 +32,7 @@ typedef struct {
     int include_masm;
     int warnings_as_errors;
     int error_trace;
+    int line_info;
     int dump_tokens;
     int dump_ast;
 } DriverOptions;

@@ -220,6 +220,7 @@ void emit_drop_binding(CompilerContext *cc, DropBinding *binding, StringBuilder 
                        char **params, int param_count, char **locals, int local_count) {
     if (!binding) return;
     int done = next_label(cc);
+    codegen_cost_begin(sb, "drop");
     sb_append(sb, "  ; drop '%s' when it still owns a value\n", binding->name);
     sb_append(sb, "  mov r3, bp\n");
     sb_append(sb, "  addis r3, %d\n", binding->flag_offset);
@@ -231,6 +232,7 @@ void emit_drop_binding(CompilerContext *cc, DropBinding *binding, StringBuilder 
     emit_drop_type_at(cc, binding->base_type, "r5", 0, sb);
     emit_drop_flag(cc, binding, false, sb);
     sb_append(sb, "drop_done_%d:\n", done);
+    codegen_cost_end(sb);
 }
 
 void emit_drop_all(CompilerContext *cc, StringBuilder *sb,

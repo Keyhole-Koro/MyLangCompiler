@@ -20,6 +20,8 @@ void codegen_set_error_trace(int enabled);
 /* Whether the last codegen run emitted a trace call, so the module must be
  * linked: the driver lists it as a dependency. */
 int codegen_error_trace_used(void);
+/* `--line-info`: emit `.func`, `.loc` and `.cost` for the line table. */
+void codegen_set_line_info(int enabled);
 // Redirect direct calls while preserving bare function values. Each entry is
 // `source=destination`; this is consumed by test build tooling.
 void codegen_set_call_redirects(const char **redirects, int count);

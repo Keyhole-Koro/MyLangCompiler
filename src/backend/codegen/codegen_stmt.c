@@ -392,6 +392,7 @@ static void gen_stmt_labeled(CompilerContext *cc, ASTNode *node, StringBuilder *
                              const char *break_label,
                              const char *continue_label)
 {
+    codegen_debug_loc(sb, node->line);
     switch (node->type)
     {
     case AST_VAR_DECL:
