@@ -367,7 +367,26 @@ static void import_plain_dependency(ParserContext *context, Module *mod,
                  strcmp(stmt->typedef_stmt.alias, type_name) == 0)
             dep = stmt;
     }
-    if (!dep) return; /* a type parameter, or declared in another module */
+    if (!dep) {
+        /* A type parameter, or declared in a module this one imports: an
+         * imported Mutex holds an Atomic<MutexState>, and MutexState comes
+         * from Mutex's own imports. */
+        static int depth = 0;
+        FrontendSession *session = context->session;
+        if (depth >= 8 || !session || !session->loader) return;
+        depth++;
+        for (int k = 0; k < mod->program->block.count && !is_user_typename(context, type_name); k++) {
+            ASTNode *stmt = mod->program->block.stmts[k];
+            if (!stmt || stmt->type != AST_IMPORT || !stmt->import_stmt.path ||
+                !module_loader_is_mylang_source(stmt->import_stmt.path)) continue;
+            Module *target = module_loader_load(session->loader, mod->canonical_path,
+                                                 stmt->import_stmt.path);
+            if (target && target->state == MODULE_LOADED)
+                import_plain_dependency(context, target, type_name);
+        }
+        depth--;
+        return;
+    }
 
     /* A payload enum in a module's program is already lowered to its tagged
      * struct, which has lost the variant table this module's own lowering
@@ -381,6 +400,18 @@ static void import_plain_dependency(ParserContext *context, Module *mod,
     if (copy->type == AST_STRUCT && strncmp(type_name, "__mlg_", 6) == 0)
         copy->struct_stmt.is_imported_instance = 1;
     add_typename(context, type_name);            /* before recursing: closes cycles */
+    /* An instance's methods name its type arguments: `_n10_MutexState`. */
+    if (strncmp(type_name, "__mlg_", 6) == 0) {
+        for (const char *p = strstr(type_name, "_n"); p; p = strstr(p + 2, "_n")) {
+            char *end = NULL;
+            long length = strtol(p + 2, &end, 10);
+            char argument[128];
+            if (end == p + 2 || *end != '_' || length <= 0 || length >= (long)sizeof(argument)) continue;
+            memcpy(argument, end + 1, (size_t)length);
+            argument[length] = 0;
+            import_plain_dependency(context, mod, argument);
+        }
+    }
     import_member_types(context, mod, copy);     /* its own fields' types first */
     add_imported_plain_type(context, copy);
 }
