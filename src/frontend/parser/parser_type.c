@@ -327,7 +327,7 @@ ASTNode *parse_newtype(ParserContext *context, Token **cur, int want_export) {
 
 ASTNode *parse_type(ParserContext *context, Token **cur) {
     int modifiers = 0;
-    int ref_kind = REFKIND_NONE;
+    int borrow_kind = REFKIND_NONE;
 
     while ((*cur)->kind == CONST) {
         modifiers |= TYPEMOD_CONST;
@@ -335,12 +335,12 @@ ASTNode *parse_type(ParserContext *context, Token **cur) {
     }
 
     if ((*cur)->kind == BORROW) {
-        ref_kind = REFKIND_MUT;
+        borrow_kind = REFKIND_BORROW;
         *cur = (*cur)->next;
     }
 
     if ((*cur)->kind == FN) {
-        if (modifiers != 0 || ref_kind != REFKIND_NONE)
+        if (modifiers != 0 || borrow_kind != REFKIND_NONE)
             parse_error(context, "function value types cannot have const or borrow modifiers", *cur);
         *cur = (*cur)->next;
         if (!expect(cur, L_PARENTHESES))
@@ -379,5 +379,5 @@ ASTNode *parse_type(ParserContext *context, Token **cur) {
         pointer_level++;
         *cur = (*cur)->next;
     }
-    return new_type_node(base_type, pointer_level, modifiers, ref_kind);
+    return new_type_node(base_type, pointer_level, modifiers, borrow_kind);
 }

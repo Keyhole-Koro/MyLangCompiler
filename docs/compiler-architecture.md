@@ -111,13 +111,25 @@ Resolver
   - `parser_import_generics.c`: Obtains exported generic templates directly from cached module ASTs.
   - `parser_dom_sig.c`: Obtains parameter names and variadics from parsed function declarations via the Resolver without token scanning.
   - `codegen_toplevel.c`: Obtains exported function signatures and variadics from Resolver metadata instead of manual token scans.
-  - `semantic_walk.c`: Decoupled from parser default context; receives imported package info explicitly through `SemanticContext`.
+  - `semantic_symbols.c`: Decoupled from parser default context; receives imported package info explicitly through `SemanticContext`.
 
 ## Semantic
 
 The semantic stage sits between parsing and code generation.
 It is the intended home for type-directed validation, ownership checks, borrow rules,
 and lifetime analysis so those rules stay out of backend emission.
+
+- `semantic_driver.c`: runs the pass over one AST
+- `semantic_symbols.c`: functions, enums, types and struct layouts a module can see
+- `semantic_bindings.c`: the variables in scope and their snapshots around a branch
+- `semantic_type_rules.c`: a value's kind, type compatibility, how a type is spelled
+- `semantic_infer.c`: the type of an expression
+- `semantic_check.c`: type checks of operands, assignments, calls and returns
+- `semantic_borrow.c`: borrow tracking and what may be written while a borrow lasts
+- `semantic_unsafe.c`: what a checked source may not do
+- `semantic_mock.c`: the mock facade's intrinsics
+- `semantic_flow.c`: reachability
+- `semantic_walk_expr.c`, `semantic_walk_stmt.c`: the walk, and its entry point
 
 ## Backend
 
@@ -196,3 +208,32 @@ python3 qa/mlc-test.py
 successful compile still writes `<output>_tokens.txt` and `<output>_ast.txt`
 beside the generated assembly for later inspection. Use `--dump-tokens` or
 `--dump-ast` when the corresponding debug dump is also needed on stdout.
+
+### Symbol files
+
+`mlc --emit-symbols <path> <input.mln> <output.masm>` also writes what the
+source exports and which symbols it uses. It is for single-file compilation.
+`make unused-exports` (`qa/tools/unused_exports.py`) runs it on every source in
+the repository to find exports nothing references.
+
+The file starts with `MYSYMBOLS 1`. Every other line is tab-separated:
+
+| Line | Meaning |
+| --- | --- |
+| `function <symbol> <path> <line>` | An exported function, by its link name |
+| `method <symbol> <path> <line>` | An exported method, as `Type__method` |
+| `global <symbol> <path> <line>` | An exported global |
+| `impl <symbol> <path> <line>` | An item of an exported trait impl |
+| `template <name> <path> <line>` | An exported generic function or method |
+| `instance <symbol> <path> <line>` | A specialization, and where its template is |
+| `use <from> <symbol>` | The label `<from>` names `<symbol>` |
+
+Paths are canonical. A definition is listed in the source that wrote it, so a
+template is listed once and each instance points back at it by path and line.
+
+Uses are read from the finished assembly rather than from the AST, so a use
+is whatever the program really links against: DOM calls, drops, `==` on a
+trait, annotation rows and trampolines are all there, with what lowering made
+of them. `<from>` is the enclosing function or global, `__START__` for the entry
+function, or `-` before the first one. Only symbols of this source and its
+`import` lines are listed.

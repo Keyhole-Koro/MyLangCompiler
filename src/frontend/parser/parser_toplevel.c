@@ -341,7 +341,11 @@ static ASTNode *parse_toplevel_decl(ParserContext *context, Token **cur) {
      * type.  Receiver-bound generic methods can start with their own formal
      * parameter, e.g. `T (borrow Box<T> self) get()`. */
     if (looks_like_method(context, *cur)) {
+        int generic_methods = generic_method_count(context);
         ASTNode *fn = parse_method(context, cur);
+        /* A generic method went to its table instead of being returned. */
+        if (generic_method_count(context) > generic_methods)
+            generic_method_at(context, generic_methods)->is_exported = want_export;
         /* Unlike a plain exported function, an exported method is not
          * mangled with the package prefix or added to the export table:
          * it is never called by a bare name (only ever `.method()`), and

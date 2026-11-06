@@ -11,6 +11,7 @@ void driver_print_usage(const char *prog) {
             "  -entry <name>     Entry function name mapped to __START__ (default: main)\n"
             "  --alias <@name=path>  Resolve an import prefix to a source directory (repeatable)\n"
             "  --depfile <path>  Write canonical direct source dependencies\n"
+            "  --emit-symbols <path>  Write the exports this source defines and the symbols it uses\n"
             "  --redirect-call <from>=<to>  Redirect direct calls (repeatable)\n"
             "  -masm             When compiling a directory, also copy .masm files\n"
             "  --dump-tokens     Print lexer tokens to stdout\n"
@@ -68,6 +69,12 @@ int driver_parse_args(int argc, char *argv[], DriverOptions *opts) {
                 return -1;
             }
             opts->depfile_path = argv[++i];
+        } else if (strcmp(argv[i], "--emit-symbols") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "--emit-symbols requires a path\n");
+                return -1;
+            }
+            opts->symbols_path = argv[++i];
         } else if (strcmp(argv[i], "--redirect-call") == 0 && i + 1 < argc) {
             const char *spec = argv[++i];
             if (!strchr(spec, '=')) {

@@ -9,7 +9,7 @@ static const char *drop_func_for_base(CompilerContext *cc, const char *base_type
         !sig->return_type.base_type || strcmp(sig->return_type.base_type, "void") != 0 ||
         !sig->param_has_type || !sig->param_has_type[0] ||
         (sig->param_types[0].pointer_level == 0 &&
-         sig->param_types[0].ref_kind == REFKIND_NONE)) return NULL;
+         sig->param_types[0].borrow_kind == REFKIND_NONE)) return NULL;
     return sig->name;
 }
 
@@ -30,7 +30,7 @@ bool type_needs_drop(CompilerContext *cc, ASTNode *type_node) {
     TypeInfo type = {0};
     if (!type_node || !typeinfo_from_type_ast(cc, type_node, &type)) return false;
     resolve_type(cc, &type);
-    return type.pointer_level == 0 && type.ref_kind == REFKIND_NONE &&
+    return type.pointer_level == 0 && type.borrow_kind == REFKIND_NONE &&
            type.dims_count == 0 &&
            base_needs_drop(cc, type.base_type, 0);
 }
@@ -39,7 +39,7 @@ bool expr_needs_drop(CompilerContext *cc, ASTNode *expr) {
     TypeInfo type = {0};
     if (!expr || !infer_expr_type(cc, expr, &type)) return false;
     resolve_type(cc, &type);
-    return type.pointer_level == 0 && type.ref_kind == REFKIND_NONE &&
+    return type.pointer_level == 0 && type.borrow_kind == REFKIND_NONE &&
            type.dims_count == 0 && base_needs_drop(cc, type.base_type, 0);
 }
 

@@ -1,5 +1,5 @@
-// Rule V2: a struct made only of data is copied without `impl Copy`, so the
-// original stays usable, also inside a loop.
+// Rule V2: a struct made only of data is copied, so the original stays usable,
+// also inside a loop.
 import { Option } from "@std/core/option.mln";
 
 struct Point { i32 x; i32 y; };

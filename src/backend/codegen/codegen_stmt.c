@@ -440,9 +440,11 @@ static void gen_stmt_labeled(CompilerContext *cc, ASTNode *node, StringBuilder *
                     selection->case_expr.default_expr =
                         assigning_arm(node->var_decl.name, selection->case_expr.default_expr);
                 gen_expr(cc, selection, sb, "r1", params, param_count, locals, local_count);
-            } else if (aggregate_type_size(cc, vtype) > SLOT_SIZE &&
+            } else if (aggregate_type_size(cc, vtype) > 0 &&
                        is_addressable_expr(node->var_decl.init)) {
-                /* The source first: `*at(0)` calls, which clobbers every
+                /* Every size goes through memory: evaluating an array yields
+                 * its address, even one that would fit a word.
+                 * The source first: `*at(0)` calls, which clobbers every
                  * scratch register, so the destination is computed after. */
                 gen_lvalue_addr(cc, node->var_decl.init, sb, "r2",
                                 params, param_count, locals, local_count);

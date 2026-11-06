@@ -136,9 +136,9 @@ static void require_pointer_receiver(ParserContext *context, const ASTNode *fn, 
     ASTNode *recv = fn->fundef.param_count > 0 ? fn->fundef.params[0] : NULL;
     ASTNode *type = recv && recv->type == AST_PARAM ? recv->param.type : NULL;
     int by_pointer = type && type->type == AST_TYPE && type->type_node.pointer_level == 1 &&
-                     type->type_node.ref_kind == REFKIND_NONE;
+                     type->type_node.borrow_kind == REFKIND_NONE;
     int by_ref = type && type->type == AST_TYPE && type->type_node.pointer_level == 0 &&
-                 type->type_node.ref_kind != REFKIND_NONE;
+                 type->type_node.borrow_kind != REFKIND_NONE;
     if (!by_pointer && !by_ref) {
         annot_error(context, line, col,
                     "handler method '%s' must take its receiver by pointer or reference, `(%s *self)` or `(borrow %s self)`",

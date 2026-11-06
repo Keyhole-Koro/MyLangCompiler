@@ -61,7 +61,7 @@ static ASTNode *resolving_program;
 typedef struct {
     const char *base_name;
     int pointer_level;
-    int ref_kind;
+    int borrow_kind;
 } RecvShape;
 
 static int shape_from_type_ast(ASTNode *type_node, RecvShape *out) {
@@ -72,7 +72,7 @@ static int shape_from_type_ast(ASTNode *type_node, RecvShape *out) {
     else if (base->type == AST_TYPE_GENERIC) out->base_name = base->generic_type.name;
     else return 0;
     out->pointer_level = type_node->type_node.pointer_level;
-    out->ref_kind = type_node->type_node.ref_kind;
+    out->borrow_kind = type_node->type_node.borrow_kind;
     return 1;
 }
 
@@ -134,12 +134,12 @@ static int infer_recv_shape(ParserContext *ctx, MethodScope *scope, ASTNode *exp
     case AST_NUMBER:
         out->base_name = "i32";
         out->pointer_level = 0;
-        out->ref_kind = REFKIND_NONE;
+        out->borrow_kind = REFKIND_NONE;
         return 1;
     case AST_STRING_LITERAL:
         out->base_name = "str";
         out->pointer_level = 0;
-        out->ref_kind = REFKIND_NONE;
+        out->borrow_kind = REFKIND_NONE;
         return 1;
     case AST_IDENTIFIER: {
         ASTNode *t = method_scope_lookup(scope, expr->identifier.name);
@@ -185,9 +185,9 @@ static int infer_recv_shape(ParserContext *ctx, MethodScope *scope, ASTNode *exp
         if (expr->unary.op == ASTARISK) {
             RecvShape inner;
             if (!infer_recv_shape(ctx, scope, expr->unary.operand, &inner)) return 0;
-            if (inner.pointer_level == 0 && inner.ref_kind != REFKIND_NONE) {
+            if (inner.pointer_level == 0 && inner.borrow_kind != REFKIND_NONE) {
                 *out = inner;
-                out->ref_kind = REFKIND_NONE;
+                out->borrow_kind = REFKIND_NONE;
                 return 1;
             }
             if (inner.pointer_level <= 0) return 0;
@@ -208,7 +208,7 @@ static int infer_recv_shape(ParserContext *ctx, MethodScope *scope, ASTNode *exp
         RecvShape inner;
         if (!infer_recv_shape(ctx, scope, inner_expr, &inner)) return 0;
         *out = inner;
-        out->ref_kind = REFKIND_MUT;
+        out->borrow_kind = REFKIND_BORROW;
         return 1;
     }
     default:
@@ -236,29 +236,29 @@ static void method_error(ParserContext *ctx, ASTNode *node, const char *fmt, ...
  * auto-conversion yet -- it needs an explicit local. */
 static ASTNode *convert_receiver(ParserContext *ctx, ASTNode *call, ASTNode *recv,
                                  const RecvShape *actual, const RecvShape *expected) {
-    if (actual->pointer_level == expected->pointer_level && actual->ref_kind == expected->ref_kind) {
+    if (actual->pointer_level == expected->pointer_level && actual->borrow_kind == expected->borrow_kind) {
         return recv;
     }
 
-    int actual_plain = actual->pointer_level == 0 && actual->ref_kind == REFKIND_NONE;
-    int expected_plain_value = expected->pointer_level == 0 && expected->ref_kind == REFKIND_NONE;
+    int actual_plain = actual->pointer_level == 0 && actual->borrow_kind == REFKIND_NONE;
+    int expected_plain_value = expected->pointer_level == 0 && expected->borrow_kind == REFKIND_NONE;
 
     if (actual_plain) {
-        if (expected->pointer_level == 0 && expected->ref_kind == REFKIND_MUT) return new_borrow(recv);
-        if (expected->pointer_level == 1 && expected->ref_kind == REFKIND_NONE) return new_borrow(recv);
+        if (expected->pointer_level == 0 && expected->borrow_kind == REFKIND_BORROW) return new_borrow(recv);
+        if (expected->pointer_level == 1 && expected->borrow_kind == REFKIND_NONE) return new_borrow(recv);
     }
-    if (actual->pointer_level == 1 && actual->ref_kind == REFKIND_NONE && expected_plain_value) {
+    if (actual->pointer_level == 1 && actual->borrow_kind == REFKIND_NONE && expected_plain_value) {
         return new_unary(ASTARISK, recv);
     }
     /* `p.push(x)` with `Vec<T> *p` against a `borrow Vec<T>` receiver: borrow
      * the pointee. Like any raw deref it is unchecked. */
-    if (actual->pointer_level == 1 && actual->ref_kind == REFKIND_NONE &&
-        expected->pointer_level == 0 && expected->ref_kind == REFKIND_MUT) {
+    if (actual->pointer_level == 1 && actual->borrow_kind == REFKIND_NONE &&
+        expected->pointer_level == 0 && expected->borrow_kind == REFKIND_BORROW) {
         return new_borrow(new_unary(ASTARISK, recv));
     }
 
     /* A reading receiver reads what the borrow names. */
-    if (actual->pointer_level == 0 && actual->ref_kind != REFKIND_NONE && expected_plain_value) {
+    if (actual->pointer_level == 0 && actual->borrow_kind != REFKIND_NONE && expected_plain_value) {
         return new_unary(ASTARISK, recv);
     }
 
@@ -295,8 +295,8 @@ static void resolve_method_call(ParserContext *ctx, MethodScope *scope, ASTNode 
                    recv->type == AST_ARROW_ACCESS ||
                    (recv->type == AST_UNARY && recv->unary.op == ASTARISK);
     ASTNode *temp_decl = NULL;
-    if (!is_place && actual.pointer_level == 0 && actual.ref_kind == REFKIND_NONE &&
-        (expected.pointer_level > 0 || expected.ref_kind != REFKIND_NONE)) {
+    if (!is_place && actual.pointer_level == 0 && actual.borrow_kind == REFKIND_NONE &&
+        (expected.pointer_level > 0 || expected.borrow_kind != REFKIND_NONE)) {
         /* `half(3).is_none()` borrows a value that has no storage: give it a
          * temporary first, `({ T __mlg_recv_N = half(3); is_none(&__mlg_recv_N) })`. */
         char temp[48];

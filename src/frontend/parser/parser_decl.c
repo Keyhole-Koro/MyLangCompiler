@@ -24,7 +24,7 @@ ASTNode* parse_param(ParserContext *context, Token **cur) {
     }
     ASTNode *type = parse_type(context, cur);
     if (is_move && type->type == AST_TYPE &&
-        (type->type_node.ref_kind != REFKIND_NONE || type->type_node.pointer_level > 0))
+        (type->type_node.borrow_kind != REFKIND_NONE || type->type_node.pointer_level > 0))
         parse_error(context, "`move` takes a value, not a borrow or a pointer", start);
     if (!token_is_name(*cur)) parse_error(context, "expected param name", *cur);
     Token *name_tok = *cur;

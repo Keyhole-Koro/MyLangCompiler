@@ -65,7 +65,6 @@ The standard traits live in MyStdLib's `core/`:
 | `Eq` | `@std/core/cmp.mln` | `==` and `!=` |
 | `Iterator<T>` | `@std/core/iter.mln` | `for (T x in it)` |
 | `Drop` | `@std/core/drop.mln` | automatic cleanup |
-| `Copy` | `@std/core/copy.mln` | explicit copy semantics for safe structs |
 | `Describe` | `@std/core/describe.mln` | a short message for a value (errors), as `describe()` |
 
 ## Implementing a trait

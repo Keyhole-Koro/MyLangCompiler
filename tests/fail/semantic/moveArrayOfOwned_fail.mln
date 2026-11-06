@@ -1,0 +1,12 @@
+// Rule V2: an array is the strongest of what it holds, so an array of owned
+// values is moved.
+import { Drop } from "@std/core/drop.mln";
+
+struct Res { i32 handle; };
+impl Drop for Res { void (borrow Self self) drop() { } }
+
+i32 main() {
+    Res a[2];
+    Res b[2] = a;
+    return a[0].handle; // invalid: a was moved into b
+}

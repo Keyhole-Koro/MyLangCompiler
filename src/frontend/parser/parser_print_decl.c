@@ -21,11 +21,11 @@ static void fprint_type_modifiers(FILE *out, ASTNode *node, int indent) {
     fprintf(out, "\n");
 }
 
-static void fprint_ref_kind(FILE *out, ASTNode *node, int indent) {
+static void fprint_borrow_kind(FILE *out, ASTNode *node, int indent) {
     fprint_indent(out, indent);
     fprintf(out, "refkind: ");
-    switch (node->type_node.ref_kind) {
-    case REFKIND_MUT: fprintf(out, "borrow\n"); break;
+    switch (node->type_node.borrow_kind) {
+    case REFKIND_BORROW: fprintf(out, "borrow\n"); break;
     default: fprintf(out, "none\n"); break;
     }
 }
@@ -36,7 +36,7 @@ int fprint_ast_decl_node(FILE *out, ASTNode *node, int indent) {
         fprint_indent(out, indent); fprintf(out, "Type:\n");
         fprint_ast(out, node->type_node.base_type, indent + 1);
         fprint_indent(out, indent); fprintf(out, "pointers: %d\n", node->type_node.pointer_level);
-        fprint_ref_kind(out, node, indent);
+        fprint_borrow_kind(out, node, indent);
         fprint_type_modifiers(out, node, indent);
         return 1;
     case AST_TYPE_GENERIC:

@@ -1,7 +1,7 @@
 # Semantic Walk Coverage
 
 Covered by white-box tests:
-- `AST_BORROW` / `AST_BORROW_MUT`
+- `AST_BORROW`
 - `AST_PARAM` with `borrow` and `move`
 - `AST_WHILE` with `AST_BREAK` / `AST_CONTINUE`
 - `AST_CASE`
@@ -35,13 +35,15 @@ Covered by semantic failure tests:
   arm), a `case` without `_` on an integer (E0202)
 - a `@noreturn` function that has a `return`, can reach its end, or is not
   `void` (E0203)
-- moving or mutating a receiver while a method's returned borrow is in scope
+- moving or changing a receiver while a method's returned borrow is in scope
 - writing to or moving a parameter that only reads an owned value, and an
   owned temporary passed to one (E0601)
 - assigning to a value, or to one of its fields, while it is borrowed (E0602)
 - reading a value while a local holds `&` of it (E0603)
 - a value moved inside a loop, at the end of the body or before `continue`
   (E0604)
+- use after moving an array of owned values, a struct holding an owned value,
+  or a struct with a raw pointer field (`fail/semantic/move*_fail`)
 - `&` of a `const` value, and writing a `const` struct's field (E0605)
 - changing a `borrow` parameter or local while a borrow taken through it
   is in scope
@@ -49,7 +51,9 @@ Covered by semantic failure tests:
 Covered by semantic success tests:
 - a move followed by `break` or `return`, and a value assigned again before
   the next iteration (`succeed/semantic/moveThenLeave.mln`)
-- data-only structs copied without `impl Copy` (`succeed/semantic/dataStructsCopy.mln`)
+- data-only structs copied (`succeed/semantic/dataStructsCopy.mln`)
+- arrays of data and the structs holding them copied, down to an array that
+  fits a word (`succeed/semantic/arraysCopy.mln`)
 - re-pointing a borrow variable (`succeed/semantic/rebindBorrow.mln`)
 
 Covered by warning tests:

@@ -577,17 +577,17 @@ static const char *result_error_type_key(ASTNode *type) {
 
 /* `_p0_r0_m0_n8_SsdError` (one key of an instance name) back to a type. */
 static ASTNode *decode_type_key(const char *key) {
-    int pointer_level = 0, ref_kind = 0, modifiers = 0;
+    int pointer_level = 0, borrow_kind = 0, modifiers = 0;
     size_t length = 0;
     int consumed = 0;
-    if (sscanf(key, "_p%d_r%d_m%d_n%zu_%n", &pointer_level, &ref_kind, &modifiers, &length,
+    if (sscanf(key, "_p%d_r%d_m%d_n%zu_%n", &pointer_level, &borrow_kind, &modifiers, &length,
                &consumed) != 4 || consumed == 0 || strlen(key + consumed) < length)
         return NULL;
     char name[256];
     if (length >= sizeof(name)) return NULL;
     memcpy(name, key + consumed, length);
     name[length] = '\0';
-    return new_type_node(new_identifier(name), pointer_level, modifiers, ref_kind);
+    return new_type_node(new_identifier(name), pointer_level, modifiers, borrow_kind);
 }
 
 static int is_generated_try_case(ASTNode *node) {
@@ -983,7 +983,7 @@ static VariantTag *case_result_variant(VariantTable *table, ASTNode *node) {
  * an arm's value is otherwise carried as a single word. */
 static int is_aggregate_type(VariantTable *table, ASTNode *type) {
     const char *name = type_base_name(type);
-    if (!name || type->type_node.pointer_level || type->type_node.ref_kind != REFKIND_NONE) return 0;
+    if (!name || type->type_node.pointer_level || type->type_node.borrow_kind != REFKIND_NONE) return 0;
     for (int i = 0; i < table->program->block.count; i++) {
         ASTNode *node = table->program->block.stmts[i];
         if (!node) continue;

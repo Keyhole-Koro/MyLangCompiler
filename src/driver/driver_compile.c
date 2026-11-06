@@ -295,7 +295,7 @@ static int write_dependency_file(const char *depfile_path,
 int compile_one(const char *input_path, const char *output_path,
                 int dump_tokens_to_stdout, int dump_ast_to_stdout,
                 const char **aliases, int alias_count,
-                const char *depfile_path) {
+                const char *depfile_path, const char *symbols_path) {
     MyLangSourceSpecResult source = mylang_source_spec_parse(input_path);
     if (!source.ok) {
         fprintf(stderr, "Invalid MyLang source filename: %s\n", source.error);
@@ -376,7 +376,8 @@ int compile_one(const char *input_path, const char *output_path,
         return 1;
     }
 
-    if (!write_dependency_file(depfile_path, input_path, root, session)) {
+    if (!write_dependency_file(depfile_path, input_path, root, session) ||
+        !write_symbol_file(symbols_path, input_path, root, output)) {
         free(output);
         free_ast(root);
         free_tokens(tokens);
