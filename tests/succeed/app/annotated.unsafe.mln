@@ -58,6 +58,16 @@ i32 main() {
     Annotations marks = annotations.named("mark");
     while (marks.next()) { str t = annotation_text(marks.type()); if (t.length == 0) { if (annotation_i32(marks.size()) == 0) { out = out + 400; } } }
 
+    Annotations first = annotations.named("app");
+    if (first.row().is_some()) { return 6; }                 // nothing selected yet
+    if (!first.next()) { return 7; }
+    if (annotation_text(first.name()) != "app") { return 8; }
+    if (annotation_i32(first.argc()) != 2) { return 9; }     // single, name
+    if (first.row().is_none()) { return 10; }
+    first.reset();
+    if (first.row().is_some()) { return 11; }
+    if (!first.next()) { return 12; }
+
     Annotations all = annotations.all();
     i32 n = 0;
     while (all.next()) { n++; }

@@ -97,7 +97,8 @@ int typeinfo_elem_size_bytes(CompilerContext *cc, const TypeInfo *info) {
 int typeinfo_total_size_bytes(CompilerContext *cc, const TypeInfo *info) {
     if (!info) return SLOT_SIZE;
     if (info->pointer_level > 0 && info->dims_count == 0) return SLOT_SIZE;
-    long sz = typeinfo_elem_size_bytes(cc, info);
+    /* An array of pointers holds pointers, whatever they point at. */
+    long sz = info->pointer_level > 0 ? SLOT_SIZE : typeinfo_elem_size_bytes(cc, info);
     for (int i = 0; i < info->dims_count; i++) {
         int len = info->dims[i] > 0 ? info->dims[i] : 1;
         sz *= len;

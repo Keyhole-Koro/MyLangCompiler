@@ -1,0 +1,15 @@
+// The trace holds 32 sites. What did not fit is counted.
+import error_trace from "@std/debug/error_trace.mln";
+import { Result } from "@std/core/result.mln";
+
+Result<i32, i32> deep(i32 level) {
+    if (level == 0) { return Err(1); }
+    i32 value = deep(level - 1)?;
+    return Ok(value);
+}
+
+i32 main() {
+    bool failed = case deep(39) of { Ok(_) -> false; Err(_) -> true; };
+    if (!failed) { return 0; }
+    return error_trace.dropped();
+}

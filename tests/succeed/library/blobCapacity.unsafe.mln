@@ -1,0 +1,29 @@
+// Blob reports the capacity it was made with, and nothing for a dead handle.
+import allocator from "@std/memory/allocator.mln";
+import blob from "@std/memory/blob.mln";
+import { Blob } from "@std/memory/blob.mln";
+import { AllocationError } from "@std/memory/allocator.mln";
+import { Option } from "@std/core/option.mln";
+import { Result } from "@std/core/result.mln";
+
+u8 g_storage[131072];
+i32 g_used = 0;
+
+Result<i32, AllocationError> test_alloc(i32 size) {
+    if (size <= 0) { return Err(AllocationError::InvalidSize); }
+    if (size > 131072 - g_used) { return Err(AllocationError::OutOfMemory); }
+    i32 result = (i32)(&g_storage[g_used]);
+    g_used = g_used + size;
+    return Ok(result);
+}
+
+void test_free(i32 pointer) { }
+
+i32 main() {
+    allocator.configure(test_alloc, test_free);
+    Blob made = case blob.blob_new(12) of {
+        Some(value) -> value;
+        None -> ({ return 1; });
+    };
+    return made.cap();
+}

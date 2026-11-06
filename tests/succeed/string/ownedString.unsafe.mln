@@ -34,13 +34,24 @@ i32 exercise() {
     str original = text.as_str();
     if (!text.append(original)) { return 3; }
     if (text.as_str() != "hello!hello!") { return 4; }
+    if (text.is_empty() || text.capacity_bytes() < 12) { return 5; }
+    text.clear();
+    if (!text.is_empty() || text.len() != 0) { return 6; }
+    return 0;
+}
+
+i32 copied() {
+    String text = string.from_str("copy");
+    if (text.as_str() != "copy") { return 7; }
     return 0;
 }
 
 i32 main() {
     allocator.configure(test_alloc, test_free);
     i32 error = exercise();
+    if (error == 0) { error = copied(); }
     if (error != 0) { return error; }
-    // 2 -> 8 -> 16 frees both old allocations; scope drop frees the final one.
+    // 2 -> 8 -> 16 frees both old allocations; scope drop frees the final one,
+    // and the copy's four bytes.
     return frees * 10 + used;
 }

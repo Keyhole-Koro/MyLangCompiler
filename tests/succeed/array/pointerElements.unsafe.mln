@@ -1,0 +1,19 @@
+// An array of pointers takes a word per element, whatever they point at.
+struct Big { i32 words[16]; };
+
+char *g_names[8];
+Big *g_bigs[2];
+i32 g_after = 7;
+
+i32 main() {
+    char *names[8];
+    i32 after_local = 5;
+    i32 i = 0;
+    while (i < 8) {
+        g_names[i] = "x";
+        names[i] = "y";
+        i++;
+    }
+    g_bigs[1] = (Big *)0;
+    return g_after * 10 + after_local;
+}

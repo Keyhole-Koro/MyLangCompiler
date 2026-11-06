@@ -578,7 +578,14 @@ static ASTNode *try_source_type(VariantTable *table, ASTNode *target) {
             type = find_local_type(fn->fundef.params[i], target->identifier.name);
             if (type) return type;
         }
-        return find_local_type(fn->fundef.body, target->identifier.name);
+        type = find_local_type(fn->fundef.body, target->identifier.name);
+        for (int i = 0; i < table->program->block.count && !type; i++) {
+            ASTNode *node = table->program->block.stmts[i];
+            if (node && node->type == AST_VAR_DECL &&
+                strcmp(node->var_decl.name, target->identifier.name) == 0)
+                type = node->var_decl.var_type;
+        }
+        return type;
     }
     return NULL;
 }
