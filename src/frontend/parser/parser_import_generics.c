@@ -338,11 +338,7 @@ void load_imported_generic_templates(ParserContext *context, ASTNode *import_nod
     for (int i = 0; i < mod->generic_template_count; i++) {
         ASTNode *template = mod->generic_templates[i];
         const char *name = template_name(template);
-        /* A package import asks for no names; `pkg.run<T>()` reaches its
-         * generic functions all the same. */
-        int by_package = import_node->import_stmt.symbol_count == 0 && template->type == AST_FUNDEF;
-        if (!template_is_exported(template) ||
-            (!by_package && !import_requests_symbol(import_node, name)))
+        if (!template_is_exported(template) || !import_requests_symbol(import_node, name))
             continue;
 
         GenericImportClosure closure = {context, mod};
@@ -350,6 +346,29 @@ void load_imported_generic_templates(ParserContext *context, ASTNode *import_nod
 
         remove_import_symbol(import_node, name);
     }
+}
+
+/* `pkg.name<T>()`: a package import names nothing, so the template comes at its
+ * first call. Taking a package's templates at the import would count every
+ * method they call as called here, and each instance would emit those methods. */
+int load_package_generic_function(ParserContext *context, const char *package, const char *name) {
+    if (find_generic_function_template(context, name)) return 1;
+    FrontendSession *session = context->session;
+    if (!session || !session->graph) return 0;
+    for (int m = 0; m < session->graph->module_count; m++) {
+        Module *module = session->graph->modules[m];
+        if (!module || !module->package_name || strcmp(module->package_name, package) != 0) continue;
+        for (int i = 0; i < module->generic_template_count; i++) {
+            ASTNode *template = module->generic_templates[i];
+            const char *candidate = template_name(template);
+            if (template->type != AST_FUNDEF || !template_is_exported(template) ||
+                !candidate || strcmp(candidate, name) != 0) continue;
+            GenericImportClosure closure = {context, module};
+            import_generic_template_closure(&closure, template);
+            return 1;
+        }
+    }
+    return 0;
 }
 
 /* Same idea as load_imported_generic_templates(), for a plain (non-generic)

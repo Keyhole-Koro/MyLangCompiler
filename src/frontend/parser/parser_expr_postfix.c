@@ -106,8 +106,8 @@ ASTNode *parse_postfix(ParserContext *context, Token **cur) {
             char *member_name = is_mock_of ? "target" : (*cur)->value;
             *cur = (*cur)->next;
             if (node->type == AST_IDENTIFIER && is_imported_package(context, node->identifier.name)) {
-                /* `pkg.run<T>()`: the template came with the package import. */
-                if ((*cur)->kind == LT && find_generic_function_template(context, member_name)) {
+                if ((*cur)->kind == LT &&
+                    load_package_generic_function(context, node->identifier.name, member_name)) {
                     node = parse_package_generic_call(context, cur, node, member_name);
                     continue;
                 }

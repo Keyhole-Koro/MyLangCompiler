@@ -121,6 +121,7 @@ void instantiate_generics(ParserContext *context, ASTNode *program);
  * argument (parser_borrow_positions.c). */
 void check_borrow_positions(ParserContext *context, ASTNode *program);
 void load_imported_generic_templates(ParserContext *context, ASTNode *import_node, const char *source_path);
+int load_package_generic_function(ParserContext *context, const char *package, const char *name);
 void load_imported_plain_types(ParserContext *context, ASTNode *import_node, const char *source_path);
 /* Copies the declaration of a type that `mod` names in a signature (and the
  * types its fields name) into this module, unless it is already visible. */
