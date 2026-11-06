@@ -42,6 +42,8 @@ Covered by semantic failure tests:
 - reading a value while a local holds `&` of it (E0603)
 - a value moved inside a loop, at the end of the body or before `continue`
   (E0604)
+- use after moving an array of owned values, a struct holding an owned value,
+  or a struct with a raw pointer field (`fail/semantic/move*_fail`)
 - `&` of a `const` value, and writing a `const` struct's field (E0605)
 - changing a `borrow` parameter or local while a borrow taken through it
   is in scope
@@ -50,6 +52,8 @@ Covered by semantic success tests:
 - a move followed by `break` or `return`, and a value assigned again before
   the next iteration (`succeed/semantic/moveThenLeave.mln`)
 - data-only structs copied (`succeed/semantic/dataStructsCopy.mln`)
+- arrays of data and the structs holding them copied, down to an array that
+  fits a word (`succeed/semantic/arraysCopy.mln`)
 - re-pointing a borrow variable (`succeed/semantic/rebindBorrow.mln`)
 
 Covered by warning tests:
