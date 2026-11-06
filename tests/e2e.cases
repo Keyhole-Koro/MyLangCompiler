@@ -114,7 +114,7 @@ phase2_refParam|11|succeed/semantic/phase2_refParam.mln
 phase2_refMutParam|9|succeed/semantic/phase2_refMutParam.mln
 refImportLongLocals|49|succeed/semantic/refImportLongLocals_main.mln,succeed/semantic/refImportLongLocals_helper.mln
 phase_restParam|0|succeed/semantic/phase_restParam.unsafe.mln
-annotationTable|4422313|succeed/app/annotated.unsafe.mln,support/app/counter.unsafe.mln,support/app/annotations.unsafe.mln,../../MyStdLib/meta/annotations.unsafe.mln,../../MyStdLib/memory/section.unsafe.mln,../../MyStdLib/memory/slice.unsafe.mln,../../MyStdLib/format/mbin.unsafe.mln,../../MyStdLib/text/str.unsafe.mln,../../MyStdLib/core/option.mln,../../MyStdLib/text/ascii.mln,../../MyStdLib/text/bytes.unsafe.mln,../../MyStdLib/core/int32.mln
+annotationTable|4422313|succeed/app/annotated.unsafe.mln,support/app/counter.unsafe.mln,support/app/annotations.unsafe.mln,../../MyStdLib/meta/annotations.unsafe.mln,../../MyStdLib/memory/section.unsafe.mln,../../MyStdLib/memory/slice.unsafe.mln,../../MyStdLib/format/mbin.mln,../../MyStdLib/text/str.unsafe.mln,../../MyStdLib/core/option.mln,../../MyStdLib/text/ascii.mln,../../MyStdLib/text/bytes.unsafe.mln,../../MyStdLib/core/int32.mln
 defaultArguments|62|succeed/function/defaultArgs.mln,support/app/lib.mln
 domRefAndDefaults|113|succeed/dom/refAndDefaults.dom.mln,support/app/dom.unsafe.mln
 breakInCaseArm|562|succeed/enum/breakInCaseArm.mln
@@ -133,7 +133,7 @@ structCaseResult|39544|succeed/case/structCaseResult.mln
 nestedAggregateCallArg|7147421|succeed/struct/byval/nestedAggregateCallArg.mln
 traitTryInStructLiteral|4028304|succeed/trait/tryInStructLiteral.mln
 siblingShadowTypes|143|succeed/scope/siblingShadowTypes.mln
-errorTrace|141111|succeed/trace/errorTrace.unsafe.mln,../../MyStdLib/debug/error_trace.unsafe.mln|--error-trace
+errorTrace|141111|succeed/trace/errorTrace.unsafe.mln,../../MyStdLib/debug/error_trace.unsafe.mln,../../MyStdLib/text/str.unsafe.mln,../../MyStdLib/text/text.unsafe.mln,../../MyStdLib/text/ascii.mln,../../MyStdLib/text/bytes.unsafe.mln,../../MyStdLib/core/int32.mln|--error-trace
 traitDefaultItems|18420016|succeed/trait/defaultItems.unsafe.mln
 traitDefaultCrossModule|1042|succeed/trait/defaultCross_main.unsafe.mln,succeed/trait/defaultCross_lib.mln
 traitStructBounds|115|succeed/trait/structBounds.mln

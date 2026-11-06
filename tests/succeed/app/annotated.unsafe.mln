@@ -20,7 +20,7 @@ CodeAddress annotation_code(Result<CodeAddress, AnnotationError> result) {
     return case result of { Ok(value) -> value; Err(_) -> CodeAddress(0); };
 }
 
-char* annotation_text(Result<char*, AnnotationError> result) {
+str annotation_text(Result<str, AnnotationError> result) {
     return case result of { Ok(value) -> value; Err(_) -> ""; };
 }
 
@@ -37,17 +37,17 @@ i32 main() {
         fn(i32) -> i32 callback = (fn(i32) -> i32)function_address;
         i32 v = callback(self);                            // 42
         out = out + v * 10000 + annotation_i32(it.size()) * 100 + annotation_i32(it.arg(0)) * 10;   // size 16, single 1
-        char *label = annotation_text(it.text(1));
-        if (label[0] == 'C') { out = out + 1; }
-        char *type = annotation_text(it.type());
-        if (type[0] == 'C') { out = out + 2; }
+        str label = annotation_text(it.text(1));
+        if (label.data[0] == 'C') { out = out + 1; }
+        str type = annotation_text(it.type());
+        if (type.data[0] == 'C') { out = out + 2; }
     }
 
     Annotations timers = annotations.named("timer");
     while (timers.next()) { out = out + annotation_i32(timers.arg(0)); }   // +100
 
     Annotations keys = annotations.where("key", "Counter");
-    while (keys.next()) { char *k = annotation_text(keys.text(0)); if (k[5] == 'S') { out = out + 200; } }
+    while (keys.next()) { str k = annotation_text(keys.text(0)); if (k.data[5] == 'S') { out = out + 200; } }
     Annotations none = annotations.where("key", "Nobody");
     if (none.next()) { return 4; }
     Annotations typed = annotations.of_type("Counter");
@@ -56,7 +56,7 @@ i32 main() {
     if (on_counter != 3) { return 5; }                       // app, timer, key
 
     Annotations marks = annotations.named("mark");
-    while (marks.next()) { char *t = annotation_text(marks.type()); if (t[0] == 0) { if (annotation_i32(marks.size()) == 0) { out = out + 400; } } }
+    while (marks.next()) { str t = annotation_text(marks.type()); if (t.length == 0) { if (annotation_i32(marks.size()) == 0) { out = out + 400; } } }
 
     Annotations all = annotations.all();
     i32 n = 0;
