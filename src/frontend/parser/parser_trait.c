@@ -1159,6 +1159,8 @@ void resolve_imported_impls(ParserContext *context) {
                 ImplDef *copy = impl_def_clone(impl);
                 copy->is_exported = 0;
                 add_impl(context, copy);
+                for (int k = 0; k < copy->item_count; k++)
+                    import_private_names_of(context, copy->template_items[k]);
             }
             continue;
         }

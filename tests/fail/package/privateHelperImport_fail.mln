@@ -1,0 +1,6 @@
+// A private name cannot be imported by name either.
+import { decode } from "../../succeed/generic/privateReach_one.mln";
+
+i32 main() {
+    return decode(1);
+}

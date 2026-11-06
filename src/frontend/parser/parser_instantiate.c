@@ -982,7 +982,11 @@ void instantiate_generics(ParserContext *context, ASTNode *program) {
         const char *name = struct_name(node);
         if (node->type == AST_FUNDEF) name = node->fundef.name;
         if (node->type == AST_VAR_DECL) name = node->var_decl.name;
-        if (name && strncmp(name, "__mlg_", 6) == 0 &&
+        /* What a template reaches of its module is declared under its link
+         * name, and has no definition here. */
+        int declares_link_name = (node->type == AST_FUNDEF && !node->fundef.body) ||
+                                 (node->type == AST_VAR_DECL && node->var_decl.is_extern);
+        if (name && strncmp(name, "__mlg_", 6) == 0 && !declares_link_name &&
             !(node->type == AST_STRUCT && node->struct_stmt.is_imported_instance))
             generic_error(context, node,
                           "the __mlg_ prefix is reserved for generic instantiations");

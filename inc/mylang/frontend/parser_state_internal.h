@@ -141,6 +141,8 @@ typedef struct ParserModuleState {
 
 typedef struct ParserControlState {
     int generic_decl_depth;
+    /* Source the compiler wrote, which may spell the names it generates. */
+    int parsing_generated;
     const char *current_generic_function_name;
     int stop_at_arrow;
 } ParserControlState;

@@ -1,0 +1,6 @@
+// A private global a generic uses stays out of ordinary code as well.
+import { wrap_one } from "../../succeed/generic/privateReach_one.mln";
+
+i32 main() {
+    return wrap_one<i32>(1) + g_seen;
+}

@@ -1,0 +1,18 @@
+// A generic is compiled where it is instantiated, here, yet it reaches the
+// private functions and globals of the module that wrote it. Both modules have
+// a private `decode` and a private `g_seen`, so each is linked under a name of
+// its module's own.
+import one from "privateReach_one.mln";
+import { Box, wrap_one } from "privateReach_one.mln";
+import { pair_two, Pair, shout } from "privateReach_two.mln";
+
+i32 main() {
+    i32 total = wrap_one<i32>(1);                 // one's g_seen is 1
+    total = total + wrap_one<char>('a');          // 2: total 3
+    Box<i32> box = Box<i32> { value: 5 };
+    total = total * 100 + box.opened();           // one's decode: 306, seen 3
+    total = total * 1000 + pair_two<i32>(3);      // two's decode and g_seen: 306106
+    Pair<i32> pair = Pair<i32> { left: 1, right: 2 };
+    total = total * 10 + shout<i32>(pair);        // 3061069
+    return total + one.inside() - 4;                  // made in `one`'s object too: seen 4
+}

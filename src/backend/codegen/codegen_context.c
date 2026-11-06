@@ -83,6 +83,16 @@ void note_defined_func(CompilerContext *cc, const char *name) {
     cc->defined_funcs[cc->defined_func_count++] = (char*)name;
 }
 
+void note_object_local_func(CompilerContext *cc, const char *name) {
+    cc->object_local_funcs = (char**)realloc(cc->object_local_funcs,
+                                             sizeof(char*) * (cc->object_local_func_count + 1));
+    cc->object_local_funcs[cc->object_local_func_count++] = (char*)name;
+}
+
+bool func_is_object_local(CompilerContext *cc, const char *name) {
+    return find_name(cc->object_local_funcs, cc->object_local_func_count, name) >= 0;
+}
+
 bool func_is_defined(CompilerContext *cc, const char *name) {
     return find_name(cc ? cc->defined_funcs : NULL, cc ? cc->defined_func_count : 0, name) >= 0;
 }

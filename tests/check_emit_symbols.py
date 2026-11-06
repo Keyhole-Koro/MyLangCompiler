@@ -35,6 +35,10 @@ export i32 (Key self) raw() { return self.value; }
 export impl Eq for Key {
     bool (Key self) eq(Key other) { return self.value == other.value; }
 }
+
+// Exported from the object for instances elsewhere, but not an export.
+i32 reached() { return 4; }
+export i32 through<T>(T value) { return reached(); }
 """
 
 MAIN = """import lib from "lib.mln";
@@ -76,6 +80,7 @@ with tempfile.TemporaryDirectory(prefix="mylang-symbols-") as temporary:
         f"template\tBox__get\t{library}\t17",
         f"method\tKey__raw\t{library}\t21",
         f"impl\tKey__eq\t{library}\t23",
+        f"template\tthrough\t{library}\t28",
     }
     if exports != expected_exports:
         raise SystemExit(f"unexpected exports:\nexpected={sorted(expected_exports)!r}\n"

@@ -37,6 +37,7 @@ void free_ast(ASTNode *node) {
             free_ast(node->var_decl.var_type);
             free(node->var_decl.name);
             free(node->var_decl.package);
+            free(node->var_decl.link_name);
             if (node->var_decl.init) free_ast(node->var_decl.init);
             break;
         case AST_BORROW:

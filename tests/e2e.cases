@@ -30,6 +30,7 @@ genericImportedFieldMethod|11|succeed/generic/importedFieldMethod_main.unsafe.ml
 genericKernelContainers|63|succeed/generic/kernel_containers.unsafe.mln,../../MyStdLib/core/result_take.unsafe.mln,../../MyStdLib/collections/hashmap.unsafe.mln,../../MyStdLib/core/cmp.mln,../../MyStdLib/core/hash.unsafe.mln
 genericFieldReceiver|169|succeed/generic/fieldReceiver.unsafe.mln
 genericModuleIsolation|33|succeed/generic/modules_main.mln,succeed/generic/modules_one.mln,succeed/generic/modules_two.mln
+genericPrivateReach|3061069|succeed/generic/privateReach_main.mln,succeed/generic/privateReach_one.mln,succeed/generic/privateReach_two.mln
 crossModuleResultReturn|149|succeed/enum/cross_module_result_main.mln,succeed/enum/cross_module_result_lib.mln
 crossModulePayloadEnum|1156|succeed/enum/cross_module_payload_enum_main.mln,succeed/enum/cross_module_payload_enum_lib.mln
 qualifiedEnumVariant|17|succeed/enum/qualifiedEnumVariant.mln

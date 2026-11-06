@@ -132,7 +132,35 @@ part of the design.
   read-only in the importing translation unit and byte-width globals retain
   their load width.
 - Non-exported declarations and generic templates remain invisible to
-  importers.
+  importers. Importing a private function or global of a package by name is an
+  error; a file that declares no package links by plain names.
+
+### What a generic reaches of its own module
+
+A generic is compiled where it is instantiated, which can be another object, and
+its body may use private functions and globals of the module that wrote it. The
+author exports nothing for that:
+
+- At the end of parsing, a private function with a body or a private global that
+  a body of the module's generics names gets a link name unique to the module,
+  `__mlg_m_<hash of its canonical path>_<name>`
+  (`publish_private_names_of_generics`). Two modules may each have a `decode`.
+  Generic functions, receiver methods of generic types and impl templates count.
+- The defining object labels it with that name as well and exports that name
+  alone. `is_exported` stays 0, so `--emit-symbols` lists no export for it and
+  `qa/tools/unused_exports.py` has nothing to report.
+- `module_loader_load` rewrites the module's templates to the link name, the way
+  it rewrites an exported name to its package form. The module's own compilation
+  keeps calling the function by its name.
+- Copying a template into a unit (`import_private_name`) declares each link name
+  in it: a prototype, or an `extern` global, along with the types of the
+  signature. The lookup goes through the whole module graph, because a template
+  can arrive through a module that does not import the one that wrote it.
+- The source name never reaches an importer, and `__mlg_m_` cannot be spelled in
+  source, so ordinary code cannot call the function.
+
+Private receiver methods and private generics are not published: a generic that
+uses one of those still needs it exported.
 
 The resolver provides, at minimum:
 

@@ -29,6 +29,27 @@ static int module_declares(const Module *module, const char *name) {
     return 0;
 }
 
+/* A function or global a package does not export. A file with no package is
+ * plain C-like linkage, whose names are there for any import to take, and
+ * mytest reaches the tests of a `.test.mln` file by name. */
+static int module_keeps_private(const Module *module, const char *name) {
+    static const char kTest[] = ".test.mln";
+    size_t length = strlen(module->canonical_path);
+    if (!module->package_name || (length >= sizeof(kTest) - 1 &&
+        strcmp(module->canonical_path + length - (sizeof(kTest) - 1), kTest) == 0))
+        return 0;
+    int found = 0;
+    for (int i = 0; i < module->symbol_count; i++) {
+        const ModuleSymbol *symbol = &module->symbols[i];
+        if ((symbol->kind != SYMBOL_FUNCTION && symbol->kind != SYMBOL_GLOBAL) ||
+            !symbol->source_name || strcmp(symbol->source_name, name) != 0)
+            continue;
+        if (symbol->is_exported) return 0;
+        found = 1;
+    }
+    return found;
+}
+
 /* `import X from "f.mln";` imports the package when f.mln declares
  * `package X;` and otherwise the symbol X. A name that is neither -- an
  * attempt to give the package another name -- would silently import nothing
@@ -36,8 +57,12 @@ static int module_declares(const Module *module, const char *name) {
 static void check_imported_names(ParserContext *context, Module *module, const char *path,
                                  char **symbols, int count, Token *at) {
     for (int i = 0; i < count; i++) {
-        if (module_declares(module, symbols[i])) continue;
         char message[512];
+        if (module_keeps_private(module, symbols[i])) {
+            snprintf(message, sizeof(message), "'%s' does not export '%s'", path, symbols[i]);
+            parse_error(context, message, at);
+        }
+        if (module_declares(module, symbols[i])) continue;
         if (module->package_name && count == 1) {
             snprintf(message, sizeof(message),
                      "'%s' declares package '%s' and nothing named '%s'; a package is imported "
@@ -414,5 +439,7 @@ ASTNode *parse_program_syntax(ParserContext *context, Token **cur) {
         nodes[count++] = node;
     }
     resolve_imported_impls(context);
-    return new_block(nodes, count);
+    ASTNode *program = new_block(nodes, count);
+    publish_private_names_of_generics(context, program);
+    return program;
 }

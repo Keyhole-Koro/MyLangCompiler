@@ -89,12 +89,14 @@ void parse_generated_toplevels(ParserContext *context, ASTNode *program, const c
     char *copy = strdup(source);
     Token *tokens = lexer(copy);
     Token *cur = tokens;
+    context->control.parsing_generated++;
     while (cur && cur->kind != EOT) {
         ASTNode *node = parse_toplevel(context, &cur);
         if (!node) continue;
         program->block.stmts = realloc(program->block.stmts, sizeof(ASTNode *) * (program->block.count + 1));
         program->block.stmts[program->block.count++] = node;
     }
+    context->control.parsing_generated--;
     while (tokens) {
         Token *next = tokens->next;
         free(tokens->value);

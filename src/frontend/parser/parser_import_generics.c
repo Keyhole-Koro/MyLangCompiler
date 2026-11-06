@@ -3,6 +3,85 @@
 #include "mylang/frontend/resolver.h"
 #include "mylang/frontend/parser_ast_internal.h"
 #include "mylang/type/type_info.h"
+#include "mylang/frontend/parser_trait_internal.h"
+
+#include <limits.h>
+
+/* Link names of private functions and globals. Generated like an instance's,
+ * but exported from the object that defines them. */
+#define PRIVATE_LINK_PREFIX "__mlg_m_"
+
+typedef struct {
+    const char *module_path;
+    ASTNode *program;
+} PrivateNames;
+
+static char *private_link_name(const char *module_path, const char *name) {
+    char canonical[PATH_MAX];
+    const char *path = realpath(module_path, canonical) ? canonical : module_path;
+    /* FNV-1a: the same file gives the same name in every compilation. */
+    unsigned long long hash = 0xcbf29ce484222325ULL;
+    for (const unsigned char *p = (const unsigned char *)path; *p; p++) {
+        hash ^= *p;
+        hash *= 0x100000001b3ULL;
+    }
+    size_t size = sizeof(PRIVATE_LINK_PREFIX) + 16 + 1 + strlen(name);
+    char *link_name = malloc(size);
+    snprintf(link_name, size, PRIVATE_LINK_PREFIX "%016llx_%s", hash, name);
+    return link_name;
+}
+
+static void publish_private_name(PrivateNames *names, const char *name) {
+    for (int i = 0; i < names->program->block.count; i++) {
+        ASTNode *node = names->program->block.stmts[i];
+        if (node && node->type == AST_FUNDEF && !node->fundef.is_exported && node->fundef.body &&
+            !node->fundef.recv_type_name && !node->fundef.link_name &&
+            strcmp(node->fundef.name, name) == 0)
+            node->fundef.link_name = private_link_name(names->module_path, name);
+        if (node && node->type == AST_VAR_DECL && !node->var_decl.is_exported &&
+            !node->var_decl.is_extern && !node->var_decl.link_name &&
+            strcmp(node->var_decl.name, name) == 0)
+            node->var_decl.link_name = private_link_name(names->module_path, name);
+    }
+}
+
+/* A name here is only a candidate: a local may share it. Publishing one too
+ * many changes nothing a program can see. */
+static void find_private_names(ASTNode **slot, void *user_data) {
+    ASTNode *node = *slot;
+    if (!node) return;
+    if (node->type == AST_CALL && !node->call.recv && node->call.name)
+        publish_private_name(user_data, node->call.name);
+    if (node->type == AST_IDENTIFIER) publish_private_name(user_data, node->identifier.name);
+    ast_visit_children(node, find_private_names, user_data);
+}
+
+/* A generic body is compiled where it is instantiated, which can be another
+ * object, so a private function or global its module's generics use needs a
+ * symbol that object can link to. Two modules may have a private `decode`, so
+ * the symbol is unique to the module, and the source name stays as private as
+ * it was: importers only meet the link name inside a template. A template that
+ * came from an import spells link names already. */
+void publish_private_names_of_generics(ParserContext *context, ASTNode *program) {
+    PrivateNames names = {context->module.filename, program};
+    if (!names.module_path) return;
+    for (int i = 0; i < generic_template_count(context); i++) {
+        ASTNode *tpl = generic_template_at(context, i);
+        if (tpl && tpl->type == AST_FUNDEF && !tpl->fundef.origin_path)
+            find_private_names(&tpl, &names);
+    }
+    for (int i = 0; i < generic_method_count(context); i++) {
+        ASTNode *fn = generic_method_at(context, i)->fundef;
+        if (!fn->fundef.origin_path) find_private_names(&fn, &names);
+    }
+    for (int i = 0; i < impl_count(context); i++) {
+        ImplDef *impl = impl_at(context, i);
+        for (int k = 0; impl->template_items && k < impl->item_count; k++) {
+            ASTNode *item = impl->template_items[k];
+            find_private_names(&item, &names);
+        }
+    }
+}
 
 static int import_requests_symbol(const ASTNode *node, const char *name) {
     if (!node || node->type != AST_IMPORT || !name) return 0;
@@ -65,10 +144,84 @@ static void stamp_template_origin(ASTNode *fundef, Module *module) {
 static void import_plain_dependency(ParserContext *context, Module *mod,
                                     const char *type_name);
 
+static void import_named_type(ParserContext *context, Module *mod, ASTNode *type) {
+    while (type && type->type == AST_TYPE_ARRAY) type = type->type_array.element_type;
+    if (type && type->type == AST_TYPE && type->type_node.base_type &&
+        type->type_node.base_type->type == AST_IDENTIFIER)
+        import_plain_dependency(context, mod, type->type_node.base_type->identifier.name);
+}
+
+/* A prototype is enough to call a function of another object. It gives the
+ * checks a signature and the caller the hidden pointer of an aggregate return. */
+static void declare_called_function(ParserContext *context, Module *owner, ASTNode *fn,
+                                    const char *name) {
+    ASTNode **params = NULL;
+    if (fn->fundef.param_count > 0) {
+        params = malloc(sizeof(ASTNode *) * fn->fundef.param_count);
+        for (int k = 0; k < fn->fundef.param_count; k++)
+            params[k] = ast_clone(fn->fundef.params[k]);
+    }
+    ASTNode *proto = new_fundef(ast_clone(fn->fundef.ret_type), (char *)name, params,
+                                fn->fundef.param_count, NULL, fn->fundef.is_variadic);
+    proto->fundef.is_safe = fn->fundef.is_safe;
+    proto->fundef.is_noreturn = fn->fundef.is_noreturn;
+    proto->fundef.origin_unsafe = owner->is_unsafe;
+    import_named_type(context, owner, fn->fundef.ret_type);
+    add_function(context, proto);
+    add_imported_plain_type(context, proto);
+}
+
+/* What a generic reaches of its own module's private names: only the instance
+ * spells these link names (publish_private_names_of_generics), and no import
+ * shows the function or global, so it is declared here under that name. Its
+ * module may be several imports away: a template travels with what it uses. */
+static void import_private_name(ParserContext *context, const char *name) {
+    FrontendSession *session = context->session;
+    if (strncmp(name, PRIVATE_LINK_PREFIX, sizeof(PRIVATE_LINK_PREFIX) - 1) != 0 ||
+        !session || !session->graph || find_function(context, name))
+        return;
+    for (int i = 0; i < imported_plain_type_count(context); i++) {
+        ASTNode *known = imported_plain_type_at(context, i);
+        if (known && known->type == AST_VAR_DECL && strcmp(known->var_decl.name, name) == 0) return;
+    }
+    for (int m = 0; m < session->graph->module_count; m++) {
+        Module *owner = session->graph->modules[m];
+        for (int s = 0; s < owner->symbol_count; s++) {
+            ModuleSymbol *symbol = &owner->symbols[s];
+            if (!symbol->link_name || strcmp(symbol->link_name, name) != 0) continue;
+            ASTNode *declaration = symbol->declaration;
+            if (symbol->kind == SYMBOL_FUNCTION) {
+                for (int k = 0; k < declaration->fundef.param_count; k++)
+                    import_named_type(context, owner, declaration->fundef.params[k]->param.type);
+                declare_called_function(context, owner, declaration, name);
+            } else {
+                import_named_type(context, owner, declaration->var_decl.var_type);
+                ASTNode *external = new_var_decl(ast_clone(declaration->var_decl.var_type),
+                                                 (char *)name, NULL);
+                external->var_decl.is_extern = 1;
+                add_imported_plain_type(context, external);
+            }
+            return;
+        }
+    }
+}
+
+static void import_private_names(ASTNode **slot, void *user_data) {
+    ASTNode *node = slot ? *slot : NULL;
+    if (!node) return;
+    if (node->type == AST_CALL && !node->call.recv && node->call.name)
+        import_private_name(user_data, node->call.name);
+    if (node->type == AST_IDENTIFIER) import_private_name(user_data, node->identifier.name);
+    ast_visit_children(node, import_private_names, user_data);
+}
+
+void import_private_names_of(ParserContext *context, ASTNode *template_item) {
+    ast_visit_children(template_item, import_private_names, context);
+}
+
 /* A generic body is compiled where it is instantiated, so what it calls from
  * the modules its own module imports has to be declared there too: `futex.wait`
- * inside Atomic<T>. A prototype is enough. It gives the checks a signature and
- * the caller the hidden pointer of an aggregate return. */
+ * inside Atomic<T>. */
 static void import_called_function(ParserContext *context, Module *mod, const char *name) {
     FrontendSession *session = context->session;
     if (!session || !session->loader || !mod->program || mod->program->type != AST_BLOCK ||
@@ -85,26 +238,7 @@ static void import_called_function(ParserContext *context, Module *mod, const ch
             if (sym->kind != SYMBOL_FUNCTION || !sym->is_exported || !sym->link_name ||
                 strcmp(sym->link_name, name) != 0 || !sym->declaration ||
                 sym->declaration->type != AST_FUNDEF) continue;
-            ASTNode *fn = sym->declaration;
-            ASTNode **params = NULL;
-            if (fn->fundef.param_count > 0) {
-                params = malloc(sizeof(ASTNode *) * fn->fundef.param_count);
-                for (int k = 0; k < fn->fundef.param_count; k++)
-                    params[k] = ast_clone(fn->fundef.params[k]);
-            }
-            ASTNode *proto = new_fundef(ast_clone(fn->fundef.ret_type), (char *)name, params,
-                                        fn->fundef.param_count, NULL, fn->fundef.is_variadic);
-            proto->fundef.is_safe = fn->fundef.is_safe;
-            proto->fundef.is_noreturn = fn->fundef.is_noreturn;
-            proto->fundef.origin_unsafe = target->is_unsafe;
-            ASTNode *returned = fn->fundef.ret_type;
-            if (returned && returned->type == AST_TYPE && returned->type_node.base_type &&
-                returned->type_node.base_type->type == AST_IDENTIFIER) {
-                import_plain_dependency(context, target,
-                                        returned->type_node.base_type->identifier.name);
-            }
-            add_function(context, proto);
-            add_imported_plain_type(context, proto);
+            declare_called_function(context, target, sym->declaration, name);
             return;
         }
     }
@@ -114,8 +248,12 @@ static void import_generic_dependency(ASTNode **slot, void *user_data) {
     ASTNode *node = slot ? *slot : NULL;
     GenericImportClosure *closure = user_data;
     const char *name = NULL;
-    if (node && node->type == AST_CALL && !node->call.recv && node->call.name)
+    if (node && node->type == AST_CALL && !node->call.recv && node->call.name) {
+        import_private_name(closure->context, node->call.name);
         import_called_function(closure->context, closure->module, node->call.name);
+    }
+    if (node && node->type == AST_IDENTIFIER)
+        import_private_name(closure->context, node->identifier.name);
     if (node && node->type == AST_TYPE_GENERIC) name = node->generic_type.name;
     if (node && node->type == AST_CALL && node->call.type_arg_count) name = node->call.name;
     if (name) {

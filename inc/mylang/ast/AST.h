@@ -152,6 +152,7 @@ struct ASTNode {
             int is_exported;
             int is_extern;   // `extern T name;`: defined in another object, so no storage here
             char *package;
+            char *link_name; // see fundef.link_name
         } var_decl;
         
         struct {
@@ -222,6 +223,10 @@ struct ASTNode {
             ASTNode *body;
             int is_exported;
             char *package;
+            /* Non-NULL for a private function a generic of its module uses:
+             * the symbol its object exports for the instances other objects
+             * make. `name` stays what this file calls it. */
+            char *link_name;
             bool is_variadic;
             char **type_params;
             /* Parallel to type_params: non-zero means `const N`, whose

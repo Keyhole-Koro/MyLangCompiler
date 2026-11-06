@@ -1,0 +1,19 @@
+package two;
+
+i32 g_seen = 0;
+i32 g_table[3] = { 7, 8, 9 };
+const i32 LIMIT = 1;
+
+i32 decode(i32 value) { g_seen = g_seen + 1; return value * 2; }
+fn(i32 value) -> i32 g_decoder = decode;
+
+export struct Pair<T> { T left; T right; };
+
+export i32 pair_two<T>(T value) {
+    fn(i32 value) -> i32 by_name = decode;
+    return by_name(3) + g_seen * 100;
+}
+
+export i32 shout<T>(Pair<T> pair) {
+    return g_table[1] + LIMIT + g_decoder(0);
+}

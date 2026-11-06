@@ -97,6 +97,10 @@ static ASTNode *parse_identifier_primary(ParserContext *context, Token **cur) {
     char *name = tok->value;
     *cur = (*cur)->next;
 
+    /* A link name would otherwise reach a private name of another module. */
+    if (strncmp(name, "__mlg_m_", 8) == 0 && !context->control.parsing_generated)
+        parse_error(context, "the __mlg_ prefix is reserved for compiler-generated names", tok);
+
     if ((*cur)->kind == L_BRACE) {
         return parse_struct_literal(context, cur, tok, NULL, 0);
     }

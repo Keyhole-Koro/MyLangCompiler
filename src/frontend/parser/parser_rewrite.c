@@ -39,6 +39,7 @@ void rewrite_node(ParserContext *context, ASTNode *node, char **scope, int scope
         for (int i = 0; i < node->call.arg_count; i++) {
             rewrite_node(context, node->call.args[i], scope, scope_count);
         }
+        rewrite_node(context, node->call.recv, scope, scope_count);
         break;
     }
     case AST_VAR_DECL:

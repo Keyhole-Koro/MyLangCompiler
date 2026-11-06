@@ -133,6 +133,9 @@ typedef struct {
     const char *loop_break_label;
     const char *loop_continue_label;
     char **defined_funcs;
+    /* Defined here, but other objects reach them by a link name instead. */
+    char **object_local_funcs;
+    int object_local_func_count;
     int defined_func_count;
     char **imports;
     int import_count;
@@ -204,6 +207,8 @@ void codegen_cost_end(StringBuilder *sb);
 int is_entry_name(const char *name);
 int next_label(CompilerContext *cc);
 void note_defined_func(CompilerContext *cc, const char *name);
+void note_object_local_func(CompilerContext *cc, const char *name);
+bool func_is_object_local(CompilerContext *cc, const char *name);
 bool func_is_defined(CompilerContext *cc, const char *name);
 int is_codegen_builtin(const char *name);
 ASTNode *cg_current_fundef_node(CompilerContext *cc);

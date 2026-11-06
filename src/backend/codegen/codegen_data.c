@@ -251,6 +251,7 @@ void emit_global_decl(CompilerContext *cc, ASTNode *var_decl) {
     // inside it (the global's address would be the string's).
     StringBuilder block;
     sb_init(&block);
+    if (var_decl->var_decl.link_name) sb_append(&block, "%s:\n", var_decl->var_decl.link_name);
     sb_append(&block, "%s:\n", var_decl->var_decl.name ? var_decl->var_decl.name : "");
     if (var_decl->var_decl.init) {
         emit_global_init(cc, &block, var_decl->var_decl.init, bytes, elem_bytes);

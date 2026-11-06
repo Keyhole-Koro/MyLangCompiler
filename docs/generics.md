@@ -64,7 +64,8 @@ in a temporary for the call.
 
 - Definitions must be available in the current translation unit or through a
   preceding named import of an exported template. A function can refer to
-  itself.
+  itself. A body may use private functions and globals of its own module from
+  any unit; see [Module Loading](module-resolution.md).
 - Instantiating a prototype without a definition is an error. The current
   template registry rejects duplicate generic declarations, including a
   separate prototype followed by a definition.

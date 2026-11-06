@@ -121,6 +121,7 @@ void gen_func(CompilerContext *cc, ASTNode *node, StringBuilder *sb)
         ? local_offset(param_count, return_index) : 0;
 
     sb_append(sb, "\n");
+    if (fn->fundef.link_name) sb_append(sb, "%s:\n", fn->fundef.link_name);
     sb_append(sb, "%s:\n", fname);
     codegen_debug_func(sb, fn->fundef.name,
                        fn->fundef.origin_path ? fn->fundef.origin_path : codegen_current_source_path(),

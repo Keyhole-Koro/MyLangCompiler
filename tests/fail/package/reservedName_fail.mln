@@ -1,0 +1,6 @@
+// Spelling a generated name does not reach what it names.
+import { wrap_one } from "../../succeed/generic/privateReach_one.mln";
+
+i32 main() {
+    return wrap_one<i32>(1) + __mlg_m_0000000000000000_decode(1);
+}

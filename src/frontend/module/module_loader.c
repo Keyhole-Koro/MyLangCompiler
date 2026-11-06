@@ -177,7 +177,7 @@ static void collect_module_symbols(Module *module, ParserContext *ctx) {
                 const char *current_name = stmt->fundef.name;
                 const char *orig = find_export_orig_by_mangled(ctx, current_name);
                 const char *source_name = orig ? orig : current_name;
-                const char *link_name = current_name;
+                const char *link_name = stmt->fundef.link_name ? stmt->fundef.link_name : current_name;
                 module_add_symbol(module, SYMBOL_FUNCTION, source_name, link_name,
                                   stmt, stmt->fundef.is_exported);
             } else if (stmt->type == AST_STRUCT) {
@@ -200,7 +200,7 @@ static void collect_module_symbols(Module *module, ParserContext *ctx) {
                 const char *current_name = stmt->var_decl.name;
                 const char *orig = find_export_orig_by_mangled(ctx, current_name);
                 const char *source_name = orig ? orig : current_name;
-                const char *link_name = current_name;
+                const char *link_name = stmt->var_decl.link_name ? stmt->var_decl.link_name : current_name;
                 module_add_symbol(module, SYMBOL_GLOBAL, source_name, link_name,
                                   stmt, stmt->var_decl.is_exported);
             }
@@ -305,12 +305,19 @@ Module *module_loader_load(ModuleLoader *loader, const char *importer_path, cons
 
     /* An importer instantiates this module's generic templates in its own
      * translation unit, from the clones handed over below. A template body
-     * that calls one of this module's exported functions (`start(name)` in
-     * section.mln's as_slice<T>) therefore has to carry the link name
-     * (`section_start`) the importer's object will import -- the same
+     * that calls one of this module's exported functions therefore has to
+     * carry the link name the importer's object will import -- the same
      * export rewrite lower_program() applies to a unit's own code, which
-     * this loader otherwise skips. Only exported names change; a private
-     * helper is out of a template's reach from another module regardless. */
+     * this loader otherwise skips. A private name a template uses goes the
+     * same way, to the link name it was published under: only here, as the
+     * module's own compilation keeps calling it by its name. */
+    for (int i = 0; i < program->block.count; i++) {
+        ASTNode *stmt = program->block.stmts[i];
+        if (stmt && stmt->type == AST_FUNDEF && stmt->fundef.link_name)
+            add_export(&ctx, stmt->fundef.name, stmt->fundef.link_name);
+        if (stmt && stmt->type == AST_VAR_DECL && stmt->var_decl.link_name)
+            add_export(&ctx, stmt->var_decl.name, stmt->var_decl.link_name);
+    }
     for (int i = 0; i < ctx.symbols.generic_templates.count; i++) {
         ASTNode *tpl = ctx.symbols.generic_templates.declarations[i];
         if (tpl && tpl->type == AST_FUNDEF) rewrite_node(&ctx, tpl, NULL, 0);
@@ -318,6 +325,11 @@ Module *module_loader_load(ModuleLoader *loader, const char *importer_path, cons
     for (int i = 0; i < ctx.symbols.generic_methods.count; i++) {
         GenericMethodDef *gm = ctx.symbols.generic_methods.methods[i];
         if (gm && gm->fundef) rewrite_node(&ctx, gm->fundef, NULL, 0);
+    }
+    for (int i = 0; i < ctx.symbols.impls.count; i++) {
+        ImplDef *impl = ctx.symbols.impls.impls[i];
+        for (int k = 0; impl->template_items && k < impl->item_count; k++)
+            rewrite_node(&ctx, impl->template_items[k], NULL, 0);
     }
 
     module->program = program; /* module owns program */

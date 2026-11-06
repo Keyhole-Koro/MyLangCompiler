@@ -1,0 +1,18 @@
+package one;
+
+i32 g_seen = 0;
+
+i32 decode(i32 value) { g_seen = g_seen + 1; return value + 1; }
+
+export struct Box<T> { T value; };
+
+export i32 wrap_one<T>(T value) {
+    decode(1);
+    return g_seen;
+}
+
+export i32 (Box<T> self) opened() {
+    return decode(5);
+}
+
+export i32 inside() { return wrap_one<i32>(1); }

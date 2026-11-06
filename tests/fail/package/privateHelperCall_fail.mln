@@ -1,0 +1,7 @@
+// A generic of this module reaches its private `decode` from any file, and
+// that gives no other code the name.
+import { wrap_one } from "../../succeed/generic/privateReach_one.mln";
+
+i32 main() {
+    return wrap_one<i32>(1) + decode(1);
+}

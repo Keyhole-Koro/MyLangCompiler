@@ -359,6 +359,8 @@ void collect_codegen_globals(CompilerContext *cc, ASTNode *root) {
              * it imports `pkg.function()`. */
             if (n->var_decl.is_exported)
                 note_defined_func(cc, n->var_decl.name);
+            if (n->var_decl.link_name)
+                note_defined_func(cc, n->var_decl.link_name);
             cg_globals_info = (LocalInfo*)realloc(cg_globals_info, sizeof(LocalInfo) * (cg_globals_count + 1));
             cg_globals_info[cg_globals_count].name = n->var_decl.name;
             set_localinfo_from_type(cc, &cg_globals_info[cg_globals_count], n->var_decl.var_type);
@@ -406,11 +408,12 @@ char *prepend_codegen_imports(CompilerContext *cc, StringBuilder *body) {
         sb_append(&final_sb, "; exports\n");
         for (int i = 0; i < cc->defined_func_count; i++) {
             /* Specializations (including their lowered lambdas) are local to
-             * this object, even when the source template was exported. */
-            if (!is_entry_name(cc->defined_funcs[i]) &&
-                strncmp(cc->defined_funcs[i], "__mlg_", 6) != 0) {
-                sb_append(&final_sb, "export %s\n", cc->defined_funcs[i]);
-            }
+             * this object, even when the source template was exported. A
+             * private name that has a link name goes out under that alone. */
+            const char *name = cc->defined_funcs[i];
+            if (is_entry_name(name) || func_is_object_local(cc, name)) continue;
+            if (strncmp(name, "__mlg_", 6) == 0 && strncmp(name, "__mlg_m_", 8) != 0) continue;
+            sb_append(&final_sb, "export %s\n", name);
         }
         sb_append(&final_sb, "\n");
     }
@@ -462,6 +465,9 @@ void cleanup_codegen_context(CompilerContext *cc) {
         cc->defined_funcs = NULL;
         cc->defined_func_count = 0;
     }
+    free(cc->object_local_funcs);
+    cc->object_local_funcs = NULL;
+    cc->object_local_func_count = 0;
     if (cc->func_sigs) {
         for (int i = 0; i < cc->func_sig_count; i++) {
             free(cc->func_sigs[i].param_is_aggregate);

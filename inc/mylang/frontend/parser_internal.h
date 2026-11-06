@@ -135,6 +135,8 @@ void rewrite_node(ParserContext *context, ASTNode *node, char **scope, int scope
  * their declarations are lowered to. Runs after specialization, before the
  * declarations themselves become structs. */
 void lower_payload_enum_uses(ParserContext *context, ASTNode *program);
+void publish_private_names_of_generics(ParserContext *context, ASTNode *program);
+void import_private_names_of(ParserContext *context, ASTNode *template_item);
 void lower_payload_call_arguments(ParserContext *context, ASTNode *program);
 void lower_fun_literals_block(ParserContext *context, ASTNode *block, const char *func_prefix, FunAlias *aliases, int alias_count);
 void ensure_no_fun_literals(ASTNode *node);

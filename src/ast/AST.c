@@ -163,13 +163,13 @@ ASTNode *ast_clone(const ASTNode *src) {
     case AST_TYPE_GENERIC: STR(generic_type.name); ARRAY(generic_type.args, generic_type.arg_count); break;
     case AST_TYPE_ARRAY: STR(type_array.array_size_param); break;
     case AST_TYPE_FUNCTION: ARRAY(function_type.param_types, function_type.param_count); break;
-    case AST_VAR_DECL: STR(var_decl.name); STR(var_decl.package); break;
+    case AST_VAR_DECL: STR(var_decl.name); STR(var_decl.package); STR(var_decl.link_name); break;
     case AST_TYPEDEF: STR(typedef_stmt.alias); STR(typedef_stmt.package); break;
     case AST_BLOCK: ARRAY(block.stmts, block.count); break;
     case AST_FUN_LITERAL: ARRAY(fun_literal.params, fun_literal.param_count); break;
     case AST_CASE: ARRAY(case_expr.cases, case_expr.case_count); break;
     case AST_FUNDEF:
-        STR(fundef.name); STR(fundef.package); STR(fundef.recv_type_name);
+        STR(fundef.name); STR(fundef.package); STR(fundef.link_name); STR(fundef.recv_type_name);
         STR(fundef.origin_path);
         ARRAY(fundef.params, fundef.param_count);
         STRINGS(fundef.type_params, fundef.type_param_count);
