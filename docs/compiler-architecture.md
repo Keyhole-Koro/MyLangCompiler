@@ -111,13 +111,25 @@ Resolver
   - `parser_import_generics.c`: Obtains exported generic templates directly from cached module ASTs.
   - `parser_dom_sig.c`: Obtains parameter names and variadics from parsed function declarations via the Resolver without token scanning.
   - `codegen_toplevel.c`: Obtains exported function signatures and variadics from Resolver metadata instead of manual token scans.
-  - `semantic_walk.c`: Decoupled from parser default context; receives imported package info explicitly through `SemanticContext`.
+  - `semantic_symbols.c`: Decoupled from parser default context; receives imported package info explicitly through `SemanticContext`.
 
 ## Semantic
 
 The semantic stage sits between parsing and code generation.
 It is the intended home for type-directed validation, ownership checks, borrow rules,
 and lifetime analysis so those rules stay out of backend emission.
+
+- `semantic_driver.c`: runs the pass over one AST
+- `semantic_symbols.c`: functions, enums, types and struct layouts a module can see
+- `semantic_bindings.c`: the variables in scope and their snapshots around a branch
+- `semantic_type_rules.c`: a value's kind, type compatibility, how a type is spelled
+- `semantic_infer.c`: the type of an expression
+- `semantic_check.c`: type checks of operands, assignments, calls and returns
+- `semantic_borrow.c`: borrow tracking and what may be written while a borrow lasts
+- `semantic_unsafe.c`: what a checked source may not do
+- `semantic_mock.c`: the mock facade's intrinsics
+- `semantic_flow.c`: reachability
+- `semantic_walk_expr.c`, `semantic_walk_stmt.c`: the walk, and its entry point
 
 ## Backend
 

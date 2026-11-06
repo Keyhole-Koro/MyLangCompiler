@@ -60,7 +60,7 @@ void (borrow Counter c) click(i32 id) { ... }
 
 ## 3. Enforcement Rules
 
-The semantic analyzer (`semantic_walk.c`) enforces these rules:
+The semantic analyzer (`src/semantic/`) enforces these rules:
 
 1. **Use After Move**: Attempting to use a variable after its value has been moved results in a compiler error.
    A branch that ends in `return`, `break` or `continue` does not carry its
