@@ -1,0 +1,22 @@
+// Element sizes that are not powers of two: the index is scaled by shifts and
+// adds, so each size below exercises a different mix of the two.
+struct Small { i32 a; i32 b; i32 c; };          // 12 bytes
+struct Wide { i32 pad[33]; i32 last; };         // 136 bytes
+struct Many { i32 pad[14]; i32 last; };         // 60 bytes, four set bits
+
+Small g_small[7];
+Wide g_wide[9];
+Many g_many[5];
+
+i32 main() {
+    i32 i = 0;
+    while (i < 7) { g_small[i].c = i + 1; i++; }
+    i = 0;
+    while (i < 9) { g_wide[i].last = i * 2; i++; }
+    i = 0;
+    while (i < 5) { g_many[i].last = i * 3; i++; }
+    Wide local[3];
+    local[1].last = 2;
+    local[2].last = 5;
+    return g_small[6].c * 1000 + g_small[2].c * 100 + g_wide[8].last * 10 + g_many[4].last + local[2].last - local[1].last;
+}

@@ -3,6 +3,7 @@ globalConstantExpressions|366|succeed/global/constantExpressions.unsafe.mln
 modelStaleId|0x1BAD01|succeed/model/stale.mln,succeed/model/more.model.mln
 modelRelations|127|succeed/model/relations.mln,succeed/model/more.model.mln
 caseAggregateInit|634|succeed/semantic/caseAggregateInit.mln
+scaledIndex|7475|succeed/array/scaledIndex.mln
 safeCall|42|succeed/unsafe/safeCall.mln,support/unsafe_lib.unsafe.mln
 reborrowShared|6|succeed/borrow/reborrowShared.mln
 modelExtension|511|succeed/model/main.mln,succeed/model/ui.model.mln,../../MyStdLib/text/text.unsafe.mln,../../MyStdLib/text/str.unsafe.mln,../../MyStdLib/text/ascii.mln,../../MyStdLib/text/bytes.unsafe.mln,../../MyStdLib/core/int32.mln

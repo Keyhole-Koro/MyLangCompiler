@@ -364,47 +364,30 @@ void emit_store_width_to_addr(StringBuilder *sb, const char *addr_reg, const cha
     }
 }
 
-// If `n` is a power of two (> 0), return its exponent (log2), else -1.
-static int power_of_two_shift(long n) {
-    if (n <= 0) return -1;
-    int shift = 0;
-    while ((n & 1) == 0) {
-        n >>= 1;
-        shift++;
-    }
-    return (n == 1) ? shift : -1;
-}
-
 void emit_scale_reg_const(CompilerContext *cc, StringBuilder *sb, const char *reg, long factor) {
+    (void)cc;
     if (factor == 1) return;
     if (factor <= 0) {
         sb_append(sb, "  ; unsupported scale factor %ld\n", factor);
         return;
     }
 
-    // Fast path: multiplying by a power of two is a left shift. The target has
-    // no multiply instruction, so the generic path below is a repeated-add
-    // loop that runs `factor` times per scale — catastrophic for large factors
-    // like a display row stride. `shl` shifts by one, so emit `shift` of them.
-    int shift = power_of_two_shift(factor);
-    if (shift >= 0) {
-        sb_append(sb, "  ; scale %s by %ld (<< %d)\n", reg, factor, shift);
-        for (int i = 0; i < shift; i++) {
-            sb_append(sb, "  shl %s\n", reg);
-        }
-        return;
-    }
-
+    // The target has no multiply instruction and `shl` shifts by one. The factor
+    // is known here, so the product is shifts and adds: one `shl` per bit below
+    // the top one and one `add` per further set bit. A row of a table is reached
+    // through this on every access, so it must not loop.
     sb_append(sb, "  ; scale %s by %ld\n", reg, factor);
+    long rest = factor;
+    while ((rest & 1) == 0) {
+        sb_append(sb, "  shl %s\n", reg);
+        rest >>= 1;
+    }
+    rest >>= 1;
+    if (rest == 0) return;
     sb_append(sb, "  mov r4, %s\n", reg);
-    sb_append(sb, "  movi %s, 0\n", reg);
-    sb_append(sb, "  movi r5, %ld\n", factor);
-    int lbl = next_label(cc);
-    sb_append(sb, "b_idx_mul_%d:\n", lbl);
-    sb_append(sb, "  cmp r5, 0\n");
-    sb_append(sb, "  jz b_idx_mul_end_%d\n", lbl);
-    sb_append(sb, "  add %s, r4\n", reg);
-    sb_append(sb, "  addis r5, -1\n");
-    sb_append(sb, "  jmp b_idx_mul_%d\n", lbl);
-    sb_append(sb, "b_idx_mul_end_%d:\n", lbl);
+    while (rest != 0) {
+        sb_append(sb, "  shl r4\n");
+        if (rest & 1) sb_append(sb, "  add %s, r4\n", reg);
+        rest >>= 1;
+    }
 }
