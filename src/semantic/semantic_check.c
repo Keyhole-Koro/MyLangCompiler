@@ -375,6 +375,7 @@ void semantic_check_call_signature(SemanticContext *ctx, ASTNode *node) {
         if (!semantic_infer_expr_type(ctx, node->call.args[i], &actual)) continue;
         if (semantic_call_arg_compatible(ctx, &sig->param_types[i], &actual) ||
             semantic_null_function_literal(&sig->param_types[i], node->call.args[i]) ||
+            semantic_default_of_newtype(&sig->param_types[i], node->call.args[i]) ||
             semantic_literal_to_legacy_c_string(&sig->param_types[i], &actual,
                                                 node->call.args[i])) continue;
 

@@ -253,6 +253,14 @@ int semantic_null_function_literal(const SemanticTypeInfo *expected,
            expr->number.value && strcmp(expr->number.value, "0") == 0;
 }
 
+/* `Part p = 0` as a parameter: the caller may not know the type by name. */
+int semantic_default_of_newtype(const SemanticTypeInfo *expected, ASTNode *expr) {
+    return expected && expected->pointer_level == 0 && !expected->is_function &&
+           !mylang_type_is_builtin(expected->base_type) && strcmp(expected->base_type, "str") != 0 &&
+           expr && expr->type == AST_NUMBER && expr->number.is_default &&
+           strcmp(expr->number.value, "0") == 0;
+}
+
 int semantic_typeinfo_compatible(SemanticContext *ctx, const SemanticTypeInfo *expected, const SemanticTypeInfo *actual) {
     if (!expected || !actual) return 0;
     // Function values occupy one code address at the ABI. Only the nominal

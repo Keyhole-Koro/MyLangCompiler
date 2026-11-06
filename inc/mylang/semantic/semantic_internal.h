@@ -266,6 +266,7 @@ int semantic_typeinfo_same_base(const SemanticTypeInfo *a, const SemanticTypeInf
 int semantic_literal_to_legacy_c_string(const SemanticTypeInfo *expected,
                                         const SemanticTypeInfo *actual, ASTNode *expr);
 int semantic_null_function_literal(const SemanticTypeInfo *expected, ASTNode *expr);
+int semantic_default_of_newtype(const SemanticTypeInfo *expected, ASTNode *expr);
 int semantic_typeinfo_compatible(SemanticContext *ctx, const SemanticTypeInfo *expected,
                                  const SemanticTypeInfo *actual);
 int semantic_call_arg_compatible(SemanticContext *ctx, const SemanticTypeInfo *expected,

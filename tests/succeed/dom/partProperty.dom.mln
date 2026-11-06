@@ -1,0 +1,29 @@
+// A part is a handle an element is given once: a property of a newtype reads
+// the state but has no hook, so it is not bound. A newtype parameter may default
+// to its zero, whose name the markup does not need.
+newtype Part = i32;
+
+struct Form { Part title; };
+
+i32 g_parts = 0;
+i32 g_bound = 0;
+
+void bind(i32 slot, i32 node) { g_bound = g_bound + 1; }
+void append_child(i32 parent, i32 child) { }
+
+i32 Box() { return 2; }
+i32 Input(Part field = 0) { g_parts = g_parts * 10 + (i32)field + 1; return 1; }
+
+i32 (Form f) view() {
+    return <Box>
+        <Input field={f.title} />
+        <Input />
+    </Box>;
+}
+
+i32 main() {
+    Form f = Form { title: Part(7) };
+    f.view();
+    f.__view_update();
+    return g_bound * 1000 + g_parts;   // 81
+}

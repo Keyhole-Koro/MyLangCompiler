@@ -123,6 +123,8 @@ struct ASTNode {
              * (an associated-function call choosing between From<Code> and
              * From<i32>). NULL for a written number. */
             char *enum_name;
+            /* A parameter's `= 0`, which also stands for a newtype's zero. */
+            int is_default;
         } number;
         struct { char *name; } identifier;
         // `subscript` marks the `a + i` that `a[i]` lowers to, so the index of

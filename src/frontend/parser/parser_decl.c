@@ -60,6 +60,7 @@ ASTNode* parse_param(ParserContext *context, Token **cur) {
         param->param.default_value = parse_literal_value(context, cur);
         if (!param->param.default_value)
             parse_error(context, "a parameter default must be a literal (number, string, char or bool)", *cur);
+        if (param->param.default_value->type == AST_NUMBER) param->param.default_value->number.is_default = 1;
     }
     return param;
 }
