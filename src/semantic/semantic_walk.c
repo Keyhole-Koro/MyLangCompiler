@@ -642,6 +642,10 @@ static int semantic_function_type_compatible(SemanticContext *ctx,
         if (!semantic_typeinfo_from_type_ast(ep, &expected_info) ||
             !semantic_typeinfo_from_type_ast(ap, &actual_info) ||
             !semantic_typeinfo_compatible(ctx, &expected_info, &actual_info)) return 0;
+        /* An address and a word convert at a call, not across a function
+         * value: nothing there says which of the two is really passed. */
+        if (expected_info.pointer_level != actual_info.pointer_level ||
+            expected_info.ref_kind != actual_info.ref_kind) return 0;
     }
     return 1;
 }

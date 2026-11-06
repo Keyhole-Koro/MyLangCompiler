@@ -1,0 +1,5 @@
+// A function taking a pointer does not fit a function value taking a word.
+struct R { i32 a; };
+void takes_pointer(i32 x, R *out) { }
+fn(i32 x, i32 out) -> void g_hook = takes_pointer;
+i32 main() { return 0; }

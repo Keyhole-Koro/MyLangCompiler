@@ -1,0 +1,19 @@
+// A hook starts as a real function, so it needs no "not set yet" value and
+// every call can go straight through it.
+import { Result } from "@std/core/result.mln";
+
+Result<i32, i32> no_service(i32 x) { return Err(7); }
+Result<i32, i32> real_service(i32 x) { return Ok(x + 1); }
+
+fn(i32 x) -> Result<i32, i32> g_hook = no_service;
+
+i32 call(i32 x) {
+    Result<i32, i32> r = g_hook(x);
+    return case r of { Ok(v) -> v; Err(e) -> e; };
+}
+
+i32 main() {
+    i32 before = call(4);
+    g_hook = real_service;
+    return before * 10 + call(4);
+}
