@@ -1,6 +1,8 @@
 #include "mylang/frontend/parser_dom_internal.h"
 #include "mylang/frontend/parser_annot_internal.h"
 #include "mylang/frontend/parser_ast_internal.h"
+#include "mylang/frontend/module.h"
+#include "mylang/frontend/resolver.h"
 
 #include <stdarg.h>
 #include <ctype.h>
@@ -24,6 +26,9 @@ static ASTNode *i32_type(void);
  *     dom.append_child(__dom0, __dom1);
  *     return __dom0;
  *
+ * A generated local has the type the callee returns, so a package whose
+ * elements return a nominal id type keeps that type through `ref=`.
+ *
  * Properties are ordered by the callee's parameter names, so source order does
  * not matter and a misspelled property is reported against the signature. A
  * property left out takes the parameter's `= literal` default, if it has one.
@@ -36,9 +41,9 @@ static ASTNode *i32_type(void);
  *     create call, so app code keeps ids without walking the tree afterwards.
  *   - A handler property -- any parameter named `on` + a capital letter, such
  *     as onClick -- whose value names a method (`onClick={c.click}`) or a
- *     local function is replaced by a trampoline with the dispatcher's
- *     uniform ABI, `void (i32 owner, i32 id, i32 arg)`; see
- *     parser_lower_app.c. Any other value is passed through as written.
+ *     local function is passed as the parameter's declared function type,
+ *     through a trampoline when the function takes fewer arguments; see
+ *     parser_lower_annot.c. Any other value is passed through as written.
  */
 
 #define DOM_APPEND_CHILD "append_child"
@@ -119,11 +124,54 @@ static const char *local_type_name(ParserContext *context, const char *name) {
     return find_decl_type_in(fn->fundef.body, name);
 }
 
+/* The function an element tag names, found as dom_signature_lookup finds it.
+ * DomSignature keeps parameter names and defaults, not parameter types. */
+static ASTNode *dom_callee(ParserContext *context, const char *tag) {
+    ASTNode *local = find_function(context, tag);
+    if (local && local->type == AST_FUNDEF) return local;
+
+    ASTNode *program = context->lowering.dom_program;
+    FrontendSession *session = context->session;
+    if (!program || program->type != AST_BLOCK || !session || !session->loader) return NULL;
+    for (int i = 0; i < program->block.count; i++) {
+        ASTNode *node = program->block.stmts[i];
+        if (!node || node->type != AST_IMPORT || !node->import_stmt.path) continue;
+        if (!module_loader_is_mylang_source(node->import_stmt.path)) continue;
+        Module *mod = module_loader_load(session->loader, context->module.filename,
+                                         node->import_stmt.path);
+        if (!mod || mod->state != MODULE_LOADED) continue;
+        ModuleSymbol *sym = resolver_lookup_import_symbol(node, mod, tag);
+        if (sym && sym->kind == SYMBOL_FUNCTION && sym->declaration) return sym->declaration;
+    }
+    return NULL;
+}
+
+/* The type a handler value is passed as: the function type the callee declares
+ * for the parameter, or the dispatcher's word ABI when it declares none. */
+static ASTNode *handler_value_type(ParserContext *context, const char *tag, int param) {
+    ASTNode *callee = dom_callee(context, tag);
+    ASTNode *declared = callee && callee->type == AST_FUNDEF && param < callee->fundef.param_count
+                            ? callee->fundef.params[param] : NULL;
+    if (declared && declared->type == AST_PARAM && declared->param.type &&
+        declared->param.type->type == AST_TYPE_FUNCTION) {
+        return ast_clone(declared->param.type);
+    }
+    ASTNode **params = calloc(3, sizeof(ASTNode *));
+    params[0] = i32_type();
+    params[1] = i32_type();
+    params[2] = i32_type();
+    return new_function_type(
+        params, 3,
+        new_type_node(new_identifier("void"), 0, TYPEMOD_NONE, REFKIND_NONE),
+        false);
+}
+
 /* `onClick={c->click}` names the method itself: the dispatcher's
  * (owner, id, arg) call lands on `(Counter *c, i32 id)` directly, since the
  * calling convention ignores trailing arguments. A plain local function
  * with fewer parameters is wrapped so `id` arrives in the right slot. */
-static ASTNode *lower_handler_value(ParserContext *context, ASTNode *el, const DomProp *prop, ASTNode *value) {
+static ASTNode *lower_handler_value(ParserContext *context, ASTNode *el, const DomProp *prop,
+                                    int param, ASTNode *value) {
     const char *tramp = NULL;
     if (value->type == AST_MEMBER_ACCESS || value->type == AST_ARROW_ACCESS) {
         ASTNode *lhs = value->type == AST_MEMBER_ACCESS ? value->member_access.lhs : value->arrow_access.lhs;
@@ -157,15 +205,7 @@ static ASTNode *lower_handler_value(ParserContext *context, ASTNode *el, const D
     ASTNode *ref = new_identifier((char *)tramp);
     ref->line = value->line;
     ref->col = value->col;
-    ASTNode **params = calloc(3, sizeof(ASTNode *));
-    params[0] = i32_type();
-    params[1] = i32_type();
-    params[2] = i32_type();
-    ASTNode *handler_type = new_function_type(
-        params, 3,
-        new_type_node(new_identifier("void"), 0, TYPEMOD_NONE, REFKIND_NONE),
-        false);
-    ASTNode *cast = new_cast(handler_type, ref);
+    ASTNode *cast = new_cast(handler_value_type(context, el->dom_element.tag, param), ref);
     cast->line = value->line;
     cast->col = value->col;
     free_ast(value);
@@ -278,7 +318,7 @@ static char *emit_element(ParserContext *context, ASTNode *el, DomEmit *out) {
                       tag, sig.param_names[i], sig.call_name);
         }
         if (prop && is_handler_param(sig.param_names[i])) {
-            value = lower_handler_value(context, el, prop, value);
+            value = lower_handler_value(context, el, prop, i, value);
         }
         args[i] = value;
     }
@@ -287,6 +327,7 @@ static char *emit_element(ParserContext *context, ASTNode *el, DomEmit *out) {
     char var[32];
     snprintf(var, sizeof(var), "__dom%d", ordinal);
     ASTNode *create_call = NULL;
+    ASTNode *node_type = NULL;
     if (signature_returns_result(&sig)) {
         char adapter_name[256];
         snprintf(adapter_name, sizeof(adapter_name), "dom_%s", tag);
@@ -298,11 +339,13 @@ static char *emit_element(ParserContext *context, ASTNode *el, DomEmit *out) {
                       tag, adapter_name);
         }
         create_call = dom_call(adapter_sig.call_name, args, sig.param_count, el);
+        node_type = ast_clone(adapter_sig.return_type);
         dom_signature_free(&adapter_sig);
     } else {
         create_call = dom_call(sig.call_name, args, sig.param_count, el);
+        node_type = ast_clone(sig.return_type);
     }
-    emit_stmt(out, new_var_decl(i32_type(), var, create_call));
+    emit_stmt(out, new_var_decl(node_type ? node_type : i32_type(), var, create_call));
 
     ASTNode *ref_target = take_prop(el, DOM_REF_PROP);
     if (ref_target) {
