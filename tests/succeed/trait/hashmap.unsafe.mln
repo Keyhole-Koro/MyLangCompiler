@@ -1,6 +1,5 @@
 import { Eq } from "@std/core/cmp.mln";
 import { Hash } from "@std/core/hash.mln";
-import { Copy } from "@std/core/copy.mln";
 import { HashMap } from "@std/collections/hashmap.mln";
 
 struct Pid { i32 value; };
@@ -16,8 +15,6 @@ impl Eq for Pid {
 impl Hash for Pid {
     u32 (Pid self) hash() { return 0; }
 }
-
-impl Copy for Pid {}
 
 i32 main() {
     Pid keys[4];

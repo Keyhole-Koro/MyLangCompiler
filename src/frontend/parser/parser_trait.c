@@ -741,15 +741,6 @@ static void orphan_check(ParserContext *context, TraitDef *trait, ImplDef *impl,
                    "in this source tree rather than imported through an '@' alias");
 }
 
-/* Copy is a compiler-recognised marker because it changes ownership checking.
- * The semantic pass validates its fields after every struct layout is known. */
-static void validate_copy_impl(ParserContext *context, ImplDef *impl, Token *at) {
-    if (strcmp(impl->trait_name, "Copy") != 0) return;
-    if (find_impl_for_name(context, "Drop", impl->self_name))
-        trait_error_at(context, at->line, at->col,
-                       "a type with drop() cannot implement Copy", NULL);
-}
-
 /* Tokens [first, last] spell a type; does the sequence starting at `t`? */
 static const Token *match_token_run(const Token *t, const Token *first, const Token *last) {
     for (const Token *p = first;; p = p->next, t = t->next) {
@@ -891,12 +882,6 @@ ASTNode *parse_impl(ParserContext *context, Token **cur, int want_export) {
                  existing->line);
         trait_error_at(context, start->line, start->col, message, note);
     }
-
-    validate_copy_impl(context, impl, start);
-    if (strcmp(impl->trait_name, "Drop") == 0 &&
-        find_impl_for_name(context, "Copy", impl->self_name))
-        trait_error_at(context, start->line, start->col,
-                       "a Copy type cannot implement Drop", NULL);
 
     /* A template's items are written against a placeholder type. */
     Token placeholder_tok = *self_tok;

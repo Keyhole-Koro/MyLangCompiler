@@ -1,0 +1,9 @@
+// Rule V2: a raw pointer field may own what it points at, so copying the
+// struct would alias it. It moves until shared values land (MLC-025).
+struct Buffer { i32 *data; i32 length; };
+
+i32 main() {
+    Buffer a;
+    Buffer b = a;
+    return a.length; // invalid: a was moved into b
+}

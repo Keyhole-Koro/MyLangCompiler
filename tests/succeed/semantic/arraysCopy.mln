@@ -1,0 +1,39 @@
+// Rule V2: an array of data is data, whatever its size, and so is a struct
+// holding one, so the original stays usable after a copy and does not change.
+import { Text } from "@std/text/text.mln";
+import { Result } from "@std/core/result.mln";
+
+enum Failure { Broken(i32), Lost, }
+
+struct Grid { i32 cells[3]; };
+struct Named { Text<8> name; Result<i32, Failure> state; Result<_, Failure> done; };
+
+i32 main() {
+    i32 a[3];
+    a[0] = 1;
+    i32 b[3] = a;
+    b[0] = 2;
+    i32 c[3] = a;
+
+    /* An array that fits a word is still copied, not its address. */
+    i32 one[1];
+    one[0] = 3;
+    i32 other[1] = one;
+    other[0] = other[0] + 1;
+
+    /* Taking a field that holds an array leaves the struct usable. */
+    Grid g;
+    g.cells[1] = 5;
+    i32 cells[3] = g.cells;
+    cells[1] = 6;
+    Grid h = g;
+
+    Named n;
+    n.state = Ok(7);
+    Named m = n;
+    Named k = n;
+    i32 state = case m.state of { Ok(v) -> v; Err(_) -> 0; };
+
+    return a[0] * 1000000 + b[0] * 100000 + c[0] * 10000 + one[0] * 1000 +
+           other[0] * 100 + h.cells[1] * 10 + state;
+}

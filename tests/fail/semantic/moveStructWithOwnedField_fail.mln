@@ -1,0 +1,13 @@
+// Rule V2: a struct holding an owned value is moved, even with no drop of its
+// own and an array beside it.
+import { Drop } from "@std/core/drop.mln";
+
+struct Res { i32 handle; };
+impl Drop for Res { void (borrow Self self) drop() { } }
+struct Holder { i32 cells[2]; Res res; };
+
+i32 main() {
+    Holder a;
+    Holder b = a;
+    return a.cells[0]; // invalid: a was moved into b
+}

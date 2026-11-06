@@ -12,22 +12,14 @@ describes how the compiler implements them.
 Every value has a variable that is its "owner". There can only be one owner at a time.
 
 ### Move Semantics
-When a value is assigned to another variable, returned, or passed to a `move T x` parameter, its ownership is **moved**, unless the type implements `Copy`. After a move, the original variable can no longer be used.
+When a value that cannot be copied is assigned to another variable, returned, or passed to a `move T x` parameter, its ownership is **moved**. After a move, the original variable can no longer be used.
 
-### Copy Types
-Certain types are considered "Copy" and are duplicated instead of moved:
-- Built-in numeric types (`i32`, `u32`, `float`, etc.)
-- Booleans
-- Enumerations
-- Pointers
-- Structs without `drop()` whose fields are all data -- scalars, enums,
-  newtypes, function values, fixed-size arrays of those, and other such
-  structs -- with no `impl Copy` needed (rule V2). `Option<i32>` and
-  `Text<N>` are Copy this way. A raw pointer field keeps a struct non-Copy:
-  the struct may own what it points at (`Vec`) without a `drop()` that says
-  so.
-- Structs with an explicit `impl Copy`, when every field is Copy and the type
-  does not implement `Drop`
+### What is copied
+A value's kind follows from its type (rule V2, `semantic_value_kind`): there is no declaration for it. A struct or array is the strongest of what it holds:
+
+- **Owned**: the type has a `drop`, or a field or element holds one that does. It is moved, and dropped by its last owner.
+- **Moved**: a struct with a raw pointer field, directly or in a field. It may own what the pointer points at: `Vec` has no `drop` yet, and copying its header would alias its buffer until shared values land (MLC-025).
+- **Data**: everything else, which is copied: numbers, booleans, enums, newtypes, pointers and borrows held in a variable, function values, and the structs and arrays made of those. `Option<i32>`, `Text<N>` and `i32 a[4]` are data.
 
 ## 2. Parameters and Borrowing
 
@@ -208,7 +200,7 @@ the current values from the variables' stack slots. A defer body cannot contain
 
 ## 6. Automatic Drop
 
-A non-Copy struct opts into deterministic cleanup by defining a one-argument
+A struct opts into deterministic cleanup by defining a one-argument
 pointer/reference method named `drop` that returns `void`:
 
 ```mylang

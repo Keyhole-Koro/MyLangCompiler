@@ -49,7 +49,7 @@ Covered by semantic failure tests:
 Covered by semantic success tests:
 - a move followed by `break` or `return`, and a value assigned again before
   the next iteration (`succeed/semantic/moveThenLeave.mln`)
-- data-only structs copied without `impl Copy` (`succeed/semantic/dataStructsCopy.mln`)
+- data-only structs copied (`succeed/semantic/dataStructsCopy.mln`)
 - re-pointing a borrow variable (`succeed/semantic/rebindBorrow.mln`)
 
 Covered by warning tests:

@@ -432,114 +432,90 @@ static void check_mock_callback_signature(SemanticContext *ctx, ASTNode *call) {
     }
 }
 
-/* Rule V2 of docs/design/mylang-values.md: a struct with no drop()
- * whose fields are all data is data too, so it is copied without an
- * `impl Copy`. A raw pointer field does not count as data here: the struct
- * may own what it points at (Vec's buffer) without saying so in a drop(). */
-static int semantic_struct_is_data(SemanticContext *ctx, const char *name, int depth) {
+/* Rule V2 of docs/design/mylang-values.md: a value's kind follows from its
+ * type, and a struct or array is the strongest of what it holds. */
+typedef enum {
+    VALUE_DATA,
+    /* Moved with nothing to drop. A raw pointer field may own what it points
+     * at: Vec has no drop yet, and copying its header would alias its buffer
+     * until shared values land (MLC-025). A type this module cannot see into
+     * is treated the same, as it may hold either. */
+    VALUE_MOVED,
+    /* Moved, and has a drop, here or in a field. */
+    VALUE_OWNED,
+} SemanticValueKind;
+
+/* A value cannot hold itself, so this only stops a declaration that tries. */
+#define SEMANTIC_MAX_VALUE_NESTING 32
+
+static SemanticValueKind semantic_value_kind(SemanticContext *ctx, const SemanticTypeInfo *info, int depth);
+
+static int semantic_type_declares_drop(SemanticContext *ctx, const char *name) {
     ParserContext *parser = parser_context_current();
     char drop_name[256];
-    if (!parser || !name || depth > 8) return 0;
     snprintf(drop_name, sizeof(drop_name), "%s__drop", name);
-    if (find_impl_for_name(parser, "Drop", name) || find_method(parser, name, "drop") ||
-        find_function_sig(ctx, drop_name))
-        return 0;
-    StructDef *def = find_structdef(parser, name);
-    if (!def) return 0;
-    for (int i = 0; i < def->member_count; i++) {
-        ASTNode *member = def->members[i];
-        SemanticTypeInfo field;
-        if (!member || member->type != AST_VAR_DECL ||
-            !semantic_typeinfo_from_type_ast(member->var_decl.var_type, &field))
-            return 0;
-        if (field.is_function) continue;
-        if (field.pointer_level > 0 || field.borrow_kind != REFKIND_NONE || !field.base_type) return 0;
-        if (semantic_enum_type_exists(ctx, field.base_type) || find_newtype(ctx, field.base_type)) continue;
-        if (semantic_is_builtin_type(field.base_type)) {
-            if (strcmp(field.base_type, "void") == 0) return 0;
-            continue;
+    return (parser && (find_impl_for_name(parser, "Drop", name) || find_method(parser, name, "drop"))) ||
+           find_function_sig(ctx, drop_name);
+}
+
+static SemanticValueKind field_value_kind(SemanticContext *ctx, const SemanticTypeInfo *field, int depth) {
+    return field->pointer_level > 0 ? VALUE_MOVED : semantic_value_kind(ctx, field, depth);
+}
+
+/* The parser's table holds a module's own structs and those an import brought
+ * along. One an import names is in the layouts, under its link name. */
+static SemanticValueKind struct_value_kind(SemanticContext *ctx, const char *name, int depth) {
+    ParserContext *parser = parser_context_current();
+    StructDef *def = parser ? find_structdef(parser, name) : NULL;
+    SemanticValueKind kind = VALUE_DATA;
+    if (def) {
+        for (int i = 0; i < def->member_count; i++) {
+            ASTNode *member = def->members[i];
+            SemanticTypeInfo field;
+            SemanticValueKind held = VALUE_MOVED;
+            if (member && member->type == AST_VAR_DECL &&
+                semantic_typeinfo_from_type_ast(member->var_decl.var_type, &field))
+                held = field_value_kind(ctx, &field, depth + 1);
+            if (held > kind) kind = held;
         }
-        if (find_impl_for_name(parser, "Copy", field.base_type)) continue;
-        if (!semantic_struct_is_data(ctx, field.base_type, depth + 1)) return 0;
+        return kind;
     }
-    return 1;
+    for (int i = 0; i < ctx->struct_layout_count; i++) {
+        const SemanticStructLayout *layout = &ctx->struct_layouts[i];
+        if (strcmp(layout->name, name) != 0) continue;
+        for (int m = 0; m < layout->member_count; m++) {
+            SemanticValueKind held = field_value_kind(ctx, &layout->members[m].type, depth + 1);
+            if (held > kind) kind = held;
+        }
+        return kind;
+    }
+    return VALUE_MOVED;
+}
+
+static SemanticValueKind semantic_value_kind(SemanticContext *ctx, const SemanticTypeInfo *info, int depth) {
+    if (info->is_function || info->borrow_kind != REFKIND_NONE || info->pointer_level > 0) return VALUE_DATA;
+    const char *name = info->base_type;
+    if (!name || depth > SEMANTIC_MAX_VALUE_NESTING) return VALUE_MOVED;
+    /* `_` is the unit payload of `Result<_, E>`. */
+    if (semantic_is_builtin_type(name) || strcmp(name, "_") == 0) return VALUE_DATA;
+    if (semantic_type_declares_drop(ctx, name)) return VALUE_OWNED;
+    if (semantic_enum_type_exists(ctx, name) || find_newtype(ctx, name)) return VALUE_DATA;
+    return struct_value_kind(ctx, name, depth);
 }
 
 static int semantic_typeinfo_is_copy(SemanticContext *ctx, const SemanticTypeInfo *info) {
-    if (info->is_function) return 1;
-    if (info->borrow_kind != REFKIND_NONE) return 1;
-    if (info->pointer_level > 0) return 1;
-    if (info->is_array) return 0;
-    const char *base_type = info->base_type;
-    if (!base_type) return 0;
-    if (semantic_enum_type_exists(ctx, base_type)) return 1;
-    if (find_newtype(ctx, base_type)) return 1;
-    if (find_impl_for_name(parser_context_current(), "Copy", base_type)) return 1;
-    if (semantic_is_builtin_type(base_type)) return 1;
-    return semantic_struct_is_data(ctx, base_type, 0);
+    return semantic_value_kind(ctx, info, 0) == VALUE_DATA;
 }
 
 /* An owned value: a `drop` runs when its owner goes away, here or in a field. */
-static int semantic_typeinfo_has_drop(SemanticContext *ctx, const SemanticTypeInfo *info, int depth) {
-    if (!info || depth > 4 || info->pointer_level > 0 || info->borrow_kind != REFKIND_NONE ||
-        info->is_function || !info->base_type) return 0;
-    ParserContext *parser = parser_context_current();
-    if (parser && (find_impl_for_name(parser, "Drop", info->base_type) ||
-                   find_method(parser, info->base_type, "drop"))) return 1;
-    for (int i = 0; i < ctx->struct_layout_count; i++) {
-        const SemanticStructLayout *layout = &ctx->struct_layouts[i];
-        if (strcmp(layout->name, info->base_type) != 0) continue;
-        for (int m = 0; m < layout->member_count; m++) {
-            if (semantic_typeinfo_has_drop(ctx, &layout->members[m].type, depth + 1)) return 1;
-        }
-        break;
-    }
-    return 0;
+static int semantic_typeinfo_has_drop(SemanticContext *ctx, const SemanticTypeInfo *info) {
+    return info && semantic_value_kind(ctx, info, 0) == VALUE_OWNED;
 }
 
 static int semantic_type_is_copy(SemanticContext *ctx, ASTNode *type_node) {
     if (!type_node) return 1;
     SemanticTypeInfo info;
     return semantic_typeinfo_from_type_ast(type_node, &info) && semantic_typeinfo_is_copy(ctx, &info);
-}
-
-static SemanticLocation semantic_location_from_impl(const ImplDef *impl) {
-    return (SemanticLocation){
-        .line = impl ? impl->line : 0,
-        .col = impl ? impl->col : 0,
-        .end_line = impl ? impl->line : 0,
-        .end_col = impl ? impl->col : 0,
-    };
-}
-
-/* A Copy impl is a marker, but it affects every ownership decision.  Check its
- * structural promise after the parser has collected the layouts of local and
- * imported structs. */
-static void semantic_validate_copy_impls(SemanticContext *ctx) {
-    ParserContext *parser = parser_context_current();
-    if (!parser) return;
-    for (int i = 0; i < impl_count(parser); i++) {
-        ImplDef *impl = impl_at(parser, i);
-        if (!impl || impl->is_template || strcmp(impl->trait_name, "Copy") != 0) continue;
-        if (find_impl_for_name(parser, "Drop", impl->self_name) ||
-            find_method(parser, impl->self_name, "drop")) {
-            semantic_error_at(ctx, semantic_location_from_impl(impl),
-                              "a type with drop() cannot implement Copy");
-            continue;
-        }
-        StructDef *def = find_structdef(parser, impl->self_name);
-        if (!def) continue; /* enums and newtypes are already Copy values. */
-        for (int f = 0; f < def->member_count; f++) {
-            ASTNode *member = def->members[f];
-            SemanticTypeInfo field;
-            if (member && member->type == AST_VAR_DECL &&
-                semantic_typeinfo_from_type_ast(member->var_decl.var_type, &field) &&
-                semantic_typeinfo_is_copy(ctx, &field)) continue;
-            semantic_error_at(ctx, semantic_location_from_impl(impl),
-                              "field '%s' is not Copy", member && member->type == AST_VAR_DECL
-                                  ? member->var_decl.name : "<unknown>");
-        }
-    }
 }
 
 /* A `drop()` method still runs automatically without `impl Drop` (the
@@ -2247,7 +2223,7 @@ static void walk_params(SemanticContext *ctx, ASTNode **params, int param_count,
             binding->param_is_move = param->param.is_move;
             binding->param_is_written = ast_writes_name(body, param->param.name);
             binding->reads_owned_value = !param->param.is_move && binding->has_type &&
-                semantic_typeinfo_has_drop(ctx, &binding->type_info, 0);
+                semantic_typeinfo_has_drop(ctx, &binding->type_info);
         }
     }
 }
@@ -2552,7 +2528,7 @@ static void read_named_borrows(SemanticContext *ctx, ASTNode *call, const Semant
 static void check_read_temporary(SemanticContext *ctx, const SemanticFunctionSig *callee, int i, ASTNode *arg) {
     SemanticTypeInfo type;
     if (!arg || arg->type != AST_CALL || !call_reads_argument(callee, i) ||
-        !semantic_infer_expr_type(ctx, arg, &type) || !semantic_typeinfo_has_drop(ctx, &type, 0))
+        !semantic_infer_expr_type(ctx, arg, &type) || !semantic_typeinfo_has_drop(ctx, &type))
         return;
     semantic_error_code_at(ctx, semantic_location_from_ast(arg), SEMCODE_WRITE_TO_READ_PARAM,
                            "this value has no owner; give it a name before passing it to a parameter that only reads");
@@ -2764,7 +2740,7 @@ static void semantic_walk_expr(SemanticContext *ctx, ASTNode *node, ExprContext 
     case AST_MEMBER_ACCESS: {
         /* `a.length` on a fixed-size array is a compile-time constant: it
          * neither reads nor moves `a`, so `f(a, a.length)` is fine even
-         * though passing `a` moves it. */
+         * when passing `a` moves it. */
         SemanticTypeInfo lhs_type;
         if (node->member_access.member && strcmp(node->member_access.member, "length") == 0 &&
             semantic_infer_expr_type(ctx, node->member_access.lhs, &lhs_type) &&
@@ -3279,7 +3255,6 @@ void semantic_walk_ast(SemanticContext *ctx, ASTNode *node) {
     semantic_collect_user_types(ctx, node);
     semantic_collect_function_sigs(ctx, node);
     semantic_collect_imported_globals(ctx, node);
-    semantic_validate_copy_impls(ctx);
     semantic_warn_drop_without_impl(ctx, node);
     semantic_walk_stmt(ctx, node);
     report_remaining_unsafe_operations(ctx, node);
