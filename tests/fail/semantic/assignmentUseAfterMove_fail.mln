@@ -1,6 +1,6 @@
 import { Drop } from "@std/core/drop.mln";
 struct Box { i32 value; };
-impl Drop for Box { void (Self *self) drop() { } }
+impl Drop for Box { void (borrow mut Self self) drop() { } }
 i32 main() {
     Box a = Box { value: 7 };
     Box b;

@@ -309,9 +309,24 @@ void _gen_expr(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char
     case AST_BINARY:
         gen_expr_binop(cc, node, sb, target_reg, params, param_count, locals, local_count);
         break;
-    case AST_CALL:
+    case AST_CALL: {
+        /* Reached with an aggregate call only when nothing takes the result
+         * (`Ok(x) -> close(x);`). The callee still writes it somewhere: without
+         * a slot, through whatever the hidden-pointer position holds. */
+        int discarded = call_return_aggregate_size(cc, node);
+        if (discarded > 0) {
+            int temp_bytes = ((discarded + SLOT_SIZE - 1) / SLOT_SIZE) * SLOT_SIZE;
+            sb_append(sb, "  ; temporary storage for a discarded aggregate result\n");
+            sb_append(sb, "  addis sp, -%d\n", temp_bytes);
+            sb_append(sb, "  mov r1, sp\n");
+            sb_append(sb, "  push r1\n");
+            gen_call_sret(cc, node, sb, params, param_count, locals, local_count);
+            sb_append(sb, "  addis sp, %d\n", temp_bytes);
+            break;
+        }
         gen_call(cc, node, sb, target_reg, params, param_count, locals, local_count);
         break;
+    }
     case AST_MEMBER_ACCESS: {
         if (gen_rest_len_access(cc, node, sb, target_reg)) {
             break;

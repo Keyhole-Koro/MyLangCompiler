@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 ModuleLoader *module_loader_create(ModuleGraph *graph, FrontendSession *session) {
     if (!graph || !session) return NULL;
@@ -122,7 +123,31 @@ int module_loader_resolve_import_path(const ModuleLoader *loader,
         if (written < 0 || (size_t)written >= sizeof(raw_buf)) return 0;
     }
 
-    if (!realpath(raw_buf, resolved)) return 0;
+    /* Rule U3: an import names `fs.mln`; whether that file is checked or
+     * `fs.unsafe.mln` is the file's own business, so moving code into an
+     * unsafe file does not touch its importers. */
+    char unsafe_path[PATH_MAX];
+    size_t raw_len = strlen(raw_buf);
+    int unsafe_exists = 0;
+    if (raw_len > 4 && strcmp(raw_buf + raw_len - 4, ".mln") == 0 &&
+        !(raw_len > 11 && strcmp(raw_buf + raw_len - 11, ".unsafe.mln") == 0) &&
+        raw_len + 7 < sizeof(unsafe_path)) {
+        memcpy(unsafe_path, raw_buf, raw_len - 4);
+        memcpy(unsafe_path + raw_len - 4, ".unsafe.mln", 12);
+        unsafe_exists = access(unsafe_path, F_OK) == 0;
+    }
+    if (unsafe_exists && access(raw_buf, F_OK) == 0) {
+        fprintf(stderr, "module_loader: both '%s' and '%s' exist; keep one\n", raw_buf, unsafe_path);
+        return 0;
+    }
+    /* A model is imported the same way: its expansion is a plain module. */
+    if (!unsafe_exists && raw_len > 4 && strcmp(raw_buf + raw_len - 4, ".mln") == 0 &&
+        access(raw_buf, F_OK) != 0 && raw_len + 6 < sizeof(unsafe_path)) {
+        memcpy(unsafe_path, raw_buf, raw_len - 4);
+        memcpy(unsafe_path + raw_len - 4, ".model.mln", 11);
+        unsafe_exists = access(unsafe_path, F_OK) == 0;
+    }
+    if (!realpath(unsafe_exists ? unsafe_path : raw_buf, resolved)) return 0;
     if (strlen(resolved) >= out_size) return 0;
     snprintf(out_canonical, out_size, "%s", resolved);
     return 1;

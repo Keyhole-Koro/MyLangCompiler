@@ -5,5 +5,5 @@ import { Eq } from "@std/core/cmp.mln";
 export struct Box<T> { T value; };
 
 export impl<T: Eq> Eq for Box<T> {
-    bool (Self *self) eq(Self *other) { return self->value == other->value; }
+    bool (borrow Self self) eq(borrow Self other) { return self.value == other.value; }
 }

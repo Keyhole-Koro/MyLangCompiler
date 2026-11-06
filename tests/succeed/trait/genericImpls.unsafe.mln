@@ -4,15 +4,15 @@ import { Eq } from "@std/core/cmp.mln";
 
 struct Point { i32 x; };
 impl Eq for Point {
-    bool (Point *self) eq(Point *other) { return self->x == other->x; }
+    bool (borrow Point self) eq(borrow Point other) { return self.x == other.x; }
 }
 struct Opaque { i32 v; };   // no Eq: Box<Opaque> gets no Eq impl
 
 struct Box<T> { T value; i32 tag; };
 
 impl<T: Eq> Eq for Box<T> {
-    bool (Self *self) eq(Box<T> *other) {
-        return self->value == other->value && self->tag == other->tag;
+    bool (borrow Self self) eq(borrow Box<T> other) {
+        return self.value == other.value && self.tag == other.tag;
     }
 }
 
@@ -24,7 +24,7 @@ trait Make {
 
 impl Make for Box<i32> {
     Self make(i32 n) { return Self { value: n, tag: 1 }; }
-    i32 (Self *self) weight() { return self->value + self->tag; }
+    i32 (Self *self) weight() { return self.value + self.tag; }
 }
 
 i32 same<T: Eq>(T *a, T *b) {

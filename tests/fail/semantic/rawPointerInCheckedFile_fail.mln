@@ -1,4 +1,4 @@
-// Raw-pointer operations belong in a .unsafe.mln file; here they warn.
+// Raw-pointer operations belong in a .unsafe.mln file; here they are errors.
 struct P { i32 x; };
 i32 read(P *p) { return p->x; }
 i32 main() {

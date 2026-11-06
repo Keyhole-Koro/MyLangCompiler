@@ -1,0 +1,8 @@
+// The same through a variable.
+import { Text } from "@std/text/text.mln";
+str name() {
+    Text<8> local = Text<8> {};
+    str view = local.as_str();
+    return view;
+}
+i32 main() { return name().length; }

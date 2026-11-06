@@ -1,0 +1,37 @@
+import more from "more.mln";
+import { Team, Player, Seat, team_players_Iter } from "more.mln";
+import { Option } from "@std/core/option.mln";
+import { Iterator } from "@std/core/iter.mln";
+
+Player player(i32 badge) {
+    Player made = case more.new_player() of { Some(v) -> v; None -> more.player_from_raw(0); };
+    made.set_badge(badge);
+    return made;
+}
+
+i32 count(Team t) { i32 n = 0; for (Player p in t.players()) { n++; } return n; }
+
+i32 main() {
+    Team team = case more.new_team() of { Some(v) -> v; None -> more.team_from_raw(0); };
+    Seat seat = case more.new_seat() of { Some(v) -> v; None -> more.seat_from_raw(0); };
+    Player a = player(7);
+    Player b = player(9);
+    team.players_add(a);
+    team.players_add(b);
+    team.seat_add(seat);
+    i32 r = 0;
+    if (count(team) == 2) { r = r + 1; }
+    bool found = case more.player_by_badge(9) of { Some(p) -> p.raw() == b.raw(); None -> false; };
+    if (found) { r = r + 2; }
+    bool absent = case more.player_by_badge(8) of { Some(_) -> false; None -> true; };
+    if (absent) { r = r + 4; }
+    team.delete();
+    if (a.is_live() && b.is_live()) { r = r + 8; }
+    if (!seat.is_live()) { r = r + 16; }
+    bool free_agent = case a.team() of { Some(_) -> false; None -> true; };
+    if (free_agent) { r = r + 32; }
+    b.delete();
+    bool gone = case more.player_by_badge(9) of { Some(_) -> false; None -> true; };
+    if (gone) { r = r + 64; }
+    return r;
+}

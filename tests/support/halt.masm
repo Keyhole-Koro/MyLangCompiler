@@ -1,0 +1,4 @@
+export halt
+
+halt:
+  mov pc, lr

@@ -2,7 +2,7 @@ import { Copy } from "@std/core/copy.mln";
 import { Drop } from "@std/core/drop.mln";
 
 struct Inner { i32 value; };
-impl Drop for Inner { void (Self *self) drop() { } }
+impl Drop for Inner { void (borrow mut Self self) drop() { } }
 struct Outer { Inner inner; };
 
 /* A Copy marker must be structural: a non-Copy field cannot be smuggled into

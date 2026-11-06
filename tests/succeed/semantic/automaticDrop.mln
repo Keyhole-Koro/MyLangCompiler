@@ -9,9 +9,9 @@ struct Holder {
     Resource resource;
 };
 
-void (Resource *self) drop() {
-    dropped = dropped + self->value;
-    self->value = 0;
+void (borrow mut Resource self) drop() {
+    dropped = dropped + self.value;
+    self.value = 0;
 }
 
 Resource make(i32 value) {

@@ -171,8 +171,9 @@ Token *generic_function_type_params_start(ParserContext *context, Token *cur) {
 
     Token *params_start = t->next;
     Token *p = params_start->next;
-    if (!p || p->kind != IDENTIFIER) return NULL;
-    while (p && p->kind == IDENTIFIER) {
+    if (!p || (p->kind != IDENTIFIER && p->kind != CONST)) return NULL;
+    while (p && (p->kind == IDENTIFIER || (p->kind == CONST && p->next && p->next->kind == IDENTIFIER))) {
+        if (p->kind == CONST) p = p->next;
         p = p->next;
         /* `T: Eq + From<S>`: skip the bound list, including the bound's own
          * type arguments. */

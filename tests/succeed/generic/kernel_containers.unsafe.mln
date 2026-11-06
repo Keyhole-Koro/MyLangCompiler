@@ -10,8 +10,10 @@ import { IntrusiveList }
     from "@std/collections/intrusive_list.mln";
 import { Option }
     from "@std/core/option.mln";
-import { Result, result_take_err }
+import { Result }
     from "@std/core/result.mln";
+import { result_take_err }
+    from "@std/core/result_take.mln";
 import { HashMap }
     from "@std/collections/hashmap.mln";
 import { Eq }

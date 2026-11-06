@@ -1,7 +1,7 @@
 // `==` and `!=` call Eq::eq for a type with an Eq impl, including inside a
 // bounded generic function; operands that are not places are bound first.
 trait Eq {
-    bool (Self *self) eq(Self *other);
+    bool (borrow Self self) eq(borrow Self other);
 }
 
 trait From<S> {
@@ -11,7 +11,7 @@ trait From<S> {
 enum Shape { Circle(i32), Square(i32), Empty }
 
 impl Eq for Shape {
-    bool (Self *self) eq(Self *other) {
+    bool (borrow Self self) eq(borrow Self other) {
         return case *self of {
             Circle(a) -> case *other of { Circle(b) -> a == b; _ -> false; };
             Square(a) -> case *other of { Square(b) -> a == b; _ -> false; };
@@ -23,8 +23,8 @@ impl Eq for Shape {
 struct Point { i32 x; i32 y; };
 
 impl Eq for Point {
-    bool (Point *self) eq(Point *other) {
-        return self->x == other->x && self->y == other->y;
+    bool (borrow Point self) eq(borrow Point other) {
+        return self.x == other.x && self.y == other.y;
     }
 }
 

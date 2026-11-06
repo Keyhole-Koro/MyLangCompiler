@@ -1,0 +1,4 @@
+// What a checked file may call cannot hand it an address.
+@safe
+export i32 *address_of(i32 value) { return (i32 *)value; }
+i32 main() { return 0; }

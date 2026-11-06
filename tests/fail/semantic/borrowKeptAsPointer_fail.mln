@@ -1,5 +1,5 @@
 // Rule B9: keeping a borrow as a raw pointer stops it from being tracked,
-// so it is a raw-pointer operation (W0003) outside an unsafe file.
+// so it is a raw-pointer operation (E0701) outside an unsafe file.
 struct P { i32 x; };
 struct Holder { P *p; };
 

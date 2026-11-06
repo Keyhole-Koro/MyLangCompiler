@@ -1,0 +1,3 @@
+// Assembly can do anything, so it is unsafe code by nature.
+import { halt } from "../../support/halt.masm";
+i32 main() { halt(); return 0; }

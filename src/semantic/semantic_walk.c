@@ -236,6 +236,8 @@ static void semantic_collect_function_sigs(SemanticContext *ctx, ASTNode *node) 
                                               fn->fundef.ret_type,
                                               fn->fundef.params,
                                               fn);
+                        SemanticFunctionSig *imported = find_function_sig(ctx, sym->link_name);
+                        if (imported) imported->from_unsafe_module = mod->is_unsafe;
                     }
                 }
             }
@@ -250,6 +252,11 @@ static void semantic_collect_function_sigs(SemanticContext *ctx, ASTNode *node) 
                                   NULL,
                                   NULL,
                                   NULL);
+            /* Assembly can do anything, so it is unsafe code by nature. */
+            if (node->import_stmt.path && !module_loader_is_mylang_source(node->import_stmt.path)) {
+                SemanticFunctionSig *imported = find_function_sig(ctx, node->import_stmt.symbols[i]);
+                if (imported) imported->from_unsafe_module = 1;
+            }
         }
         break;
     default:
@@ -749,7 +756,8 @@ static int semantic_call_arg_compatible(SemanticContext *ctx, const SemanticType
         semantic_typeinfo_is_integer_like_or_enum(ctx, actual)) return 1;
 
     if (semantic_typeinfo_same_base(expected, actual) &&
-        expected->ref_kind == actual->ref_kind &&
+        (expected->ref_kind == actual->ref_kind ||
+         (expected->ref_kind == REFKIND_SHARED && actual->ref_kind == REFKIND_MUT)) &&
         expected->pointer_level == actual->pointer_level &&
         expected->is_array == actual->is_array &&
         expected->dims_count == actual->dims_count) {
@@ -790,6 +798,19 @@ static void semantic_report_type_mismatch(SemanticContext *ctx, SemanticLocation
 }
 
 static void report_unsafe_operation(SemanticContext *ctx, ASTNode *at, const char *what);
+
+static SemanticBinding *find_binding(SemanticContext *ctx, const char *name);
+
+/* `&b` on a variable that already is a borrow would name the variable's own
+ * slot, an address that dies with the frame, while the types still read
+ * `borrow T`. The variable passes on as it is. */
+static void check_borrow_of_borrow(SemanticContext *ctx, ASTNode *node, ASTNode *operand) {
+    if (!operand || operand->type != AST_IDENTIFIER) return;
+    SemanticBinding *binding = find_binding(ctx, operand->identifier.name);
+    if (!binding || !binding->has_type || binding->type_info.ref_kind == REFKIND_NONE) return;
+    semantic_error_at(ctx, semantic_location_from_ast(node),
+                      "'%s' is already a borrow; pass it without '&'", operand->identifier.name);
+}
 static SemanticBinding *find_binding(SemanticContext *ctx, const char *name);
 
 /* `&g` of a global lives as long as the program, and `&p->x` was taken
@@ -830,9 +851,8 @@ static int borrow_is_static_or_unchecked(SemanticContext *ctx, ASTNode *expr) {
 
 /* Rule B9: a borrow kept as a raw pointer or an integer address is no longer
  * tracked, so it can outlive what it borrows. Like the other raw-pointer
- * operations it is warning W0003 until MLC-023 makes those errors. Passing a
- * borrow to a pointer parameter is not reported yet: MLC-023 moves those
- * parameters to borrows first. */
+ * operations it is error E0701. Passing a
+ * borrow to a pointer parameter is left alone: a checked file cannot name one. */
 static void check_borrow_kept_as_pointer(SemanticContext *ctx, const SemanticTypeInfo *expected,
                                          const SemanticTypeInfo *actual, ASTNode *at) {
     if (actual->ref_kind == REFKIND_NONE || actual->is_function ||
@@ -1941,6 +1961,21 @@ static void check_struct_literal(SemanticContext *ctx, ASTNode *node) {
     }
 }
 
+static void report_unsafe_operation(SemanticContext *ctx, ASTNode *at, const char *what);
+
+/* Rule U4: an `.unsafe.mln` file's functions are out of a checked file's
+ * reach unless a person vouched for them with `@safe`. A function that takes
+ * an address as an i32 passes only values, so its signature cannot tell. */
+static void check_unsafe_call(SemanticContext *ctx, ASTNode *node, const SemanticFunctionSig *sig) {
+    const ASTNode *decl = sig->declaration;
+    int fn = decl && decl->type == AST_FUNDEF;
+    if (fn && decl->fundef.is_safe) return;
+    if (!sig->from_unsafe_module && !(fn && decl->fundef.origin_unsafe)) return;
+    char what[160];
+    snprintf(what, sizeof what, "calling '%s', which is not @safe,", node->call.name);
+    report_unsafe_operation(ctx, node, what);
+}
+
 static void check_call_signature(SemanticContext *ctx, ASTNode *node) {
     SemanticFunctionSig *sig;
     int argc;
@@ -1993,6 +2028,7 @@ static void check_call_signature(SemanticContext *ctx, ASTNode *node) {
     }
 
     sig = find_function_sig(ctx, node->call.name);
+    if (sig) check_unsafe_call(ctx, node, sig);
     if (!sig) {
         if (call_may_be_package_import(ctx, node->call.name)) return;
         SemanticBinding *callee = find_binding(ctx, node->call.name);
@@ -2204,7 +2240,9 @@ static void walk_params(SemanticContext *ctx, ASTNode **params, int param_count)
 
 /* ---- raw pointers outside `.unsafe.mln` ------------------------------- */
 
+#ifndef UNSAFE_OPERATIONS_REPORTED
 #define UNSAFE_OPERATIONS_REPORTED 8
+#endif
 
 /* The code being walked was written in an `.unsafe.mln` file: this file, or
  * for a generic copied from another module, the file it came from. */
@@ -2230,8 +2268,8 @@ static int semantic_type_ast_is_raw_pointer(ASTNode *type_node) {
 static void report_unsafe_operation(SemanticContext *ctx, ASTNode *at, const char *what) {
     if (semantic_in_unsafe_source(ctx)) return;
     if (ctx->unsafe_operation_count++ >= UNSAFE_OPERATIONS_REPORTED) return;
-    semantic_warning_code_at(ctx, semantic_location_from_ast(at), SEMCODE_UNSAFE_OPERATION,
-                             "%s outside an .unsafe.mln file", what);
+    semantic_error_code_at(ctx, semantic_location_from_ast(at), SEMCODE_UNSAFE_OPERATION,
+                           "%s outside an .unsafe.mln file", what);
 }
 
 /* `a[3]` on a fixed-size array is checked here. A computed index is
@@ -2307,10 +2345,10 @@ static void check_unsafe_operation(SemanticContext *ctx, ASTNode *node) {
 
 static void report_remaining_unsafe_operations(SemanticContext *ctx, ASTNode *root) {
     if (ctx->unsafe_operation_count <= UNSAFE_OPERATIONS_REPORTED) return;
-    semantic_warning_code_at(ctx, semantic_location_from_ast(root), SEMCODE_UNSAFE_OPERATION,
-                             "%d more raw-pointer operations in this file; move them to an "
-                             ".unsafe.mln file or use borrow",
-                             ctx->unsafe_operation_count - UNSAFE_OPERATIONS_REPORTED);
+    semantic_error_code_at(ctx, semantic_location_from_ast(root), SEMCODE_UNSAFE_OPERATION,
+                           "%d more raw-pointer operations in this file; move them to an "
+                           ".unsafe.mln file or use borrow",
+                           ctx->unsafe_operation_count - UNSAFE_OPERATIONS_REPORTED);
 }
 
 /* ---- writes, branches that leave, and loops ----------------------------
@@ -2323,7 +2361,7 @@ typedef enum { WRITE_ASSIGN, WRITE_STEP, WRITE_BORROW_MUT } WriteKind;
 /* A write to `place`: the left side of `=` (WRITE_ASSIGN), the operand of
  * `++` / `--` (WRITE_STEP), or of `&mut` (WRITE_BORROW_MUT). The place is
  * followed through fields, indexes and `*` of a borrow to the variable it is
- * in. A write through a raw pointer (`p->x`, `p[i]`) is unchecked: W0003. */
+ * in. A write through a raw pointer (`p->x`, `p[i]`) is unchecked: E0701. */
 static void check_write_place(SemanticContext *ctx, ASTNode *place, WriteKind kind) {
     ASTNode *at = place;
     int whole = 1;
@@ -2415,6 +2453,33 @@ static int stmt_always_exits(ASTNode *node) {
     default:
         return 0;
     }
+}
+
+/* `t.as_str()` on a local Text is a view of this frame: rule B2 keeps a `str`
+ * out of fields and globals, and this keeps it from being returned. */
+static int expr_views_local(SemanticContext *ctx, ASTNode *expr) {
+    if (!expr) return 0;
+    if (expr->type == AST_IDENTIFIER) {
+        SemanticBinding *binding = find_binding(ctx, expr->identifier.name);
+        return binding && binding->str_views_local;
+    }
+    if (expr->type != AST_CALL || expr->call.arg_count == 0) return 0;
+    SemanticTypeInfo type;
+    if (!semantic_infer_expr_type(ctx, expr, &type) || !type.base_type ||
+        strcmp(type.base_type, "str") != 0 || type.pointer_level != 0) return 0;
+    ASTNode *first = expr->call.args[0];
+    ASTNode *target = first && first->type == AST_BORROW ? first->borrow.expr :
+        (first && first->type == AST_BORROW_MUT ? first->borrow_mut.expr : NULL);
+    if (!target) return expr_views_local(ctx, first);
+    SemanticBinding *owner = borrow_target_binding(ctx, target);
+    return owner && !owner->is_global && owner->has_type &&
+           owner->type_info.ref_kind == REFKIND_NONE;
+}
+
+static void check_returned_str(SemanticContext *ctx, ASTNode *node) {
+    if (semantic_in_unsafe_source(ctx) || !expr_views_local(ctx, node->ret.expr)) return;
+    semantic_error_at(ctx, semantic_location_from_ast(node),
+                      "a str viewing a local cannot be returned; copy it into a Text");
 }
 
 static SemanticLoopFrame *loop_enter(SemanticContext *ctx) {
@@ -2513,11 +2578,13 @@ static void semantic_walk_expr(SemanticContext *ctx, ASTNode *node, ExprContext 
         reassign_borrow(ctx, node);
         break;
     case AST_BORROW:
+        check_borrow_of_borrow(ctx, node, node->borrow.expr);
         ctx->in_borrow_operand++;
         semantic_walk_expr(ctx, node->borrow.expr, EXPRCTX_READ);
         ctx->in_borrow_operand--;
         break;
     case AST_BORROW_MUT:
+        check_borrow_of_borrow(ctx, node, node->borrow_mut.expr);
         ctx->in_borrow_operand++;
         semantic_walk_expr(ctx, node->borrow_mut.expr, EXPRCTX_READ);
         ctx->in_borrow_operand--;
@@ -2547,6 +2614,9 @@ static void semantic_walk_expr(SemanticContext *ctx, ASTNode *node, ExprContext 
             saved_shared[i] = ctx->bindings[i].shared_borrow_count;
             saved_mutable[i] = ctx->bindings[i].mutable_borrow_active;
         }
+        /* Every argument is evaluated before the call lends anything, so
+         * `buf.truncate(buf.len() - 1)` reads `buf` first: only what is
+         * still lent when the call starts can conflict. */
         for (int i = 0; i < node->call.arg_count; i++) {
             ASTNode *arg = node->call.args[i];
             SemanticBinding *reference = arg && arg->type == AST_IDENTIFIER
@@ -2558,16 +2628,39 @@ static void semantic_walk_expr(SemanticContext *ctx, ASTNode *node, ExprContext 
             if (reference) ctx->in_borrow_operand++;
             semantic_walk_expr(ctx, arg, reference ? EXPRCTX_READ : EXPRCTX_MOVE);
             if (reference) ctx->in_borrow_operand--;
+        }
+        for (int i = 0; i < node->call.arg_count; i++) {
+            ASTNode *arg = node->call.args[i];
+            SemanticBinding *reference = arg && arg->type == AST_IDENTIFIER
+                ? find_binding(ctx, arg->identifier.name) : NULL;
+            if (reference && (!reference->has_type || reference->type_info.ref_kind == REFKIND_NONE))
+                reference = NULL;
             int is_mut = arg && arg->type == AST_BORROW_MUT;
             ASTNode *target = is_mut ? arg->borrow_mut.expr :
                 (arg && arg->type == AST_BORROW ? arg->borrow.expr : NULL);
+            /* A nested call that returns a borrow keeps its first argument
+             * lent (rule B6) through this call too. */
+            if (!target && arg && arg->type == AST_CALL && arg->call.arg_count > 0) {
+                SemanticTypeInfo returned;
+                if (semantic_infer_expr_type(ctx, arg, &returned) && returned.ref_kind != REFKIND_NONE) {
+                    ASTNode *first = arg->call.args[0];
+                    target = first && first->type == AST_BORROW ? first->borrow.expr :
+                        (first && first->type == AST_BORROW_MUT ? first->borrow_mut.expr : first);
+                    is_mut = returned.ref_kind == REFKIND_MUT;
+                }
+            }
             SemanticBinding *owner = borrow_target_binding(ctx, target);
             /* Reborrowing a named reference uses that reference as the
              * capability. Its owner's lexical borrow remains active, while
              * two uses of the same mutable capability in one call conflict. */
             if (reference) {
                 owner = reference;
-                is_mut = reference->type_info.ref_kind == REFKIND_MUT;
+                /* A `borrow mut` handed to a shared parameter is only read
+                 * for this call. */
+                SemanticFunctionSig *callee = find_function_sig(ctx, node->call.name);
+                int lent_shared = callee && callee->has_param_types && i < callee->param_count &&
+                                  callee->param_types[i].ref_kind == REFKIND_SHARED;
+                is_mut = reference->type_info.ref_kind == REFKIND_MUT && !lent_shared;
             }
             if (!owner) continue;
             if (owner->mutable_borrow_active || (is_mut && owner->shared_borrow_count)) {
@@ -2705,6 +2798,10 @@ static void semantic_walk_stmt(SemanticContext *ctx, ASTNode *node) {
         is_copy = semantic_type_is_copy(ctx, node->var_decl.var_type);
         declare_binding(ctx, node->var_decl.name, node->var_decl.var_type, is_copy, 0, semantic_location_from_ast(node));
         register_borrow_binding(ctx, node);
+        {
+            SemanticBinding *declared = find_binding(ctx, node->var_decl.name);
+            if (declared && expr_views_local(ctx, node->var_decl.init)) declared->str_views_local = 1;
+        }
         break;
     case AST_EXPR_STMT:
         if (node->expr_stmt.expr && node->expr_stmt.expr->type == AST_CASE) {
@@ -2750,6 +2847,7 @@ static void semantic_walk_stmt(SemanticContext *ctx, ASTNode *node) {
         }
         check_return_type(ctx, node);
         check_returned_borrow(ctx, node);
+        check_returned_str(ctx, node);
         semantic_walk_expr(ctx, node->ret.expr, EXPRCTX_MOVE);
         break;
     case AST_DEFER:

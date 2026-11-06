@@ -36,6 +36,7 @@ typedef struct {
  *   name.mln
  *   name.unsafe.mln
  *   name.dom.mln
+ *   name.model.mln
  *   name.dom.unsafe.mln
  *   name.contract.mln
  *   name.test.mln

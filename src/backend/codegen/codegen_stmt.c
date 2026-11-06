@@ -1,3 +1,4 @@
+#include "mylang/frontend/parser_ast_internal.h"
 #include "mylang/backend/codegen_internal.h"
 
 static int is_mock_call_original(ASTNode *node) {
@@ -172,7 +173,25 @@ void gen_struct_literal_into_addr(CompilerContext *cc, ASTNode *literal,
     // Named literals follow Go's zero-value rule for fields not supplied.
     sb_append(sb, "  ; zero struct literal destination\n");
     sb_append(sb, "  movi r1, 0\n");
-    for (int offset = 0; offset < si->size_bytes; offset += SLOT_SIZE) {
+    int zeroed = 0;
+    if (si->size_bytes > 32 && strcmp(dest_addr_reg, "sp") != 0) {
+        /* Same reasoning as emit_aggregate_copy: a loop past a few words. */
+        const char *counter = strcmp(dest_addr_reg, "r7") != 0 ? "r7" : "r6";
+        int label = aggregate_loop_label();
+        zeroed = si->size_bytes & ~3;
+        sb_append(sb, "  push %s\n", counter);
+        sb_append(sb, "  movi %s, 0\n", counter);
+        sb_append(sb, "agg_zero_%d:\n", label);
+        sb_append(sb, "  mov r2, %s\n", dest_addr_reg);
+        sb_append(sb, "  add r2, %s\n", counter);
+        sb_append(sb, "  store r2, r1\n");
+        sb_append(sb, "  addis %s, 4\n", counter);
+        sb_append(sb, "  movi r2, %d\n", zeroed);
+        sb_append(sb, "  cmp %s, r2\n", counter);
+        sb_append(sb, "  jnz agg_zero_%d\n", label);
+        sb_append(sb, "  pop %s\n", counter);
+    }
+    for (int offset = zeroed; offset < si->size_bytes; offset += SLOT_SIZE) {
         int width = si->size_bytes - offset;
         if (width > SLOT_SIZE) width = SLOT_SIZE;
         if (offset == 0) {
@@ -313,6 +332,21 @@ static void emit_zero_local(CompilerContext *cc, ASTNode *decl, StringBuilder *s
     sb_append(sb, "  jnz b_L_zero_%d\n", label);
 }
 
+static ASTNode *assigning_arm(const char *name, ASTNode *arm) {
+    if (!arm || arm->type == AST_STMT_EXPR) return arm;
+    ASTNode **stmts = malloc(sizeof(ASTNode *));
+    stmts[0] = new_expr_stmt(new_assign(new_identifier((char *)name), arm));
+    return new_stmt_expr(new_block(stmts, 1));
+}
+
+/* An arm that already leaves (`({ return x; })`) stays as written. */
+static ASTNode *returning_arm(ASTNode *arm) {
+    if (!arm || arm->type == AST_STMT_EXPR) return arm;
+    ASTNode **stmts = malloc(sizeof(ASTNode *));
+    stmts[0] = new_return(arm);
+    return new_stmt_expr(new_block(stmts, 1));
+}
+
 void gen_stmt(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
               char **params, int param_count,
               char **locals, int local_count)
@@ -392,6 +426,20 @@ static void gen_stmt_labeled(CompilerContext *cc, ASTNode *node, StringBuilder *
                 sb_append(sb, "  push r1\n");
                 gen_call_sret(cc, node->var_decl.init, sb, params, param_count, locals, local_count);
             } else if (aggregate_type_size(cc, vtype) > SLOT_SIZE &&
+                       node->var_decl.init->type == AST_CASE) {
+                /* `T y = case x of { a -> e; ... };`: each arm assigns y, so
+                 * no arm's value has to pass through a register. */
+                ASTNode *selection = node->var_decl.init;
+                for (int i = 0; i < selection->case_expr.case_count; i++) {
+                    if (!selection->case_expr.cases[i].is_noop)
+                        selection->case_expr.cases[i].expr =
+                            assigning_arm(node->var_decl.name, selection->case_expr.cases[i].expr);
+                }
+                if (selection->case_expr.default_expr)
+                    selection->case_expr.default_expr =
+                        assigning_arm(node->var_decl.name, selection->case_expr.default_expr);
+                gen_expr(cc, selection, sb, "r1", params, param_count, locals, local_count);
+            } else if (aggregate_type_size(cc, vtype) > SLOT_SIZE &&
                        is_addressable_expr(node->var_decl.init)) {
                 /* The source first: `*at(0)` calls, which clobbers every
                  * scratch register, so the destination is computed after. */
@@ -461,6 +509,21 @@ static void gen_stmt_labeled(CompilerContext *cc, ASTNode *node, StringBuilder *
     case AST_RETURN:
         // A bare `return;` has no expression; only evaluate one when present.
         if (node->ret.expr && cc->sret_active) {
+            if (node->ret.expr->type == AST_CASE) {
+                /* `return case x of { a -> e; ... };` of an aggregate: each
+                 * arm returns its own value through the hidden pointer, so
+                 * no arm's value has to pass through a register. */
+                ASTNode *selection = node->ret.expr;
+                for (int i = 0; i < selection->case_expr.case_count; i++) {
+                    if (!selection->case_expr.cases[i].is_noop)
+                        selection->case_expr.cases[i].expr =
+                            returning_arm(selection->case_expr.cases[i].expr);
+                }
+                if (selection->case_expr.default_expr)
+                    selection->case_expr.default_expr = returning_arm(selection->case_expr.default_expr);
+                gen_expr(cc, selection, sb, "r1", params, param_count, locals, local_count);
+                break;
+            }
             if (node->ret.expr->type == AST_STRING_LITERAL &&
                 cc->sret_size_bytes == SLOT_SIZE * 2) {
                 sb_append(sb, "  mov r3, bp\n  addis r3, %d\n  load r3, r3\n", cc->sret_offset);

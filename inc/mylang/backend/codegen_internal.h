@@ -312,6 +312,7 @@ int is_byval_aggregate_param(CompilerContext *cc, const char *name, char **param
 // Returns the size of a struct or array returned by this direct or typed
 // indirect call, or 0 for a non-call or a scalar/pointer return.
 int call_return_aggregate_size(CompilerContext *cc, ASTNode *node);
+int aggregate_loop_label(void);
 // Copies total_bytes from [src_addr_reg] to [dest_addr_reg], word by word
 // with a byte tail. Clobbers r1 and r4; neither address register may be one
 // of those.

@@ -3,8 +3,8 @@
 
 An instance of an imported generic must report its diagnostics against the
 template's own file and line, and follow that file's safety profile: raw
-pointer indexing in a checked library warns at the library's line, and the
-same code in an `.unsafe.mln` library does not warn at all.
+pointer indexing in a checked library is an error at the library's line, and
+the same code in an `.unsafe.mln` library compiles.
 """
 
 import subprocess
@@ -18,6 +18,7 @@ LIBRARY = """export struct Buf<T> {
     i32 len;
 };
 
+@safe
 export T (Buf<T> *b) first() {
     T *data = b->data;
     return data[0];
@@ -49,8 +50,6 @@ def compile_with(directory: Path, library_name: str) -> str:
         capture_output=True,
         text=True,
     )
-    if result.returncode != 0:
-        raise SystemExit(f"compiling {main.name} failed:\n{result.stderr}")
     return result.stderr
 
 
@@ -58,17 +57,17 @@ with tempfile.TemporaryDirectory(prefix="mylang-generic-origin-") as temporary:
     directory = Path(temporary)
 
     checked = compile_with(directory, "buf.mln")
-    warnings = [line for line in checked.splitlines() if "W0003" in line]
+    errors = [line for line in checked.splitlines() if "E0701" in line]
     expected_prefix = f"{(directory / 'buf.mln').resolve()}:"
-    if not warnings or not all(line.startswith(expected_prefix) for line in warnings):
+    if not errors or not all(line.startswith(expected_prefix) for line in errors):
         raise SystemExit(
-            "expected every W0003 to name buf.mln, got:\n" + checked
+            "expected every E0701 to name buf.mln, got:\n" + checked
         )
 
     unsafe = compile_with(directory, "buf.unsafe.mln")
-    if "W0003" in unsafe:
+    if "E0701" in unsafe:
         raise SystemExit(
-            "an instance of a generic from an .unsafe.mln file must not warn:\n" + unsafe
+            "an instance of a generic from an .unsafe.mln file must compile:\n" + unsafe
         )
 
 print("[PASS] generic instances report against their template's file")

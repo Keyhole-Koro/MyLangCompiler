@@ -1,0 +1,5 @@
+// `&b` on a borrow would name the variable's own slot, not what it borrows.
+struct S { i32 v; };
+void set(borrow mut S s) { s.v = 1; }
+void relay(borrow mut S s) { set(&mut s); }
+i32 main() { S s; relay(&mut s); return s.v; }

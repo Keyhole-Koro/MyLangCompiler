@@ -59,6 +59,8 @@ typedef struct {
      * mutable_borrow_active, the borrows a call argument takes for the
      * duration of the call do not set it. */
     int mut_borrow_held;
+    /* A `str` taken from a local's own storage: it may not be returned. */
+    int str_views_local;
     SemanticLocation last_shared_borrow_loc;
     SemanticLocation last_mut_borrow_loc;
 } SemanticBinding;
@@ -84,6 +86,7 @@ typedef struct {
     int fixed_param_count;
     int is_variadic;
     int is_imported;
+    int from_unsafe_module;
     int has_return_type;
     int has_param_types;
     SemanticTypeInfo return_type;

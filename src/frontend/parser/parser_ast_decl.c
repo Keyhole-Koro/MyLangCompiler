@@ -1,5 +1,10 @@
 #include "mylang/frontend/parser_ast_internal.h"
 
+/* Set while parse_toplevel reads a declaration written under `@safe`, so every
+ * function it creates -- a method of an impl, a generic template -- is marked
+ * wherever it ends up. */
+int g_parsing_safe_decl = 0;
+
 ASTNode *new_type_array(ASTNode *elem_type, int size) {
     ASTNode *node = calloc(1, sizeof(ASTNode));
     node->type = AST_TYPE_ARRAY;
@@ -64,6 +69,7 @@ ASTNode* new_fundef(ASTNode *ret_type, char *name, ASTNode **params, int param_c
     node->fundef.param_count = param_count;
     node->fundef.body = body;
     node->fundef.is_exported = 0;
+    node->fundef.is_safe = g_parsing_safe_decl;
     node->fundef.package = NULL;
     node->fundef.is_variadic = is_variadic;
     return node;

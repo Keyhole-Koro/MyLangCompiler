@@ -7,8 +7,8 @@ i32 g_dropped = 0;
 struct Guard { i32 id; };
 
 impl Drop for Guard {
-    void (Guard *self) drop() {
-        g_dropped = g_dropped * 10 + self->id;
+    void (borrow mut Guard self) drop() {
+        g_dropped = g_dropped * 10 + self.id;
     }
 }
 

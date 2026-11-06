@@ -1,0 +1,3 @@
+// A checked file calls what is marked @safe, through a path without `.unsafe`.
+import unsafe_lib from "../../support/unsafe_lib.mln";
+i32 main() { return unsafe_lib.answer(); }

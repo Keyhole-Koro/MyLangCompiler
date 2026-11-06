@@ -1,0 +1,11 @@
+// A stale id does not read another row: it stops the program.
+import more from "more.mln";
+import { Player } from "more.mln";
+import { Option } from "@std/core/option.mln";
+
+i32 main() {
+    Player p = case more.new_player() of { Some(v) -> v; None -> more.player_from_raw(0); };
+    p.delete();
+    more.new_player();
+    return p.row().number;
+}

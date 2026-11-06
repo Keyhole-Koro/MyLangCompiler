@@ -72,7 +72,7 @@ with tempfile.TemporaryDirectory(prefix="mylang-trace-depfile-") as temporary:
         "i32 main() { return 0; }\n",
         encoding="utf-8",
     )
-    trace_module = (repo.parent / "MyStdLib/debug/error_trace.mln").resolve()
+    trace_module = (repo.parent / "MyStdLib/debug/error_trace.unsafe.mln").resolve()
     for flags, wants_trace in (([], False), (["--error-trace"], True)):
         output = temporary / "traced.masm"
         depfile = temporary / "traced.deps"

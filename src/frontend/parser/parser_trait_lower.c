@@ -316,7 +316,7 @@ static void lower_equality(TraitLowering *L, ASTNode **slot) {
     ASTNode *left = hoist_operand(L, node->binary.left, type, &decls, &decl_count);
     ASTNode *right = hoist_operand(L, node->binary.right, type, &decls, &decl_count);
     ASTNode **args = malloc(sizeof(ASTNode *));
-    args[0] = new_unary(AMPERSAND, right);
+    args[0] = new_borrow(right);
     ASTNode *call = new_call("eq", args, 1);
     call->call.recv = left;
     call->line = node->line;

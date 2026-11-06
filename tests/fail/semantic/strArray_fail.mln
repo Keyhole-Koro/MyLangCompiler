@@ -1,0 +1,2 @@
+// A str is a view: like a borrow, it cannot be an array element.
+i32 main() { str names[2]; return 0; }

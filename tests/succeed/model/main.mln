@@ -1,0 +1,37 @@
+import ui from "ui.mln";
+import { Node, Window, node_children_Iter, node_by_owner_Iter } from "ui.mln";
+import { Option } from "@std/core/option.mln";
+import { Iterator } from "@std/core/iter.mln";
+
+Node must(Option<Node> n) { return case n of { Some(v) -> v; None -> ui.node_from_raw(0); }; }
+
+i32 count(Node p) { i32 total = 0; for (Node c in p.children()) { total++; } return total; }
+i32 owned(i32 pid) { i32 total = 0; for (Node n in ui.node_by_owner(pid)) { total++; } return total; }
+bool focused(Window w) { return case w.focus() of { Some(_) -> true; None -> false; }; }
+
+i32 main() {
+    Node root = must(ui.new_node());
+    Node a = must(ui.new_node());
+    Node b = must(ui.new_node());
+    Node leaf = must(ui.new_node());
+    root.children_add(a); root.children_add(b); a.children_add(leaf);
+    a.row().kind = 7;
+    a.set_owner(5); leaf.set_owner(5); b.set_owner(6);
+    Window w = case ui.new_window() of { Some(v) -> v; None -> ui.window_from_raw(0); };
+    w.set_focus(leaf);
+    i32 r = 0;
+    if (count(root) == 2) { r = r + 1; }
+    if (owned(5) == 2) { r = r + 2; }
+    if (focused(w)) { r = r + 4; }
+    i32 stale = a.raw();
+    a.delete();
+    if (count(root) == 1) { r = r + 8; }
+    if (!a.is_live() && !leaf.is_live()) { r = r + 16; }
+    if (!focused(w)) { r = r + 32; }
+    if (owned(5) == 0 && owned(6) == 1) { r = r + 64; }
+    Node reused = must(ui.new_node());
+    if (reused.raw() != stale && !ui.node_from_raw(stale).is_live()) { r = r + 128; }
+    root.children_add(reused);
+    if (case b.parent() of { Some(p) -> p.raw() == root.raw(); None -> false; }) { r = r + 256; }
+    return r;
+}

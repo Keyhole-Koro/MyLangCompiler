@@ -1,0 +1,3 @@
+// A struct in a checked file holds values, ids and nothing that points.
+struct Link { i32 *next; };
+i32 main() { return 0; }

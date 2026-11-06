@@ -6,15 +6,15 @@ import { HashMap } from "@std/collections/hashmap.mln";
 struct Pid { i32 value; };
 
 impl Eq for Pid {
-    bool (Pid *self) eq(Pid *other) {
-        return self->value == other->value;
+    bool (borrow Pid self) eq(borrow Pid other) {
+        return self.value == other.value;
     }
 }
 
 /* Deliberately make every key collide, so the test exercises probing rather
  * than only the primary bucket. */
 impl Hash for Pid {
-    u32 (Pid *self) hash() { return 0; }
+    u32 (borrow Pid self) hash() { return 0; }
 }
 
 impl Copy for Pid {}

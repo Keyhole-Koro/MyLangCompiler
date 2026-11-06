@@ -9,7 +9,7 @@ i32 g_log = 0;
 struct Guard { i32 id; };
 
 impl Drop for Guard {
-    void (Self *self) drop() { g_log = g_log * 10 + self->id; }
+    void (borrow mut Self self) drop() { g_log = g_log * 10 + self.id; }
 }
 
 enum LowError { Broken }

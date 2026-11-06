@@ -10,6 +10,7 @@ main.mln
 heap.unsafe.mln
 page.dom.mln
 page.dom.unsafe.mln
+ui.model.mln
 schema.contract.mln
 serial_rx.test.mln
 serial_rx.unsafe.test.mln
@@ -28,6 +29,18 @@ can be compiled checked or unsafe. `contract` and `test` are optional, mutually
 exclusive final role markers; neither changes the compiler profile. `test` is
 consumed by MyLangTester. Repository boundary checks enforce that contract
 sources contain declarations rather than implementations.
+
+`model` marks a declaration file: the lexer reads its expansion, which is
+ordinary checked source (`docs/design/mylang-model.md` in MyComputer). It takes
+no other modifier.
+
+An import names `fs.mln` whether the file is `fs.mln`, `fs.unsafe.mln` or
+`fs.model.mln`. Both a plain and an unsafe file of one name is an error.
+
+A checked source may not spell a raw pointer type, and it may call a function
+of an `.unsafe.mln` file only if that function is marked `@safe`. Assembly
+imports are unsafe code. The only exception is a pointer field of a
+`.contract.mln` record, which describes a wire format.
 
 ## Rejected forms
 

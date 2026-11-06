@@ -15,18 +15,18 @@ struct Square { i32 side; };
 struct Tri { i32 base; i32 height; };
 
 impl Shape for Square {
-    i32 (Square *self) area() { return self->side * self->side; }
+    i32 (Square *self) area() { return self.side * self.side; }
     i32 (Square *self) sides() { return 4; }
     Square make(i32 n) { return Square { side: n }; }
 }
 
 impl Shape for Tri {
-    i32 (Tri *self) area() { return self->base * self->height / 2; }
+    i32 (Tri *self) area() { return self.base * self.height / 2; }
     Tri make(i32 n) { return Tri { base: n, height: n }; }
 }
 
 trait Counter<T> {
-    Option<T> (Self *self) next();
+    Option<T> (borrow mut Self self) next();
     // A default written against the trait's own parameter T.
     i32 (Self *self) count() {
         i32 n = 0;
@@ -43,10 +43,10 @@ trait Counter<T> {
 struct Upto { i32 at; i32 end; };
 
 impl Counter<i32> for Upto {
-    Option<i32> (Upto *self) next() {
-        if (self->at >= self->end) { return None; }
-        self->at = self->at + 1;
-        return Some(self->at);
+    Option<i32> (borrow mut Upto self) next() {
+        if (self.at >= self.end) { return None; }
+        self.at = self.at + 1;
+        return Some(self.at);
     }
 }
 

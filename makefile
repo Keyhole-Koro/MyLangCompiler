@@ -16,7 +16,7 @@ all: mlc
 mlc: $(SRC)
 	$(CC) $(CFLAGS) -o $(MYCC) $(SRC)
 
-syntax-check: tools/syntax_check.c src/frontend/lexer/lexer.c src/support/utils.c $(SYNTAX_ENGINE_SRC)
+syntax-check: tools/syntax_check.c src/frontend/lexer/lexer.c src/frontend/model/model_expand.c src/support/utils.c $(SYNTAX_ENGINE_SRC)
 	$(CC) $(CFLAGS) $(SYNTAX_ENGINE_INC) -o $(SYNTAX_CHECK) $^
 
 # Compiler fixtures are executed by MyLangTester. They remain here as .mln

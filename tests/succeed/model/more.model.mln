@@ -1,0 +1,12 @@
+package more;
+
+entity Team   max 8  { i32 score; }
+entity Player max 16 { i32 number; i32 badge; }
+entity Seat   max 4  { i32 row_number; }
+
+// `knows many`: losing the team only unlinks the players.
+Team   knows many Player as players / team;
+// `has one`: the seat goes with its team.
+Team   has   one  Seat   as seat / holder;
+
+unique Player.badge;

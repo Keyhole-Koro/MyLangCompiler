@@ -1,0 +1,10 @@
+// Support for the @safe fixtures.
+package unsafe_lib;
+
+export void poke(i32 address, i32 value) {
+    i32 *p = (i32 *)address;
+    *p = value;
+}
+
+@safe
+export i32 answer() { return 42; }

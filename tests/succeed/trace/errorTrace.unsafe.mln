@@ -39,9 +39,9 @@ i32 main() {
     Result<i32, FsError> r = open_and_read();
     i32 failed = case r of { Ok(_) -> 0; Err(_) -> 1; };
     i32 score = failed * 100000 + error_trace.depth() * 10000;
-    if (same(error_trace.site(0), "errorTrace.mln:13 wait")) { score = score + 1000; }
-    if (same(error_trace.site(1), "errorTrace.mln:17 read_block")) { score = score + 100; }
-    if (same(error_trace.site(2), "errorTrace.mln:22 read_file (DiskError -> FsError)")) { score = score + 10; }
-    if (same(error_trace.site(3), "errorTrace.mln:27 open_and_read")) { score = score + 1; }
+    if (same(error_trace.site(0), "errorTrace.unsafe.mln:13 wait")) { score = score + 1000; }
+    if (same(error_trace.site(1), "errorTrace.unsafe.mln:17 read_block")) { score = score + 100; }
+    if (same(error_trace.site(2), "errorTrace.unsafe.mln:22 read_file (DiskError -> FsError)")) { score = score + 10; }
+    if (same(error_trace.site(3), "errorTrace.unsafe.mln:27 open_and_read")) { score = score + 1; }
     return score;
 }

@@ -4,12 +4,12 @@ import { Eq } from "@std/core/cmp.mln";
 struct Point { i32 x; i32 y; };
 
 impl Eq for Point {
-    bool (Point *self) eq(Point *other) { return self->x == other->x && self->y == other->y; }
+    bool (borrow Point self) eq(borrow Point other) { return self.x == other.x && self.y == other.y; }
 }
 
 struct Pair<T: Eq> { T left; T right; };
 
-bool (Pair<T> *self) same() { return self->left == self->right; }
+bool (borrow Pair<T> self) same() { return self.left == self.right; }
 
 enum Slot<T: Eq> { Full(T), Empty };
 

@@ -1,0 +1,11 @@
+import { Result } from "@std/core/result.mln";
+import { Option } from "@std/core/option.mln";
+struct V { i32 a; i32 b; };
+Result<str, i32> pick(i32 n) { if (n == 0) { return Err(1); } return Ok("sixsix"); }
+Option<V> makev() { V v = V { a: 3, b: 4 }; Option<V> o = Some(v); return o; }
+i32 main() {
+    Result<str, i32> r = pick(1);
+    str item = case r of { Ok(view) -> view; Err(_) -> ""; };
+    V v = case makev() of { Some(x) -> x; None -> V { a: 0, b: 0 }; };
+    return item.length * 100 + v.a * 10 + v.b;
+}

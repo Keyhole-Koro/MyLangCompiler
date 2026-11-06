@@ -213,6 +213,15 @@ static void import_type_methods(ParserContext *context, Module *mod, const char 
                                     params, fn->fundef.param_count, NULL, fn->fundef.is_variadic);
         proto->fundef.recv_type_name = strdup(type_name);
         proto->fundef.is_exported = 1;
+        proto->fundef.is_safe = fn->fundef.is_safe;
+        proto->fundef.origin_unsafe = mod->is_unsafe;
+        /* `case s.byte_at(i) of` has to know Option<u8>'s layout even when
+         * this unit never spells that type: the lowered struct comes along. */
+        ASTNode *returned = fn->fundef.ret_type;
+        if (returned && returned->type == AST_TYPE && returned->type_node.base_type &&
+            returned->type_node.base_type->type == AST_IDENTIFIER) {
+            import_plain_dependency(context, mod, returned->type_node.base_type->identifier.name);
+        }
         add_function(context, proto);
         add_method(context, type_name, method_name, fn->fundef.name, proto);
     }
@@ -356,6 +365,23 @@ void load_imported_plain_types(ParserContext *context, ASTNode *import_node,
         }
     }
 
+    /* A caller has to know whether a function returns an aggregate, or it
+     * passes no hidden out-pointer and the callee writes through garbage:
+     * `ui.open(path);` in a file that never names AppError. The return type's
+     * layout comes along with the function. */
+    for (int i = 0; i < mod->symbol_count; i++) {
+        ModuleSymbol *sym = &mod->symbols[i];
+        if (sym->kind != SYMBOL_FUNCTION || !sym->is_exported || !sym->source_name ||
+            !sym->declaration || sym->declaration->type != AST_FUNDEF) continue;
+        if (import_node->import_stmt.symbol_count != 0 &&
+            !import_requests_symbol(import_node, sym->source_name)) continue;
+        ASTNode *returned = sym->declaration->fundef.ret_type;
+        if (returned && returned->type == AST_TYPE && returned->type_node.base_type &&
+            returned->type_node.base_type->type == AST_IDENTIFIER) {
+            import_plain_dependency(context, mod, returned->type_node.base_type->identifier.name);
+        }
+    }
+
     for (int i = 0; i < mod->symbol_count; i++) {
         ModuleSymbol *sym = &mod->symbols[i];
         /* SYMBOL_TYPEDEF covers both a plain alias (`typedef i32 Id;`, not
@@ -370,6 +396,22 @@ void load_imported_plain_types(ParserContext *context, ASTNode *import_node,
          * (including by an earlier import statement pulling in the same
          * re-exported type transitively) -- nothing left to stage. */
         if (is_user_typename(context, sym->source_name)) {
+            /* It may have arrived as another type's dependency: only its
+             * layout came along then, not what naming it gives this file. */
+            ASTNode *known = sym->declaration;
+            if (known && known->type == AST_ENUM && !known->enum_stmt.has_payloads) {
+                for (int k = 0; k < known->enum_stmt.member_count; k++) {
+                    ASTNode *m = known->enum_stmt.members[k];
+                    if (m && m->type == AST_ENUM_MEMBER) {
+                        char qualified[256];
+                        snprintf(qualified, sizeof(qualified), "%s::%s",
+                                 known->enum_stmt.name, m->enum_member.name);
+                        add_enum_constant(context, qualified, m->enum_member.resolved_value);
+                        add_enum_constant(context, m->enum_member.name, m->enum_member.resolved_value);
+                    }
+                }
+            }
+            import_type_methods(context, mod, sym->source_name);
             remove_import_symbol(import_node, sym->source_name);
             continue;
         }

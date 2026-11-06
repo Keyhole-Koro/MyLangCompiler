@@ -1,0 +1,7 @@
+// A view of a local dies with the frame.
+import { Text } from "@std/text/text.mln";
+str name() {
+    Text<8> local = Text<8> {};
+    return local.as_str();
+}
+i32 main() { return name().length; }

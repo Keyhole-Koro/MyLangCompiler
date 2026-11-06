@@ -243,6 +243,9 @@ struct ASTNode {
              * operations are checked under that file's safety profile. */
             char *origin_path;
             int origin_unsafe;
+            /* `@safe`: written in an `.unsafe.mln` file and callable from a
+             * checked one (rule U4). */
+            int is_safe;
         } fundef;
         struct {
             ASTNode *type;
@@ -399,5 +402,6 @@ char *astType2str(ASTNodeType type);
 void ast_visit_children(ASTNode *node, void (*visit)(ASTNode **, void *), void *context);
 /* Deep copy: the result shares no owned strings, arrays, or children. */
 ASTNode *ast_clone(const ASTNode *node);
+extern int g_parsing_safe_decl;
 
 #endif

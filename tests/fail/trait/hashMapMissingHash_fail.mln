@@ -5,7 +5,7 @@ import { HashMap } from "@std/collections/hashmap.mln";
 struct Key { i32 value; };
 
 impl Eq for Key {
-    bool (Key *self) eq(Key *other) { return self->value == other->value; }
+    bool (borrow Key self) eq(borrow Key other) { return self.value == other.value; }
 }
 
 /* Key deliberately omits `impl Hash`. Specializing HashMap must reject it. */

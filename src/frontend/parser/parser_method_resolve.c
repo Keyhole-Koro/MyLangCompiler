@@ -185,6 +185,11 @@ static int infer_recv_shape(ParserContext *ctx, MethodScope *scope, ASTNode *exp
         if (expr->unary.op == ASTARISK) {
             RecvShape inner;
             if (!infer_recv_shape(ctx, scope, expr->unary.operand, &inner)) return 0;
+            if (inner.pointer_level == 0 && inner.ref_kind != REFKIND_NONE) {
+                *out = inner;
+                out->ref_kind = REFKIND_NONE;
+                return 1;
+            }
             if (inner.pointer_level <= 0) return 0;
             *out = inner;
             out->pointer_level -= 1;
@@ -253,6 +258,17 @@ static ASTNode *convert_receiver(ParserContext *ctx, ASTNode *call, ASTNode *rec
     if (actual->pointer_level == 1 && actual->ref_kind == REFKIND_NONE && expected->pointer_level == 0) {
         if (expected->ref_kind == REFKIND_SHARED) return new_borrow(new_unary(ASTARISK, recv));
         if (expected->ref_kind == REFKIND_MUT) return new_borrow_mut(new_unary(ASTARISK, recv));
+    }
+
+    /* A value receiver takes a copy of what the borrow names. */
+    if (actual->pointer_level == 0 && actual->ref_kind != REFKIND_NONE && expected_plain_value) {
+        return new_unary(ASTARISK, recv);
+    }
+    /* A `borrow mut` lends itself on as a shared `borrow` for the call: both
+     * are the same address, and the checker's B4/B5 rules see the use. */
+    if (actual->pointer_level == 0 && actual->ref_kind == REFKIND_MUT &&
+        expected->pointer_level == 0 && expected->ref_kind == REFKIND_SHARED) {
+        return recv;
     }
 
     method_error(ctx, call,

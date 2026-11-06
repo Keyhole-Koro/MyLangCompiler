@@ -1,0 +1,3 @@
+// A checked file does not spell a raw pointer type, even without using it.
+i32 first(i32 *values) { return 0; }
+i32 main() { return 0; }

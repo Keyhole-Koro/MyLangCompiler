@@ -1,3 +1,4 @@
+#include <string.h>
 #include "mylang/backend/codegen_internal.h"
 
 // Aggregate (struct/array) by-value calling convention (MLC-015).
@@ -72,9 +73,44 @@ int call_return_aggregate_size(CompilerContext *cc, ASTNode *node) {
         (ASTNode *)li->function_type->function_type.return_type);
 }
 
+/* Past this size a copy is a loop: unrolled, a Text<128> costs a kilobyte of
+ * code at every assignment and loading those bytes costs more than the loop. */
+#define AGGREGATE_UNROLL_BYTES 32
+
+int aggregate_loop_label(void) {
+    static int next = 0;
+    return next++;
+}
+
+/* A scratch register that holds neither address. */
+static const char *loop_counter_reg(const char *a, const char *b) {
+    return strcmp(a, "r7") != 0 && strcmp(b, "r7") != 0 ? "r7" : "r6";
+}
+
 void emit_aggregate_copy(StringBuilder *sb, const char *dest_addr_reg, const char *src_addr_reg, int total_bytes) {
     sb_append(sb, "  ; copy %d bytes (aggregate)\n", total_bytes);
     int off = 0;
+    if (total_bytes > AGGREGATE_UNROLL_BYTES &&
+        strcmp(dest_addr_reg, "sp") != 0 && strcmp(src_addr_reg, "sp") != 0) {
+        const char *counter = loop_counter_reg(dest_addr_reg, src_addr_reg);
+        int label = aggregate_loop_label();
+        int words = total_bytes & ~3;
+        sb_append(sb, "  push  %s\n", counter);
+        sb_append(sb, "  movi  %s, 0\n", counter);
+        sb_append(sb, "agg_copy_%d:\n", label);
+        sb_append(sb, "  mov   r4, %s\n", src_addr_reg);
+        sb_append(sb, "  add   r4, %s\n", counter);
+        sb_append(sb, "  load  r1, r4\n");
+        sb_append(sb, "  mov   r4, %s\n", dest_addr_reg);
+        sb_append(sb, "  add   r4, %s\n", counter);
+        sb_append(sb, "  store r4, r1\n");
+        sb_append(sb, "  addis %s, 4\n", counter);
+        sb_append(sb, "  movi  r4, %d\n", words);
+        sb_append(sb, "  cmp   %s, r4\n", counter);
+        sb_append(sb, "  jnz   agg_copy_%d\n", label);
+        sb_append(sb, "  pop   %s\n", counter);
+        off = words;
+    }
     for (; off + 4 <= total_bytes; off += 4) {
         sb_append(sb, "  mov   r4, %s\n", src_addr_reg);
         if (off) sb_append(sb, "  addis r4, %d\n", off);

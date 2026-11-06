@@ -2,7 +2,7 @@
 import { Drop } from "@std/core/drop.mln";
 
 struct Res { i32 handle; };
-impl Drop for Res { void (Self *self) drop() { } }
+impl Drop for Res { void (borrow mut Self self) drop() { } }
 
 void take(Res r) { }
 

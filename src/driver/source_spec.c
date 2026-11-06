@@ -93,7 +93,14 @@ MyLangSourceSpecResult mylang_source_spec_parse(const char *path) {
             return result;
         }
 
-        if (strcmp(modifier, "dom") == 0) {
+        if (strcmp(modifier, "model") == 0) {
+            /* Declarations only: the lexer reads their expansion
+             * (model_expand.c), which is ordinary checked source. */
+            if (saw_dom || semantic_phase) {
+                fail(&result, "modifier '%s' cannot be combined with other modifiers", modifier);
+                return result;
+            }
+        } else if (strcmp(modifier, "dom") == 0) {
             if (saw_dom) {
                 fail(&result, "duplicate source modifier '%s'", modifier);
                 return result;

@@ -1,3 +1,4 @@
+#include "mylang/frontend/model_expand.h"
 #include "mylang/frontend/lexer.h"
 
 #include <string.h>
@@ -618,6 +619,18 @@ Token *lexer_from_file(const char *file_path) {
     if (!file_path) return NULL;
     char *input = readSampleInput(file_path);
     if (!input) return NULL;
+    /* A model is a declaration file: what the lexer reads is its expansion. */
+    size_t path_length = strlen(file_path);
+    if (path_length > 10 && strcmp(file_path + path_length - 10, ".model.mln") == 0) {
+        char *expanded = model_expand(input, file_path);
+        free(input);
+        input = expanded;
+        const char *dump = getenv("MLC_DUMP_MODEL");
+        if (dump && dump[0]) {
+            FILE *out = fopen(dump, "w");
+            if (out) { fputs(input, out); fclose(out); }
+        }
+    }
     Token *tokens = lexer(input);
     free(input);
     return tokens;

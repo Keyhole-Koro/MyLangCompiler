@@ -1,0 +1,3 @@
+// An .unsafe.mln function is out of reach unless it is marked @safe.
+import unsafe_lib from "../../support/unsafe_lib.mln";
+i32 main() { unsafe_lib.poke(4096, 1); return 0; }

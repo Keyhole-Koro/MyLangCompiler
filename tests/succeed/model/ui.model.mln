@@ -1,0 +1,15 @@
+package ui;
+
+import { Text } from "@std/text/text.mln";
+
+entity Window max 16  { Text<32> title; }
+entity Node   max 64 {
+    i32 kind;
+    Text<16> label;
+    i32 owner;
+}
+
+Node   has   many Node as children / parent, ordered;
+Window knows one  Node as focus;
+
+index Node.owner;

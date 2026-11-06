@@ -1,0 +1,8 @@
+// A `borrow mut` lends itself on as a shared borrow, and an argument is
+// evaluated before the call lends anything.
+struct S { i32 v; };
+i32 (borrow S s) get() { return s.v; }
+void (borrow mut S s) set(i32 value) { s.v = value; }
+i32 read(borrow S s) { return s.get(); }
+void (borrow mut S s) bump() { s.set(s.get() + read(s)); }
+i32 main() { S s; s.set(3); s.bump(); return s.v; }

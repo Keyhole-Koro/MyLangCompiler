@@ -210,12 +210,30 @@ ASTNode* parse_toplevel(ParserContext *context, Token **cur) {
     int attr_count = 0;
     Token *first = *cur;
     Attribute *attrs = parse_attributes(context, cur, &attr_count);
+    /* `@safe` belongs to the language, not to an `annotation` declaration:
+     * it never reaches the metadata rows, and unlike those it may precede a
+     * generic template or an impl. */
+    int is_safe = 0;
+    for (int i = 0; i < attr_count;) {
+        if (strcmp(attrs[i].name, "safe") == 0) {
+            is_safe = 1;
+            memmove(&attrs[i], &attrs[i + 1], sizeof(Attribute) * (size_t)(attr_count - i - 1));
+            attr_count--;
+        } else {
+            i++;
+        }
+    }
+    int outer_safe = g_parsing_safe_decl;
+    g_parsing_safe_decl = is_safe;
     ASTNode *decl = parse_toplevel_decl(context, cur);
+    g_parsing_safe_decl = outer_safe;
     if (!decl) {
         /* Package/import lines and generic templates come back NULL; none of
          * them can carry an attribute today. */
+        if (is_safe && attr_count == 0) return NULL;
         parse_error(context, "attributes may only precede a function or method declaration", first);
     }
+    if (is_safe && attr_count == 0) return decl;
     decl->attrs = attrs;
     decl->attr_count = attr_count;
     return decl;
@@ -366,8 +384,10 @@ ASTNode *parse_program_syntax(ParserContext *context, Token **cur) {
     ASTNode **nodes = NULL;
     int count = 0;
     while ((*cur)->kind != EOT) {
-        int is_impl = (*cur)->kind == IMPL ||
-                      ((*cur)->kind == EXPORT && (*cur)->next && (*cur)->next->kind == IMPL);
+        Token *head = *cur;
+        while (head->kind == AT && head->next && head->next->next) head = head->next->next;
+        int is_impl = head->kind == IMPL ||
+                      (head->kind == EXPORT && head->next && head->next->kind == IMPL);
         ASTNode *node = parse_toplevel(context, cur);
         if (!node) continue;
         if (is_impl) {

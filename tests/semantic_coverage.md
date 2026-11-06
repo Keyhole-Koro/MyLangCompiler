@@ -53,4 +53,4 @@ Covered by warning tests:
 Still thin / future work:
 - field-sensitive move tracking
 - borrow conflicts through function calls
-- raw-pointer operations outside `.unsafe.mln` sources (W0003)
+- raw-pointer operations outside `.unsafe.mln` sources (E0701)
