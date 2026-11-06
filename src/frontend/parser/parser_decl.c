@@ -57,9 +57,15 @@ ASTNode* parse_param(ParserContext *context, Token **cur) {
     // -- possibly in another package, where a name would not resolve.
     if ((*cur)->kind == ASSIGN) {
         *cur = (*cur)->next;
+        if (token_is_name(*cur) && strcmp((*cur)->value, "None") == 0) {
+            param->param.default_value = new_identifier("None");
+            set_node_loc_from_tokens(param->param.default_value, *cur, NULL);
+            *cur = (*cur)->next;
+            return param;
+        }
         param->param.default_value = parse_literal_value(context, cur);
         if (!param->param.default_value)
-            parse_error(context, "a parameter default must be a literal (number, string, char or bool)", *cur);
+            parse_error(context, "a parameter default must be a literal (number, string, char, bool or None)", *cur);
         if (param->param.default_value->type == AST_NUMBER) param->param.default_value->number.is_default = 1;
     }
     return param;

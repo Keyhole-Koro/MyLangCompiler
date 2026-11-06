@@ -1,0 +1,12 @@
+// `None` is a default of an Option parameter, for a call and for a property.
+import { Option } from "@std/core/option.mln";
+
+i32 read(Option<i32> value = None) {
+    return case value of { Some(v) -> v; None -> 7; };
+}
+
+i32 Box(Option<i32> value = None) { return read(value); }
+
+i32 f() { return <Box />; }
+
+i32 main() { return read() * 10 + f(); }   // 77

@@ -175,7 +175,7 @@ name.
 ### Default parameters
 
 - `param` -> `move? type IDENTIFIER ( [ NUMBER? ] )* ( = literal )?`
-- `literal` -> `-? NUMBER` | `STRING_LITERAL` | `CHAR_LITERAL` | `true` | `false`
+- `literal` -> `-? NUMBER` | `STRING_LITERAL` | `CHAR_LITERAL` | `true` | `false` | `None`
 
 ```mylang
 i32 Label(char *text, i32 x = 0, i32 y = 0, i32 color = 0, i32 bold = 0) { ... }
