@@ -4,6 +4,7 @@
 #include <stdbool.h>
 
 #include "mylang/frontend/lexer.h"
+#include "mylang/frontend/model_expand.h"
 #include "syntax_engine/syntax_engine.h"
 
 #define TOKEN_KIND_COUNT ((int)EOT + 1)
@@ -37,7 +38,10 @@ static void print_json_string(const char *text) {
             case '\n': printf("\\n"); break;
             case '\r': printf("\\r"); break;
             case '\t': printf("\\t"); break;
-            default: putchar(*p); break;
+            default:
+                if ((unsigned char)*p < 0x20) printf("\\u%04x", (unsigned char)*p);
+                else putchar(*p);
+                break;
         }
     }
     putchar('"');
@@ -955,6 +959,51 @@ static int check_source(
     return check_tokens(grammar, table, token_map, lexer(source));
 }
 
+static void print_model_span(ModelSpan span) {
+    printf("%d,%d,%d", span.line, span.column, span.length);
+}
+
+/* Two lines of JSON: the trace of a `.model.mln`, then the usual result for
+ * its text. See model_expand.h. */
+static int check_model(
+    const SyntaxGrammar *grammar,
+    SyntaxTable *table,
+    const int *token_map,
+    const char *source
+) {
+    ModelTrace *trace = model_trace(source);
+    printf("{\"generatedLine\":%zu,\"generated\":", trace->generated_line);
+    print_json_string(trace->text + trace->generated_offset);
+    printf(",\"origins\":[");
+    for (size_t i = 0; i < trace->origin_count; i++) {
+        printf("%s[", i ? "," : "");
+        print_model_span(trace->origins[i]);
+        printf("]");
+    }
+    printf("],\"words\":[");
+    for (size_t i = 0; i < trace->word_count; i++) {
+        const ModelWord *word = &trace->words[i];
+        printf("%s[", i ? "," : "");
+        print_model_span(word->span);
+        printf(",\"%s\",\"%s\",", word->kind, word->role);
+        print_model_span(word->declaration);
+        printf("]");
+    }
+    printf("],\"errors\":[");
+    for (size_t i = 0; i < trace->error_count; i++) {
+        const ModelError *error = &trace->errors[i];
+        printf("%s[", i ? "," : "");
+        print_model_span(error->span);
+        printf(",");
+        print_json_string(error->message);
+        printf("]");
+    }
+    printf("]}\n");
+    int status = check_source(grammar, table, token_map, trace->text);
+    model_trace_free(trace);
+    return status;
+}
+
 static int consume_record_separator(void) {
     int c = getchar();
     if (c == EOF || c == '\n') return 0;
@@ -974,10 +1023,12 @@ static int run_stdio(const SyntaxGrammar *grammar, SyntaxTable *table, const int
         path[strcspn(path, "\r\n")] = '\0';
         if (path[0] == '\0') continue;
 
-        if (strncmp(path, "content ", 8) == 0) {
+        int is_model = strncmp(path, "model ", 6) == 0;
+        if (is_model || strncmp(path, "content ", 8) == 0) {
+            const char *size = path + (is_model ? 6 : 8);
             char *end = NULL;
-            unsigned long length = strtoul(path + 8, &end, 10);
-            if (end == path + 8) return 1;
+            unsigned long length = strtoul(size, &end, 10);
+            if (end == size) return 1;
 
             char *source = malloc(length + 1);
             if (!source) return 1;
@@ -988,7 +1039,9 @@ static int run_stdio(const SyntaxGrammar *grammar, SyntaxTable *table, const int
                 return 1;
             }
 
-            int status = check_source(grammar, table, token_map, source);
+            int status = is_model
+                ? check_model(grammar, table, token_map, source)
+                : check_source(grammar, table, token_map, source);
             free(source);
             if (status != 0) return status;
             fflush(stdout);
