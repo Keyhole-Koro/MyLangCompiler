@@ -1,0 +1,8 @@
+// `*` on a borrow is an error in an unsafe source too.
+void set(borrow i32 n) { *n = 2; }
+
+i32 main() {
+    i32 n = 1;
+    set(&n);
+    return n;
+}

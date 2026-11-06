@@ -338,6 +338,7 @@ void gen_func(CompilerContext *cc, ASTNode *node, StringBuilder *sb);
 
 bool type_needs_drop(CompilerContext *cc, ASTNode *type_node);
 bool expr_needs_drop(CompilerContext *cc, ASTNode *expr);
+void emit_drop_value_at(CompilerContext *cc, ASTNode *expr, const char *address_reg, StringBuilder *sb);
 void collect_drop_bindings(CompilerContext *cc, ASTNode *node, bool is_param,
                            int param_count, int local_count);
 DropBinding *find_drop_binding(CompilerContext *cc, const char *name);

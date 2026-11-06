@@ -1,0 +1,9 @@
+// Rule B1: `&` marks an argument that can change, even when it is a borrow.
+void bump(borrow i32 n) { n = n + 1; }
+void bump_again(borrow i32 n) { bump(n); }
+
+i32 main() {
+    i32 n = 1;
+    bump_again(&n);
+    return n;
+}

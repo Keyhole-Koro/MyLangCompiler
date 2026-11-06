@@ -34,9 +34,9 @@ i32 main() {
     i32 result = 0;
     i32 absent = -1;
     Pid missing = Pid { value: 3 };
-    if (*map.get(&zero).unwrap_or(&absent) == 10) { result = result + 1; }
-    if (*map.get(&one).unwrap_or(&absent) == 25) { result = result + 10; }
-    if (*map.get(&two).unwrap_or(&absent) == 30) { result = result + 100; }
+    if (map.get(&zero).unwrap_or(&absent) == 10) { result = result + 1; }
+    if (map.get(&one).unwrap_or(&absent) == 25) { result = result + 10; }
+    if (map.get(&two).unwrap_or(&absent) == 30) { result = result + 100; }
     if (map.get(&missing).is_none()) { result = result + 1000; }
     if (map.len == 3) { result = result + 10000; }
 
@@ -47,6 +47,6 @@ i32 main() {
     names.init(&names_keys[0], &names_values[0], &names_used[0], 4);
     names.put("app", 7);
     str app = "app";
-    if (*names.get(&app).unwrap_or(&absent) == 7) { result = result + 100000; }
+    if (names.get(&app).unwrap_or(&absent) == 7) { result = result + 100000; }
     return result;
 }

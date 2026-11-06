@@ -1,5 +1,5 @@
 i32 main() {
     i32 x = 7;
     borrow i32 rx = &x;
-    return *rx;
+    return rx;
 }

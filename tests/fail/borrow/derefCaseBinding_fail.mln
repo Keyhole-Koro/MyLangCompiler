@@ -1,0 +1,9 @@
+// A binding from Option<borrow T> is a borrow like any other.
+import { Option } from "@std/core/option.mln";
+
+Option<borrow i32> some(borrow i32 n) { return Some(&n); }
+
+i32 main() {
+    i32 n = 1;
+    return case some(&n) of { Some(v) -> *v; None -> 0; };
+}

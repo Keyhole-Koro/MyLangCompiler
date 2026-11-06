@@ -1,4 +1,5 @@
 #include "mylang/frontend/parser_rewrite_internal.h"
+#include "mylang/frontend/parser_method_internal.h"
 #include "mylang/frontend/parser_ast_internal.h"
 #include "mylang/frontend/parser_annot_internal.h"
 #include <stdarg.h>
@@ -11,16 +12,7 @@
  * same way rewrite_node threads a scope of names -- is all inference needs;
  * no real type-inference engine is required. */
 
-/* name -> declared type AST (borrowed from the declaration; never owned
- * here). */
-typedef struct {
-    char **names;
-    ASTNode **types;
-    int count;
-    int cap;
-} MethodScope;
-
-static void method_scope_push(MethodScope *scope, const char *name, ASTNode *type) {
+void method_scope_push(MethodScope *scope, const char *name, ASTNode *type) {
     if (!name || !type) return;
     if (scope->count == scope->cap) {
         scope->cap = scope->cap ? scope->cap * 2 : 8;
@@ -32,20 +24,20 @@ static void method_scope_push(MethodScope *scope, const char *name, ASTNode *typ
     scope->count++;
 }
 
-static ASTNode *method_scope_lookup(MethodScope *scope, const char *name) {
+ASTNode *method_scope_lookup(MethodScope *scope, const char *name) {
     for (int i = scope->count - 1; i >= 0; i--) {
         if (strcmp(scope->names[i], name) == 0) return scope->types[i];
     }
     return NULL;
 }
 
-static MethodScope method_scope_clone(MethodScope *src) {
+MethodScope method_scope_clone(MethodScope *src) {
     MethodScope out = {0};
     for (int i = 0; i < src->count; i++) method_scope_push(&out, src->names[i], src->types[i]);
     return out;
 }
 
-static void method_scope_free(MethodScope *scope) {
+void method_scope_free(MethodScope *scope) {
     for (int i = 0; i < scope->count; i++) free(scope->names[i]);
     free(scope->names);
     free(scope->types);
@@ -54,15 +46,6 @@ static void method_scope_free(MethodScope *scope) {
 /* The program being resolved, for looking a call's declaration up among
  * its imports (callee_declaration). Set by resolve_method_calls(). */
 static ASTNode *resolving_program;
-
-/* A receiver's static shape: base type name (borrowed from the type AST) plus
- * pointer level and borrow kind. Arrays and modifiers don't matter for method
- * dispatch, so they're not tracked here. */
-typedef struct {
-    const char *base_name;
-    int pointer_level;
-    int borrow_kind;
-} RecvShape;
 
 static int shape_from_type_ast(ASTNode *type_node, RecvShape *out) {
     if (!type_node || type_node->type != AST_TYPE) return 0;
@@ -128,7 +111,7 @@ static void resolve_mock_facade_method(ASTNode *call, const char *mangled) {
     call->call.recv = NULL;
 }
 
-static int infer_recv_shape(ParserContext *ctx, MethodScope *scope, ASTNode *expr, RecvShape *out) {
+int infer_recv_shape(ParserContext *ctx, MethodScope *scope, ASTNode *expr, RecvShape *out) {
     if (!expr) return 0;
     switch (expr->type) {
     case AST_NUMBER:
@@ -230,14 +213,15 @@ static void method_error(ParserContext *ctx, ASTNode *node, const char *fmt, ...
 
 /* Builds the expression that goes into args[0] to turn `recv` (whose static
  * shape is `actual`) into what the method's declared receiver (`expected`)
- * needs -- see docs/grammar.md's receiver table. An exact match passes
- * through unchanged. A raw pointer is dereferenced, and borrowed for a
- * `borrow` receiver; a borrow reaching a pointer receiver has no
- * auto-conversion yet -- it needs an explicit local. */
+ * needs -- see docs/grammar.md's receiver table. A receiver is the one place
+ * the `&` of a borrow is automatic, so it is written here, and a borrow
+ * reaching a reading receiver is simply used. A raw pointer is dereferenced,
+ * and borrowed for a `borrow` receiver; a borrow reaching a pointer receiver
+ * has no auto-conversion yet -- it needs an explicit local. */
 static ASTNode *convert_receiver(ParserContext *ctx, ASTNode *call, ASTNode *recv,
                                  const RecvShape *actual, const RecvShape *expected) {
     if (actual->pointer_level == expected->pointer_level && actual->borrow_kind == expected->borrow_kind) {
-        return recv;
+        return actual->borrow_kind != REFKIND_NONE ? new_borrow(recv) : recv;
     }
 
     int actual_plain = actual->pointer_level == 0 && actual->borrow_kind == REFKIND_NONE;
@@ -259,7 +243,7 @@ static ASTNode *convert_receiver(ParserContext *ctx, ASTNode *call, ASTNode *rec
 
     /* A reading receiver reads what the borrow names. */
     if (actual->pointer_level == 0 && actual->borrow_kind != REFKIND_NONE && expected_plain_value) {
-        return new_unary(ASTARISK, recv);
+        return recv;
     }
 
     method_error(ctx, call,
@@ -501,10 +485,14 @@ static void register_structs(ParserContext *context, ASTNode *program) {
     }
 }
 
-void resolve_method_calls(ParserContext *context, ASTNode *program) {
-    if (!program || program->type != AST_BLOCK) return;
+void method_shapes_begin(ParserContext *context, ASTNode *program) {
     resolving_program = program;
     register_structs(context, program);
+}
+
+void resolve_method_calls(ParserContext *context, ASTNode *program) {
+    if (!program || program->type != AST_BLOCK) return;
+    method_shapes_begin(context, program);
 
     MethodScope global = {0};
     for (int i = 0; i < program->block.count; i++) {

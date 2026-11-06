@@ -1,0 +1,24 @@
+// Writing an owned value through a borrow replaces what the place holds: the
+// old value is dropped, and the place's owner drops the new one.
+import { Drop } from "@std/core/drop.mln";
+
+i32 g_dropped = 0;
+
+struct Res { i32 id; };
+impl Drop for Res { void (borrow Self self) drop() { g_dropped = g_dropped + self.id; } }
+
+void swap_in(borrow Res place, move Res with) { place = with; }
+
+i32 main() {
+    {
+        Res a = Res { id: 1 };
+        Res b = Res { id: 10 };
+        swap_in(&a, b);                         // drops 1
+        if (g_dropped != 1) { return 0; }
+        borrow Res r = &a;
+        Res c = Res { id: 100 };
+        r = c;                                  // drops 10
+        if (g_dropped != 11) { return 0; }
+    }                                           // drops 100
+    return g_dropped;
+}

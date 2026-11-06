@@ -221,6 +221,14 @@ static void emit_drop_type_at(CompilerContext *cc, const char *base_type,
     }
 }
 
+/* Drops the value of `expr`'s type that sits at `address_reg`. */
+void emit_drop_value_at(CompilerContext *cc, ASTNode *expr, const char *address_reg, StringBuilder *sb) {
+    TypeInfo type = {0};
+    if (!infer_expr_type(cc, expr, &type)) return;
+    resolve_type(cc, &type);
+    emit_drop_type_at(cc, type.base_type, address_reg, 0, sb);
+}
+
 void emit_drop_binding(CompilerContext *cc, DropBinding *binding, StringBuilder *sb,
                        char **params, int param_count, char **locals, int local_count) {
     if (!binding) return;

@@ -130,9 +130,13 @@ struct ASTNode {
         struct { TokenKind op; ASTNode *left, *right; int subscript; } binary;
         struct {
             ASTNode *left, *right;
-            /* A payload store into a value being built: no old value to drop,
-             * and the value it stores now belongs to the place's owner. */
+            /* A store a construction expanded to. Its destination may be an
+             * `Option<borrow T>` payload, which is bound rather than written
+             * through. */
             int is_construction;
+            /* The value being built is a new one: no old value to drop, and
+             * what is stored now belongs to the place's owner. */
+            int fills_new_value;
         } assign;
         struct {
             ASTNode *base_type;
@@ -182,7 +186,12 @@ struct ASTNode {
         } cast;
         struct { ASTNode *expr; } borrow;
         
-        struct { TokenKind op; ASTNode *operand; } unary;
+        struct {
+            TokenKind op;
+            ASTNode *operand;
+            /* A `*` the compiler wrote: a use of a borrow's value. */
+            int is_implicit;
+        } unary;
         struct { ASTNode *expr; } expr_stmt;
         struct { ASTNode *cond, *then_stmt, *else_stmt; } if_stmt;
         struct {

@@ -57,6 +57,10 @@ static void lower_program(ParserContext *context, ASTNode *program) {
     /* Every callee is known by now, method or not, so a construction written
      * as an argument can be built into a temporary of the parameter's type. */
     lower_payload_call_arguments(context, program);
+
+    /* A `case` binding is a payload field and every temporary has its type
+     * now, so a borrow's uses can be told from the places it is handed on. */
+    lower_borrow_places(context, program);
 }
 
 ASTNode *parse_program(Token **cur) {

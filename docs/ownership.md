@@ -50,13 +50,32 @@ A parameter is passed in one of three ways. Reading is the default:
   the callee.
 
 ### Borrowing (`borrow T`)
-A borrow is taken with `&x` and lends the place for writing:
+A borrow is taken with `&x` and is an alias of the place: the name stands for
+what is there, not for a reference to it.
 
 ```mylang
+void add(borrow i32 n, i32 by) { n = n + by; }   // writes the caller's place
+void (borrow Counter c) click(i32 id) { c.clicks = c.clicks + 1; }
+
 borrow Node r = &n;
-void (borrow Counter c) click(i32 id) { ... }
+Node copy = r;     // reads the Node
+r = other;         // writes n, for any T; an owned old value is dropped
+r.next = 3;        // a field of n
 ```
 
+This holds for parameters, locals, `case` bindings from `Option<borrow T>`, and
+values returned as `borrow T`.
+
+- `*b` on a borrow is E0305 in every source file. `*p` stays for a raw pointer.
+- A borrow stays with its place: `r = &other` is an error.
+- `&` is the mark at a call that an argument can change, so an argument to a
+  `borrow` parameter is written `&x` even when `x` already is a borrow, and a
+  bare `b` there is an error. `&b` names the place `b` already is. A receiver is
+  the exception: its `&` is automatic.
+- An instance of a generic written over `T` passes a borrow on without the mark,
+  because its body could not spell it: `T` may or may not be a borrow.
+- A borrow goes into a `borrow` local, return or `Option<borrow T>` payload as a
+  place, with or without `&`: the destination says what is meant.
 - Only **one** borrow can exist at a time for a particular piece of data.
 - The owner cannot move, read or write the value while it is borrowed.
 - A `const` value cannot be borrowed (E0605).
@@ -92,6 +111,14 @@ The semantic analyzer (`src/semantic/`) enforces these rules:
 
 Writes through a raw pointer (`p->x`, `p[i]` on `T *p`) are not checked here;
 they are raw-pointer operations (W0003).
+
+These checks and the backend see a borrow as a word holding the place's address.
+`parser_borrow_places.c` writes a source's uses out in that form as the last
+lowering step, once calls are ordinary calls and `case` bindings are payload
+fields: a use of the value becomes `*b` and `&b` becomes `b`. Where a use stands
+decides which it is. The base of a field or an index, the operand of `&` and
+anything going into a `borrow` destination keep the place; everything else reads
+or writes through.
 
 ### Where a borrow may live
 

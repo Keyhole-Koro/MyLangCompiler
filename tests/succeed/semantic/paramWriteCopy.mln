@@ -5,7 +5,7 @@ struct V { i32 a; i32 b; };
 i32 change(V v) { v.a = 9; return v.a; }
 i32 step(V v) { v.b++; return v.b; }
 
-void bump(borrow i32 n) { *n = *n + 1; }
+void bump(borrow i32 n) { n = n + 1; }
 i32 lend(V v) { bump(&v.a); return v.a; }
 
 i32 main() {

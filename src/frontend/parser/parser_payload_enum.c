@@ -351,14 +351,14 @@ static void build_construction(VariantTable *table, ASTNode *dest, ASTNode *use,
                                             ast_clone(payload)));
 }
 
-/* A declaration or a return builds into a new place. */
-static void mark_payload_stores(ASTNode *statement) {
+static void mark_payload_stores(ASTNode *statement, int fills_new_value) {
     if (!statement) return;
     if (statement->type == AST_EXPR_STMT) {
         statement->expr_stmt.expr->assign.is_construction = 1;
+        statement->expr_stmt.expr->assign.fills_new_value = fills_new_value;
     } else if (statement->type == AST_BLOCK) {
         for (int i = 0; i < statement->block.count; i++)
-            mark_payload_stores(statement->block.stmts[i]);
+            mark_payload_stores(statement->block.stmts[i], fills_new_value);
     }
 }
 
@@ -1275,7 +1275,7 @@ static void rewrite_payload_block(VariantTable *table, ASTNode *block) {
         /* Decide before anything is freed: the assignment form releases the
          * statement that would otherwise answer this. */
         int keeps_declaration = stmt->type == AST_VAR_DECL;
-        if (keeps_declaration || is_return) mark_payload_stores(payload_store);
+        mark_payload_stores(payload_store, keeps_declaration || is_return);
 
         flush_pending_hoists(table, &out, &count);
         out = realloc(out, sizeof(ASTNode *) * (count + 4));
@@ -1510,7 +1510,7 @@ static void hoist_construction_stores(VariantTable *table, ASTNode *dest, ASTNod
         free_ast(field);
     } else {
         ASTNode *store = located_store(field, ast_clone(payload), payload);
-        mark_payload_stores(store);
+        mark_payload_stores(store, 1);
         hoist_statement(table, store);
     }
 }

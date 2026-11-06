@@ -1,0 +1,52 @@
+// A `case` binding from `Option<borrow T>` and a returned `borrow T` are aliases
+// like any other: reading gives the T, and writing reaches the place.
+import { Option } from "@std/core/option.mln";
+
+struct Slot { i32 value; };
+struct Pair { Slot left; Slot right; };
+
+Slot g_slot = Slot { value: 1 };
+
+borrow i32 left_of(borrow Pair p) { return &p.left.value; }
+borrow i32 first(borrow i32 a, borrow i32 b) { return a; }
+Option<borrow i32> find(borrow Pair p, bool some) {
+    if (some) { return Some(&p.right.value); }
+    return None;
+}
+Option<borrow Slot> slot_of(borrow Pair p) { return Some(&p.right); }
+void set(borrow i32 n, i32 value) { n = value; }
+
+i32 main() {
+    Pair p = Pair { left: Slot { value: 2 }, right: Slot { value: 3 } };
+
+    i32 read = left_of(&p);                     // 2
+    {
+        borrow i32 r = left_of(&p);
+        r = r + 10;                             // left 12
+    }
+    i32 x = 5;
+    i32 y = 6;
+    i32 picked = first(&x, &y);                 // 5
+
+    {
+        case find(&p, true) of {
+            Some(n) -> ({ n = n + 1; set(&n, n + 1); });       // right 5
+            None -> _;
+        };
+    }
+    i32 none = 0;
+    {
+        none = case find(&p, false) of { Some(n) -> n; None -> 0 - 1; };
+    }
+    i32 seen = 0;
+    {
+        seen = case find(&p, true) of { Some(n) -> n * 2; None -> 0; }; // 10
+    }
+    {
+        case slot_of(&p) of {
+            Some(s) -> ({ s = Slot { value: s.value + 1 }; });         // right 6
+            None -> _;
+        };
+    }
+    return read * 1000000 + p.left.value * 10000 + picked * 1000 + p.right.value * 100 + seen + none;
+}

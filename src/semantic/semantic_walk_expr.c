@@ -208,18 +208,6 @@ static int call_reads_argument(const SemanticFunctionSig *callee, int i) {
            callee->param_types[i].pointer_level == 0;
 }
 
-/* A `borrow T` handed to a `T` parameter is read through. */
-static void read_named_borrows(SemanticContext *ctx, ASTNode *call, const SemanticFunctionSig *callee) {
-    for (int i = 0; i < call->call.arg_count; i++) {
-        ASTNode *arg = call->call.args[i];
-        SemanticTypeInfo actual;
-        if (!arg || arg->type == AST_BORROW || !call_reads_argument(callee, i) ||
-            !semantic_infer_expr_type(ctx, arg, &actual) || actual.borrow_kind == REFKIND_NONE)
-            continue;
-        call->call.args[i] = new_unary(ASTARISK, arg);
-    }
-}
-
 /* Nothing would drop an owned value that a call makes and another only reads. */
 static void check_read_temporary(SemanticContext *ctx, const SemanticFunctionSig *callee, int i, ASTNode *arg) {
     SemanticTypeInfo type;
@@ -265,10 +253,9 @@ void semantic_walk_expr(SemanticContext *ctx, ASTNode *node, ExprContext expr_ct
         semantic_check_write_place(ctx, node->assign.left, WRITE_ASSIGN);
         semantic_check_assignment_type(ctx, node);
         semantic_revive_binding_if_identifier(ctx, node->assign.left);
-        semantic_reassign_borrow(ctx, node);
+        if (node->assign.is_construction) semantic_hold_payload_borrow(ctx, node);
         break;
     case AST_BORROW:
-        semantic_check_borrow_of_borrow(ctx, node, node->borrow.expr);
         ctx->in_borrow_operand++;
         semantic_walk_expr(ctx, node->borrow.expr, EXPRCTX_READ);
         ctx->in_borrow_operand--;
@@ -300,7 +287,6 @@ void semantic_walk_expr(SemanticContext *ctx, ASTNode *node, ExprContext expr_ct
             saved_borrow_active[i] = ctx->bindings[i].borrow_active;
         }
         SemanticFunctionSig *callee = semantic_find_function_sig(ctx, node->call.name);
-        read_named_borrows(ctx, node, callee);
         /* Every argument is evaluated before the call lends anything, so
          * `buf.truncate(buf.len() - 1)` reads `buf` first: only what is
          * still lent when the call starts can conflict. */

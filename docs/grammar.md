@@ -87,7 +87,9 @@ pointer. The address-of / dereference needed to match the declared receiver is
 inserted during resolution, so `u.display()` reads the same whether `display`
 takes `User`, `borrow User`, or `User*`. The receiver may be a local, a parameter,
 a global, a struct field (`it.rows.len()`, `t->hits.add(1)`), a call's result,
-a cast, or `*p` / `&v` of one of those.
+a cast, or `*p` / `&v` of one of those. This is the one place the `&` of a
+`borrow` is not written: an argument to a `borrow` parameter always is, even when
+it already is a borrow.
 
 A generic receiver binds the method's type parameters directly from its own
 type arguments. The formal names need not match those used by the struct:
@@ -378,6 +380,11 @@ arithmetic requires extracting the base value first.
 
 `const` applies to the declared value. Assignment through that binding is a
 semantic error, including when the value was imported from another package.
+
+A `borrow T` is an alias of a place, not a pointer: its name reads and writes the
+`T`, `.f` and `[i]` reach into it, and `*` does not apply (E0305). `&x` makes one,
+and on a borrow names the same place. `r = y` writes through `r`, and `r = &other`
+is an error. See [Ownership](ownership.md).
 
 Generic uses are concretely instantiated before semantic analysis. See
 [Generic instantiation](generics.md) for supported behavior and boundaries.

@@ -45,8 +45,11 @@ static bool literal_reads_no_memory(ASTNode *literal) {
 // dest's address is still computed first, so an index in it is evaluated
 // before the right side. The old value is dropped last, because the right side
 // may read it or move it away. Leaves dest's address in r3.
+//
+// A write through a borrow of an owned value comes here as well, with any right
+// side: no binding owns what the place holds, so it is dropped where it sits.
 static void gen_assign_through_temp(CompilerContext *cc, ASTNode *node, int bytes,
-                                    DropBinding *old_value, StringBuilder *sb,
+                                    DropBinding *old_value, bool drops_place, StringBuilder *sb,
                                     char **params, int param_count,
                                     char **locals, int local_count) {
     ASTNode *rhs = node->assign.right;
@@ -61,13 +64,23 @@ static void gen_assign_through_temp(CompilerContext *cc, ASTNode *node, int byte
         sb_append(sb, "  mov r3, sp\n");
         gen_struct_literal_into_addr(cc, rhs, sb, "r3",
                                      params, param_count, locals, local_count);
-    } else {
+    } else if (call_return_aggregate_size(cc, rhs) > 0) {
         sb_append(sb, "  mov r1, sp\n");
         sb_append(sb, "  push r1\n");
         gen_call_sret(cc, rhs, sb, params, param_count, locals, local_count);
+    } else {
+        gen_lvalue_addr(cc, rhs, sb, "r2", params, param_count, locals, local_count);
+        sb_append(sb, "  mov r3, sp\n");
+        emit_aggregate_copy(sb, "r3", "r2", bytes);
     }
     if (old_value)
         emit_drop_binding(cc, old_value, sb, params, param_count, locals, local_count);
+    if (drops_place) {
+        sb_append(sb, "  mov r5, sp\n");
+        sb_append(sb, "  addis r5, %d\n", reserved);
+        sb_append(sb, "  load r5, r5\n");
+        emit_drop_value_at(cc, node->assign.left, "r5", sb);
+    }
     sb_append(sb, "  mov r2, sp\n");
     sb_append(sb, "  mov r3, sp\n");
     sb_append(sb, "  addis r3, %d\n", reserved);
@@ -95,8 +108,11 @@ void gen_assign(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
         fprintf(stderr, "Codegen error: assignment to const lvalue is not allowed\n");
         exit(1);
     }
-    bool construction = node->assign.is_construction;
-    if (node->assign.left->type != AST_IDENTIFIER && !construction &&
+    bool construction = node->assign.fills_new_value;
+    bool through_borrow = node->assign.left->type == AST_UNARY &&
+                          node->assign.left->unary.is_implicit &&
+                          expr_needs_drop(cc, node->assign.left);
+    if (node->assign.left->type != AST_IDENTIFIER && !construction && !through_borrow &&
         expr_needs_drop(cc, node->assign.left)) {
         fprintf(stderr,
                 "Codegen error at %d:%d: replacing a droppable field or "
@@ -119,12 +135,14 @@ void gen_assign(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
     } else if (!literal && total > 0 && call_return_aggregate_size(cc, node->assign.right) > 0) {
         temp_bytes = total;
     }
+    if (through_borrow) temp_bytes = total;
     if (temp_bytes > 0) {
-        gen_assign_through_temp(cc, node, temp_bytes, old_value, sb,
+        gen_assign_through_temp(cc, node, temp_bytes, old_value, through_borrow, sb,
                                 params, param_count, locals, local_count);
         if (target_reg && strcmp(target_reg, "r3") != 0)
             sb_append(sb, "  mov %s, r3\n", target_reg);
         finish_drop_assignment(cc, dest_drop, source_drop, sb);
+        if (through_borrow) emit_drop_flag(cc, source_drop, false, sb);
         return;
     }
     if (old_value)

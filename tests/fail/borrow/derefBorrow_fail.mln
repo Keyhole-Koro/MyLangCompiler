@@ -1,0 +1,7 @@
+// Rule B1: a borrow's name reads the value. `*` is for raw pointers.
+i32 read(borrow i32 n) { return *n; }
+
+i32 main() {
+    i32 n = 1;
+    return read(&n);
+}

@@ -16,7 +16,7 @@ i32 vec_checks() {
     v.push(6);
     if (v.len() != 2) { return 2; }
     {
-        i32 seen = case v.at(1) of { Some(value) -> *value; None -> 0; };
+        i32 seen = case v.at(1) of { Some(value) -> value; None -> 0; };
         if (seen != 6) { return 3; }
     }
     bool past_end = case v.at(2) of { Some(_) -> false; None -> true; };

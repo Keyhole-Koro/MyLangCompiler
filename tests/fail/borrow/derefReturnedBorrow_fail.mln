@@ -1,0 +1,7 @@
+// So is a returned borrow.
+borrow i32 same(borrow i32 n) { return n; }
+
+i32 main() {
+    i32 n = 1;
+    return *same(&n);
+}

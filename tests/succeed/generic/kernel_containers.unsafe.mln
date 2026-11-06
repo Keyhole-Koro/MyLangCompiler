@@ -37,7 +37,7 @@ i32 main() {
 
     Slice<i32> slice;
     slice.init(&storage[0], storage.length);
-    i32 *slice_value = slice.at(1).unwrap_or(&value);
+    i32 *slice_value = &slice.at(1).unwrap_or(&value);
 
     i32 arena_storage[4];
     Arena<i32> arena;
@@ -82,7 +82,7 @@ i32 main() {
     map.put(42, 11);
     i32 none = 0;
     i32 answer = 42;
-    i32 mapped = *map.get(&answer).unwrap_or(&none);
+    i32 mapped = map.get(&answer).unwrap_or(&none);
 
     return value + *slice_value + *allocated + ring_value + option_value + error + front->value + mapped;
 }

@@ -1,0 +1,56 @@
+// A `borrow T` is an alias of its place. Its name reads the T, an assignment
+// writes the place whatever T is, and `.f` and `[i]` reach into it. This holds
+// for parameters and locals alike.
+struct Point { i32 x; i32 y; };
+struct Line { Point start; Point stop; i32 marks[3]; };
+
+i32 twice(i32 value) { return value * 2; }
+Point moved(Point p) { p.x = p.x + 1; return p; }
+
+void step(borrow i32 n) { n = n + 1; }
+void add(borrow i32 n, i32 by) { n = n + by; }
+void count(borrow i32 n) { n++; }
+
+void replace(borrow Point p, Point with) { p = with; }
+void shift(borrow Line line) {
+    line.start = moved(line.start);
+    line.marks[1] = line.marks[1] + 5;
+}
+i32 sum(borrow Point p) { return p.x + p.y; }
+i32 copy_sum(borrow Point p) {
+    Point copy = p;           // reads the value: the copy is separate
+    copy.x = 100;
+    return copy.x + p.x;
+}
+
+bool flip(borrow bool on) { on = !on; return on; }
+
+i32 main() {
+    i32 n = 1;
+    step(&n);                                   // 2
+    add(&n, 3);                                 // 5
+    count(&n);                                  // 6
+
+    i32 local_value = 10;
+    {
+        borrow i32 r = &local_value;
+        i32 read = r;                           // 10
+        r = read + r;                           // 20
+    }
+
+    Point p = Point { x: 1, y: 2 };
+    Point three_four = Point { x: 3, y: 4 };
+    replace(&p, three_four);
+    Line line = Line {};
+    line.marks[1] = 2;
+    shift(&line);                               // start.x 1, marks[1] 7
+    bool on = false;
+    i32 flipped = flip(&on) ? 1 : 0;            // on is true
+    {
+        borrow Point q = &p;
+        q.y = 5;
+        Point other = Point { x: 7, y: 8 };
+        q = other;                              // writes p
+    }
+    return n * 100000 + local_value * 1000 + sum(&p) * 10 + line.marks[1] + line.start.x + flipped + copy_sum(&p);
+}

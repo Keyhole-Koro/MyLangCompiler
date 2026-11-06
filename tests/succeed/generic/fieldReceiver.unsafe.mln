@@ -9,7 +9,7 @@ i32 (Counter<T> *c) add(T v) { c->total = c->total + v; return c->total; }
 struct Table { Slice<i32> rows; Counter<i32> hits; i32 pad; };
 
 i32 through_pointer(Table *t) {
-    return t->rows.len() + *t->rows.at(1).unwrap_or(&t->pad) + t->hits.add(100);
+    return t->rows.len() + t->rows.at(1).unwrap_or(&t->pad) + t->hits.add(100);
 }
 
 i32 main() {
@@ -20,5 +20,5 @@ i32 main() {
     it.hits.total = 0;
     it.hits.add(1);
     // 4 + 20 + 101 = 125, plus main's own reads: 4 + 40 = 44 -> 169
-    return through_pointer(&it) + it.rows.len() + *it.rows.at(3).unwrap_or(&it.pad);
+    return through_pointer(&it) + it.rows.len() + it.rows.at(3).unwrap_or(&it.pad);
 }

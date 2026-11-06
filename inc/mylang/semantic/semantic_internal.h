@@ -292,13 +292,12 @@ void semantic_check_constant_index(SemanticContext *ctx, ASTNode *node);
 void semantic_check_dereference(SemanticContext *ctx, ASTNode *node);
 
 /* semantic_borrow.c */
-void semantic_check_borrow_of_borrow(SemanticContext *ctx, ASTNode *node, ASTNode *operand);
 void semantic_check_borrow_kept_as_pointer(SemanticContext *ctx, const SemanticTypeInfo *expected,
                                            const SemanticTypeInfo *actual, ASTNode *at);
 SemanticBinding *semantic_borrow_target_binding(SemanticContext *ctx, ASTNode *expr);
 void semantic_release_borrow(SemanticContext *ctx, SemanticBinding *binding);
 void semantic_register_borrow_binding(SemanticContext *ctx, ASTNode *binding_node);
-void semantic_reassign_borrow(SemanticContext *ctx, ASTNode *assign);
+void semantic_hold_payload_borrow(SemanticContext *ctx, ASTNode *assign);
 void semantic_check_returned_borrow(SemanticContext *ctx, ASTNode *return_node);
 void semantic_check_write_place(SemanticContext *ctx, ASTNode *place, WriteKind kind);
 int semantic_expr_views_local(SemanticContext *ctx, ASTNode *expr);

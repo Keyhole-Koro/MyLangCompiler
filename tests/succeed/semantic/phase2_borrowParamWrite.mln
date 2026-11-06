@@ -1,6 +1,6 @@
 i32 bump(borrow i32 rx) {
-    *rx = *rx + 1;
-    return *rx;
+    rx = rx + 1;
+    return rx;
 }
 
 i32 main() {

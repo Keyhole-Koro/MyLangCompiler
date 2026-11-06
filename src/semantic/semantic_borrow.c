@@ -4,17 +4,6 @@
 /* Borrow tracking: where a borrow comes from, what it keeps locked, what may
  * be written while it lasts, and what may be returned. */
 
-/* `&b` on a variable that already is a borrow would name the variable's own
- * slot, an address that dies with the frame, while the types still read
- * `borrow T`. The variable passes on as it is. */
-void semantic_check_borrow_of_borrow(SemanticContext *ctx, ASTNode *node, ASTNode *operand) {
-    if (!operand || operand->type != AST_IDENTIFIER) return;
-    SemanticBinding *binding = semantic_find_binding(ctx, operand->identifier.name);
-    if (!binding || !binding->has_type || binding->type_info.borrow_kind == REFKIND_NONE) return;
-    semantic_error_at(ctx, semantic_location_from_ast(node),
-                      "'%s' is already a borrow; pass it without '&'", operand->identifier.name);
-}
-
 /* `&g` of a global lives as long as the program, and `&p->x` was taken
  * through a raw pointer, whose dereference is already reported. */
 static int borrow_is_static_or_unchecked(SemanticContext *ctx, ASTNode *expr) {
@@ -350,8 +339,9 @@ void semantic_register_borrow_binding(SemanticContext *ctx, ASTNode *binding_nod
     if (binding) hold_borrow(ctx, binding, var_decl->var_decl.init);
 }
 
-/* `r = &y;` or `opt.Some = &y;` moves the local's borrow to a new owner. */
-void semantic_reassign_borrow(SemanticContext *ctx, ASTNode *assign) {
+/* `opt = Some(&y);` moves the local's borrow to a new owner. A borrow itself
+ * stays with its place: assigning one writes through it. */
+void semantic_hold_payload_borrow(SemanticContext *ctx, ASTNode *assign) {
     SemanticBinding *binding = assigned_binding(ctx, assign->assign.left);
     SemanticTypeInfo target;
     if (!binding || binding->is_param || binding->is_global ||

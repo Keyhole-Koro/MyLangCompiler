@@ -1,4 +1,4 @@
-void change(borrow i32 a, borrow i32 b) { *a = *a + 1; *b = *b + 2; }
+void change(borrow i32 a, borrow i32 b) { a = a + 1; b = b + 2; }
 void read(i32 a, i32 b) { }
 i32 main() {
     i32 x = 0; i32 y = 0;
@@ -7,5 +7,5 @@ i32 main() {
     change(&x, &y);
     change(&x, &y);
     borrow i32 after = &x;
-    return *after + y;
+    return after + y;
 }

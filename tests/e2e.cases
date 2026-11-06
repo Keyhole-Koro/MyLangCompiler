@@ -15,6 +15,10 @@ blobCapacity|12|succeed/library/blobCapacity.unsafe.mln,../../MyStdLib/memory/bl
 errorTraceDropped|8|succeed/library/errorTraceDropped.mln,../../MyStdLib/debug/error_trace.unsafe.mln,../../MyStdLib/text/str.unsafe.mln,../../MyStdLib/text/text.unsafe.mln,../../MyStdLib/core/option.mln,../../MyStdLib/core/result.mln,../../MyStdLib/text/bytes.unsafe.mln,../../MyStdLib/text/ascii.mln,../../MyStdLib/core/int32.mln|--error-trace
 safeCall|42|succeed/unsafe/safeCall.mln,support/unsafe_lib.unsafe.mln
 readThroughBorrow|6|succeed/borrow/readThroughBorrow.mln
+aliasReadWrite|620266|succeed/borrow/aliasReadWrite.mln
+aliasPassedOn|26620|succeed/borrow/aliasPassedOn.mln
+aliasResults|2125609|succeed/borrow/aliasResults.mln,../../MyStdLib/core/option.mln
+aliasDrop|111|succeed/borrow/aliasDrop.mln
 modelExtension|511|succeed/model/main.mln,succeed/model/ui.model.mln,../../MyStdLib/text/text.unsafe.mln,../../MyStdLib/text/str.unsafe.mln,../../MyStdLib/text/ascii.mln,../../MyStdLib/text/bytes.unsafe.mln,../../MyStdLib/core/int32.mln
 ternaryMoveIsolation|14|succeed/semantic/ternaryMoveIsolation.mln
 automaticDrop|1166|succeed/semantic/automaticDrop.mln

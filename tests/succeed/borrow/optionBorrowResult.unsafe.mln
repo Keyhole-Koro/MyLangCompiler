@@ -15,7 +15,7 @@ i32 main() {
     i32 picked = 0;
     {
         Option<borrow i32> o = bag.pick(1);
-        picked = case o of { Some(v) -> *v; None -> 0; };
+        picked = case o of { Some(v) -> v; None -> 0; };
     }
     i32 x = 10; i32 y = 20; i32 z = 0;
     borrow i32 r = first(&x, &y);
@@ -25,8 +25,8 @@ i32 main() {
     s.init(&storage[0], 2);
     {
         Option<borrow i32> slot = s.at(1);
-        case slot of { Some(v) -> ({ *v = 50; }); None -> _; };
+        case slot of { Some(v) -> ({ v = 50; }); None -> _; };
     }
-    i32 read = *s.at(1).unwrap_or(&z);
-    return picked + *r + read + total(bag); // 4 + 10 + 50 + 7 = 71
+    i32 read = s.at(1).unwrap_or(&z);
+    return picked + r + read + total(bag); // 4 + 10 + 50 + 7 = 71
 }
