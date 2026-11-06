@@ -1,0 +1,10 @@
+// A `borrow` parameter changes the caller's place, and a temporary is not one.
+enum Option<T> { None, Some(T) }
+
+void clear(borrow Option<i32> value) { value = None; }
+
+i32 main() {
+    Option<i32> unused = None;
+    clear(Some(1));
+    return 0;
+}

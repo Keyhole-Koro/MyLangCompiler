@@ -97,12 +97,16 @@ void collect_drop_bindings(CompilerContext *cc, ASTNode *node, bool is_param,
         break;
     case AST_FOR:
         collect_drop_bindings(cc, node->for_stmt.init, false, param_count, local_count);
+        collect_drop_bindings(cc, node->for_stmt.cond, false, param_count, local_count);
+        collect_drop_bindings(cc, node->for_stmt.inc, false, param_count, local_count);
         collect_drop_bindings(cc, node->for_stmt.body, false, param_count, local_count);
         break;
     case AST_WHILE:
+        collect_drop_bindings(cc, node->while_stmt.cond, false, param_count, local_count);
         collect_drop_bindings(cc, node->while_stmt.body, false, param_count, local_count);
         break;
     case AST_DO_WHILE:
+        collect_drop_bindings(cc, node->do_while_stmt.cond, false, param_count, local_count);
         collect_drop_bindings(cc, node->do_while_stmt.body, false, param_count, local_count);
         break;
     case AST_DEFER:
@@ -175,10 +179,11 @@ void emit_drop_flag(CompilerContext *cc, DropBinding *binding, bool active,
                     StringBuilder *sb) {
     (void)cc;
     if (!binding) return;
+    /* r1 stays: this also runs right after a call, on what it returned. */
     sb_append(sb, "  mov r3, bp\n");
     sb_append(sb, "  addis r3, %d\n", binding->flag_offset);
-    sb_append(sb, "  movi r1, %d\n", active ? 1 : 0);
-    sb_append(sb, "  store r3, r1\n");
+    sb_append(sb, "  movi r2, %d\n", active ? 1 : 0);
+    sb_append(sb, "  store r3, r2\n");
 }
 
 static void emit_drop_type_at(CompilerContext *cc, const char *base_type,

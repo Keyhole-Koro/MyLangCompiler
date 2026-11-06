@@ -1,0 +1,7 @@
+// The caller of an imported function need not name the parameter's type: the
+// layout and the variants come with the function.
+import library from "constructionArgument_lib.mln";
+
+i32 main() {
+    return library.read(Some(3)) * 10 + library.read(None);
+}

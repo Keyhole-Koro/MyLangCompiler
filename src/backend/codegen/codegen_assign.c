@@ -95,7 +95,8 @@ void gen_assign(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
         fprintf(stderr, "Codegen error: assignment to const lvalue is not allowed\n");
         exit(1);
     }
-    if (node->assign.left->type != AST_IDENTIFIER &&
+    bool construction = node->assign.is_construction;
+    if (node->assign.left->type != AST_IDENTIFIER && !construction &&
         expr_needs_drop(cc, node->assign.left)) {
         fprintf(stderr,
                 "Codegen error at %d:%d: replacing a droppable field or "
@@ -104,11 +105,11 @@ void gen_assign(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
                 node->assign.left->line, node->assign.left->col);
         exit(1);
     }
-    DropBinding *dest_drop = node->assign.left->type == AST_IDENTIFIER
-        ? find_drop_binding(cc, node->assign.left->identifier.name) : NULL;
+    DropBinding *dest_drop = node->assign.left->type == AST_IDENTIFIER || construction
+        ? drop_binding_for_expr(cc, node->assign.left) : NULL;
     DropBinding *source_drop = drop_binding_for_expr(cc, node->assign.right);
     bool self_move = dest_drop && source_drop == dest_drop;
-    DropBinding *old_value = self_move ? NULL : dest_drop;
+    DropBinding *old_value = self_move || construction ? NULL : dest_drop;
     bool literal = node->assign.right->type == AST_INIT_LIST &&
                    node->assign.right->init_list.struct_type_name;
     int total = aggregate_assign_size(cc, node->assign.left);

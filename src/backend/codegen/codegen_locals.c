@@ -27,6 +27,7 @@ int collect_locals(CompilerContext *cc, ASTNode *node, char **locals)
         break; }
     case AST_FOR:
         if (node->for_stmt.init) count += collect_locals(cc, node->for_stmt.init, locals ? (locals + count) : NULL);
+        if (node->for_stmt.cond) count += collect_locals(cc, node->for_stmt.cond, locals ? (locals + count) : NULL);
         if (node->for_stmt.body) count += collect_locals(cc, node->for_stmt.body, locals ? (locals + count) : NULL);
         if (node->for_stmt.inc) count += collect_locals(cc, node->for_stmt.inc, locals ? (locals + count) : NULL);
         break;

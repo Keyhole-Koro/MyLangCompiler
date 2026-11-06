@@ -53,6 +53,10 @@ static void lower_program(ParserContext *context, ASTNode *program) {
     /* Call names are final now, so `f(1)` against `void f(i32 a, i32 b = 2)`
      * can be completed to `f(1, 2)`. */
     fill_default_arguments(context, program);
+
+    /* Every callee is known by now, method or not, so a construction written
+     * as an argument can be built into a temporary of the parameter's type. */
+    lower_payload_call_arguments(context, program);
 }
 
 ASTNode *parse_program(Token **cur) {

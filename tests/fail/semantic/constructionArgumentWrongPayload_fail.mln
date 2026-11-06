@@ -1,0 +1,9 @@
+// A construction in an argument is built as the parameter's type, so what it
+// carries has to fit that type.
+enum Option<T> { None, Some(T) }
+
+i32 take(Option<i32> value) { return 0; }
+
+i32 main() {
+    return take(Some("seven"));
+}

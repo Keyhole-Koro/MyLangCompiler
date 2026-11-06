@@ -164,6 +164,7 @@ void free_ast(ASTNode *node) {
         case AST_STRUCT:
             free(node->struct_stmt.name);
             free(node->struct_stmt.package);
+            free_ast(node->struct_stmt.payload_enum);
             for (int i = 0; i < node->struct_stmt.type_param_count; i++)
                 free(node->struct_stmt.type_params[i]);
             free(node->struct_stmt.type_params);

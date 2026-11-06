@@ -307,6 +307,33 @@ Only a number literal counts as a constant condition.
 - `enum_decl` -> `enum IDENTIFIER { IDENTIFIER ( = NUMBER )? ( , IDENTIFIER ( = NUMBER )? )* ,? } ;`
 - `typedef_stmt` -> `typedef type IDENTIFIER ;` | `typedef struct ... IDENTIFIER ;`
 
+### Variant constructions
+
+`Some(x)`, `Ok(x)`, `Err(x)` and `None` are built where a place of their type is
+known: an initialiser, an assignment, a `return`, a struct literal's field, the
+payload of another construction, and a call argument. Anywhere else, such as an
+operand, is an error.
+
+```mylang
+void set_focus(Option<NodeId> id);
+
+set_focus(Some(id));
+open_menu(x, y, items, on_menu, None);
+nested(Some(Some(1)));
+```
+
+An argument is built as the parameter's type, for a function of this file or an
+imported one, a method, an instance of a generic and a function value alike. The
+caller does not have to name that type or import `Option`. A variadic tail has
+no type to build as, and a `borrow` or pointer parameter needs a place, not a
+temporary; both are errors. What a construction carries is checked like any
+store into the parameter's payload field.
+
+It runs where it is written: only in the `case` arm, branch or `&&`/`||` operand
+it is in, and on every pass of a loop condition or increment. Within one
+statement it runs ahead of the statement's other expressions, like `f()?`, apart
+from the earlier arguments of its own call, which keep running first.
+
 ## 4. Type System
 
 Function values carry their complete signature:

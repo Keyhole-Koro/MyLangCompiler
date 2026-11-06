@@ -803,12 +803,12 @@ static ASTNode *lower_payload_enum(ASTNode *node) {
      * is still exported once lowered to its backing struct. Within a single
      * file this never showed: only cross-file lookups (an importer asking
      * whether this struct's declaration is exported) ever read it. Move
-     * `package` rather than copy it; it's about to be freed with the rest
-     * of `node`. */
+     * `package` rather than copy it: `node` lives on only for its variant
+     * table. */
     result->struct_stmt.is_exported = node->enum_stmt.is_exported;
     result->struct_stmt.package = node->enum_stmt.package;
     node->enum_stmt.package = NULL;
-    free_ast(node);
+    result->struct_stmt.payload_enum = node;
     return result;
 }
 

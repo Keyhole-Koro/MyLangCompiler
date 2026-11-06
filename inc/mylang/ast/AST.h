@@ -128,7 +128,12 @@ struct ASTNode {
         // `subscript` marks the `a + i` that `a[i]` lowers to, so the index of
         // a fixed-size array can be range-checked.
         struct { TokenKind op; ASTNode *left, *right; int subscript; } binary;
-        struct { ASTNode *left, *right; } assign;
+        struct {
+            ASTNode *left, *right;
+            /* A payload store into a value being built: no old value to drop,
+             * and the value it stores now belongs to the place's owner. */
+            int is_construction;
+        } assign;
         struct {
             ASTNode *base_type;
             int pointer_level; // number of pointers
@@ -271,6 +276,10 @@ struct ASTNode {
              * clearing this field. No later pass should ever see it set --
              * parser_check.c's ensure_no_unresolved_method_calls() checks. */
             ASTNode *recv;
+            /* `Some(x)` as a call argument, known to name a payload variant.
+             * It stays a call until lower_payload_call_arguments() can ask
+             * the callee what it builds. */
+            int is_construction;
         } call;
         struct {
             char *tag;
@@ -314,6 +323,10 @@ struct ASTNode {
              * type; this unit's own instantiation of the same generic reuses
              * it (parser_instantiate.c). */
             int is_imported_instance;
+            /* Owned. The enum this struct is the lowered layout of, or NULL:
+             * a layout alone cannot say a variant's tag or whether it carries
+             * anything, and it may be all an importer has. */
+            ASTNode *payload_enum;
         } struct_stmt;
         
         struct {

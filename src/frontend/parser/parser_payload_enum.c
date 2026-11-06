@@ -2,6 +2,7 @@
 #include "mylang/frontend/parser_ast_internal.h"
 #include "mylang/frontend/module.h"
 #include "mylang/frontend/parser_trait_internal.h"
+#include "mylang/frontend/parser_annot_internal.h"
 
 /* Lowers payload enum *uses* onto the struct layout parser_instantiate.c gives
  * their declarations.
@@ -21,6 +22,12 @@
  * there is nowhere to put `Ok(5)` except directly into the variable it is
  * initialising. `T r = Ok(5);` therefore becomes `T r;` followed by the two
  * field stores, and a plain assignment expands the same way.
+ *
+ * A call argument has no such variable, and its type is the parameter's, which
+ * for a method is not known until resolve_method_calls() has run. So the first
+ * pass leaves `f(Some(x))` alone, and lower_payload_call_arguments() walks the
+ * same tree again after name rewriting and builds it into a temporary:
+ * `T __mlg_arg_N;`, the field stores, `f(__mlg_arg_N);`.
  *
  * A pattern binding is substituted rather than copied: `Ok(x) -> x + 1`
  * becomes `0 -> r.Ok + 1`, with every `x` in the arm replaced by the member
@@ -68,6 +75,12 @@ typedef struct {
      * the case, so the call is evaluated exactly once. */
     ASTNode **pending_hoists;
     int pending_hoist_count;
+    /* Where import_type_layout() puts the next layout: ahead of everything
+     * else, the way splice_imported_plain_types() does, and in order. */
+    int layout_count;
+    /* lower_payload_call_arguments() is walking: `items` is empty, and every
+     * construction left is a call argument. */
+    int lowering_arguments;
 } VariantTable;
 
 static void copy_display_name(char *out, size_t size, const char *name);
@@ -338,6 +351,17 @@ static void build_construction(VariantTable *table, ASTNode *dest, ASTNode *use,
                                             ast_clone(payload)));
 }
 
+/* A declaration or a return builds into a new place. */
+static void mark_payload_stores(ASTNode *statement) {
+    if (!statement) return;
+    if (statement->type == AST_EXPR_STMT) {
+        statement->expr_stmt.expr->assign.is_construction = 1;
+    } else if (statement->type == AST_BLOCK) {
+        for (int i = 0; i < statement->block.count; i++)
+            mark_payload_stores(statement->block.stmts[i]);
+    }
+}
+
 typedef struct {
     const char *name;
     ASTNode *replacement;
@@ -440,17 +464,23 @@ static void import_type_layout(VariantTable *table, Module *module, const char *
         if (node->type == AST_STRUCT) {
             for (int m = 0; m < node->struct_stmt.member_count; m++) {
                 ASTNode *member = node->struct_stmt.members[m];
-                const char *dependency = member && member->type == AST_VAR_DECL
-                    ? type_base_name(member->var_decl.var_type) : NULL;
+                ASTNode *type = member && member->type == AST_VAR_DECL
+                    ? member->var_decl.var_type : NULL;
+                while (type && type->type == AST_TYPE_ARRAY) type = type->type_array.element_type;
+                const char *dependency = type_base_name(type);
                 if (dependency && strcmp(dependency, name) != 0)
                     import_type_layout(table, module, dependency);
             }
         }
 
-        table->program->block.stmts = realloc(
-            table->program->block.stmts,
-            sizeof(ASTNode *) * (size_t)(table->program->block.count + 1));
-        table->program->block.stmts[table->program->block.count++] = ast_clone(node);
+        ASTNode *block = table->program;
+        block->block.stmts = realloc(block->block.stmts,
+                                     sizeof(ASTNode *) * (size_t)(block->block.count + 1));
+        memmove(block->block.stmts + table->layout_count + 1,
+                block->block.stmts + table->layout_count,
+                sizeof(ASTNode *) * (size_t)(block->block.count - table->layout_count));
+        block->block.stmts[table->layout_count++] = ast_clone(node);
+        block->block.count++;
         return;
     }
 }
@@ -1238,6 +1268,7 @@ static void rewrite_payload_block(VariantTable *table, ASTNode *block) {
         /* Decide before anything is freed: the assignment form releases the
          * statement that would otherwise answer this. */
         int keeps_declaration = stmt->type == AST_VAR_DECL;
+        if (keeps_declaration || is_return) mark_payload_stores(payload_store);
 
         flush_pending_hoists(table, &out, &count);
         out = realloc(out, sizeof(ASTNode *) * (count + 4));
@@ -1272,14 +1303,59 @@ static void rewrite_payload_block(VariantTable *table, ASTNode *block) {
     table->pending_hoist_count = outer_hoist_count;
 }
 
+/* What `variant` of the enum `name` carries, while enums are still enums. */
+static ASTNode *enum_payload_type(VariantTable *table, const char *name, const char *variant) {
+    for (int i = 0; i < table->program->block.count; i++) {
+        ASTNode *node = table->program->block.stmts[i];
+        if (!node || node->type != AST_ENUM || strcmp(node->enum_stmt.name, name) != 0) continue;
+        for (int m = 0; m < node->enum_stmt.member_count; m++) {
+            ASTNode *member = node->enum_stmt.members[m];
+            if (member && strcmp(member->enum_member.name, variant) == 0)
+                return member->enum_member.payload_type;
+        }
+    }
+    return NULL;
+}
+
+/* The type a named struct literal gives field `index`. */
+static ASTNode *literal_field_type(VariantTable *table, ASTNode *literal, int index) {
+    const char *field = literal->init_list.field_names ? literal->init_list.field_names[index] : NULL;
+    if (!field) return NULL;
+    for (int i = 0; i < table->program->block.count; i++) {
+        ASTNode *node = table->program->block.stmts[i];
+        ASTNode **members = NULL;
+        int count = 0;
+        if (node && node->type == AST_STRUCT &&
+            strcmp(node->struct_stmt.name, literal->init_list.struct_type_name) == 0) {
+            members = node->struct_stmt.members;
+            count = node->struct_stmt.member_count;
+        } else if (node && node->type == AST_TYPEDEF_STRUCT &&
+                   strcmp(node->typedef_struct.typedef_name, literal->init_list.struct_type_name) == 0) {
+            members = node->typedef_struct.members;
+            count = node->typedef_struct.member_count;
+        }
+        for (int m = 0; m < count; m++) {
+            if (members[m] && members[m]->type == AST_VAR_DECL &&
+                strcmp(members[m]->var_decl.name, field) == 0)
+                return members[m]->var_decl.var_type;
+        }
+    }
+    return NULL;
+}
+
 /* Materialize a payload enum construction as its lowered tagged struct.  A
  * struct-literal field is already a concrete aggregate destination, so unlike
  * ordinary construction this form needs no temporary or sequence of stores.
- * Recurse for payloads such as `Some(Other::None)`. */
-static ASTNode *make_payload_struct_literal(VariantTable *table, ASTNode *use) {
+ * Recurse for payloads such as `Some(Other::None)`.
+ *
+ * `type` is the field's declared type. Every specialization of a generic enum
+ * has its own entry in the table, so the variant alone would build whichever
+ * specialization came first. */
+static ASTNode *make_payload_struct_literal(VariantTable *table, ASTNode *use, ASTNode *type) {
     VariantTag *variant = variant_use(table, use);
     check_unambiguous(table, variant, use);
     if (variant->has_payload) check_single_payload(table, use);
+    const char *enum_name = type_base_name(type) ? type_base_name(type) : variant->enum_name;
 
     int count = variant->has_payload ? 2 : 1;
     char **field_names = malloc(sizeof(char *) * (size_t)count);
@@ -1293,37 +1369,355 @@ static ASTNode *make_payload_struct_literal(VariantTable *table, ASTNode *use) {
         field_names[1] = strdup(variant->variant);
         ASTNode *payload = use->call.args[0];
         fields[1] = variant_use(table, payload)
-            ? make_payload_struct_literal(table, payload)
+            ? make_payload_struct_literal(table, payload,
+                                          enum_payload_type(table, enum_name, variant->variant))
             : ast_clone(payload);
     }
-    return new_struct_init_list(variant->enum_name, field_names, fields, count);
+    return new_struct_init_list(enum_name, field_names, fields, count);
 }
 
-static void find_hoisted_case(ASTNode **slot, void *user_data) {
+static void hoist_statement(VariantTable *table, ASTNode *statement) {
+    table->pending_hoists = realloc(table->pending_hoists,
+                                    sizeof(ASTNode *) * (size_t)(table->pending_hoist_count + 1));
+    table->pending_hoists[table->pending_hoist_count++] = statement;
+}
+
+/* A generated store reports its errors where the construction was written. */
+static ASTNode *located_store(ASTNode *place, ASTNode *value, ASTNode *at) {
+    ASTNode *assign = new_assign(place, value);
+    assign->line = place->line = at->line;
+    assign->col = place->col = at->col;
+    ASTNode *statement = new_expr_stmt(assign);
+    statement->line = at->line;
+    statement->col = at->col;
+    return statement;
+}
+
+static ASTNode *program_struct(ASTNode *program, const char *name) {
+    for (int i = 0; program && i < program->block.count; i++) {
+        ASTNode *node = program->block.stmts[i];
+        if (node && node->type == AST_STRUCT && node->struct_stmt.name &&
+            strcmp(node->struct_stmt.name, name) == 0)
+            return node;
+    }
+    return NULL;
+}
+
+/* A file can pass None to `set_focus(Option<NodeId>)` without naming the type.
+ * The instance's name is the same in every module that has one. */
+static void import_type_layout_from_graph(VariantTable *table, const char *name) {
+    FrontendSession *session = table->context->session;
+    if (!session || !session->graph) return;
+    for (int i = 0; i < session->graph->module_count; i++) {
+        Module *module = session->graph->modules[i];
+        if (module->state != MODULE_LOADED || !program_has_type_layout(module->program, name))
+            continue;
+        import_type_layout(table, module, name);
+        return;
+    }
+}
+
+/* The lowered layout behind `type`, when that is a payload enum. An alias is
+ * followed, and a layout this unit has not seen yet is brought in. */
+static ASTNode *payload_layout(VariantTable *table, ASTNode *type) {
+    for (int steps = 0; steps < 16; steps++) {
+        const char *name = type_base_name(type);
+        if (!name) return NULL;
+        ASTNode *found = program_struct(table->program, name);
+        if (!found && !program_has_type_layout(table->program, name)) {
+            import_type_layout_from_graph(table, name);
+            found = program_struct(table->program, name);
+        }
+        if (found) return found->struct_stmt.payload_enum ? found : NULL;
+
+        ASTNode *alias = NULL;
+        for (int i = 0; i < table->program->block.count && !alias; i++) {
+            ASTNode *node = table->program->block.stmts[i];
+            if (node && node->type == AST_TYPEDEF && !node->typedef_stmt.is_newtype &&
+                strcmp(node->typedef_stmt.alias, name) == 0)
+                alias = node->typedef_stmt.src_type;
+        }
+        if (!alias) return NULL;
+        type = alias;
+    }
+    return NULL;
+}
+
+static ASTNode *layout_member_type(ASTNode *layout, const char *name) {
+    for (int i = 0; i < layout->struct_stmt.member_count; i++) {
+        ASTNode *member = layout->struct_stmt.members[i];
+        if (member && member->type == AST_VAR_DECL && strcmp(member->var_decl.name, name) == 0)
+            return member->var_decl.var_type;
+    }
+    return NULL;
+}
+
+/* What `node` is written as, if it could name a variant at all. */
+static const char *construction_name(ASTNode *node) {
+    if (!node) return NULL;
+    if (node->type == AST_CALL && !node->call.recv) return node->call.name;
+    return node->type == AST_IDENTIFIER ? node->identifier.name : NULL;
+}
+
+/* The variant of `layout`'s enum that `use` spells, or NULL. `use` needs no
+ * entry in a variant table: the type says which enum is meant. */
+static ASTNode *layout_variant(ASTNode *layout, ASTNode *use) {
+    const char *name = construction_name(use);
+    if (!name) return NULL;
+    ASTNode *payload_enum = layout->struct_stmt.payload_enum;
+    const char *separator = strstr(name, "::");
+    if (separator) {
+        char want[64], got[64];
+        snprintf(want, sizeof(want), "%.*s", (int)(separator - name), name);
+        copy_display_name(got, sizeof(got), payload_enum->enum_stmt.name);
+        if (strcmp(want, got) != 0) return NULL;
+        name = separator + 2;
+    }
+    for (int i = 0; i < payload_enum->enum_stmt.member_count; i++) {
+        ASTNode *member = payload_enum->enum_stmt.members[i];
+        if (member && strcmp(member->enum_member.name, name) == 0 &&
+            (member->enum_member.payload_type != NULL) == (use->type == AST_CALL))
+            return member;
+    }
+    return NULL;
+}
+
+/* The tag and payload stores of `use`, into `dest` of the enum `layout` lays
+ * out. A payload that is itself a construction goes into its own field. */
+static void hoist_construction_stores(VariantTable *table, ASTNode *dest, ASTNode *layout,
+                                      ASTNode *variant, ASTNode *use) {
+    char *text = tag_text(variant->enum_member.resolved_value);
+    hoist_statement(table, located_store(new_member_access(ast_clone(dest), "__tag"),
+                                         new_number(text), use));
+    free(text);
+    if (!variant->enum_member.payload_type) return;
+    check_single_payload(table, use);
+
+    ASTNode *field = new_member_access(ast_clone(dest), variant->enum_member.name);
+    ASTNode *payload = use->call.args[0];
+    ASTNode *field_type = layout_member_type(layout, variant->enum_member.name);
+    ASTNode *field_layout = payload_layout(table, field_type);
+    ASTNode *nested = field_layout ? layout_variant(field_layout, payload) : NULL;
+    if (nested) {
+        hoist_construction_stores(table, field, field_layout, nested, payload);
+        free_ast(field);
+    } else {
+        ASTNode *store = located_store(field, ast_clone(payload), payload);
+        mark_payload_stores(store);
+        hoist_statement(table, store);
+    }
+}
+
+/* `f(Some(x))`: hoists `T __mlg_arg_N;` and the stores, and leaves the name. */
+static void hoist_construction(VariantTable *table, ASTNode **slot, ASTNode *type,
+                               ASTNode *layout, ASTNode *variant) {
+    ASTNode *use = *slot;
+    char name[32];
+    snprintf(name, sizeof(name), "__mlg_arg_%d", table->temp_counter++);
+    ASTNode *temporary_type = ast_clone(type);
+    temporary_type->type_node.type_modifiers &= ~TYPEMOD_CONST;
+    ASTNode *declaration = new_var_decl(temporary_type, name, NULL);
+    declaration->line = use->line;
+    declaration->col = use->col;
+    hoist_statement(table, declaration);
+
+    ASTNode *dest = new_identifier(name);
+    dest->line = use->line;
+    dest->col = use->col;
+    hoist_construction_stores(table, dest, layout, variant, use);
+    free_ast(use);
+    *slot = dest;
+}
+
+/* The type a name was declared with in the function being walked, or as a
+ * global. */
+static ASTNode *declared_value_type(VariantTable *table, const char *name) {
+    ASTNode *fn = table->current_function;
+    ASTNode *type = NULL;
+    for (int i = 0; fn && i < fn->fundef.param_count && !type; i++)
+        type = find_local_type(fn->fundef.params[i], name);
+    if (!type && fn) type = find_local_type(fn->fundef.body, name);
+    for (int i = 0; i < table->program->block.count && !type; i++) {
+        ASTNode *node = table->program->block.stmts[i];
+        if (node && node->type == AST_VAR_DECL && strcmp(node->var_decl.name, name) == 0)
+            type = node->var_decl.var_type;
+    }
+    return type;
+}
+
+/* What a call's arguments go into: a function's parameters, or the parameter
+ * types of the function value it calls through. Returns how many of them have
+ * a type of their own (a variadic tail has none). */
+static int callee_parameters(VariantTable *table, ASTNode *call, ASTNode ***params) {
+    ASTNode *fn = callee_declaration(table->context, table->program, call->call.name);
+    if (fn) {
+        *params = fn->fundef.params;
+        return fn->fundef.is_variadic ? fn->fundef.param_count - 1 : fn->fundef.param_count;
+    }
+    ASTNode *type = declared_value_type(table, call->call.name);
+    for (int steps = 0; steps < 16 && type && type->type == AST_TYPE; steps++) {
+        const char *name = type_base_name(type);
+        ASTNode *alias = NULL;
+        for (int i = 0; name && i < table->program->block.count && !alias; i++) {
+            ASTNode *node = table->program->block.stmts[i];
+            if (node && node->type == AST_TYPEDEF && strcmp(node->typedef_stmt.alias, name) == 0)
+                alias = node->typedef_stmt.src_type;
+        }
+        type = alias;
+    }
+    if (!type || type->type != AST_TYPE_FUNCTION) return 0;
+    *params = type->function_type.param_types;
+    return type->function_type.is_variadic ? type->function_type.param_count - 1
+                                           : type->function_type.param_count;
+}
+
+static ASTNode *parameter_type(ASTNode *param) {
+    return param && param->type == AST_PARAM ? param->param.type : param;
+}
+
+static void find_side_effect(ASTNode **slot, void *user_data) {
     ASTNode *node = *slot;
     int *found = user_data;
-    if (!node || *found || node->type == AST_STMT_EXPR || node->type == AST_FUN_LITERAL) return;
-    if (node->type == AST_CASE && !is_repeatable_target(node->case_expr.target)) {
+    if (!node || *found) return;
+    if ((node->type == AST_CALL && !node->call.is_construction) || node->type == AST_ASSIGN ||
+        (node->type == AST_UNARY && (node->unary.op == INC || node->unary.op == DEC ||
+                                     node->unary.op == POST_INC || node->unary.op == POST_DEC))) {
         *found = 1;
         return;
     }
-    ast_visit_children(node, find_hoisted_case, user_data);
+    ast_visit_children(node, find_side_effect, user_data);
 }
 
-/* A `case` on a call evaluates the call into a temporary ahead of its
- * statement, and `f()?` is such a case. Where an expression runs only sometimes
- * or more than once, ahead of the statement is the wrong place: its own block
- * keeps the temporary with it. */
-static void keep_hoists_here(ASTNode **slot) {
+/* An argument ahead of a construction has to keep running first. */
+static void hoist_earlier_argument(VariantTable *table, ASTNode **slot, ASTNode *type) {
     int found = 0;
-    find_hoisted_case(slot, &found);
-    if (!found) return;
-    ASTNode **statements = malloc(sizeof(ASTNode *));
-    statements[0] = new_yield(*slot);
-    ASTNode *wrapped = new_stmt_expr(new_block(statements, 1));
-    wrapped->line = (*slot)->line;
-    wrapped->col = (*slot)->col;
-    *slot = wrapped;
+    find_side_effect(slot, &found);
+    if (!found || !type) return;
+    char name[32];
+    snprintf(name, sizeof(name), "__mlg_arg_%d", table->temp_counter++);
+    ASTNode *declaration = new_var_decl(ast_clone(type), name, *slot);
+    declaration->line = (*slot)->line;
+    declaration->col = (*slot)->col;
+    hoist_statement(table, declaration);
+    ASTNode *reference = new_identifier(name);
+    reference->line = declaration->line;
+    reference->col = declaration->col;
+    *slot = reference;
+}
+
+static void argument_error(VariantTable *table, ASTNode *call, int index, ASTNode *argument,
+                           const char *problem) {
+    char message[384];
+    snprintf(message, sizeof(message), "'%s' as argument %d of '%s': %s",
+             construction_name(argument), index + 1, call->call.name, problem);
+    payload_error(table->context, argument, message);
+}
+
+/* The parameter's enum if `argument` names one of its variants, reporting a
+ * construction that cannot go there. */
+static ASTNode *argument_variant(VariantTable *table, ASTNode *call, int index, ASTNode *type,
+                                 ASTNode **layout) {
+    ASTNode *argument = call->call.args[index];
+    int written_as_variant = argument->type == AST_CALL && argument->call.is_construction;
+    *layout = type && type->type == AST_TYPE ? payload_layout(table, type) : NULL;
+    ASTNode *variant = *layout ? layout_variant(*layout, argument) : NULL;
+    if (variant && argument->type == AST_IDENTIFIER &&
+        declared_value_type(table, argument->identifier.name))
+        return NULL; /* a variable that shares the variant's name */
+
+    if (written_as_variant && !type)
+        argument_error(table, call, index, argument,
+                       "the parameter has no type to build it as");
+    if (written_as_variant && !*layout)
+        argument_error(table, call, index, argument,
+                       "the parameter does not take a payload enum");
+    if (written_as_variant && !variant)
+        argument_error(table, call, index, argument,
+                       "it is not a variant of the parameter's enum");
+    if (variant && (type->type_node.pointer_level || type->type_node.borrow_kind != REFKIND_NONE))
+        argument_error(table, call, index, argument,
+                       "a temporary has no place to lend; put it in a variable and pass &variable");
+    return variant;
+}
+
+static void lower_call_constructions(VariantTable *table, ASTNode *call) {
+    for (int i = 0; i < call->call.arg_count; i++)
+        rewrite_payload_node(&call->call.args[i], table);
+    if (call->call.is_construction) return; /* built by whatever holds it */
+
+    ASTNode **params = NULL;
+    int known = callee_parameters(table, call, &params);
+
+    int last = -1;
+    for (int i = 0; i < call->call.arg_count; i++) {
+        ASTNode *layout = NULL;
+        ASTNode *type = i < known ? parameter_type(params[i]) : NULL;
+        if (argument_variant(table, call, i, type, &layout)) last = i;
+    }
+    for (int i = 0; i <= last; i++) {
+        ASTNode *layout = NULL;
+        ASTNode *type = i < known ? parameter_type(params[i]) : NULL;
+        ASTNode *variant = argument_variant(table, call, i, type, &layout);
+        if (variant) hoist_construction(table, &call->call.args[i], type, layout, variant);
+        else hoist_earlier_argument(table, &call->call.args[i], type);
+    }
+}
+
+/* The temporaries an expression hoists go ahead of its statement. Where the
+ * expression runs only sometimes or more than once, ahead of the statement is
+ * the wrong place: its own block keeps them with it. */
+static void keep_hoists_here(VariantTable *table, ASTNode **slot) {
+    if (!*slot) return;
+    ASTNode **outer_hoists = table->pending_hoists;
+    int outer_hoist_count = table->pending_hoist_count;
+    table->pending_hoists = NULL;
+    table->pending_hoist_count = 0;
+
+    rewrite_payload_node(slot, table);
+
+    if (table->pending_hoist_count) {
+        int count = table->pending_hoist_count;
+        ASTNode **statements = malloc(sizeof(ASTNode *) * (size_t)(count + 1));
+        memcpy(statements, table->pending_hoists, sizeof(ASTNode *) * (size_t)count);
+        statements[count] = new_yield(*slot);
+        ASTNode *wrapped = new_stmt_expr(new_block(statements, count + 1));
+        wrapped->line = (*slot)->line;
+        wrapped->col = (*slot)->col;
+        *slot = wrapped;
+        free(table->pending_hoists);
+    }
+    table->pending_hoists = outer_hoists;
+    table->pending_hoist_count = outer_hoist_count;
+}
+
+/* The body of an `if`, a loop or a `defer` may be one bare statement, and what
+ * that statement hoists must stay inside it: `else if (f()?)`, `while (c)
+ * g(None);`. A block is what can hold them. */
+static void rewrite_body(VariantTable *table, ASTNode **slot) {
+    if (!*slot) return;
+    if ((*slot)->type != AST_BLOCK) {
+        ASTNode *statement = *slot;
+        ASTNode **statements = malloc(sizeof(ASTNode *));
+        statements[0] = statement;
+        *slot = new_block(statements, 1);
+        (*slot)->line = statement->line;
+        (*slot)->col = statement->col;
+    }
+    rewrite_payload_node(slot, table);
+}
+
+/* The first pass leaves a construction in an argument for
+ * lower_payload_call_arguments(), and only looks inside it. */
+static void keep_construction_argument(VariantTable *table, ASTNode **slot) {
+    ASTNode *argument = *slot;
+    if (variant_bare(table, argument)) return;
+    if (!variant_call(table, argument)) {
+        rewrite_payload_node(slot, table);
+        return;
+    }
+    argument->call.is_construction = 1;
+    for (int i = 0; i < argument->call.arg_count; i++)
+        keep_construction_argument(table, &argument->call.args[i]);
 }
 
 static void rewrite_payload_node(ASTNode **slot, void *user_data) {
@@ -1332,25 +1726,38 @@ static void rewrite_payload_node(ASTNode **slot, void *user_data) {
     VariantTable *table = user_data;
 
     switch (node->type) {
-    case AST_CASE:
-        for (int i = 0; i < node->case_expr.case_count; i++)
-            keep_hoists_here(&node->case_expr.cases[i].expr);
-        keep_hoists_here(&node->case_expr.default_expr);
-        break;
     case AST_TERNARY:
-        keep_hoists_here(&node->ternary.then_expr);
-        keep_hoists_here(&node->ternary.else_expr);
-        break;
+        rewrite_payload_node(&node->ternary.cond, table);
+        keep_hoists_here(table, &node->ternary.then_expr);
+        keep_hoists_here(table, &node->ternary.else_expr);
+        return;
     case AST_BINARY:
-        if (node->binary.op == LAND || node->binary.op == LOR) keep_hoists_here(&node->binary.right);
-        break;
+        if (node->binary.op != LAND && node->binary.op != LOR) break;
+        rewrite_payload_node(&node->binary.left, table);
+        keep_hoists_here(table, &node->binary.right);
+        return;
+    case AST_IF:
+        rewrite_payload_node(&node->if_stmt.cond, table);
+        rewrite_body(table, &node->if_stmt.then_stmt);
+        rewrite_body(table, &node->if_stmt.else_stmt);
+        return;
     case AST_WHILE:
-        keep_hoists_here(&node->while_stmt.cond);
-        break;
+        keep_hoists_here(table, &node->while_stmt.cond);
+        rewrite_body(table, &node->while_stmt.body);
+        return;
+    case AST_DO_WHILE:
+        rewrite_body(table, &node->do_while_stmt.body);
+        keep_hoists_here(table, &node->do_while_stmt.cond);
+        return;
     case AST_FOR:
-        keep_hoists_here(&node->for_stmt.cond);
-        keep_hoists_here(&node->for_stmt.inc);
-        break;
+        rewrite_payload_node(&node->for_stmt.init, table);
+        keep_hoists_here(table, &node->for_stmt.cond);
+        keep_hoists_here(table, &node->for_stmt.inc);
+        rewrite_body(table, &node->for_stmt.body);
+        return;
+    case AST_DEFER:
+        rewrite_body(table, &node->defer_stmt.body);
+        return;
     default:
         break;
     }
@@ -1380,7 +1787,12 @@ static void rewrite_payload_node(ASTNode **slot, void *user_data) {
      * that cannot hold one, and the check below would reject them. */
     if (node->type == AST_CASE) {
         rewrite_payload_case(table, node);
-        ast_visit_children(node, rewrite_payload_node, user_data);
+        rewrite_payload_node(&node->case_expr.target, table);
+        for (int i = 0; i < node->case_expr.case_count; i++) {
+            rewrite_payload_node(&node->case_expr.cases[i].key, table);
+            keep_hoists_here(table, &node->case_expr.cases[i].expr);
+        }
+        keep_hoists_here(table, &node->case_expr.default_expr);
         return;
     }
 
@@ -1395,13 +1807,12 @@ static void rewrite_payload_node(ASTNode **slot, void *user_data) {
             ASTNode *value = node->init_list.elements[i];
             VariantTag *variant = variant_use(table, value);
             if (!variant) continue;
-            ASTNode *replacement = make_payload_struct_literal(table, value);
+            ASTNode *replacement = make_payload_struct_literal(
+                table, value, literal_field_type(table, node, i));
             free_ast(value);
             node->init_list.elements[i] = replacement;
         }
     }
-
-    ast_visit_children(node, rewrite_payload_node, user_data);
 
     /* A construction anywhere else has no destination to store into. Only the
      * carrying spelling is diagnosed: a bare variant is just an identifier, and
@@ -1410,26 +1821,55 @@ static void rewrite_payload_node(ASTNode **slot, void *user_data) {
         char message[256];
         snprintf(message, sizeof(message),
                  "'%s' constructs a payload enum, which can only appear as the whole "
-                 "right-hand side of an assignment or an initialiser",
+                 "right-hand side of an assignment or an initialiser, or as a call argument",
                  node->call.name);
         payload_error(table->context, node, message);
     }
+
+    if (node->type == AST_CALL && table->lowering_arguments) {
+        lower_call_constructions(table, node);
+        return;
+    }
+    if (node->type == AST_CALL) {
+        for (int i = 0; i < node->call.arg_count; i++)
+            keep_construction_argument(table, &node->call.args[i]);
+        rewrite_payload_node(&node->call.recv, table);
+        return;
+    }
+
+    ast_visit_children(node, rewrite_payload_node, user_data);
+}
+
+/* Walks a copy of the list: a layout imported on the way lands in the program. */
+static void rewrite_program(VariantTable *table) {
+    int count = table->program->block.count;
+    ASTNode **nodes = malloc(sizeof(ASTNode *) * (size_t)(count ? count : 1));
+    memcpy(nodes, table->program->block.stmts, sizeof(ASTNode *) * (size_t)count);
+    for (int i = 0; i < count; i++) {
+        if (!nodes[i] || nodes[i]->type == AST_ENUM) continue;
+        rewrite_payload_node(&nodes[i], table);
+    }
+    free(nodes);
 }
 
 /* Runs after specialization, so every payload enum in the program is concrete
  * and its variants carry final tags, and before the declarations themselves are
  * lowered to structs. */
 void lower_payload_enum_uses(ParserContext *context, ASTNode *program) {
-    VariantTable table = {NULL, 0, context, program, NULL, NULL, 0, NULL, 0};
+    VariantTable table = {.context = context, .program = program};
     collect_variants(&table, program);
     if (table.count == 0) return;
 
-    for (int i = 0; i < program->block.count; i++) {
-        ASTNode *node = program->block.stmts[i];
-        if (!node || node->type == AST_ENUM) continue;
-        rewrite_payload_node(&program->block.stmts[i], &table);
-    }
+    rewrite_program(&table);
 
     for (int i = 0; i < table.count; i++) free(table.items[i].variant);
     free(table.items);
+}
+
+/* Runs once call names are final, so a callee can be looked up whatever it
+ * was written as. The walk is the one above, to the same hoists; every other
+ * construction is gone by now, which leaves it nothing else to do. */
+void lower_payload_call_arguments(ParserContext *context, ASTNode *program) {
+    VariantTable table = {.context = context, .program = program, .lowering_arguments = 1};
+    rewrite_program(&table);
 }

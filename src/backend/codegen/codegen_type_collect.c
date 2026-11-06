@@ -21,6 +21,7 @@ int collect_local_type_info(CompilerContext *cc, ASTNode *node, LocalInfo *arr) 
         break;
     case AST_FOR:
         if (node->for_stmt.init) n += collect_local_type_info(cc, node->for_stmt.init, arr ? (arr + n) : NULL);
+        if (node->for_stmt.cond) n += collect_local_type_info(cc, node->for_stmt.cond, arr ? (arr + n) : NULL);
         n += collect_local_type_info(cc, node->for_stmt.body, arr ? (arr + n) : NULL);
         if (node->for_stmt.inc) n += collect_local_type_info(cc, node->for_stmt.inc, arr ? (arr + n) : NULL);
         break;

@@ -34,6 +34,11 @@ crossModuleResultReturn|149|succeed/enum/cross_module_result_main.mln,succeed/en
 crossModulePayloadEnum|1156|succeed/enum/cross_module_payload_enum_main.mln,succeed/enum/cross_module_payload_enum_lib.mln
 qualifiedEnumVariant|17|succeed/enum/qualifiedEnumVariant.mln
 payloadCaseHoist|179|succeed/enum/payloadCaseHoist.mln
+constructionArgument|1870|succeed/enum/constructionArgument.mln,succeed/enum/constructionArgument_lib.mln,../../MyStdLib/core/option.mln,../../MyStdLib/core/result.mln
+constructionArgumentUnnamed|29|succeed/enum/constructionArgumentUnnamed.mln,succeed/enum/constructionArgument_lib.mln,../../MyStdLib/core/option.mln
+constructionArgumentWhereWritten|1456132321|succeed/enum/constructionArgumentWhereWritten.mln,../../MyStdLib/core/option.mln
+constructionArgumentOwned|1111111|succeed/enum/constructionArgumentOwned.mln,../../MyStdLib/core/option.mln,../../MyStdLib/core/result.mln
+constructionInLiteralField|431321|succeed/enum/constructionInLiteralField.mln,../../MyStdLib/core/option.mln
 unitResult|10|succeed/enum/unitResult.mln
 exportedCallInCast|16|succeed/expr/exportedCallInCast.unsafe.mln
 simpleFunc|15|succeed/function/simpleFunc.mln

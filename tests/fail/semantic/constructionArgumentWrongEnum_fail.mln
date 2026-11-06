@@ -1,0 +1,10 @@
+// The parameter says which enum is being built.
+enum Option<T> { None, Some(T) }
+enum Result<T, E> { Ok(T), Err(E) }
+
+i32 take(Option<i32> value) { return 0; }
+
+i32 main() {
+    Result<i32, i32> unused = Ok(1);
+    return take(Ok(1));
+}

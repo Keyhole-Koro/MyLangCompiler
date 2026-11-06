@@ -191,6 +191,7 @@ ASTNode *ast_clone(const ASTNode *src) {
         ARRAY(dom_element.children, dom_element.child_count); break;
     case AST_STRUCT:
         STR(struct_stmt.name); STR(struct_stmt.package); ARRAY(struct_stmt.members, struct_stmt.member_count);
+        n->struct_stmt.payload_enum = ast_clone(src->struct_stmt.payload_enum);
         STRINGS(struct_stmt.type_params, struct_stmt.type_param_count);
         if (src->struct_stmt.type_param_is_const)
             n->struct_stmt.type_param_is_const = copy_array(src->struct_stmt.type_param_is_const,

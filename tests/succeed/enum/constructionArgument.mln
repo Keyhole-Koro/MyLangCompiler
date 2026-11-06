@@ -1,0 +1,48 @@
+// `Some(x)`, `Ok(x)`, `Err(x)` and `None` as call arguments: each is built into
+// a temporary of the parameter's type. The callee is what says the type, so
+// free functions, imported functions, methods, generics and function values
+// all work.
+import { Option } from "@std/core/option.mln";
+import { Result } from "@std/core/result.mln";
+import library from "constructionArgument_lib.mln";
+
+i32 g_calls = 0;
+i32 next() { g_calls = g_calls + 1; return g_calls; }
+
+i32 read(Option<i32> value) { return case value of { Some(v) -> v; None -> 100; }; }
+
+i32 nested(Option<Option<i32>> value) {
+    return case value of { Some(Some(v)) -> v; Some(None) -> 200; None -> 300; };
+}
+
+i32 result(Result<i32, i32> value) { return case value of { Ok(v) -> v; Err(e) -> e + 1000; }; }
+
+i32 ordered(i32 first, Option<i32> second) { return first * 10 + read(second); }
+
+Option<i32> same(Option<i32> value) { return value; }
+
+struct Counter { i32 base; };
+i32 (Counter c) add(Option<i32> value) { return c.base + read(value); }
+
+T identity<T>(T value) { return value; }
+i32 tag_of<T>(Option<T> value) { return case value of { Some(v) -> 1; None -> 0; }; }
+
+fn(Option<i32>) -> i32 g_reader = read;
+
+i32 main() {
+    i32 total = read(Some(1)) + read(None);                       // 101
+    total = total + nested(Some(Some(2))) + nested(Some(None)) + nested(None); // 603
+    total = total + result(Ok(4)) + result(Err(5));               // 1612
+    Counter c = Counter { base: 7 };
+    total = total + c.add(Some(1)) + c.add(None);                 // 1727
+    total = total + library.read(Some(3)) + library.read(None);   // 1729
+    total = total + library.tag(Tag::Plain(9));           // 1738
+    total = total + tag_of<i32>(Some(1)) + tag_of<char>(None);    // 1739
+    total = total + read(identity<Option<i32>>(Some(9)));         // 1748
+    total = total + ordered(next(), Some(next()));                // 12: 1760
+    total = total + g_reader(Some(3));                            // 1763
+    fn(Option<i32>) -> i32 local = read;
+    total = total + local(None);                                  // 1863
+    total = total + read(same(Some(2)));                          // 1865
+    return total + case same(None) of { Some(v) -> v; None -> 5; }; // 1870
+}

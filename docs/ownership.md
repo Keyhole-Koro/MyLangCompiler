@@ -39,11 +39,15 @@ A parameter is passed in one of three ways. Reading is the default:
   read: writing to it or moving it is E0601. The caller keeps it and drops it.
 - An owned value straight from a call has no owner to drop it, so it cannot go
   to a reading parameter (E0601): give it a name first.
+- A construction written as an argument (`read(Some(owned))`) is built into a
+  temporary, which is its owner: the temporary drops it when its block ends.
 - A `borrow T` variable passed to a `T` parameter is read through.
 
 ### Taking (`move T x`)
 - The caller's variable is spent and the callee drops the value.
 - Use it where a function keeps the value, such as `push(move T value)`.
+- `take(Some(owned))` moves `owned` into the temporary and the temporary into
+  the callee.
 
 ### Borrowing (`borrow T`)
 A borrow is taken with `&x` and lends the place for writing:

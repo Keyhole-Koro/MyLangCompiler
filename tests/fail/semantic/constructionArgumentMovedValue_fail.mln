@@ -1,0 +1,14 @@
+// The construction moves what it carries, so the name is spent.
+import { Drop } from "@std/core/drop.mln";
+enum Option<T> { None, Some(T) }
+
+struct Res { i32 id; };
+impl Drop for Res { void (borrow Self self) drop() { } }
+
+void take(move Option<Res> value) { }
+
+i32 main() {
+    Res r = Res { id: 1 };
+    take(Some(r));
+    return r.id;
+}

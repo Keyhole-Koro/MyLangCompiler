@@ -1,0 +1,9 @@
+// A construction needs a parameter of its enum to say what it builds.
+enum Option<T> { None, Some(T) }
+
+i32 take(i32 value) { return value; }
+
+i32 main() {
+    Option<i32> unused = None;
+    return take(Some(1));
+}

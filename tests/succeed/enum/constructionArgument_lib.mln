@@ -1,0 +1,13 @@
+package library;
+
+import { Option } from "@std/core/option.mln";
+
+export enum Tag { Plain(i32), Empty }
+
+export i32 read(Option<i32> value) {
+    return case value of { Some(v) -> v; None -> 0 - 1; };
+}
+
+export i32 tag(Tag value) {
+    return case value of { Tag::Plain(v) -> v; Tag::Empty -> 0; };
+}

@@ -1,0 +1,37 @@
+// A construction carrying an owned value moves it. A `move` parameter takes
+// the temporary and drops it; a reading parameter leaves the temporary to drop
+// it when its scope ends.
+import { Drop } from "@std/core/drop.mln";
+import { Option } from "@std/core/option.mln";
+import { Result } from "@std/core/result.mln";
+
+i32 g_dropped = 0;
+
+struct Res { i32 id; };
+impl Drop for Res { void (borrow Self self) drop() { g_dropped = g_dropped + self.id; } }
+
+i32 take(move Option<Res> value) { return case value of { Some(r) -> r.id; None -> 0; }; }
+i32 read(Option<Res> value) { return case value of { Some(r) -> r.id; None -> 0; }; }
+i32 take_result(move Result<Res, i32> value) { return case value of { Ok(r) -> r.id; Err(e) -> e; }; }
+
+Option<Res> keep(i32 id) {
+    Res r = Res { id: id };
+    return Some(r);
+}
+
+i32 main() {
+    Res a = Res { id: 1 };
+    i32 total = take(Some(a));                  // dropped 1
+    i32 after_take = g_dropped;
+    Res b = Res { id: 10 };
+    {
+        total = total + read(Some(b));          // dropped 11 at the block's end
+    }
+    i32 after_read = g_dropped;
+    Res c = Res { id: 100 };
+    total = total + take_result(Ok(c));         // dropped 111
+    total = total + take(None);
+    total = total + take(keep(1000));           // dropped 1111
+    if (total != 1111) { return 0; }
+    return (after_take * 100 + after_read) * 10000 + g_dropped;
+}

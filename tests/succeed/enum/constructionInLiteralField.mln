@@ -1,0 +1,18 @@
+// A variant as a struct literal's field is built as that field's type, whatever
+// other specializations of the enum the unit has.
+import { Option } from "@std/core/option.mln";
+
+struct Inner { i32 value; };
+struct Holder { Option<Inner> inner; Option<i32> count; Option<Option<i32>> deep; };
+
+i32 main() {
+    Option<i32> first = Some(1);
+    Holder a = Holder { inner: None, count: Some(2), deep: Some(None) };
+    Holder b = Holder { inner: Some(Inner { value: 3 }), count: None, deep: Some(Some(4)) };
+    i32 total = case first of { Some(v) -> v; None -> 0; };
+    total = total + case a.count of { Some(v) -> v * 10; None -> 0; };
+    total = total + case a.inner of { Some(v) -> 0; None -> 300; };
+    total = total + case a.deep of { Some(Some(v)) -> 0; Some(None) -> 1000; None -> 0; };
+    total = total + case b.inner of { Some(v) -> v.value * 10000; None -> 0; };
+    return total + case b.deep of { Some(Some(v)) -> v * 100000; Some(None) -> 0; None -> 0; };
+}
