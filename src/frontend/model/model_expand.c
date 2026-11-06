@@ -1,6 +1,7 @@
 #include "mylang/frontend/model_expand.h"
 
 #include <ctype.h>
+#include <setjmp.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,6 +21,7 @@ typedef struct {
     char type[MODEL_TYPE_CAP];
     char name[MODEL_NAME_CAP];
     char suffix[MODEL_NAME_CAP]; /* `[8]` of an array column */
+    ModelSpan span;
 } Column;
 
 typedef struct {
@@ -28,6 +30,12 @@ typedef struct {
     int max;
     Column columns[MODEL_MAX_COLUMNS];
     int column_count;
+    ModelSpan span;
+    /* Where the header's words are, for the outline. */
+    const char *keyword;
+    const char *name_end;
+    const char *body_open;
+    const char *body_close;
 } Entity;
 
 typedef struct {
@@ -37,6 +45,8 @@ typedef struct {
     Entity *right;
     char name[MODEL_NAME_CAP];
     char inverse[MODEL_NAME_CAP];
+    ModelSpan span;
+    ModelSpan inverse_span;
 } Relation;
 
 typedef struct {
@@ -44,6 +54,7 @@ typedef struct {
     char column[MODEL_NAME_CAP];
     int unique;
     int buckets;
+    ModelSpan span; /* the column's own declaration */
 } Index;
 
 typedef struct {
@@ -54,7 +65,7 @@ typedef struct {
 
 typedef struct {
     const char *path;
-    int line;
+    const char *source;
     Entity entities[MODEL_MAX_ENTITIES];
     int entity_count;
     Relation relations[MODEL_MAX_RELATIONS];
@@ -62,16 +73,87 @@ typedef struct {
     Index indexes[MODEL_MAX_INDEXES];
     int index_count;
     Out out;
+    /* Set only by model_trace(). */
+    int tracing;
+    jmp_buf *recover;
+    Out outline;
+    const Entity *closed_entity; /* the statement just parsed, if an entity */
+    int generating;
+    ModelSpan origin;            /* the source word of what is being emitted */
+    ModelTrace trace;
+    size_t origin_capacity;
+    size_t word_capacity;
+    size_t error_capacity;
 } Model;
 
-static void model_error(const Model *model, const char *fmt, ...) {
+static const ModelSpan NO_SPAN = {0, 0, 0};
+
+static void *grown(void *items, size_t count, size_t *capacity, size_t item_size) {
+    if (count < *capacity) return items;
+    *capacity = *capacity ? *capacity * 2 : 64;
+    items = realloc(items, *capacity * item_size);
+    if (!items) { fprintf(stderr, "out of memory\n"); exit(1); }
+    return items;
+}
+
+static ModelSpan span_at(const Model *model, const char *at, size_t length) {
+    ModelSpan span = {0, 0, (int)length};
+    for (const char *c = model->source; c < at; c++) {
+        if (*c == '\n') {
+            span.line++;
+            span.column = 0;
+        } else {
+            span.column++;
+        }
+    }
+    return span;
+}
+
+/* Reports the words at `at`. A trace goes on with the next statement. */
+static void model_error(Model *model, const char *at, size_t length, const char *fmt, ...) {
+    ModelSpan span = span_at(model, at, length);
     va_list ap;
-    fprintf(stderr, "%s:%d:1: error: ", model->path ? model->path : "<model>", model->line);
     va_start(ap, fmt);
+    if (model->tracing) {
+        ModelTrace *trace = &model->trace;
+        trace->errors = grown(trace->errors, trace->error_count, &model->error_capacity, sizeof(ModelError));
+        ModelError *error = &trace->errors[trace->error_count++];
+        error->span = span;
+        vsnprintf(error->message, sizeof(error->message), fmt, ap);
+        va_end(ap);
+        longjmp(*model->recover, 1);
+    }
+    fprintf(stderr, "%s:%d:1: error: ", model->path ? model->path : "<model>", span.line + 1);
     vfprintf(stderr, fmt, ap);
     va_end(ap);
     fprintf(stderr, "\n");
     exit(1);
+}
+
+static void mark(Model *model, const char *at, size_t length, const char *kind, const char *role,
+                 ModelSpan declaration) {
+    if (!model->tracing || !length) return;
+    ModelTrace *trace = &model->trace;
+    trace->words = grown(trace->words, trace->word_count, &model->word_capacity, sizeof(ModelWord));
+    ModelWord *word = &trace->words[trace->word_count++];
+    word->span = span_at(model, at, length);
+    word->kind = kind;
+    word->role = role;
+    word->declaration = declaration;
+}
+
+static void mark_keyword(Model *model, const char *at, size_t length) {
+    mark(model, at, length, "MODEL", "keyword", NO_SPAN);
+}
+
+/* One origin per line that `added`, just emitted, completes. */
+static void note_origins(Model *model, const char *added) {
+    ModelTrace *trace = &model->trace;
+    for (; *added; added++) {
+        if (*added != '\n') continue;
+        trace->origins = grown(trace->origins, trace->origin_count, &model->origin_capacity, sizeof(ModelSpan));
+        trace->origins[trace->origin_count++] = model->origin;
+    }
 }
 
 static void emit(Model *model, const char *fmt, ...) {
@@ -83,7 +165,9 @@ static void emit(Model *model, const char *fmt, ...) {
         int wanted = vsnprintf(out->text ? out->text + out->length : NULL, room, fmt, ap);
         va_end(ap);
         if (wanted >= 0 && (size_t)wanted < room) {
+            const char *added = out->text + out->length;
             out->length += (size_t)wanted;
+            if (model->tracing && model->generating) note_origins(model, added);
             return;
         }
         out->capacity = out->capacity ? out->capacity * 2 : 4096;
@@ -106,24 +190,43 @@ static const char *read_word(const char *p, char *word, size_t cap) {
     return p;
 }
 
+typedef struct {
+    const char *at;
+    size_t length;
+    char text[MODEL_NAME_CAP];
+} Word;
+
+/* The next word of a statement, remembering where it stood. */
+static const char *next_word(const char *p, Word *word) {
+    word->at = skip_space(p);
+    p = read_word(word->at, word->text, sizeof(word->text));
+    word->length = (size_t)(p - word->at);
+    return p;
+}
+
 static Entity *find_entity(Model *model, const char *name) {
     for (int i = 0; i < model->entity_count; i++)
         if (strcmp(model->entities[i].name, name) == 0) return &model->entities[i];
     return NULL;
 }
 
-static Entity *require_entity(Model *model, const char *name) {
-    Entity *entity = find_entity(model, name);
-    if (!entity) model_error(model, "unknown entity '%s'", name);
+static Entity *require_entity(Model *model, const Word *name) {
+    Entity *entity = find_entity(model, name->text);
+    if (!entity) model_error(model, name->at, name->length, "unknown entity '%s'", name->text);
     return entity;
+}
+
+static void mark_entity_use(Model *model, const Word *name) {
+    const Entity *entity = find_entity(model, name->text);
+    mark(model, name->at, name->length, "IDENTIFIER", "struct", entity ? entity->span : NO_SPAN);
 }
 
 /* `i32 kind;` or `Text<64> text;` or `i32 samples[8];`. */
 static const char *parse_column(Model *model, Entity *entity, const char *p) {
-    if (entity->column_count >= MODEL_MAX_COLUMNS) model_error(model, "too many columns");
+    if (entity->column_count >= MODEL_MAX_COLUMNS) model_error(model, p, 1, "too many columns");
     Column *column = &entity->columns[entity->column_count++];
     const char *end = strchr(p, ';');
-    if (!end) model_error(model, "expected ';' after a column of entity '%s'", entity->name);
+    if (!end) model_error(model, p, strcspn(p, "\n"), "expected ';' after a column of entity '%s'", entity->name);
     const char *q = end;
     while (q > p && isspace((unsigned char)q[-1])) q--;
     const char *suffix = NULL;
@@ -138,31 +241,45 @@ static const char *parse_column(Model *model, Entity *entity, const char *p) {
     const char *name_end = q;
     while (q > p && (isalnum((unsigned char)q[-1]) || q[-1] == '_')) q--;
     snprintf(column->name, sizeof(column->name), "%.*s", (int)(name_end - q), q);
+    column->span = span_at(model, q, (size_t)(name_end - q));
     while (q > p && isspace((unsigned char)q[-1])) q--;
     snprintf(column->type, sizeof(column->type), "%.*s", (int)(q - p), p);
-    if (!column->name[0] || !column->type[0]) model_error(model, "malformed column in entity '%s'", entity->name);
+    if (!column->name[0] || !column->type[0])
+        model_error(model, p, (size_t)(end - p), "malformed column in entity '%s'", entity->name);
     (void)suffix;
     return end + 1;
 }
 
 /* `entity Node max 512 { ... }`. */
 static const char *parse_entity(Model *model, const char *p) {
-    if (model->entity_count >= MODEL_MAX_ENTITIES) model_error(model, "too many entities");
+    const char *keyword = p;
+    mark_keyword(model, keyword, strlen("entity"));
+    if (model->entity_count >= MODEL_MAX_ENTITIES) model_error(model, keyword, strlen("entity"), "too many entities");
     Entity *entity = &model->entities[model->entity_count++];
     memset(entity, 0, sizeof(*entity));
+    entity->keyword = keyword;
     p = skip_space(p + strlen("entity"));
+    const char *name = p;
     p = read_word(p, entity->name, sizeof(entity->name));
+    entity->name_end = p;
+    entity->span = span_at(model, name, (size_t)(p - name));
     for (int i = 0; entity->name[i]; i++) entity->lower[i] = (char)tolower((unsigned char)entity->name[i]);
-    if (!entity->name[0]) model_error(model, "expected an entity name");
-    p = skip_space(p);
-    char word[MODEL_NAME_CAP];
-    p = read_word(p, word, sizeof(word));
-    if (strcmp(word, "max") != 0) model_error(model, "entity '%s' needs `max N`", entity->name);
-    entity->max = (int)strtol(skip_space(p), (char **)&p, 10);
+    if (!entity->name[0]) model_error(model, keyword, strlen("entity"), "expected an entity name");
+    mark(model, name, (size_t)(p - name), "IDENTIFIER", "struct", entity->span);
+    Word word;
+    p = next_word(p, &word);
+    if (strcmp(word.text, "max") != 0)
+        model_error(model, name, (size_t)(entity->name_end - name), "entity '%s' needs `max N`", entity->name);
+    mark_keyword(model, word.at, word.length);
+    const char *number = skip_space(p);
+    entity->max = (int)strtol(number, (char **)&p, 10);
+    mark(model, number, (size_t)(p - number), "NUMBER", "number", NO_SPAN);
     if (entity->max <= 0 || entity->max > ID_MAX_ROWS)
-        model_error(model, "entity '%s': max must be between 1 and %d", entity->name, ID_MAX_ROWS);
+        model_error(model, number, p > number ? (size_t)(p - number) : 1,
+                    "entity '%s': max must be between 1 and %d", entity->name, ID_MAX_ROWS);
     p = skip_space(p);
-    if (*p != '{') model_error(model, "expected '{' after `max %d`", entity->max);
+    if (*p != '{') model_error(model, p, 1, "expected '{' after `max %d`", entity->max);
+    entity->body_open = p;
     p = skip_space(p + 1);
     while (*p && *p != '}') {
         if (*p == '/' && p[1] == '/') {
@@ -172,80 +289,109 @@ static const char *parse_entity(Model *model, const char *p) {
         }
         p = skip_space(p);
     }
-    if (*p != '}') model_error(model, "unterminated entity '%s'", entity->name);
+    if (*p != '}') model_error(model, name, (size_t)(entity->name_end - name), "unterminated entity '%s'", entity->name);
+    entity->body_close = p;
     p++;
     p = skip_space(p);
     if (*p == ';') p++;
+    model->closed_entity = entity;
     return p;
 }
 
 /* `Node has many Node as children / parent;`, `Window knows one Node as focus;`. */
 static const char *parse_relation(Model *model, const char *p) {
-    if (model->relation_count >= MODEL_MAX_RELATIONS) model_error(model, "too many relations");
+    const char *statement = p;
+    if (model->relation_count >= MODEL_MAX_RELATIONS) model_error(model, statement, strcspn(p, "\n"), "too many relations");
     Relation *relation = &model->relations[model->relation_count++];
     memset(relation, 0, sizeof(*relation));
-    char left[MODEL_NAME_CAP], verb[MODEL_NAME_CAP], count[MODEL_NAME_CAP];
-    char right[MODEL_NAME_CAP], as[MODEL_NAME_CAP];
-    p = read_word(p, left, sizeof(left));
-    p = read_word(skip_space(p), verb, sizeof(verb));
-    p = read_word(skip_space(p), count, sizeof(count));
-    p = read_word(skip_space(p), right, sizeof(right));
-    p = read_word(skip_space(p), as, sizeof(as));
-    if (strcmp(as, "as") != 0) model_error(model, "expected `as name` in the relation of '%s'", left);
-    p = read_word(skip_space(p), relation->name, sizeof(relation->name));
-    relation->left = require_entity(model, left);
-    relation->right = require_entity(model, right);
-    relation->owns = strcmp(verb, "has") == 0;
-    if (strcmp(count, "many") == 0) relation->many = 1;
-    else if (strcmp(count, "one") != 0) model_error(model, "expected `one` or `many`, got '%s'", count);
+    Word left, verb, count, right, as, name;
+    p = next_word(p, &left);
+    p = next_word(p, &verb);
+    p = next_word(p, &count);
+    p = next_word(p, &right);
+    p = next_word(p, &as);
+    mark_entity_use(model, &left);
+    mark_keyword(model, verb.at, verb.length);
+    mark_keyword(model, count.at, count.length);
+    mark_entity_use(model, &right);
+    if (strcmp(as.text, "as") != 0)
+        model_error(model, as.at, as.length ? as.length : 1, "expected `as name` in the relation of '%s'", left.text);
+    mark_keyword(model, as.at, as.length);
+    p = next_word(p, &name);
+    snprintf(relation->name, sizeof(relation->name), "%s", name.text);
+    relation->span = span_at(model, name.at, name.length);
+    mark(model, name.at, name.length, "IDENTIFIER", "method", relation->span);
+    relation->left = require_entity(model, &left);
+    relation->right = require_entity(model, &right);
+    relation->owns = strcmp(verb.text, "has") == 0;
+    if (strcmp(count.text, "many") == 0) relation->many = 1;
+    else if (strcmp(count.text, "one") != 0)
+        model_error(model, count.at, count.length ? count.length : 1, "expected `one` or `many`, got '%s'", count.text);
     p = skip_space(p);
     if (*p == '/') {
-        p = skip_space(p + 1);
-        char first[MODEL_NAME_CAP];
-        const char *after = read_word(p, first, sizeof(first));
-        if (strcmp(first, "many") == 0) {
-            model_error(model, "a many-to-many relation is not supported yet: keep the pairs in an entity of their own");
+        mark(model, p, 1, "DIV", "operator", NO_SPAN);
+        Word first;
+        const char *after = next_word(p + 1, &first);
+        if (strcmp(first.text, "many") == 0) {
+            mark_keyword(model, first.at, first.length);
+            model_error(model, first.at, first.length, "a many-to-many relation is not supported yet: keep the pairs in an entity of their own");
         }
-        snprintf(relation->inverse, sizeof(relation->inverse), "%s", first);
+        snprintf(relation->inverse, sizeof(relation->inverse), "%s", first.text);
+        relation->inverse_span = span_at(model, first.at, first.length);
+        mark(model, first.at, first.length, "IDENTIFIER", "method", relation->inverse_span);
         p = skip_space(after);
     }
     /* `ordered` documents the contract: every chain keeps insertion order. */
     if (*p == ',') {
-        char option[MODEL_NAME_CAP];
-        p = read_word(skip_space(p + 1), option, sizeof(option));
-        if (strcmp(option, "ordered") != 0) model_error(model, "unknown relation option '%s'", option);
+        mark(model, p, 1, "COMMA", "", NO_SPAN);
+        Word option;
+        p = next_word(p + 1, &option);
+        if (strcmp(option.text, "ordered") != 0)
+            model_error(model, option.at, option.length ? option.length : 1, "unknown relation option '%s'", option.text);
+        mark_keyword(model, option.at, option.length);
         p = skip_space(p);
     }
-    if (*p != ';') model_error(model, "expected ';' after the relation '%s'", relation->name);
+    if (*p != ';') model_error(model, statement, strcspn(statement, "\n"), "expected ';' after the relation '%s'", relation->name);
+    mark(model, p, 1, "SEMICOLON", "", NO_SPAN);
     return p + 1;
 }
 
 /* `index Node.owner;`, `unique Process.pid;`. */
 static const char *parse_index(Model *model, const char *p, int unique) {
-    if (model->index_count >= MODEL_MAX_INDEXES) model_error(model, "too many indexes");
+    const char *statement = p;
+    size_t keyword_length = unique ? strlen("unique") : strlen("index");
+    mark_keyword(model, statement, keyword_length);
+    if (model->index_count >= MODEL_MAX_INDEXES) model_error(model, statement, keyword_length, "too many indexes");
     Index *index = &model->indexes[model->index_count++];
     memset(index, 0, sizeof(*index));
     index->unique = unique;
-    p = skip_space(p + (unique ? strlen("unique") : strlen("index")));
-    char entity[MODEL_NAME_CAP];
-    p = read_word(p, entity, sizeof(entity));
-    index->entity = require_entity(model, entity);
-    if (*p != '.') model_error(model, "expected Entity.column after `index`");
-    p = read_word(p + 1, index->column, sizeof(index->column));
+    Word entity;
+    p = next_word(p + keyword_length, &entity);
+    mark_entity_use(model, &entity);
+    index->entity = require_entity(model, &entity);
+    if (*p != '.') model_error(model, statement, strcspn(statement, "\n"), "expected Entity.column after `index`");
+    mark(model, p, 1, "DOT", "", NO_SPAN);
+    const char *column_at = p + 1;
+    p = read_word(column_at, index->column, sizeof(index->column));
+    size_t column_length = (size_t)(p - column_at);
     int found = 0;
     for (int i = 0; i < index->entity->column_count; i++) {
         Column *column = &index->entity->columns[i];
         if (strcmp(column->name, index->column) == 0) {
+            mark(model, column_at, column_length, "IDENTIFIER", "variable", column->span);
             if (strcmp(column->type, "i32") != 0)
-                model_error(model, "only an i32 column can be indexed: '%s'", index->column);
+                model_error(model, column_at, column_length, "only an i32 column can be indexed: '%s'", index->column);
+            index->span = column->span;
             found = 1;
         }
     }
-    if (!found) model_error(model, "entity '%s' has no column '%s'", entity, index->column);
+    if (!found)
+        model_error(model, column_at, column_length ? column_length : 1, "entity '%s' has no column '%s'", entity.text, index->column);
     index->buckets = 1;
     while (index->buckets < index->entity->max) index->buckets *= 2;
     p = skip_space(p);
-    if (*p != ';') model_error(model, "expected ';' after the index");
+    if (*p != ';') model_error(model, statement, strcspn(statement, "\n"), "expected ';' after the index");
+    mark(model, p, 1, "SEMICOLON", "", NO_SPAN);
     return p + 1;
 }
 
@@ -257,14 +403,17 @@ static int column_is_indexed(const Model *model, const Entity *entity, const cha
 }
 
 static void emit_row_struct(Model *model, const Entity *entity) {
+    model->origin = entity->span;
     emit(model, "export struct %sRow {\n", entity->name);
     for (int i = 0; i < entity->column_count; i++) {
         const Column *column = &entity->columns[i];
         /* An indexed column changes through its setter only, which keeps the
          * index right; row() does not expose it. */
         const char *prefix = column_is_indexed(model, entity, column->name) ? "__ix_" : "";
+        model->origin = column->span;
         emit(model, "    %s %s%s%s;\n", column->type, prefix, column->name, column->suffix);
     }
+    model->origin = entity->span;
     emit(model, "    bool __used;\n    i32 __gen;\n    i32 __next_free;\n");
     for (int i = 0; i < model->relation_count; i++) {
         const Relation *r = &model->relations[i];
@@ -290,6 +439,7 @@ static void emit_row_struct(Model *model, const Entity *entity) {
 
 static void emit_entity_core(Model *model, const Entity *e) {
     const char *T = e->name, *t = e->lower;
+    model->origin = e->span;
     emit(model, "%sRow g_%s_rows[%d];\n", T, t, e->max);
     emit(model, "i32 g_%s_high = 0;\ni32 g_%s_free = 0;\n\n", t, t);
     emit(model, "i32 %s_slot(%s x) { return (x.id & %d) - 1; }\n\n", t, T, (1 << ID_SLOT_BITS) - 1);
@@ -383,6 +533,7 @@ static void emit_chain(Model *model, const Relation *r) {
     const char *A = r->left->name, *a = r->left->lower;
     const char *B = r->right->name, *b = r->right->lower;
     const char *n = r->name;
+    model->origin = r->span;
     emit(model,
          "void %s_%s_unlink(i32 ref) {\n"
          "    i32 owner = g_%s_rows[ref - 1].__%s_owner;\n"
@@ -453,6 +604,7 @@ static void emit_chain(Model *model, const Relation *r) {
          "    return Some(found);\n"
          "}\n\n", B, B, n, b, b, n, B, b);
     if (r->inverse[0]) {
+        model->origin = r->inverse_span;
         emit(model,
              "export Option<%s> (%s member) %s() {\n"
              "    i32 ref = g_%s_rows[%s_checked(member)].__%s_owner;\n"
@@ -460,6 +612,7 @@ static void emit_chain(Model *model, const Relation *r) {
              "    %s found = %s_at(ref);\n"
              "    return Some(found);\n"
              "}\n\n", A, B, r->inverse, b, b, n, A, a);
+        model->origin = r->span;
     }
     /* Walking a chain by plain words: zero ends it. */
     emit(model,
@@ -475,12 +628,14 @@ static void emit_chain(Model *model, const Relation *r) {
          "    return (g_%s_rows[ref - 1].__gen << %d) | ref;\n"
          "}\n\n", b, n, b, n, b, ID_SLOT_BITS);
     if (r->inverse[0]) {
+        model->origin = r->inverse_span;
         emit(model,
              "export i32 %s_%s_id(i32 member) {\n"
              "    i32 ref = %s_row_id(member).__%s_owner;\n"
              "    if (ref == 0) { return 0; }\n"
              "    return (g_%s_rows[ref - 1].__gen << %d) | ref;\n"
              "}\n\n", b, r->inverse, b, n, a, ID_SLOT_BITS);
+        model->origin = r->span;
     }
     /* The next member is read before one is handed out, so the loop body may
      * move or delete the member it was given. */
@@ -508,6 +663,7 @@ static void emit_reference(Model *model, const Relation *r) {
     const char *A = r->left->name, *a = r->left->lower;
     const char *B = r->right->name, *b = r->right->lower;
     const char *n = r->name;
+    model->origin = r->span;
     emit(model,
          "void %s_%s_clear(i32 ref) {\n"
          "    i32 target = g_%s_rows[ref - 1].__%s_to;\n"
@@ -554,6 +710,7 @@ static void emit_index(Model *model, const Index *index) {
     const Entity *e = index->entity;
     const char *T = e->name, *t = e->lower, *c = index->column;
     int mask = index->buckets - 1;
+    model->origin = index->span;
     emit(model, "i32 g_%s_ix_%s[%d];\n\n", t, c, index->buckets);
     emit(model,
          "void %s_ix_%s_unlink(i32 ref) {\n"
@@ -625,6 +782,7 @@ static void emit_index(Model *model, const Index *index) {
 
 static void emit_delete(Model *model, const Entity *e) {
     const char *T = e->name, *t = e->lower;
+    model->origin = e->span;
     emit(model, "void %s_delete_ref(i32 ref) {\n", t);
     for (int i = 0; i < model->relation_count; i++) {
         const Relation *r = &model->relations[i];
@@ -679,42 +837,118 @@ static int starts_with_word(const char *p, const char *word) {
     return strncmp(p, word, n) == 0 && isspace((unsigned char)p[n]);
 }
 
-char *model_expand(const char *source, const char *path) {
-    Model *model = calloc(1, sizeof(Model));
-    if (!model) { fprintf(stderr, "out of memory\n"); exit(1); }
-    model->path = path;
-    model->line = 1;
+/* NULL for a line that is not a declaration. */
+static const char *parse_statement(Model *model, const char *s) {
+    if (starts_with_word(s, "entity")) return parse_entity(model, s);
+    if (starts_with_word(s, "unique")) return parse_index(model, s, 1);
+    if (starts_with_word(s, "index")) return parse_index(model, s, 0);
+    if (is_relation_line(s)) return parse_relation(model, s);
+    return NULL;
+}
 
+/* Where to go on after the bad statement at `s`. */
+static const char *skip_statement(const char *s) {
+    const char *p = s;
+    while (*p && *p != ';' && *p != '{' && *p != '\n') p++;
+    if (*p == ';') return p + 1;
+    if (*p != '{') return p;
+    int depth = 0;
+    for (; *p; p++) {
+        if (*p == '{') depth++;
+        else if (*p == '}' && --depth == 0) break;
+    }
+    if (!*p) return p;
+    p = skip_space(p + 1);
+    return *p == ';' ? p + 1 : p;
+}
+
+static const char *parse_recovering(Model *model, const char *s) {
+    jmp_buf recover;
+    model->recover = &recover;
+    if (setjmp(recover)) return skip_statement(s);
+    return parse_statement(model, s);
+}
+
+static void outline_write(Model *model, const char *text, size_t length) {
+    Out *out = &model->outline;
+    if (out->capacity < out->length + length + 1) {
+        out->capacity = (out->length + length + 1) * 2;
+        out->text = realloc(out->text, out->capacity);
+        if (!out->text) { fprintf(stderr, "out of memory\n"); exit(1); }
+    }
+    memcpy(out->text + out->length, text, length);
+    out->length += length;
+    out->text[out->length] = '\0';
+}
+
+static void outline_keep(Model *model, const char *from, const char *to) {
+    outline_write(model, from, (size_t)(to - from));
+}
+
+static void outline_blank(Model *model, const char *from, const char *to) {
+    for (const char *c = from; c < to; c++) outline_write(model, *c == '\n' ? "\n" : " ", 1);
+}
+
+/* Every word stays where it was written, so what parses here has source
+ * positions. `entity` and `struct` have the same length, and a struct's
+ * column declarations are already a struct's fields. */
+static void outline_statement(Model *model, const char *line, const char *end) {
+    const Entity *entity = model->closed_entity;
+    model->closed_entity = NULL;
+    if (!entity) {
+        outline_blank(model, line, end);
+        return;
+    }
+    outline_keep(model, line, entity->keyword);
+    outline_write(model, "struct", strlen("struct"));
+    outline_keep(model, entity->keyword + strlen("entity"), entity->name_end);
+    outline_blank(model, entity->name_end, entity->body_open);
+    const char *after = entity->body_close + 1;
+    outline_keep(model, entity->body_open, after);
+    if (end > after && end[-1] == ';') {
+        outline_keep(model, after, end);
+        return;
+    }
+    /* A struct needs the `;` that an entity may leave out. */
+    outline_write(model, ";", 1);
+    if (after < end && (*after == ' ' || *after == '\t')) after++;
+    outline_keep(model, after, end);
+}
+
+static void expand(Model *model) {
     /* The relations of an entity generate into its row, so everything is
      * read before anything is written. Other lines pass straight through. */
+    const char *source = model->source;
     const char *p = source;
     while (*p) {
         const char *line = p;
         const char *s = line;
         while (*s == ' ' || *s == '\t') s++;
-        const char *end = NULL;
-        if (starts_with_word(s, "entity")) end = parse_entity(model, s);
-        else if (starts_with_word(s, "unique")) end = parse_index(model, s, 1);
-        else if (starts_with_word(s, "index")) end = parse_index(model, s, 0);
-        else if (is_relation_line(s)) end = parse_relation(model, s);
+        const char *end = model->tracing ? parse_recovering(model, s) : parse_statement(model, s);
         if (end) {
-            for (const char *c = line; c < end; c++) if (*c == '\n') model->line++;
+            if (model->tracing) outline_statement(model, line, end);
             p = end;
             continue;
         }
         const char *newline = strchr(line, '\n');
         size_t length = newline ? (size_t)(newline - line) + 1 : strlen(line);
         emit(model, "%.*s", (int)length, line);
-        model->line++;
+        if (model->tracing) outline_write(model, line, length);
         p = line + length;
     }
 
+    model->generating = 1;
+    model->trace.generated_offset = model->out.length;
+    model->origin = NO_SPAN;
     if (!strstr(source, "core/option.mln")) emit(model, "\nimport { Option } from \"@std/core/option.mln\";\n");
     if (!strstr(source, "core/iter.mln")) emit(model, "import { Iterator } from \"@std/core/iter.mln\";\n\n");
+    if (model->trace.error_count) return;
 
-    for (int i = 0; i < model->entity_count; i++)
+    for (int i = 0; i < model->entity_count; i++) {
+        model->origin = model->entities[i].span;
         emit(model, "/** The id of a %s row. Zero names no row. */\nexport struct %s { i32 id; };\n\n",
              model->entities[i].name, model->entities[i].name);
+    }
     for (int i = 0; i < model->entity_count; i++) emit_row_struct(model, &model->entities[i]);
     for (int i = 0; i < model->entity_count; i++) emit_entity_core(model, &model->entities[i]);
     for (int i = 0; i < model->relation_count; i++) {
@@ -724,8 +958,53 @@ char *model_expand(const char *source, const char *path) {
     }
     for (int i = 0; i < model->index_count; i++) emit_index(model, &model->indexes[i]);
     for (int i = 0; i < model->entity_count; i++) emit_delete(model, &model->entities[i]);
+}
 
+static Model *model_create(const char *source, const char *path) {
+    Model *model = calloc(1, sizeof(Model));
+    if (!model) { fprintf(stderr, "out of memory\n"); exit(1); }
+    model->path = path;
+    model->source = source;
+    return model;
+}
+
+char *model_expand(const char *source, const char *path) {
+    Model *model = model_create(source, path);
+    expand(model);
     char *text = model->out.text ? model->out.text : strdup("");
     free(model);
     return text;
+}
+
+ModelTrace *model_trace(const char *source) {
+    Model *model = model_create(source, NULL);
+    model->tracing = 1;
+    expand(model);
+
+    ModelTrace *trace = malloc(sizeof(ModelTrace));
+    if (!trace) { fprintf(stderr, "out of memory\n"); exit(1); }
+    *trace = model->trace;
+    const Out *outline = &model->outline;
+    if (outline->length && outline->text[outline->length - 1] != '\n') outline_write(model, "\n", 1);
+    const char *generated = model->out.text ? model->out.text + trace->generated_offset : "";
+    trace->generated_offset = outline->length;
+    trace->generated_line = 0;
+    for (size_t i = 0; i < outline->length; i++)
+        if (outline->text[i] == '\n') trace->generated_line++;
+    trace->text = malloc(outline->length + strlen(generated) + 1);
+    if (!trace->text) { fprintf(stderr, "out of memory\n"); exit(1); }
+    if (outline->length) memcpy(trace->text, outline->text, outline->length);
+    strcpy(trace->text + outline->length, generated);
+    free(model->outline.text);
+    free(model->out.text);
+    free(model);
+    return trace;
+}
+
+void model_trace_free(ModelTrace *trace) {
+    free(trace->text);
+    free(trace->origins);
+    free(trace->words);
+    free(trace->errors);
+    free(trace);
 }
