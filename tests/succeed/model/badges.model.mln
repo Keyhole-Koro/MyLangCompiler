@@ -1,0 +1,9 @@
+package badges;
+
+export newtype Badge = i32;
+export newtype Crew = i32;
+
+entity Holder max 8 { Badge badge; Crew crew; }
+
+unique Holder.badge;
+index Holder.crew;

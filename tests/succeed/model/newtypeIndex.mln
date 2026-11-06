@@ -1,0 +1,35 @@
+// An index on a newtype column takes and returns that type, and hashes its word.
+import badges from "badges.mln";
+import { Badge, Crew, Holder, holder_by_crew_Iter } from "badges.mln";
+import { Option } from "@std/core/option.mln";
+import { Iterator } from "@std/core/iter.mln";
+
+Holder holder(i32 badge, i32 crew) {
+    Holder made = case badges.new_holder() of { Some(v) -> v; None -> badges.holder_from_raw(0); };
+    made.set_badge(Badge(badge));
+    made.set_crew(Crew(crew));
+    return made;
+}
+
+i32 main() {
+    Holder a = holder(7, 1);
+    Holder b = holder(9, 1);
+    Holder c = holder(11, 2);
+    i32 r = 0;
+    if (a.badge() == Badge(7)) { r = r + 1; }
+    bool found = case badges.holder_by_badge(Badge(9)) of { Some(h) -> h.raw() == b.raw(); None -> false; };
+    if (found) { r = r + 2; }
+    bool absent = case badges.holder_by_badge(Badge(8)) of { Some(_) -> false; None -> true; };
+    if (absent) { r = r + 4; }
+    i32 crew = 0;
+    for (Holder h in badges.holder_by_crew(Crew(1))) { crew = crew + (i32)h.badge(); }
+    if (crew == 16) { r = r + 8; }
+    c.set_crew(Crew(1));
+    crew = 0;
+    for (Holder h in badges.holder_by_crew(Crew(1))) { crew = crew + (i32)h.badge(); }
+    if (crew == 27) { r = r + 16; }
+    b.delete();
+    bool gone = case badges.holder_by_badge(Badge(9)) of { Some(_) -> false; None -> true; };
+    if (gone) { r = r + 32; }
+    return r;
+}
