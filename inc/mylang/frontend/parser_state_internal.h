@@ -71,6 +71,7 @@ typedef struct GenericMethodDef {
     char *receiver_template_name;
     char *method_name;
     ASTNode *fundef;
+    int is_exported; /* Written `export` in this module. */
 } GenericMethodDef;
 
 typedef struct GenericMethodTable {

@@ -208,3 +208,32 @@ python3 qa/mlc-test.py
 successful compile still writes `<output>_tokens.txt` and `<output>_ast.txt`
 beside the generated assembly for later inspection. Use `--dump-tokens` or
 `--dump-ast` when the corresponding debug dump is also needed on stdout.
+
+### Symbol files
+
+`mlc --emit-symbols <path> <input.mln> <output.masm>` also writes what the
+source exports and which symbols it uses. It is for single-file compilation.
+`make unused-exports` (`qa/tools/unused_exports.py`) runs it on every source in
+the repository to find exports nothing references.
+
+The file starts with `MYSYMBOLS 1`. Every other line is tab-separated:
+
+| Line | Meaning |
+| --- | --- |
+| `function <symbol> <path> <line>` | An exported function, by its link name |
+| `method <symbol> <path> <line>` | An exported method, as `Type__method` |
+| `global <symbol> <path> <line>` | An exported global |
+| `impl <symbol> <path> <line>` | An item of an exported trait impl |
+| `template <name> <path> <line>` | An exported generic function or method |
+| `instance <symbol> <path> <line>` | A specialization, and where its template is |
+| `use <from> <symbol>` | The label `<from>` names `<symbol>` |
+
+Paths are canonical. A definition is listed in the source that wrote it, so a
+template is listed once and each instance points back at it by path and line.
+
+Uses are read from the finished assembly rather than from the AST, so a use
+is whatever the program really links against: DOM calls, drops, `==` on a
+trait, annotation rows and trampolines are all there, with what lowering made
+of them. `<from>` is the enclosing function or global, `__START__` for the entry
+function, or `-` before the first one. Only symbols of this source and its
+`import` lines are listed.

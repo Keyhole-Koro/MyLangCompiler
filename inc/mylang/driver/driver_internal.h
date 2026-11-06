@@ -29,6 +29,7 @@ typedef struct {
     const char **aliases;
     int alias_count;
     const char *depfile_path;
+    const char *symbols_path;
     int include_masm;
     int warnings_as_errors;
     int error_trace;
@@ -67,7 +68,9 @@ int copy_file(const char *src, const char *dst);
 int compile_one(const char *input_path, const char *output_path,
                 int dump_tokens_to_stdout, int dump_ast_to_stdout,
                 const char **aliases, int alias_count,
-                const char *depfile_path);
+                const char *depfile_path, const char *symbols_path);
+int write_symbol_file(const char *symbols_path, const char *input_path, ASTNode *root,
+                      const char *assembly);
 int walk_dir(WalkCtx *ctx, const char *dir_path);
 void driver_print_usage(const char *prog);
 void driver_options_dispose(DriverOptions *opts);

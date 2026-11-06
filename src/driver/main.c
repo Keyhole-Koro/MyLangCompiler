@@ -5,6 +5,10 @@ static int run_directory_mode(const DriverOptions *opts) {
         fprintf(stderr, "--depfile is supported only for single-file compilation\n");
         return 1;
     }
+    if (opts->symbols_path) {
+        fprintf(stderr, "--emit-symbols is supported only for single-file compilation\n");
+        return 1;
+    }
     if (!path_is_dir(opts->output_path)) {
         if (mkdir_p(opts->output_path) != 0) {
             fprintf(stderr, "Failed to create output directory: %s\n", opts->output_path);
@@ -44,7 +48,7 @@ static int run_single_file_mode(const DriverOptions *opts) {
     return compile_one(opts->input_path, opts->output_path,
                        opts->dump_tokens, opts->dump_ast,
                        opts->aliases, opts->alias_count,
-                       opts->depfile_path);
+                       opts->depfile_path, opts->symbols_path);
 }
 
 int main(int argc, char *argv[]) {
