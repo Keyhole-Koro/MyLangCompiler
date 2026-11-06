@@ -507,6 +507,16 @@ static void emit_entity_core(Model *model, const Entity *e) {
          "}\n\n",
          T, t, (1 << ID_SLOT_BITS) - 1, e->max, t, t, ID_SLOT_BITS, e->max, t);
     emit(model,
+         "/** The row of an id given as a word, or None for a stale one. */\n"
+         "export Option<borrow %sRow> %s_find_id(i32 id) {\n"
+         "    i32 s = (id & %d) - 1;\n"
+         "    if (s < 0 || s >= %d || !g_%s_rows[s].__used || g_%s_rows[s].__gen != ((id >> %d) & 0xFFFFF)) {\n"
+         "        return None;\n"
+         "    }\n"
+         "    return Some(&g_%s_rows[s]);\n"
+         "}\n\n",
+         T, t, (1 << ID_SLOT_BITS) - 1, e->max, t, t, ID_SLOT_BITS, t);
+    emit(model,
          "/** Adds a row with zero columns, or None when the table is full. */\n"
          "export Option<%s> new_%s() {\n"
          "    i32 ref = g_%s_free;\n"
