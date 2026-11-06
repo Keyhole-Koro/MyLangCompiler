@@ -1,0 +1,22 @@
+// A shared word keeps its type: no address and no cast at the use site.
+import { Atomic } from "@std/sync/atomic.mln";
+
+enum Light { Red, Amber, Green }
+
+Atomic<Light> g_light;
+Atomic<i32> g_count;
+
+i32 main() {
+    Light before = g_light.swap(Light::Amber);
+    Light unchanged = g_light.compare_exchange(Light::Red, Light::Green);
+    Light moved = g_light.compare_exchange(Light::Amber, Light::Green);
+    i32 first = g_count.fetch_add(5);
+    i32 second = g_count.fetch_add(2);
+    g_count.store(g_count.load() + 1);
+    i32 score = 0;
+    if (before == Light::Red) { score = score + 1; }
+    if (unchanged == Light::Amber) { score = score + 10; }
+    if (moved == Light::Amber) { score = score + 100; }
+    if (g_light.load() == Light::Green) { score = score + 1000; }
+    return score * 100 + first * 10 + second + g_count.load();
+}

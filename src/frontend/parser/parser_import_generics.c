@@ -65,10 +65,57 @@ static void stamp_template_origin(ASTNode *fundef, Module *module) {
 static void import_plain_dependency(ParserContext *context, Module *mod,
                                     const char *type_name);
 
+/* A generic body is compiled where it is instantiated, so what it calls from
+ * the modules its own module imports has to be declared there too: `futex.wait`
+ * inside Atomic<T>. A prototype is enough. It gives the checks a signature and
+ * the caller the hidden pointer of an aggregate return. */
+static void import_called_function(ParserContext *context, Module *mod, const char *name) {
+    FrontendSession *session = context->session;
+    if (!session || !session->loader || !mod->program || mod->program->type != AST_BLOCK ||
+        find_function(context, name)) return;
+    for (int i = 0; i < mod->program->block.count; i++) {
+        ASTNode *import = mod->program->block.stmts[i];
+        if (!import || import->type != AST_IMPORT || !import->import_stmt.path ||
+            !module_loader_is_mylang_source(import->import_stmt.path)) continue;
+        Module *target = module_loader_load(session->loader, mod->canonical_path,
+                                            import->import_stmt.path);
+        if (!target || target->state != MODULE_LOADED) continue;
+        for (int s = 0; s < target->symbol_count; s++) {
+            ModuleSymbol *sym = &target->symbols[s];
+            if (sym->kind != SYMBOL_FUNCTION || !sym->is_exported || !sym->link_name ||
+                strcmp(sym->link_name, name) != 0 || !sym->declaration ||
+                sym->declaration->type != AST_FUNDEF) continue;
+            ASTNode *fn = sym->declaration;
+            ASTNode **params = NULL;
+            if (fn->fundef.param_count > 0) {
+                params = malloc(sizeof(ASTNode *) * fn->fundef.param_count);
+                for (int k = 0; k < fn->fundef.param_count; k++)
+                    params[k] = ast_clone(fn->fundef.params[k]);
+            }
+            ASTNode *proto = new_fundef(ast_clone(fn->fundef.ret_type), (char *)name, params,
+                                        fn->fundef.param_count, NULL, fn->fundef.is_variadic);
+            proto->fundef.is_safe = fn->fundef.is_safe;
+            proto->fundef.is_noreturn = fn->fundef.is_noreturn;
+            proto->fundef.origin_unsafe = target->is_unsafe;
+            ASTNode *returned = fn->fundef.ret_type;
+            if (returned && returned->type == AST_TYPE && returned->type_node.base_type &&
+                returned->type_node.base_type->type == AST_IDENTIFIER) {
+                import_plain_dependency(context, target,
+                                        returned->type_node.base_type->identifier.name);
+            }
+            add_function(context, proto);
+            add_imported_plain_type(context, proto);
+            return;
+        }
+    }
+}
+
 static void import_generic_dependency(ASTNode **slot, void *user_data) {
     ASTNode *node = slot ? *slot : NULL;
     GenericImportClosure *closure = user_data;
     const char *name = NULL;
+    if (node && node->type == AST_CALL && !node->call.recv && node->call.name)
+        import_called_function(closure->context, closure->module, node->call.name);
     if (node && node->type == AST_TYPE_GENERIC) name = node->generic_type.name;
     if (node && node->type == AST_CALL && node->call.type_arg_count) name = node->call.name;
     if (name) {
