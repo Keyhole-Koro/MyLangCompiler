@@ -1,0 +1,52 @@
+// `f()?` and `case f() of` run where they are written, not ahead of the
+// statement: not at all in an arm or a branch that is not taken, and on every
+// pass of a loop condition.
+import { Result } from "@std/core/result.mln";
+import { Option } from "@std/core/option.mln";
+
+i32 g_calls = 0;
+i32 g_left = 3;
+
+Result<i32, i32> step() { g_calls = g_calls + 1; return Ok(5); }
+Result<bool, i32> more() { g_left = g_left - 1; return Ok(g_left > 0); }
+
+Result<i32, i32> in_arm(Option<i32> o) {
+    i32 v = case o of {
+        Some(n) -> step()?;
+        None -> 0;
+    };
+    return Ok(v);
+}
+
+Result<i32, i32> in_ternary(bool take) {
+    i32 v = take ? (step()?) : 0;
+    return Ok(v);
+}
+
+Result<bool, i32> in_and(bool take) {
+    Result<i32, i32> none = Ok(0);
+    bool v = take && case step() of { Ok(n) -> n > 0; Err(_) -> false; };
+    return Ok(v);
+}
+
+Result<i32, i32> in_while() {
+    i32 passes = 0;
+    while (more()?) { passes = passes + 1; }
+    return Ok(passes);
+}
+
+i32 main() {
+    Option<i32> nothing = None;
+    Result<i32, i32> a = in_arm(nothing);
+    Result<i32, i32> b = in_ternary(false);
+    Result<bool, i32> c = in_and(false);
+    i32 skipped = g_calls;
+    Option<i32> something = Some(1);
+    Result<i32, i32> d = in_arm(something);
+    Result<i32, i32> e = in_ternary(true);
+    Result<bool, i32> f = in_and(true);
+    i32 taken = g_calls;
+    Result<i32, i32> g = in_while();
+    i32 passes = case g of { Ok(n) -> n; Err(_) -> 99; };
+    return skipped * 100 + taken * 10 + passes;
+}

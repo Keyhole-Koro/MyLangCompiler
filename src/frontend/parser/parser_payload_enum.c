@@ -1299,10 +1299,61 @@ static ASTNode *make_payload_struct_literal(VariantTable *table, ASTNode *use) {
     return new_struct_init_list(variant->enum_name, field_names, fields, count);
 }
 
+static void find_hoisted_case(ASTNode **slot, void *user_data) {
+    ASTNode *node = *slot;
+    int *found = user_data;
+    if (!node || *found || node->type == AST_STMT_EXPR || node->type == AST_FUN_LITERAL) return;
+    if (node->type == AST_CASE && !is_repeatable_target(node->case_expr.target)) {
+        *found = 1;
+        return;
+    }
+    ast_visit_children(node, find_hoisted_case, user_data);
+}
+
+/* A `case` on a call evaluates the call into a temporary ahead of its
+ * statement, and `f()?` is such a case. Where an expression runs only sometimes
+ * or more than once, ahead of the statement is the wrong place: its own block
+ * keeps the temporary with it. */
+static void keep_hoists_here(ASTNode **slot) {
+    int found = 0;
+    find_hoisted_case(slot, &found);
+    if (!found) return;
+    ASTNode **statements = malloc(sizeof(ASTNode *));
+    statements[0] = new_yield(*slot);
+    ASTNode *wrapped = new_stmt_expr(new_block(statements, 1));
+    wrapped->line = (*slot)->line;
+    wrapped->col = (*slot)->col;
+    *slot = wrapped;
+}
+
 static void rewrite_payload_node(ASTNode **slot, void *user_data) {
     ASTNode *node = *slot;
     if (!node) return;
     VariantTable *table = user_data;
+
+    switch (node->type) {
+    case AST_CASE:
+        for (int i = 0; i < node->case_expr.case_count; i++)
+            keep_hoists_here(&node->case_expr.cases[i].expr);
+        keep_hoists_here(&node->case_expr.default_expr);
+        break;
+    case AST_TERNARY:
+        keep_hoists_here(&node->ternary.then_expr);
+        keep_hoists_here(&node->ternary.else_expr);
+        break;
+    case AST_BINARY:
+        if (node->binary.op == LAND || node->binary.op == LOR) keep_hoists_here(&node->binary.right);
+        break;
+    case AST_WHILE:
+        keep_hoists_here(&node->while_stmt.cond);
+        break;
+    case AST_FOR:
+        keep_hoists_here(&node->for_stmt.cond);
+        keep_hoists_here(&node->for_stmt.inc);
+        break;
+    default:
+        break;
+    }
 
     /* Tracks the function whose body is being walked, so a `return Ok(5);`
      * inside it knows which payload enum to build (see rewrite_payload_block).

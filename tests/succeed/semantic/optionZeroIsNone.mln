@@ -1,0 +1,15 @@
+// Rule V1: a variable starts as zero, and the zero Option is None.
+import { Option } from "@std/core/option.mln";
+
+struct Slot { Option<i32> value; };
+
+Option<i32> g_value;
+
+i32 main() {
+    Slot slot = Slot {};
+    Option<i32> local;
+    i32 a = case g_value of { Some(_) -> 1; None -> 0; };
+    i32 b = case slot.value of { Some(_) -> 1; None -> 0; };
+    i32 c = case local of { Some(_) -> 1; None -> 0; };
+    return 7 + a + b + c;
+}
