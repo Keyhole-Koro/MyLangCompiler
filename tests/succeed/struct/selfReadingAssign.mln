@@ -1,0 +1,95 @@
+// Assigning a literal or an aggregate call to a place the right side reads
+// must behave as if the whole right side were evaluated first. Each case swaps
+// (3, 5), so a correct answer is 503.
+struct P { i32 x; i32 y; };
+struct Q { P a; P b; };
+struct Big { i32 words[20]; i32 last; };
+struct Res { i32 n; };
+
+P g;
+i32 drops = 0;
+
+void (borrow mut Res self) drop() { drops = drops + 1; }
+
+i32 packed(P p) { return p.x * 100 + p.y; }
+P swapped(P p) { return P { x: p.y, y: p.x }; }
+P swapped_borrow(borrow P p) { return P { x: p.y, y: p.x }; }
+P swapped_global() { return P { x: g.y, y: g.x }; }
+i32 global_y() { return g.y; }
+Big big_sum(Big b) { return Big { last: b.words[3] + b.last }; }
+Res bumped(Res r) { return Res { n: r.n + 1 }; }
+
+i32 literal_local() {
+    P v = P { x: 3, y: 5 };
+    v = P { x: v.y, y: v.x };
+    return packed(v);
+}
+
+i32 literal_field() {
+    Q w;
+    w.a = P { x: 3, y: 5 };
+    w.a = P { x: w.a.y, y: w.a.x };
+    return packed(w.a);
+}
+
+i32 literal_nested() {
+    Q w;
+    w.a = P { x: 3, y: 5 };
+    w = Q { a: P { x: w.a.y, y: w.a.x }, b: w.a };
+    return packed(w.a) + packed(w.b) - 305;
+}
+
+i32 literal_global_through_call() {
+    g = P { x: 3, y: 5 };
+    g = P { x: global_y(), y: g.x };
+    return packed(g);
+}
+
+i32 call_by_value() {
+    P v = P { x: 3, y: 5 };
+    v = swapped(v);
+    return packed(v);
+}
+
+i32 call_borrow() {
+    P v = P { x: 3, y: 5 };
+    v = swapped_borrow(&v);
+    return packed(v);
+}
+
+i32 call_global() {
+    g = P { x: 3, y: 5 };
+    g = swapped_global();
+    return packed(g);
+}
+
+i32 call_big() {
+    Big v;
+    v.words[3] = 500;
+    v.last = 3;
+    v = big_sum(v);
+    return v.last;
+}
+
+// The argument moves into bumped, which drops it there; the assignment has no
+// old value left to drop. The block's end drops the result: two in all.
+i32 call_moves_old_value() {
+    {
+        Res r = Res { n: 1 };
+        r = bumped(r);
+    }
+    return drops;
+}
+
+i32 main() {
+    i32 wrong = 0;
+    if (literal_local() != 503) { wrong = wrong + 1; }
+    if (literal_field() != 503) { wrong = wrong + 2; }
+    if (literal_nested() != 503) { wrong = wrong + 4; }
+    if (literal_global_through_call() != 503) { wrong = wrong + 8; }
+    if (call_by_value() != 503) { wrong = wrong + 16; }
+    if (call_borrow() != 503) { wrong = wrong + 32; }
+    if (call_global() != 503) { wrong = wrong + 64; }
+    if (call_big() != 503) { wrong = wrong + 128; }
+    return wrong * 100 + call_moves_old_value();
+}

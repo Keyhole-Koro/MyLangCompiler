@@ -48,6 +48,8 @@ sizeofType|13244|succeed/expr/sizeofType.mln
 bitnotWide|513|succeed/expr/bitnotWide.mln
 simpleStruct|10|succeed/struct/simpleStruct.unsafe.mln
 namedStructLiteral|44|succeed/struct/namedStructLiteral.mln
+selfReadingAssign|2|succeed/struct/selfReadingAssign.mln
+selfReadingAssignPointer|1000|succeed/struct/selfReadingAssignPointer.unsafe.mln
 payloadEnumFieldLiteral|57|succeed/struct/payloadEnumFieldLiteral.unsafe.mln
 arrayInit|106|succeed/array/arrayInit.mln
 multiArray|6|succeed/array/multiArray.mln
