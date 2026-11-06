@@ -209,6 +209,9 @@ struct ASTNode {
             int case_count;
             ASTNode *default_expr;
             int default_is_noop;
+            /* The arms cover every variant of a payload enum, so one of them
+             * always runs even without a `_` arm. */
+            int is_exhaustive;
         } case_expr;
         struct {
             ASTNode *ret_type;
@@ -246,6 +249,8 @@ struct ASTNode {
             /* `@safe`: written in an `.unsafe.mln` file and callable from a
              * checked one (rule U4). */
             int is_safe;
+            /* `@noreturn`: a call of this function does not come back. */
+            int is_noreturn;
         } fundef;
         struct {
             ASTNode *type;

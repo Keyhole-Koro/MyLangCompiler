@@ -214,6 +214,7 @@ static void import_type_methods(ParserContext *context, Module *mod, const char 
         proto->fundef.recv_type_name = strdup(type_name);
         proto->fundef.is_exported = 1;
         proto->fundef.is_safe = fn->fundef.is_safe;
+        proto->fundef.is_noreturn = fn->fundef.is_noreturn;
         proto->fundef.origin_unsafe = mod->is_unsafe;
         /* `case s.byte_at(i) of` has to know Option<u8>'s layout even when
          * this unit never spells that type: the lowered struct comes along. */

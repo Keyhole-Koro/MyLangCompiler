@@ -1,0 +1,7 @@
+// A `@noreturn` function has no value to declare (E0203).
+@noreturn
+i32 stop() {
+    while (1) {}
+}
+
+i32 main() { return stop(); }

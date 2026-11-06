@@ -1,0 +1,91 @@
+// Each of these ends without a final `return`, and none can reach its end.
+enum Step { Stop, Go };
+
+enum Maybe<T> {
+    Just(T),
+    Nothing,
+}
+
+@noreturn
+void stop() {
+    while (1) {}
+}
+
+i32 forever(i32 x) {
+    while (1) {
+        if (x > 3) { return x; }
+        x = x + 1;
+    }
+}
+
+i32 for_ever(i32 x) {
+    for (;;) {
+        if (x > 3) { return x; }
+        x = x + 1;
+    }
+}
+
+i32 do_forever(i32 x) {
+    do {
+        if (x > 3) { return x; }
+        x = x + 1;
+    } while (true);
+}
+
+i32 inner_break(i32 x) {
+    while (1) {
+        while (1) { break; }
+        for (i32 i = 0; i < 3; i++) { if (i == x) { break; } }
+        if (x > 3) { return x; }
+        x = x + 1;
+    }
+}
+
+i32 both_branches(i32 x) {
+    if (x > 0) {
+        return 1;
+    } else {
+        return 2;
+    }
+}
+
+i32 do_once(i32 x) {
+    do {
+        return x;
+    } while (x > 0);
+}
+
+i32 every_member(Step step) {
+    case step of {
+        Step::Stop -> ({ return 0; });
+        Step::Go -> ({ return 1; });
+    };
+}
+
+i32 default_arm(i32 x) {
+    case x of {
+        1 -> ({ return 10; });
+        _ -> ({ return 20; });
+    };
+}
+
+i32 every_variant(Maybe<i32> value) {
+    case value of {
+        Just(x) -> ({ return x; });
+        Nothing -> ({ return 0; });
+    };
+}
+
+i32 ends_in_noreturn(i32 x) {
+    if (x > 0) { return x; }
+    stop();
+}
+
+i32 noreturn_arm(i32 x) {
+    case x of {
+        1 -> ({ return 10; });
+        _ -> stop();
+    };
+}
+
+i32 main() { return forever(0); }

@@ -30,6 +30,11 @@ Covered by semantic failure tests:
 - `Option<borrow T>` returned from a local
 - constant index outside a fixed-size array, including a negative one (E0304)
 - match on a plain enum that leaves out a member without a `_` arm
+- a non-void function or function literal that can reach its end: after an
+  `if` without `else`, a `while (1)` with a `break` (also one inside a case
+  arm), a `case` without `_` on an integer (E0202)
+- a `@noreturn` function that has a `return`, can reach its end, or is not
+  `void` (E0203)
 - moving or mutating a receiver while a method's returned borrow is in scope
 - writing through a shared borrow, `++` through one, and `&mut` of a field
   through one (E0601)

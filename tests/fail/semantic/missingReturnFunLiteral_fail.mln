@@ -1,0 +1,6 @@
+// A function written as a literal is held to the same rule (E0202).
+i32 pick = (i32 x) => {
+    if (x > 0) { return x; }
+};
+
+i32 main() { return pick(1); }

@@ -942,8 +942,10 @@ static void rewrite_payload_case(VariantTable *table, ASTNode *node) {
     /* Without a `_` arm the case yields zero for an unmatched tag, which is a
      * silently wrong answer rather than a missing one. Require the arms to
      * account for every variant instead. */
-    if (!node->case_expr.default_expr && !node->case_expr.default_is_noop && enum_name)
+    if (!node->case_expr.default_expr && !node->case_expr.default_is_noop && enum_name) {
         report_missing_arms(table, node, enum_name, covered, covered_count);
+        node->case_expr.is_exhaustive = 1;
+    }
 
     free(covered);
     node->case_expr.target = new_member_access(target, "__tag");

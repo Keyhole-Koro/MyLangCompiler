@@ -1,0 +1,10 @@
+// A `@noreturn` call does not come back, so the `return` never runs (W0001).
+@noreturn
+void stop() {
+    while (1) {}
+}
+
+i32 main() {
+    stop();
+    return 0;
+}

@@ -1,0 +1,9 @@
+// A case on an integer without `_` can run no arm at all (E0202).
+i32 name(i32 x) {
+    case x of {
+        1 -> ({ return 10; });
+        2 -> ({ return 20; });
+    };
+}
+
+i32 main() { return name(1); }

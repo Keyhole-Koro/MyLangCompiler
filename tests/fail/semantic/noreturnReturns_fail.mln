@@ -1,0 +1,8 @@
+// A `@noreturn` function cannot have a `return` (E0203).
+@noreturn
+void stop(i32 x) {
+    if (x > 0) { return; }
+    while (1) {}
+}
+
+i32 main() { stop(1); }

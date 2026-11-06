@@ -1,0 +1,13 @@
+// A case arm does not own a `break`: this one leaves the loop (E0202).
+enum Step { Stop, Go };
+
+i32 spin(Step step) {
+    while (true) {
+        case step of {
+            Step::Stop -> ({ break; });
+            Step::Go -> ({ return 1; });
+        };
+    }
+}
+
+i32 main() { return spin(Step::Go); }

@@ -1,0 +1,9 @@
+// `@noreturn` is read from the imported declaration.
+import noreturn_lib from "../../support/noreturn_lib.mln";
+
+i32 pick(i32 x) {
+    if (x > 0) { return x; }
+    noreturn_lib.stop();
+}
+
+i32 main() { return pick(1); }

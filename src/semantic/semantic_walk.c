@@ -63,6 +63,10 @@ static SemanticFunctionSig *find_function_sig(SemanticContext *ctx, const char *
     return NULL;
 }
 
+SemanticFunctionSig *semantic_find_function_sig(SemanticContext *ctx, const char *name) {
+    return find_function_sig(ctx, name);
+}
+
 static SemanticNewtype *find_newtype(SemanticContext *ctx, const char *name) {
     if (!ctx || !name) return NULL;
     for (int i = 0; i < ctx->newtype_count; i++)
@@ -537,15 +541,11 @@ static void semantic_warn_drop_without_impl(SemanticContext *ctx, ASTNode *root)
     }
 }
 
-static const char *semantic_type_base_name(ASTNode *type_node) {
+/* `void *` is a value, so only plain `void` counts. */
+int semantic_type_is_void(ASTNode *type_node) {
     SemanticTypeInfo info;
-    if (!semantic_typeinfo_from_type_ast(type_node, &info)) return "";
-    return info.base_type ? info.base_type : "";
-}
-
-static int semantic_type_is_void(ASTNode *type_node) {
-    const char *base = semantic_type_base_name(type_node);
-    return strcmp(base, "void") == 0;
+    return semantic_typeinfo_from_type_ast(type_node, &info) && info.base_type &&
+           strcmp(info.base_type, "void") == 0 && info.pointer_level == 0;
 }
 
 static int semantic_typeinfo_is_integer_like(const SemanticTypeInfo *info) {
@@ -882,6 +882,13 @@ static void check_return_type(SemanticContext *ctx, ASTNode *return_node) {
     if (!ctx || !return_node || return_node->type != AST_RETURN) return;
     fn = ctx->current_function;
     if (!fn || fn->type != AST_FUNDEF) return;
+
+    if (fn->fundef.is_noreturn) {
+        semantic_error_code_at(ctx, semantic_location_from_ast(return_node),
+                               SEMCODE_NORETURN_RETURNS,
+                               "@noreturn function '%s' cannot return", fn->fundef.name);
+        return;
+    }
 
     if (!semantic_typeinfo_from_type_ast(fn->fundef.ret_type, &expected)) return;
     if (!expected.base_type || expected.base_type[0] == '\0') return;
@@ -2199,10 +2206,12 @@ static void check_enum_case_coverage(SemanticContext *ctx, ASTNode *node) {
     char missing[192];
     size_t used = 0;
     int count = 0;
+    int members = 0;
     missing[0] = '\0';
     for (int i = 0; i < ctx->enum_value_count; i++) {
         SemanticEnumValue *member = &ctx->enum_values[i];
         if (!member->enum_name || strcmp(member->enum_name, type.base_type) != 0) continue;
+        members++;
         int seen = 0;
         for (int c = 0; c < node->case_expr.case_count && !seen; c++)
             seen = case_key_matches(ctx, node->case_expr.cases[c].key, member->value);
@@ -2212,7 +2221,10 @@ static void check_enum_case_coverage(SemanticContext *ctx, ASTNode *node) {
         if (written > 0 && used + (size_t)written < sizeof(missing)) used += (size_t)written;
         count++;
     }
-    if (!count) return;
+    if (!count) {
+        if (members > 0) node->case_expr.is_exhaustive = 1;
+        return;
+    }
     semantic_error_at(ctx, semantic_location_from_ast(node),
                       "this match does not cover %s of '%s': %s. Add %s, or a `_` arm",
                       count == 1 ? "one member" : "every member", type.base_type, missing,
@@ -2537,18 +2549,15 @@ static void loop_leave(SemanticContext *ctx, SemanticLoopFrame *frame, int falls
 static void walk_block_items(SemanticContext *ctx, ASTNode **items, int count) {
     int unreachable = 0;
     for (int i = 0; i < count; i++) {
-        if (unreachable && items[i]) {
+        /* A statement the compiler added has no place in the source to point
+         * at, and the one written after it is reported anyway. */
+        if (unreachable && items[i] && semantic_location_is_known(semantic_location_from_ast(items[i]))) {
             semantic_warning_code_at(ctx, semantic_location_from_ast(items[i]),
                                      SEMCODE_UNREACHABLE_STATEMENT,
                                      "unreachable statement");
         }
         semantic_walk_stmt(ctx, items[i]);
-        if (items[i] &&
-            (items[i]->type == AST_RETURN ||
-             items[i]->type == AST_BREAK ||
-             items[i]->type == AST_CONTINUE)) {
-            unreachable = 1;
-        }
+        if (!semantic_stmt_completes(ctx, items[i])) unreachable = 1;
     }
 }
 
@@ -2899,6 +2908,7 @@ static void semantic_walk_stmt(SemanticContext *ctx, ASTNode *node) {
         semantic_walk_stmt(ctx, node->fundef.ret_type);
         walk_params(ctx, node->fundef.params, node->fundef.param_count);
         semantic_walk_stmt(ctx, node->fundef.body);
+        semantic_check_function_end(ctx, node);
         leave_scope(ctx);
         ctx->function_depth--;
         ctx->current_function = prev_function;

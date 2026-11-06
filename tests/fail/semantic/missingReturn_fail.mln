@@ -1,0 +1,6 @@
+// The path where x <= 0 reaches the end of the function (E0202).
+i32 pick(i32 x) {
+    if (x > 0) { return x; }
+}
+
+i32 main() { return pick(1); }

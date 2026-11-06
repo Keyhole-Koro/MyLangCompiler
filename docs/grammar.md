@@ -259,6 +259,46 @@ convention ignores trailing arguments, the DOM's uniform handler shape
 `(owner, id, arg)` reaches `(T *self, i32 id)` or `(T *self)` directly --
 no wrapper is generated. A value receiver is a move and is rejected.
 
+`@safe` and `@noreturn` belong to the language: they are not annotations and
+emit no row.
+
+### Functions that do not return
+
+`@noreturn` declares that a call of a function does not come back. The
+function must be `void`, must have no `return`, and must not be able to reach
+its end (E0203). An assembly import has no declaration to mark, so a function
+that ends in one says so itself:
+
+```mylang
+@noreturn
+export void panic(char *msg) {
+    print(msg);
+    halt_cpu();
+    while (1) {}
+}
+```
+
+`@noreturn` cannot be put on a generic declaration.
+
+### Reaching the end of a function
+
+A function that returns a value must not be able to reach its end (E0202). A
+statement after one that cannot complete is unreachable (W0001). A statement
+cannot complete when it is:
+
+- `return`, `break` or `continue`;
+- a block with such a statement in it;
+- an `if` with an `else`, neither branch of which can complete;
+- `while` or `for` with a constant true condition, or a `for` with none, and no
+  `break` of its own (a `break` in a case arm belongs to the enclosing loop);
+- `do ... while` with no `break`, whose condition is constant true, or whose
+  body cannot complete and has no `continue`;
+- a `case` with a `_` arm or covering every member of its enum, none of whose
+  arms can complete;
+- a call of a `@noreturn` function.
+
+Only a number literal counts as a constant condition.
+
 ### Variables
 - `var_decl` -> `mut? type IDENTIFIER ( [ ( NUMBER | const_parameter )? ] )* ( = ( expr | init_list ) )? ;`
 - `init_list` -> `{ expr ( , expr )* ,? }`

@@ -1,0 +1,6 @@
+package noreturn_lib;
+
+@noreturn
+export void stop() {
+    while (1) {}
+}

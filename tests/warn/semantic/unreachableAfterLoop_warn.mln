@@ -1,0 +1,10 @@
+// The loop has no `break`, so the `return` after it never runs (W0001).
+i32 spin(i32 x) {
+    while (1) {
+        if (x > 3) { return x; }
+        x = x + 1;
+    }
+    return 0;
+}
+
+i32 main() { return spin(0); }

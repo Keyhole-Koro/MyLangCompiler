@@ -42,6 +42,8 @@ Bands `E08xx` and above are unused and reserved for future categories.
 | `E0104` | Function call | Stored mock return used for an aggregate target | `mock .ret(...) cannot return aggregate target 'make_pair'; use .call(fake)` |
 | `E0105` | Function call | TestKit mock ABI limit exceeded | `mock .when(...) supports at most six arguments` |
 | `E0201` | Return | Return type mismatch | `function 'f' must return a value` / return type mismatch (expected / actual) |
+| `E0202` | Return | A non-void function can reach its end | `'f' can reach its end without returning a value` |
+| `E0203` | Return | A `@noreturn` function can return, or is not `void` | `@noreturn function 'f' can reach its end` |
 | `E0301` | Expression type | Assignment / initializer type mismatch | assignment or initializer expected / actual mismatch |
 | `E0302` | Expression type | Invalid binary operands | `invalid operands to '+': i32 and char*` |
 | `E0303` | Expression type | Invalid condition type | `condition must be integer-like, pointer, or reference, got ...` |
@@ -60,7 +62,7 @@ Bands `E08xx` and above are unused and reserved for future categories.
 
 | Code | Category | Meaning | Example message |
 | --- | --- | --- | --- |
-| `W0001` | Warning | Unreachable statement | `unreachable statement` |
+| `W0001` | Warning | Statement after one that cannot complete | `unreachable statement` |
 | `W0002` | Warning | `drop()` method without `impl Drop` | `T has drop() without `impl Drop`; ...` |
 
 Warnings can be promoted to errors with warnings-as-errors mode.

@@ -1,0 +1,6 @@
+// `void *` is a value, unlike `void` (E0202).
+void *pick(i32 x) {
+    if (x > 0) { return (void *)x; }
+}
+
+i32 main() { pick(1); return 0; }

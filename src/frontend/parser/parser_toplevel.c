@@ -210,13 +210,16 @@ ASTNode* parse_toplevel(ParserContext *context, Token **cur) {
     int attr_count = 0;
     Token *first = *cur;
     Attribute *attrs = parse_attributes(context, cur, &attr_count);
-    /* `@safe` belongs to the language, not to an `annotation` declaration:
-     * it never reaches the metadata rows, and unlike those it may precede a
-     * generic template or an impl. */
+    /* `@safe` and `@noreturn` belong to the language, not to an `annotation`
+     * declaration: they never reach the metadata rows. `@safe`, unlike those
+     * rows, may also precede a generic template or an impl. */
     int is_safe = 0;
+    int is_noreturn = 0;
     for (int i = 0; i < attr_count;) {
-        if (strcmp(attrs[i].name, "safe") == 0) {
-            is_safe = 1;
+        int is_safe_attr = strcmp(attrs[i].name, "safe") == 0;
+        if (is_safe_attr || strcmp(attrs[i].name, "noreturn") == 0) {
+            if (is_safe_attr) is_safe = 1;
+            else is_noreturn = 1;
             memmove(&attrs[i], &attrs[i + 1], sizeof(Attribute) * (size_t)(attr_count - i - 1));
             attr_count--;
         } else {
@@ -230,10 +233,15 @@ ASTNode* parse_toplevel(ParserContext *context, Token **cur) {
     if (!decl) {
         /* Package/import lines and generic templates come back NULL; none of
          * them can carry an attribute today. */
-        if (is_safe && attr_count == 0) return NULL;
+        if (is_safe && !is_noreturn && attr_count == 0) return NULL;
         parse_error(context, "attributes may only precede a function or method declaration", first);
     }
-    if (is_safe && attr_count == 0) return decl;
+    if (is_noreturn) {
+        if (decl->type != AST_FUNDEF)
+            parse_error(context, "@noreturn may only precede a function or method declaration", first);
+        decl->fundef.is_noreturn = 1;
+    }
+    if ((is_safe || is_noreturn) && attr_count == 0) return decl;
     decl->attrs = attrs;
     decl->attr_count = attr_count;
     return decl;

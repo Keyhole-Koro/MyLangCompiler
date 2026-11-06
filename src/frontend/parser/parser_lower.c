@@ -33,6 +33,13 @@ void lower_fun_literals_block(ParserContext *context, ASTNode *block,
                                      lit->fun_literal.body, lit->fun_literal.is_variadic);
             fn->fundef.is_exported = 0;
             fn->fundef.package = NULL;
+            /* A diagnostic about the function has no other place to point. */
+            if (fn->fundef.body) {
+                fn->line = fn->fundef.body->line;
+                fn->col = fn->fundef.body->col;
+                fn->end_line = fn->fundef.body->end_line;
+                fn->end_col = fn->fundef.body->end_col;
+            }
             add_function(context, fn);
             context->lowering.hoisted_functions = realloc(context->lowering.hoisted_functions, sizeof(ASTNode*) * (context->lowering.hoisted_function_count + 1));
             context->lowering.hoisted_functions[context->lowering.hoisted_function_count++] = fn;

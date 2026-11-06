@@ -1,0 +1,7 @@
+// A `@noreturn` function cannot reach its end (E0203).
+@noreturn
+void stop(i32 x) {
+    i32 y = x;
+}
+
+i32 main() { stop(1); }

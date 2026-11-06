@@ -1,0 +1,9 @@
+// The `break` leaves the loop, so the end of the function is reachable (E0202).
+i32 spin(i32 x) {
+    while (1) {
+        if (x > 3) { break; }
+        x = x + 1;
+    }
+}
+
+i32 main() { return spin(0); }

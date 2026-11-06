@@ -171,5 +171,11 @@ void semantic_warning_code_at(SemanticContext *ctx, SemanticLocation loc, const 
 void semantic_note_at(SemanticContext *ctx, SemanticLocation loc, const char *fmt, ...);
 void semantic_emit_diagnostics(SemanticContext *ctx);
 void semantic_walk_ast(SemanticContext *ctx, ASTNode *node);
+SemanticFunctionSig *semantic_find_function_sig(SemanticContext *ctx, const char *name);
+int semantic_type_is_void(ASTNode *type_node);
+
+/* semantic_flow.c */
+int semantic_stmt_completes(SemanticContext *ctx, ASTNode *node);
+void semantic_check_function_end(SemanticContext *ctx, ASTNode *fn);
 
 #endif
