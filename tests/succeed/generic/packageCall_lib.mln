@@ -1,0 +1,15 @@
+package shapes;
+
+export struct Square { i32 side; };
+
+export trait Sized {
+    Self make();
+    i32 (Self self) area();
+}
+
+i32 g_total = 7;
+
+export i32 measure<T: Sized>() {
+    T value = T::make();
+    return value.area() + value.extra() + g_total;
+}

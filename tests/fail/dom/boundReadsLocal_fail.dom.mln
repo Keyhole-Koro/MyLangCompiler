@@ -1,0 +1,13 @@
+// The update method has the state and not the locals of `view`.
+struct Counter { i32 x; };
+
+void bind(i32 slot, i32 node) { }
+void Label_x(i32 slot, i32 x) { }
+i32 Label(i32 x) { return 1; }
+
+i32 (Counter c) view() {
+    i32 offset = 3;
+    return <Label x={c.x + offset} />;
+}
+
+i32 main() { Counter c; return c.view(); }

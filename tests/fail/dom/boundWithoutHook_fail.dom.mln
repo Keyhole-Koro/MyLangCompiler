@@ -1,0 +1,9 @@
+// A value that reads the state must be able to change on the screen.
+struct Counter { i32 x; };
+
+void bind(i32 slot, i32 node) { }
+i32 Label(str text, i32 x) { return 1; }
+
+i32 (Counter c) view() { return <Label text="a" x={c.x} />; }
+
+i32 main() { Counter c; return c.view(); }

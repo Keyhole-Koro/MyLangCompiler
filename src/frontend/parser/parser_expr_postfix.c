@@ -54,6 +54,34 @@ static ASTNode *new_try_expr(ParserContext *context, ASTNode *target) {
     return node;
 }
 
+/* The call `pkg.name<args>(...)`, with `cur` at the `<`. An instance is named
+ * after the template, so the package name goes no further. */
+static ASTNode *parse_package_generic_call(ParserContext *context, Token **cur,
+                                           ASTNode *package, const char *name) {
+    int line = package->line;
+    int col = package->col;
+    int type_arg_count = 0;
+    ASTNode **type_args = parse_type_args(context, cur, &type_arg_count);
+    if (!expect(cur, L_PARENTHESES))
+        parse_error(context, "expected '(' after generic function arguments", *cur);
+    ASTNode **args = NULL;
+    int arg_count = 0;
+    while ((*cur)->kind != R_PARENTHESES) {
+        args = realloc(args, sizeof(ASTNode *) * (size_t)(arg_count + 1));
+        args[arg_count++] = parse_expr(context, cur);
+        if ((*cur)->kind != COMMA) break;
+        *cur = (*cur)->next;
+    }
+    Token *end_tok = *cur;
+    if (!expect(cur, R_PARENTHESES)) parse_error(context, "expected ')' after args", *cur);
+    free_ast(package);
+    ASTNode *call = new_generic_call((char *)name, type_args, type_arg_count, args, arg_count);
+    call->line = line;
+    call->col = col;
+    set_node_end_from_token(call, end_tok);
+    return call;
+}
+
 ASTNode *parse_postfix(ParserContext *context, Token **cur) {
     ASTNode *node = parse_primary(context, cur);
     while (1) {
@@ -78,6 +106,11 @@ ASTNode *parse_postfix(ParserContext *context, Token **cur) {
             char *member_name = is_mock_of ? "target" : (*cur)->value;
             *cur = (*cur)->next;
             if (node->type == AST_IDENTIFIER && is_imported_package(context, node->identifier.name)) {
+                /* `pkg.run<T>()`: the template came with the package import. */
+                if ((*cur)->kind == LT && find_generic_function_template(context, member_name)) {
+                    node = parse_package_generic_call(context, cur, node, member_name);
+                    continue;
+                }
                 char buf[256];
                 snprintf(buf, sizeof(buf), "%s_%s", node->identifier.name, member_name);
                 node = new_identifier(buf);

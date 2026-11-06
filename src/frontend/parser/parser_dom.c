@@ -4,7 +4,7 @@
 /* Parses the DOM syntax extension into AST_DOM_ELEMENT nodes.
  *
  *   element  := '<' IDENT prop* ( '/>' | '>' child* '</' IDENT '>' )
- *   prop     := IDENT '=' ( STRING | '{' expr '}' )
+ *   prop     := IDENT '=' ( STRING | '{' expr ( ',' expr )* '}' )
  *   child    := element | whitespace text
  *
  * The lexer only opens DOM mode after `return`, `=`, `(`, `=>` or `:`, and the
@@ -43,6 +43,21 @@ static DomProp *parse_dom_props(ParserContext *context, Token **cur, int *out_co
         } else if ((*cur)->kind == L_BRACE) {
             *cur = (*cur)->next;
             value = parse_expr(context, cur);
+            // `{"clicks: %d", c.clicks}`: a format and its values. Lowering
+            // turns it into the format hooks (parser_lower_dom.c).
+            if ((*cur)->kind == COMMA) {
+                ASTNode **parts = malloc(sizeof(ASTNode *));
+                int part_count = 1;
+                parts[0] = value;
+                while ((*cur)->kind == COMMA) {
+                    *cur = (*cur)->next;
+                    parts = realloc(parts, sizeof(ASTNode *) * (size_t)(part_count + 1));
+                    parts[part_count++] = parse_expr(context, cur);
+                }
+                value = new_call(DOM_FORMAT_VALUE, parts, part_count);
+                value->line = name_tok->line;
+                value->col = name_tok->col;
+            }
             if (!expect(cur, R_BRACE))
                 parse_error(context, "expected '}' after DOM property expression", *cur);
         } else {

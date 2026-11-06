@@ -338,7 +338,11 @@ void load_imported_generic_templates(ParserContext *context, ASTNode *import_nod
     for (int i = 0; i < mod->generic_template_count; i++) {
         ASTNode *template = mod->generic_templates[i];
         const char *name = template_name(template);
-        if (!template_is_exported(template) || !import_requests_symbol(import_node, name))
+        /* A package import asks for no names; `pkg.run<T>()` reaches its
+         * generic functions all the same. */
+        int by_package = import_node->import_stmt.symbol_count == 0 && template->type == AST_FUNDEF;
+        if (!template_is_exported(template) ||
+            (!by_package && !import_requests_symbol(import_node, name)))
             continue;
 
         GenericImportClosure closure = {context, mod};

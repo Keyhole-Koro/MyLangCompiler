@@ -723,6 +723,13 @@ static AngleKind *classify_generic_angles(Token **tokens, size_t token_count) {
         /* `impl From<SsdError> for FsError` */
         int is_impl_trait = i > 0 && tokens[i - 1]->kind == IMPL && next_kind == FOR;
         int is_function_declaration = brace_depth == 0 && next_kind == L_PARENTHESES;
+        /* `pkg.run<T>()` */
+        int is_package_call = i > 1 && tokens[i - 1]->kind == DOT &&
+            tokens[i - 2]->kind == IDENTIFIER && next_kind == L_PARENTHESES;
+        if (is_package_call) {
+            mark_generic_span(tokens, angles, i + 1, close_index);
+            continue;
+        }
         if (!is_type_declaration && !is_function_declaration && !is_impl_trait) continue;
 
         generic_name_add(&generic_names, &generic_name_count, tokens[i]->value);

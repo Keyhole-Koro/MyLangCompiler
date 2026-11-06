@@ -1,0 +1,10 @@
+// What a handler takes is what its event carries.
+struct Form { i32 n; };
+
+i32 Input(fn(i32 owner, str text) -> void onChange) { return 1; }
+
+void (borrow Form f) changed(i32 row) { f.n = row; }
+
+i32 (Form f) view() { return <Input onChange={f.changed} />; }
+
+i32 main() { Form f; return f.view(); }

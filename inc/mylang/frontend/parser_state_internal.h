@@ -154,6 +154,9 @@ typedef struct ParserLoweringState {
     int dom_node_counter;
     ASTNode *dom_program;
     ASTNode *dom_current_fn;   // function whose body is being DOM-lowered
+    ASTNode *dom_view;         // the `view` method being lowered, or NULL
+    ASTNode **dom_view_updates; // the update hook call of each bound property
+    int dom_view_update_count;
     int payload_ret_counter;
     int payload_case_counter;
 } ParserLoweringState;

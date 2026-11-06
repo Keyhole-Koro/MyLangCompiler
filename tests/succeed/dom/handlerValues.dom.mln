@@ -1,0 +1,43 @@
+// A handler is called with the values its event carries, or with fewer: a
+// method lands on the function type its element declares.
+import { Text } from "@std/text/text.mln";
+
+struct Form { i32 n; Text<8> seen; bool on; };
+
+fn(i32 owner, str text) -> void g_change = 0;
+fn(i32 owner, str text) -> void g_change_none = 0;
+fn(i32 owner, bool on) -> void g_flag = 0;
+
+void append_child(i32 parent, i32 child) { }
+
+i32 Input(fn(i32 owner, str text) -> void onChange) {
+    if (g_change == 0) { g_change = onChange; }
+    else { g_change_none = onChange; }
+    return 1;
+}
+i32 Check(fn(i32 owner, bool on) -> void onChange) { g_flag = onChange; return 2; }
+i32 Box() { return 3; }
+
+void (borrow Form f) changed(str text) { f.seen.append(text); }
+void (borrow Form f) changed_any() { f.n = f.n + 1; }
+void (borrow Form f) toggled(bool on) { f.on = on; }
+
+i32 (Form f) view() {
+    return <Box>
+        <Input onChange={f.changed} />
+        <Input onChange={f.changed_any} />
+        <Check onChange={f.toggled} />
+    </Box>;
+}
+
+void bind(i32 slot, i32 node) { }
+
+i32 main() {
+    Form f;
+    f.view();
+    i32 self = (i32)&f;
+    g_change(self, "abc");
+    g_change_none(self, "abc");
+    g_flag(self, true);
+    return f.seen.len() * 100 + f.n * 10 + (f.on ? 1 : 0);   // 311
+}

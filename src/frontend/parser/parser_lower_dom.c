@@ -3,6 +3,7 @@
 #include "mylang/frontend/parser_ast_internal.h"
 #include "mylang/frontend/module.h"
 #include "mylang/frontend/resolver.h"
+#include "mylang/type/type_info.h"
 
 #include <stdarg.h>
 #include <ctype.h>
@@ -44,10 +45,33 @@ static ASTNode *i32_type(void);
  *     local function is passed as the parameter's declared function type,
  *     through a trampoline when the function takes fewer arguments; see
  *     parser_lower_annot.c. Any other value is passed through as written.
+ *
+ * `view` is the one method treated apart: a method of that name that reads its
+ * receiver and holds markup. Writing to the receiver there is an error, and a
+ * property whose value reads the receiver is bound: its node is recorded with
+ * `bind(slot, node)`, and a generated method hands the value to the hook
+ * `<Tag>_<property>(slot, value)` each time it runs:
+ *
+ *     View (Counter c) view() {
+ *         return <Label text={"clicks: %d", c.clicks} />;
+ *     }
+ *
+ *     View __dom0 = dom.Label(<the format>);
+ *     dom.bind(0, __dom0);
+ *     return __dom0;
+ *     ...
+ *     void (Counter c) __view_update() { dom.Label_text(0, <the format>); }
+ *
+ * The hook decides what a change means, so the compiler knows no property. A
+ * format `{"%s: %d", a, b}` lowers to `format`, then `format_str` or
+ * `format_int` per value, then `format_end`, which yields the text.
  */
 
 #define DOM_APPEND_CHILD "append_child"
 #define DOM_REF_PROP "ref"
+#define DOM_BIND "bind"
+#define DOM_VIEW_METHOD "view"
+#define DOM_VIEW_UPDATE "__view_update"
 
 // Statements generated for one source statement, plus the id counter shared by
 // every element lowered into it.
@@ -166,10 +190,48 @@ static ASTNode *handler_value_type(ParserContext *context, const char *tag, int 
         false);
 }
 
-/* `onClick={c->click}` names the method itself: the dispatcher's
- * (owner, id, arg) call lands on `(Counter *c, i32 id)` directly, since the
- * calling convention ignores trailing arguments. A plain local function
- * with fewer parameters is wrapped so `id` arrives in the right slot. */
+static int same_value_type(const ASTNode *a, const ASTNode *b) {
+    if (!a || !b || a->type != b->type) return 0;
+    if (a->type != AST_TYPE) return 1;
+    const char *left = base_type_name((ASTNode *)a);
+    const char *right = base_type_name((ASTNode *)b);
+    return left && right && strcmp(left, right) == 0 &&
+           a->type_node.pointer_level == b->type_node.pointer_level &&
+           a->type_node.borrow_kind == b->type_node.borrow_kind;
+}
+
+/* A handler takes the values its event carries, in order, or fewer of them:
+ * what the function type declares after `owner`. */
+static void check_handler_method(ParserContext *context, ASTNode *el, const DomProp *prop,
+                                 const char *member, const ASTNode *method, const ASTNode *type) {
+    if (!type || type->type != AST_TYPE_FUNCTION) {
+        if (method->fundef.param_count > 3) {
+            dom_error(context, el, prop->line, prop->col,
+                      "handler method '%s' takes too many parameters; at most (i32 id, i32 arg) after the receiver", member);
+        }
+        return;
+    }
+    int carried = type->function_type.param_count - 1;
+    int taken = method->fundef.param_count - 1;
+    if (taken > carried) {
+        dom_error(context, el, prop->line, prop->col,
+                  "handler method '%s' takes %d value%s; %s on <%s> carries %d",
+                  member, taken, taken == 1 ? "" : "s", prop->name, el->dom_element.tag, carried);
+    }
+    for (int i = 0; i < taken; i++) {
+        const ASTNode *param = method->fundef.params[i + 1];
+        if (!same_value_type(param->param.type, type->function_type.param_types[i + 1])) {
+            dom_error(context, el, prop->line, prop->col,
+                      "handler method '%s': parameter '%s' is not the type %s on <%s> carries",
+                      member, param->param.name, prop->name, el->dom_element.tag);
+        }
+    }
+}
+
+/* `onClick={c.click}` names the method itself: the handler's function type
+ * lands on the method directly, since the calling convention ignores trailing
+ * arguments. A plain local function with fewer parameters is wrapped so `id`
+ * arrives in the right slot. */
 static ASTNode *lower_handler_value(ParserContext *context, ASTNode *el, const DomProp *prop,
                                     int param, ASTNode *value) {
     const char *tramp = NULL;
@@ -189,10 +251,9 @@ static ASTNode *lower_handler_value(ParserContext *context, ASTNode *el, const D
                               "handler method '%s' must take its receiver by pointer or reference, `(%s *self)` or `(borrow %s self)`",
                               member, type_name, type_name);
                 }
-                if (m->fundef->fundef.param_count > 3) {
-                    dom_error(context, el, prop->line, prop->col,
-                              "handler method '%s' takes too many parameters; at most (i32 id, i32 arg) after the receiver", member);
-                }
+                ASTNode *handler_type = handler_value_type(context, el->dom_element.tag, param);
+                check_handler_method(context, el, prop, member, m->fundef, handler_type);
+                free_ast(handler_type);
                 tramp = m->mangled;
             }
         }
@@ -210,6 +271,221 @@ static ASTNode *lower_handler_value(ParserContext *context, ASTNode *el, const D
     cast->col = value->col;
     free_ast(value);
     return cast;
+}
+
+// --- values -------------------------------------------------------------------------
+
+static ASTNode *dom_call(const char *name, ASTNode **args, int arg_count, const ASTNode *at);
+
+/* A call of the function `name` in scope, as the source would resolve it. */
+static ASTNode *hook_call(ParserContext *context, ASTNode *el, const DomProp *prop,
+                          const char *name, ASTNode **args, int arg_count) {
+    DomSignature sig;
+    if (!dom_signature_lookup(context, context->lowering.dom_program, name, &sig)) {
+        dom_error(context, el, prop->line, prop->col,
+                  "'%s' on <%s> needs a function named '%s' in scope", prop->name, el->dom_element.tag, name);
+    }
+    ASTNode *call = dom_call(sig.call_name, args, arg_count, el);
+    dom_signature_free(&sig);
+    return call;
+}
+
+static ASTNode *hook_call1(ParserContext *context, ASTNode *el, const DomProp *prop,
+                           const char *name, ASTNode *a) {
+    ASTNode **args = malloc(sizeof(ASTNode *));
+    args[0] = a;
+    return hook_call(context, el, prop, name, args, 1);
+}
+
+static ASTNode *hook_call2(ParserContext *context, ASTNode *el, const DomProp *prop,
+                           const char *name, ASTNode *a, ASTNode *b) {
+    ASTNode **args = malloc(sizeof(ASTNode *) * 2);
+    args[0] = a;
+    args[1] = b;
+    return hook_call(context, el, prop, name, args, 2);
+}
+
+static ASTNode *struct_field_type(ParserContext *context, const char *type_name, const char *field) {
+    ASTNode *program = context->lowering.dom_program;
+    if (!type_name || !program) return NULL;
+    for (int i = 0; i < program->block.count; i++) {
+        ASTNode *decl = program->block.stmts[i];
+        if (!decl || decl->type != AST_STRUCT || !decl->struct_stmt.name ||
+            strcmp(decl->struct_stmt.name, type_name) != 0) continue;
+        for (int m = 0; m < decl->struct_stmt.member_count; m++) {
+            ASTNode *member = decl->struct_stmt.members[m];
+            if (member && member->type == AST_VAR_DECL && member->var_decl.name &&
+                strcmp(member->var_decl.name, field) == 0) {
+                return member->var_decl.var_type;
+            }
+        }
+    }
+    return NULL;
+}
+
+/* `f.rows` where the field is a Text<N>. Instantiation has already named the
+ * instance, so its name is what there is to read. */
+static int value_is_fixed_text(ParserContext *context, ASTNode *value) {
+    if (value->type != AST_MEMBER_ACCESS || !value->member_access.lhs ||
+        value->member_access.lhs->type != AST_IDENTIFIER) return 0;
+    const char *owner = local_type_name(context, value->member_access.lhs->identifier.name);
+    const char *type = base_type_name(struct_field_type(context, owner, value->member_access.member));
+    return type && strncmp(type, "__mlg_s_4_Text", 14) == 0;
+}
+
+/* A Text<N> field given where a `str` is read. */
+static ASTNode *as_str_value(ParserContext *context, ASTNode *value) {
+    if (!value_is_fixed_text(context, value)) return value;
+    ASTNode *call = new_call("as_str", NULL, 0);
+    call->line = value->line;
+    call->col = value->col;
+    call->call.recv = value;
+    return call;
+}
+
+/* `{"a %d b %s", x, y}` as format("a %d b %s"), one call per value, format_end.
+ * The literal says what each value is, so `x` goes to format_int(rest, x) and
+ * its type is checked like any argument. Each call takes what is left of the
+ * format and returns what follows its value. */
+static ASTNode *lower_format_value(ParserContext *context, ASTNode *el, const DomProp *prop,
+                                   ASTNode *value) {
+    ASTNode *literal = value->call.args[0];
+    if (literal->type != AST_STRING_LITERAL) {
+        dom_error(context, el, prop->line, prop->col,
+                  "'%s' on <%s>: a format starts with a string literal", prop->name, el->dom_element.tag);
+    }
+    const char *text = literal->string_literal.value;
+    int given = value->call.arg_count - 1;
+    int used = 0;
+    ASTNode *call = hook_call1(context, el, prop, "format", literal);
+    for (int i = 0; text[i]; i++) {
+        if (text[i] != '%') continue;
+        char spec = text[++i];
+        if (spec == '%') continue;
+        if (spec != 'd' && spec != 's') {
+            dom_error(context, el, prop->line, prop->col,
+                      "'%s' on <%s>: a format takes %%d, %%s and %%%%", prop->name, el->dom_element.tag);
+        }
+        if (used >= given) break;
+        ASTNode *arg = value->call.args[++used];
+        if (spec == 's') arg = as_str_value(context, arg);
+        call = hook_call2(context, el, prop, spec == 'd' ? "format_int" : "format_str", call, arg);
+    }
+    int wanted = 0;
+    for (int i = 0; text[i]; i++) {
+        if (text[i] != '%') continue;
+        if (text[++i] != '%') wanted++;
+    }
+    if (wanted != given) {
+        dom_error(context, el, prop->line, prop->col,
+                  "'%s' on <%s>: the format takes %d value%s, %d given",
+                  prop->name, el->dom_element.tag, wanted, wanted == 1 ? "" : "s", given);
+    }
+    free(value->call.args);
+    value->call.args = NULL;
+    value->call.arg_count = 0;
+    free_ast(value);
+    return hook_call1(context, el, prop, "format_end", call);
+}
+
+static void emit_stmt(DomEmit *out, ASTNode *stmt);
+
+static int parameter_is_str(ParserContext *context, const char *tag, int param) {
+    ASTNode *callee = dom_callee(context, tag);
+    ASTNode *declared = callee && callee->type == AST_FUNDEF && param < callee->fundef.param_count
+                            ? callee->fundef.params[param] : NULL;
+    const char *type = declared && declared->type == AST_PARAM ? base_type_name(declared->param.type) : NULL;
+    return type && strcmp(type, "str") == 0;
+}
+
+// --- bound properties ----------------------------------------------------------------
+
+typedef struct {
+    const char *name;
+    int found;
+} NameSearch;
+
+static void find_name(ASTNode **slot, void *data) {
+    ASTNode *node = slot ? *slot : NULL;
+    NameSearch *search = data;
+    if (!node || search->found) return;
+    if (node->type == AST_IDENTIFIER && strcmp(node->identifier.name, search->name) == 0) {
+        search->found = 1;
+        return;
+    }
+    ast_visit_children(node, find_name, data);
+}
+
+static int value_reads(ASTNode *value, const char *name) {
+    NameSearch search = { name, 0 };
+    find_name(&value, &search);
+    return search.found;
+}
+
+static const char *view_receiver(ParserContext *context) {
+    ASTNode *view = context->lowering.dom_view;
+    return view ? view->fundef.params[0]->param.name : NULL;
+}
+
+typedef struct {
+    ParserContext *context;
+    ASTNode *el;
+    const DomProp *prop;
+} BoundValueCheck;
+
+/* The update method has the receiver and nothing else of `view`. */
+static void reject_view_local(ASTNode **slot, void *data) {
+    ASTNode *node = slot ? *slot : NULL;
+    BoundValueCheck *check = data;
+    if (!node) return;
+    if (node->type == AST_IDENTIFIER && strcmp(node->identifier.name, view_receiver(check->context)) != 0 &&
+        local_type_name(check->context, node->identifier.name)) {
+        dom_error(check->context, check->el, check->prop->line, check->prop->col,
+                  "'%s' on <%s> reads the state and the local '%s'; a bound value can only read the state",
+                  check->prop->name, check->el->dom_element.tag, node->identifier.name);
+    }
+    ast_visit_children(node, reject_view_local, data);
+}
+
+static int parameter_is_value(ParserContext *context, const char *tag, int param) {
+    ASTNode *callee = dom_callee(context, tag);
+    ASTNode *declared = callee && callee->type == AST_FUNDEF && param < callee->fundef.param_count
+                            ? callee->fundef.params[param] : NULL;
+    const char *type = declared && declared->type == AST_PARAM ? base_type_name(declared->param.type) : NULL;
+    return type && (strcmp(type, "str") == 0 || mylang_type_is_builtin(type));
+}
+
+/* Records the update of a property whose value reads the state, and returns
+ * its slot; -1 for a value that reads no state, and for a part: a handle the
+ * element takes once, which is why the vocabulary has no hook for it. */
+static int bind_property(ParserContext *context, ASTNode *el, const DomProp *prop, int param, ASTNode *value) {
+    const char *receiver = view_receiver(context);
+    if (!receiver || !value_reads(value, receiver)) return -1;
+    BoundValueCheck check = { context, el, prop };
+    reject_view_local(&value, &check);
+
+    char hook[256];
+    snprintf(hook, sizeof(hook), "%s_%s", el->dom_element.tag, prop->name);
+    DomSignature sig;
+    if (!dom_signature_lookup(context, context->lowering.dom_program, hook, &sig)) {
+        if (!parameter_is_value(context, el->dom_element.tag, param)) return -1;
+        dom_error(context, el, prop->line, prop->col,
+                  "'%s' on <%s> reads the state, and no function '%s' can change it",
+                  prop->name, el->dom_element.tag, hook);
+    }
+    int slot = context->lowering.dom_view_update_count;
+    char number[32];
+    snprintf(number, sizeof(number), "%d", slot);
+    ASTNode **args = malloc(sizeof(ASTNode *) * 2);
+    args[0] = new_number(number);
+    args[1] = ast_clone(value);
+    ASTNode *call = dom_call(sig.call_name, args, 2, el);
+    dom_signature_free(&sig);
+    context->lowering.dom_view_updates = realloc(context->lowering.dom_view_updates,
+                                                 sizeof(ASTNode *) * (size_t)(slot + 1));
+    context->lowering.dom_view_updates[slot] = new_expr_stmt(call);
+    context->lowering.dom_view_update_count = slot + 1;
+    return slot;
 }
 
 static ASTNode *take_prop(ASTNode *el, const char *name) {
@@ -304,6 +580,9 @@ static char *emit_element(ParserContext *context, ASTNode *el, DomEmit *out) {
     // Properties are handed over in parameter order, so writing them in any
     // order produces the same call.
     ASTNode **args = sig.param_count > 0 ? malloc(sizeof(ASTNode*) * sig.param_count) : NULL;
+    int *bound_slots = sig.param_count > 0 ? malloc(sizeof(int) * sig.param_count) : NULL;
+    int bound_count = 0;
+    int format_count = 0;
     for (int i = 0; i < sig.param_count; i++) {
         const DomProp *prop = NULL;
         for (int j = 0; j < el->dom_element.prop_count; j++) {
@@ -319,6 +598,26 @@ static char *emit_element(ParserContext *context, ASTNode *el, DomEmit *out) {
         }
         if (prop && is_handler_param(sig.param_names[i])) {
             value = lower_handler_value(context, el, prop, i, value);
+        } else if (prop) {
+            if (value->type == AST_CALL && strcmp(value->call.name, DOM_FORMAT_VALUE) == 0) {
+                // The hooks build one text at a time.
+                if (++format_count > 1) {
+                    dom_error(context, el, prop->line, prop->col, "<%s> can format one property", tag);
+                }
+                value = lower_format_value(context, el, prop, value);
+            } else if (parameter_is_str(context, tag, i)) {
+                value = as_str_value(context, value);
+            }
+            int slot = bind_property(context, el, prop, i, value);
+            if (slot >= 0) bound_slots[bound_count++] = slot;
+            // A call's aggregate result cannot be an argument of a long call.
+            if (value->type == AST_CALL && parameter_is_str(context, tag, i)) {
+                char text_var[32];
+                snprintf(text_var, sizeof(text_var), "__dom_text%d", context->lowering.dom_node_counter++);
+                emit_stmt(out, new_var_decl(
+                    new_type_node(new_identifier("str"), 0, TYPEMOD_NONE, REFKIND_NONE), text_var, value));
+                value = new_identifier(text_var);
+            }
         }
         args[i] = value;
     }
@@ -346,6 +645,15 @@ static char *emit_element(ParserContext *context, ASTNode *el, DomEmit *out) {
         node_type = ast_clone(sig.return_type);
     }
     emit_stmt(out, new_var_decl(node_type ? node_type : i32_type(), var, create_call));
+
+    for (int i = 0; i < bound_count; i++) {
+        char number[32];
+        snprintf(number, sizeof(number), "%d", bound_slots[i]);
+        DomProp bound = { (char *)DOM_BIND, NULL, el->line, el->col };
+        emit_stmt(out, new_expr_stmt(hook_call2(context, el, &bound, DOM_BIND,
+                                                new_number(number), new_identifier(var))));
+    }
+    free(bound_slots);
 
     ASTNode *ref_target = take_prop(el, DOM_REF_PROP);
     if (ref_target) {
@@ -498,6 +806,49 @@ static void lower_stmt_exprs(ParserContext *context, ASTNode *stmt, DomEmit *out
     }
 }
 
+static void find_element(ASTNode **slot, void *data) {
+    ASTNode *node = slot ? *slot : NULL;
+    int *found = data;
+    if (!node || *found) return;
+    if (node->type == AST_DOM_ELEMENT) { *found = 1; return; }
+    ast_visit_children(node, find_element, data);
+}
+
+/* `View (T self) view()` with markup in it. */
+static int is_view_method(ASTNode *fn) {
+    if (!fn->fundef.recv_type_name || !fn->fundef.body || fn->fundef.param_count != 1) return 0;
+    const char *sep = strstr(fn->fundef.name, "__");
+    if (!sep || strcmp(sep + 2, DOM_VIEW_METHOD) != 0) return 0;
+    ASTNode *receiver = fn->fundef.params[0];
+    ASTNode *type = receiver && receiver->type == AST_PARAM ? receiver->param.type : NULL;
+    if (!type || type->type != AST_TYPE || type->type_node.pointer_level ||
+        type->type_node.borrow_kind != REFKIND_NONE) return 0;
+    int found = 0;
+    find_element(&fn->fundef.body, &found);
+    return found;
+}
+
+static void read_only_receiver(ASTNode *fn) {
+    fn->fundef.params[0]->param.type->type_node.type_modifiers |= TYPEMOD_CONST;
+}
+
+/* The method that runs the update hook of every bound property. */
+static void generate_view_update(ParserContext *context, ASTNode *view) {
+    ASTNode *program = context->lowering.dom_program;
+    char source[512];
+    snprintf(source, sizeof(source), "void (%s %s) %s() { }\n", view->fundef.recv_type_name,
+             view->fundef.params[0]->param.name, DOM_VIEW_UPDATE);
+    parse_generated_toplevels(context, program, source);
+    ASTNode *update = program->block.stmts[program->block.count - 1];
+    read_only_receiver(update);
+    ASTNode *body = update->fundef.body;
+    free(body->block.stmts);
+    body->block.stmts = context->lowering.dom_view_updates;
+    body->block.count = context->lowering.dom_view_update_count;
+    context->lowering.dom_view_updates = NULL;
+    context->lowering.dom_view_update_count = 0;
+}
+
 static void lower_nested_blocks(ParserContext *context, ASTNode *stmt) {
     if (!stmt) return;
     switch (stmt->type) {
@@ -506,8 +857,17 @@ static void lower_nested_blocks(ParserContext *context, ASTNode *stmt) {
         break;
     case AST_FUNDEF: {
         ASTNode *outer = context->lowering.dom_current_fn;
+        int is_view = is_view_method(stmt);
         context->lowering.dom_current_fn = stmt;
+        if (is_view) {
+            read_only_receiver(stmt);
+            context->lowering.dom_view = stmt;
+        }
         lower_nested_blocks(context, stmt->fundef.body);
+        if (is_view) {
+            context->lowering.dom_view = NULL;
+            generate_view_update(context, stmt);
+        }
         context->lowering.dom_current_fn = outer;
         break;
     }
@@ -678,6 +1038,9 @@ void dom_lowering_reset(ParserContext *context) {
     context->lowering.dom_node_counter = 0;
     context->lowering.dom_program = NULL;
     context->lowering.dom_current_fn = NULL;
+    context->lowering.dom_view = NULL;
+    context->lowering.dom_view_updates = NULL;
+    context->lowering.dom_view_update_count = 0;
 }
 
 // The whole program is kept so element tags can be resolved against imports.

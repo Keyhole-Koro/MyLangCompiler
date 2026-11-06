@@ -32,7 +32,7 @@ void emit_annotation_rows(CompilerContext *cc, StringBuilder *sb) {
             const StructInfo *si = find_struct(cc, row->type);
             size = si ? si->size_bytes : 0;
         }
-        sb_append(sb, "  .word %s, %s, %s, %d, %d", name_label, row->fn, type_label, size, row->argc);
+        sb_append(sb, "  .word %s, %s, %s, %d, %d", name_label, row->fn ? row->fn : "0", type_label, size, row->argc);
         for (int k = 0; k < ANNOTATION_MAX_ARGS; k++) {
             const AnnotationArg *arg = &row->args[k];
             if (k >= row->argc) sb_append(sb, ", 0");

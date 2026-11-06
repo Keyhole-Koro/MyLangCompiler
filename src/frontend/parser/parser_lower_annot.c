@@ -291,9 +291,10 @@ static void record_annotation(ParserContext *context, ASTNode *program, ASTNode 
                     "unknown annotation '@%s'; an annotation is a function prototype, declared here or imported "
                     "with `import { %s } from \"...\"`", attr->name, attr->name);
     }
-    if (target->type != AST_FUNDEF) {
-        annot_error(context, attr->line, attr->col, "@%s: annotations go on functions and methods", attr->name);
+    if (target->type != AST_FUNDEF && target->type != AST_STRUCT) {
+        annot_error(context, attr->line, attr->col, "@%s: annotations go on functions, methods and structs", attr->name);
     }
+    int is_struct = target->type == AST_STRUCT;
     int n = decl->fundef.param_count;
     if (n < ANNOT_FIXED_PARAMS ||
         !param_is_plain(decl->fundef.params[0], "CodeAddress") ||
@@ -309,7 +310,7 @@ static void record_annotation(ParserContext *context, ASTNode *program, ASTNode 
                     attr->name, ANNOT_MAX_ARGS);
     }
 
-    int is_method = target->fundef.recv_type_name != NULL;
+    int is_method = !is_struct && target->fundef.recv_type_name != NULL;
     if (is_method) require_pointer_receiver(context, target, attr->line, attr->col);
 
     // Bind the written arguments to the parameters after the fixed three.
@@ -366,8 +367,9 @@ static void record_annotation(ParserContext *context, ASTNode *program, ASTNode 
     AnnotationRow *row = &g_rows[g_row_count++];
     memset(row, 0, sizeof(*row));
     row->name = strdup(attr->name);
-    row->fn = strdup(target->fundef.name);
-    row->type = is_method ? strdup(target->fundef.recv_type_name) : NULL;
+    row->fn = is_struct ? NULL : strdup(target->fundef.name);
+    row->type = is_struct ? strdup(target->struct_stmt.name)
+                          : is_method ? strdup(target->fundef.recv_type_name) : NULL;
     row->argc = n - ANNOT_FIXED_PARAMS;
     for (int k = 0; k < ANNOTATION_MAX_ARGS; k++) {
         int p = ANNOT_FIXED_PARAMS + k;

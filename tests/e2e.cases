@@ -135,6 +135,9 @@ defaultArguments|62|succeed/function/defaultArgs.mln,support/app/lib.mln
 domRefAndDefaults|113|succeed/dom/refAndDefaults.dom.mln,support/app/dom.unsafe.mln
 domNominalId|127|succeed/dom/nominalId.dom.unsafe.mln
 domHandlerNominalId|34572|succeed/dom/handlerNominalId.dom.mln
+domViewBindings|3121435194|succeed/dom/viewBindings.dom.mln,../../MyStdLib/text/text.unsafe.mln,../../MyStdLib/text/str.unsafe.mln,../../MyStdLib/text/ascii.mln,../../MyStdLib/text/bytes.unsafe.mln,../../MyStdLib/core/int32.mln,../../MyStdLib/core/option.mln
+domHandlerValues|311|succeed/dom/handlerValues.dom.mln,../../MyStdLib/text/text.unsafe.mln,../../MyStdLib/text/str.unsafe.mln,../../MyStdLib/text/ascii.mln,../../MyStdLib/text/bytes.unsafe.mln,../../MyStdLib/core/int32.mln,../../MyStdLib/core/option.mln
+genericPackageCall|132|succeed/generic/packageCall.mln,succeed/generic/packageCall_lib.mln
 breakInCaseArm|562|succeed/enum/breakInCaseArm.mln
 borrowWriteBack|1212|succeed/semantic/borrowWriteBack.mln
 globalPointerInit|104710106|succeed/data/globalPointerInit.unsafe.mln

@@ -1,0 +1,9 @@
+// The hooks build one text at a time.
+str format(str text) { return text; }
+str format_int(str left, i32 value) { return left; }
+str format_end(str left) { return left; }
+i32 Dialog(str title, str text) { return 1; }
+
+i32 f() { return <Dialog title={"%d", 1} text={"%d", 2} />; }
+
+i32 main() { return f(); }

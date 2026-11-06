@@ -1,0 +1,8 @@
+// The literal is what says the type of each value.
+str format(str text) { return text; }
+str format_end(str left) { return left; }
+i32 Label(str text) { return 1; }
+
+i32 f(str text) { return <Label text={text, 1} />; }
+
+i32 main() { return f("a"); }

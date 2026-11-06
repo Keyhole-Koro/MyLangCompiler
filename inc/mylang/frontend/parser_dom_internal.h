@@ -9,6 +9,10 @@
 
 ASTNode *parse_dom_element(ParserContext *context, Token **cur);
 
+// The call a `{"format", values...}` property value parses to, until lowering
+// replaces it. The name is not a function.
+#define DOM_FORMAT_VALUE "__dom_format"
+
 // Signature backing a DOM element: the name to call and its parameter names,
 // which give properties their argument order.
 typedef struct {

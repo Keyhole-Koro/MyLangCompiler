@@ -1,0 +1,11 @@
+// `view` reads the state: a handler is where it changes.
+struct Counter { i32 clicks; };
+
+i32 Window(str title) { return 1; }
+
+i32 (Counter c) view() {
+    c.clicks = 1;
+    return <Window title="t" />;
+}
+
+i32 main() { Counter c; return c.view(); }

@@ -1,0 +1,15 @@
+// `pkg.name<T>()` calls a generic function of a package import, and a template
+// may call what the instance's type has beyond the bound.
+import shapes from "packageCall_lib.mln";
+import { Sized } from "packageCall_lib.mln";
+
+struct Box { i32 w; };
+
+impl Sized for Box {
+    Self make() { return Box { w: 5 }; }
+    i32 (Self self) area() { return self.w * self.w; }
+}
+
+i32 (Box b) extra() { return 100; }
+
+i32 main() { return shapes.measure<Box>(); }   // 25 + 100 + 7

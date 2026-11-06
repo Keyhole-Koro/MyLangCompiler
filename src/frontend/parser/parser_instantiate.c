@@ -191,6 +191,8 @@ static void collect_called_in(ASTNode **slot, void *user_data) {
     ASTNode *node = *slot;
     if (!node) return;
     if (node->type == AST_CALL && node->call.recv) note_called_method(user_data, node->call.name);
+    /* Lowering reads a Text<N> property with as_str(). */
+    if (node->type == AST_DOM_ELEMENT) note_called_method(user_data, "as_str");
     ast_visit_children(node, collect_called_in, user_data);
 }
 

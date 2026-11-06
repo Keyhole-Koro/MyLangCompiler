@@ -1,0 +1,10 @@
+// A handler takes what its event carries, or fewer.
+struct Form { i32 n; };
+
+i32 Button(fn(i32 owner) -> void onClick) { return 1; }
+
+void (borrow Form f) clicked(i32 row) { f.n = row; }
+
+i32 (Form f) view() { return <Button onClick={f.clicked} />; }
+
+i32 main() { Form f; return f.view(); }
