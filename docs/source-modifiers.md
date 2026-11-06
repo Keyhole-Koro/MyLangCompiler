@@ -141,8 +141,10 @@ Two properties are handled by the compiler rather than the callee:
   calling convention ignores trailing arguments, so `(Counter *c, i32 id)`
   receives `owner` as `c` and `id` as `id`. The method must take a pointer
   receiver. A plain local function with fewer than three parameters is
-  wrapped so `id` lands in the right slot. Any other value is passed
-  through unchanged. A method or wrapper is passed as the function type the
+  wrapped so `id` lands in the right slot, and the wrapper converts `id` and
+  `arg` to the types the function declares, so `void f(NodeId id)` works. A
+  parameter taken by reference is an error. Any other value is passed through
+  unchanged. A method or wrapper is passed as the function type the
   callee declares for that parameter. See grammar.md, "Attributes and
   annotations".
 

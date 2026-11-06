@@ -149,6 +149,25 @@ static void require_pointer_receiver(ParserContext *context, const ASTNode *fn, 
     }
 }
 
+/* The handler ABI carries words, and the function says what each one is: with
+ * `void f(NodeId id)` the wrapper's `id` has to become a NodeId. */
+static void convert_trampoline_arguments(ParserContext *context, ASTNode *trampoline,
+                                         const ASTNode *fn, int line, int col) {
+    ASTNode *call = trampoline->fundef.body->block.stmts[0]->expr_stmt.expr;
+    for (int i = 0; i < call->call.arg_count; i++) {
+        ASTNode *type = fn->fundef.params[i]->param.type;
+        if (type && type->type == AST_TYPE &&
+            (type->type_node.pointer_level || type->type_node.borrow_kind != REFKIND_NONE))
+            annot_error(context, line, col,
+                        "handler '%s' takes parameter %d by reference; a handler is passed two words",
+                        method_short_name(fn), i + 1);
+        ASTNode *cast = new_cast(ast_clone(type), call->call.args[i]);
+        cast->line = line;
+        cast->col = col;
+        call->call.args[i] = cast;
+    }
+}
+
 const char *ensure_function_trampoline(ParserContext *context, ASTNode *program,
                                        const char *function_name, int line, int col) {
     ASTNode *fn = find_function(context, function_name);
@@ -165,6 +184,8 @@ const char *ensure_function_trampoline(ParserContext *context, ASTNode *program,
     src_appendf(&src, "void %s(i32 owner, i32 id, i32 arg) { %s(%s); }\n", name, function_name, args);
     parse_generated_toplevels(context, program, src.text);
     free(src.text);
+    convert_trampoline_arguments(context, program->block.stmts[program->block.count - 1],
+                                 fn, line, col);
     return name;
 }
 

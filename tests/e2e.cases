@@ -126,6 +126,7 @@ annotationTable|4422313|succeed/app/annotated.unsafe.mln,support/app/counter.uns
 defaultArguments|62|succeed/function/defaultArgs.mln,support/app/lib.mln
 domRefAndDefaults|113|succeed/dom/refAndDefaults.dom.mln,support/app/dom.unsafe.mln
 domNominalId|127|succeed/dom/nominalId.dom.unsafe.mln
+domHandlerNominalId|34572|succeed/dom/handlerNominalId.dom.mln
 breakInCaseArm|562|succeed/enum/breakInCaseArm.mln
 borrowWriteBack|1212|succeed/semantic/borrowWriteBack.mln
 globalPointerInit|104710106|succeed/data/globalPointerInit.unsafe.mln

@@ -1,0 +1,16 @@
+// A handler's arguments are words, so there is no place for a `borrow`.
+struct Row { i32 value; };
+
+i32 Window(str title) { return 1; }
+i32 Button(str text, fn(i32 owner, i32 id, i32 arg) -> void onClick) { return 2; }
+void append_child(i32 parent, i32 child) { }
+
+void on_row(borrow Row row) { row.value = 1; }
+
+i32 view() {
+    return <Window title="t">
+        <Button text="a" onClick={on_row} />
+    </Window>;
+}
+
+i32 main() { return view(); }

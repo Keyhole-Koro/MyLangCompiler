@@ -1,0 +1,52 @@
+// A plain function used as a handler gets a wrapper with the handler shape
+// (owner, id, arg). What arrives is two words, and the wrapper hands each to the
+// function as the type the function declares.
+newtype Id = i32;
+newtype Code = i32;
+enum Side { LEFT, RIGHT }
+
+fn(i32 owner, Id id, i32 arg) -> void g_clicks[4];
+i32 g_handlers = 0;
+Id g_seen = Id(0);
+i32 g_value = 0;
+
+void no_click(i32 owner, Id id, i32 arg) { }
+
+Id Window(str title) { return Id(1); }
+Id Button(str text, fn(i32 owner, Id id, i32 arg) -> void onClick) {
+    g_clicks[g_handlers] = onClick;
+    g_handlers = g_handlers + 1;
+    return Id(g_handlers + 1);
+}
+void append_child(Id parent, Id child) { }
+
+void on_id(Id id) { g_seen = id; }
+void on_both(Id id, Code code) { g_seen = id; g_value = (i32)code; }
+void on_side(Id id, Side side) { g_value = side == Side::RIGHT ? 7 : 8; }
+void on_word(i32 id, i32 arg) { g_value = id + arg; }
+
+Id view() {
+    return <Window title="t">
+        <Button text="a" onClick={on_id} />
+        <Button text="b" onClick={on_both} />
+        <Button text="c" onClick={on_side} />
+        <Button text="d" onClick={on_word} />
+    </Window>;
+}
+
+i32 main() {
+    view();
+    fn(i32 owner, Id id, i32 arg) -> void click = g_clicks[0];
+    click(0, Id(3), 0);
+    i32 total = (i32)g_seen;                     // 3
+    click = g_clicks[1];
+    click(0, Id(4), 5);
+    total = total * 10 + (i32)g_seen;            // 34
+    total = total * 10 + g_value;                // 345
+    click = g_clicks[2];
+    click(0, Id(4), 1);
+    total = total * 10 + g_value;                // 3457
+    click = g_clicks[3];
+    click(0, Id(1), 1);
+    return total * 10 + g_value;                 // 34572
+}
