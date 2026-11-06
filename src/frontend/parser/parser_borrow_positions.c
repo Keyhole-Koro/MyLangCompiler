@@ -44,7 +44,7 @@ static int type_is_str(ASTNode *type) {
 
 static int type_is_borrow(ASTNode *type) {
     return type && type->type == AST_TYPE &&
-           (type->type_node.ref_kind != REFKIND_NONE || type_is_str(type));
+           (type->type_node.borrow_kind != REFKIND_NONE || type_is_str(type));
 }
 
 /* Rule U5: a checked file does not spell `T*`. */

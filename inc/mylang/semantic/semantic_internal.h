@@ -56,17 +56,19 @@ typedef struct {
     /* The borrow this local's borrow was taken through (a `borrow` parameter
      * or local), which stays borrowed for as long as this one does. */
     const char *reborrowed_via;
-    int shared_borrow_count;
-    int mutable_borrow_active;
-    /* A local holds a mutable borrow of this value, so the value itself
-     * cannot be used until that local goes out of scope. Unlike
-     * mutable_borrow_active, the borrows a call argument takes for the
-     * duration of the call do not set it. */
-    int mut_borrow_held;
+    /* How many arguments of the call being checked read this value in place:
+     * an aggregate travels as an address, so `&` of it in the same call would
+     * overlap (rule B8). */
+    int read_in_place_arg_count;
+    int borrow_active;
+    /* A local holds a borrow of this value, so the value itself cannot be
+     * used until that local goes out of scope. Unlike borrow_active, the
+     * borrows a call argument takes for the duration of the call do not set
+     * it. */
+    int borrow_held;
     /* A `str` taken from a local's own storage: it may not be returned. */
     int str_views_local;
-    SemanticLocation last_shared_borrow_loc;
-    SemanticLocation last_mut_borrow_loc;
+    SemanticLocation last_borrow_loc;
 } SemanticBinding;
 
 /* What a loop needs to know to reject a value moved by one iteration and used

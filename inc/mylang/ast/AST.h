@@ -55,8 +55,8 @@ typedef enum {
 
 typedef enum {
     REFKIND_NONE = 0,
-    REFKIND_MUT,
-} RefKind;
+    REFKIND_BORROW,
+} BorrowKind;
 
 typedef enum {
     TYPEMOD_NONE    = 0,
@@ -133,7 +133,7 @@ struct ASTNode {
             ASTNode *base_type;
             int pointer_level; // number of pointers
             int type_modifiers; // bitmask of TypeModifier
-            int ref_kind; // RefKind
+            int borrow_kind; // BorrowKind
         } type_node;
         struct {
             char *name;

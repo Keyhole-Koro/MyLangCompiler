@@ -1,7 +1,7 @@
 # Semantic Walk Coverage
 
 Covered by white-box tests:
-- `AST_BORROW` / `AST_BORROW_MUT`
+- `AST_BORROW`
 - `AST_PARAM` with `borrow` and `move`
 - `AST_WHILE` with `AST_BREAK` / `AST_CONTINUE`
 - `AST_CASE`
@@ -35,7 +35,7 @@ Covered by semantic failure tests:
   arm), a `case` without `_` on an integer (E0202)
 - a `@noreturn` function that has a `return`, can reach its end, or is not
   `void` (E0203)
-- moving or mutating a receiver while a method's returned borrow is in scope
+- moving or changing a receiver while a method's returned borrow is in scope
 - writing to or moving a parameter that only reads an owned value, and an
   owned temporary passed to one (E0601)
 - assigning to a value, or to one of its fields, while it is borrowed (E0602)

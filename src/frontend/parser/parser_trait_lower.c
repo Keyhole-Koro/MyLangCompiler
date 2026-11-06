@@ -304,7 +304,7 @@ static void lower_equality(TraitLowering *L, ASTNode **slot) {
     if (node->binary.op != EQ && node->binary.op != NEQ) return;
     ASTNode *type = infer_type(L, node->binary.left);
     const char *name = named_type(type);
-    if (!name || type->type_node.pointer_level || type->type_node.ref_kind != REFKIND_NONE ||
+    if (!name || type->type_node.pointer_level || type->type_node.borrow_kind != REFKIND_NONE ||
         !find_impl_for_name(L->context, "Eq", name)) {
         free_ast(type);
         return;

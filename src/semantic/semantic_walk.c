@@ -112,7 +112,7 @@ static void populate_function_sig_types(SemanticContext *ctx, SemanticFunctionSi
             continue;
         }
         sig->param_names[i] = param->param.name;
-        sig->param_borrow_kinds[i] = sig->param_types[i].ref_kind;
+        sig->param_borrow_kinds[i] = sig->param_types[i].borrow_kind;
         sig->param_is_move[i] = param->param.is_move;
     }
     (void)param_count;
@@ -275,7 +275,7 @@ static int semantic_typeinfo_exact(const SemanticTypeInfo *left,
                                    const SemanticTypeInfo *right) {
     if (!left || !right || !left->base_type || !right->base_type ||
         strcmp(left->base_type, right->base_type) != 0 ||
-        left->ref_kind != right->ref_kind ||
+        left->borrow_kind != right->borrow_kind ||
         left->pointer_level != right->pointer_level ||
         left->is_array != right->is_array ||
         left->dims_count != right->dims_count) {
@@ -317,7 +317,7 @@ static ASTNode *mock_callback_target_expr(ASTNode *call) {
 static int mock_return_uses_hidden_buffer(SemanticContext *ctx,
                                           const SemanticTypeInfo *type) {
     if (!ctx || !type) return 0;
-    if (type->pointer_level > 0 || type->ref_kind != REFKIND_NONE) return 0;
+    if (type->pointer_level > 0 || type->borrow_kind != REFKIND_NONE) return 0;
     if (type->is_array) return 1;
     // Payload enums are lowered to a struct before semantic/codegen, so the
     // struct table is also the authoritative answer for local Result<T, E>.
@@ -453,7 +453,7 @@ static int semantic_struct_is_data(SemanticContext *ctx, const char *name, int d
             !semantic_typeinfo_from_type_ast(member->var_decl.var_type, &field))
             return 0;
         if (field.is_function) continue;
-        if (field.pointer_level > 0 || field.ref_kind != REFKIND_NONE || !field.base_type) return 0;
+        if (field.pointer_level > 0 || field.borrow_kind != REFKIND_NONE || !field.base_type) return 0;
         if (semantic_enum_type_exists(ctx, field.base_type) || find_newtype(ctx, field.base_type)) continue;
         if (semantic_is_builtin_type(field.base_type)) {
             if (strcmp(field.base_type, "void") == 0) return 0;
@@ -467,7 +467,7 @@ static int semantic_struct_is_data(SemanticContext *ctx, const char *name, int d
 
 static int semantic_typeinfo_is_copy(SemanticContext *ctx, const SemanticTypeInfo *info) {
     if (info->is_function) return 1;
-    if (info->ref_kind != REFKIND_NONE) return 1;
+    if (info->borrow_kind != REFKIND_NONE) return 1;
     if (info->pointer_level > 0) return 1;
     if (info->is_array) return 0;
     const char *base_type = info->base_type;
@@ -481,7 +481,7 @@ static int semantic_typeinfo_is_copy(SemanticContext *ctx, const SemanticTypeInf
 
 /* An owned value: a `drop` runs when its owner goes away, here or in a field. */
 static int semantic_typeinfo_has_drop(SemanticContext *ctx, const SemanticTypeInfo *info, int depth) {
-    if (!info || depth > 4 || info->pointer_level > 0 || info->ref_kind != REFKIND_NONE ||
+    if (!info || depth > 4 || info->pointer_level > 0 || info->borrow_kind != REFKIND_NONE ||
         info->is_function || !info->base_type) return 0;
     ParserContext *parser = parser_context_current();
     if (parser && (find_impl_for_name(parser, "Drop", info->base_type) ||
@@ -570,7 +570,7 @@ int semantic_type_is_void(ASTNode *type_node) {
 }
 
 static int semantic_typeinfo_is_integer_like(const SemanticTypeInfo *info) {
-    if (!info || info->pointer_level > 0 || info->ref_kind != REFKIND_NONE || info->is_array) return 0;
+    if (!info || info->pointer_level > 0 || info->borrow_kind != REFKIND_NONE || info->is_array) return 0;
     return strcmp(info->base_type, "bool") == 0 ||
            strcmp(info->base_type, "u8") == 0 ||
            strcmp(info->base_type, "u16") == 0 ||
@@ -583,7 +583,7 @@ static int semantic_typeinfo_is_integer_like(const SemanticTypeInfo *info) {
 
 static int semantic_typeinfo_is_integer_like_or_enum(SemanticContext *ctx, const SemanticTypeInfo *info) {
     if (semantic_typeinfo_is_integer_like(info)) return 1;
-    if (!ctx || !info || info->pointer_level > 0 || info->ref_kind != REFKIND_NONE || info->is_array) return 0;
+    if (!ctx || !info || info->pointer_level > 0 || info->borrow_kind != REFKIND_NONE || info->is_array) return 0;
     return semantic_enum_type_exists(ctx, info->base_type);
 }
 
@@ -645,7 +645,7 @@ static int semantic_function_type_compatible(SemanticContext *ctx,
         /* An address and a word convert at a call, not across a function
          * value: nothing there says which of the two is really passed. */
         if (expected_info.pointer_level != actual_info.pointer_level ||
-            expected_info.ref_kind != actual_info.ref_kind) return 0;
+            expected_info.borrow_kind != actual_info.borrow_kind) return 0;
     }
     return 1;
 }
@@ -686,7 +686,7 @@ static void semantic_typeinfo_format(const SemanticTypeInfo *info, char *buf, si
     }
 
     used = 0;
-    if (info->ref_kind == REFKIND_MUT) {
+    if (info->borrow_kind == REFKIND_BORROW) {
         used += (size_t)snprintf(buf + used, buf_size - used, "borrow ");
     }
     if (used >= buf_size) return;
@@ -709,7 +709,7 @@ static int semantic_typeinfo_same_base(const SemanticTypeInfo *a, const Semantic
 
 static int semantic_typeinfo_is_code_address(const SemanticTypeInfo *info) {
     return info && info->base_type && strcmp(info->base_type, "CodeAddress") == 0 &&
-           info->ref_kind == REFKIND_NONE && info->pointer_level == 0 && !info->is_array;
+           info->borrow_kind == REFKIND_NONE && info->pointer_level == 0 && !info->is_array;
 }
 
 static int semantic_literal_to_legacy_c_string(const SemanticTypeInfo *expected,
@@ -740,7 +740,7 @@ static int semantic_typeinfo_compatible(SemanticContext *ctx, const SemanticType
         semantic_typeinfo_is_integer_like_or_enum(ctx, actual)) return 1;
 
     if (semantic_typeinfo_same_base(expected, actual) &&
-        expected->ref_kind == actual->ref_kind &&
+        expected->borrow_kind == actual->borrow_kind &&
         expected->pointer_level == actual->pointer_level &&
         expected->is_array == actual->is_array &&
         expected->dims_count == actual->dims_count) {
@@ -751,20 +751,20 @@ static int semantic_typeinfo_compatible(SemanticContext *ctx, const SemanticType
     }
 
     if (semantic_typeinfo_same_base(expected, actual) &&
-        expected->ref_kind == REFKIND_NONE &&
-        actual->ref_kind == REFKIND_NONE) {
+        expected->borrow_kind == REFKIND_NONE &&
+        actual->borrow_kind == REFKIND_NONE) {
         if (expected->pointer_level == actual->pointer_level + 1 && actual->is_array) return 1;
         if (expected->is_array && expected->pointer_level == 0 && actual->pointer_level == 1) return 1;
     }
 
     if (semantic_typeinfo_same_base(expected, actual) &&
-        expected->pointer_level > 0 && actual->ref_kind != REFKIND_NONE &&
+        expected->pointer_level > 0 && actual->borrow_kind != REFKIND_NONE &&
         expected->pointer_level == actual->pointer_level + 1) {
         return 1;
     }
 
     if (semantic_typeinfo_is_integer_like_or_enum(ctx, expected) &&
-        (actual->pointer_level > 0 || actual->ref_kind != REFKIND_NONE) &&
+        (actual->pointer_level > 0 || actual->borrow_kind != REFKIND_NONE) &&
         !actual->is_array) {
         return 1;
     }
@@ -779,7 +779,7 @@ static int semantic_call_arg_compatible(SemanticContext *ctx, const SemanticType
         semantic_typeinfo_is_integer_like_or_enum(ctx, actual)) return 1;
 
     if (semantic_typeinfo_same_base(expected, actual) &&
-        expected->ref_kind == actual->ref_kind &&
+        expected->borrow_kind == actual->borrow_kind &&
         expected->pointer_level == actual->pointer_level &&
         expected->is_array == actual->is_array &&
         expected->dims_count == actual->dims_count) {
@@ -790,14 +790,14 @@ static int semantic_call_arg_compatible(SemanticContext *ctx, const SemanticType
     }
 
     if (semantic_typeinfo_same_base(expected, actual) &&
-        expected->ref_kind == REFKIND_NONE &&
-        actual->ref_kind == REFKIND_NONE) {
+        expected->borrow_kind == REFKIND_NONE &&
+        actual->borrow_kind == REFKIND_NONE) {
         if (expected->pointer_level == actual->pointer_level + 1 && actual->is_array) return 1;
         if (expected->is_array && expected->pointer_level == 0 && actual->pointer_level == 1) return 1;
     }
 
     if (semantic_typeinfo_same_base(expected, actual) &&
-        expected->pointer_level > 0 && actual->ref_kind != REFKIND_NONE &&
+        expected->pointer_level > 0 && actual->borrow_kind != REFKIND_NONE &&
         expected->pointer_level == actual->pointer_level + 1) {
         return 1;
     }
@@ -829,7 +829,7 @@ static SemanticBinding *find_binding(SemanticContext *ctx, const char *name);
 static void check_borrow_of_borrow(SemanticContext *ctx, ASTNode *node, ASTNode *operand) {
     if (!operand || operand->type != AST_IDENTIFIER) return;
     SemanticBinding *binding = find_binding(ctx, operand->identifier.name);
-    if (!binding || !binding->has_type || binding->type_info.ref_kind == REFKIND_NONE) return;
+    if (!binding || !binding->has_type || binding->type_info.borrow_kind == REFKIND_NONE) return;
     semantic_error_at(ctx, semantic_location_from_ast(node),
                       "'%s' is already a borrow; pass it without '&'", operand->identifier.name);
 }
@@ -857,7 +857,7 @@ static int borrow_is_static_or_unchecked(SemanticContext *ctx, ASTNode *expr) {
                 operand = operand->binary.left;
             SemanticTypeInfo type;
             if (operand && semantic_infer_expr_type(ctx, operand, &type) &&
-                type.pointer_level > 0 && type.ref_kind == REFKIND_NONE && !type.is_array)
+                type.pointer_level > 0 && type.borrow_kind == REFKIND_NONE && !type.is_array)
                 return 1;
             place = operand;
             break;
@@ -877,8 +877,8 @@ static int borrow_is_static_or_unchecked(SemanticContext *ctx, ASTNode *expr) {
  * borrow to a pointer parameter is left alone: a checked file cannot name one. */
 static void check_borrow_kept_as_pointer(SemanticContext *ctx, const SemanticTypeInfo *expected,
                                          const SemanticTypeInfo *actual, ASTNode *at) {
-    if (actual->ref_kind == REFKIND_NONE || actual->is_function ||
-        expected->ref_kind != REFKIND_NONE || expected->is_array || expected->is_function)
+    if (actual->borrow_kind == REFKIND_NONE || actual->is_function ||
+        expected->borrow_kind != REFKIND_NONE || expected->is_array || expected->is_function)
         return;
     int to_pointer = expected->pointer_level > 0;
     if (!to_pointer && !semantic_typeinfo_is_integer_like_or_enum(ctx, expected)) return;
@@ -959,7 +959,7 @@ static int semantic_location_is_known(SemanticLocation loc) {
 /* The value lives in this binding's own storage: not a borrow, not behind a
  * pointer. */
 static int binding_owns_value(const SemanticBinding *binding) {
-    return binding->has_type && binding->type_info.ref_kind == REFKIND_NONE &&
+    return binding->has_type && binding->type_info.borrow_kind == REFKIND_NONE &&
            binding->type_info.pointer_level == 0;
 }
 
@@ -1050,15 +1050,15 @@ static SemanticBinding *borrow_target_binding(SemanticContext *ctx, ASTNode *exp
 }
 
 static void lock_borrowed(SemanticBinding *owner, SemanticLocation at) {
-    owner->mutable_borrow_active = 1;
-    owner->mut_borrow_held = 1;
-    owner->last_mut_borrow_loc = at;
+    owner->borrow_active = 1;
+    owner->borrow_held = 1;
+    owner->last_borrow_loc = at;
 }
 
 static void unlock_borrowed(SemanticBinding *owner) {
-    owner->mutable_borrow_active = 0;
-    owner->mut_borrow_held = 0;
-    owner->last_mut_borrow_loc = semantic_location_unknown();
+    owner->borrow_active = 0;
+    owner->borrow_held = 0;
+    owner->last_borrow_loc = semantic_location_unknown();
 }
 
 /* Ends the borrow `binding` holds, if any. */
@@ -1137,11 +1137,10 @@ static void declare_binding(SemanticContext *ctx, const char *name, ASTNode *typ
     binding->borrow_is_reborrow = 0;
     binding->borrow_origin_unknown = 0;
     binding->reborrowed_via = NULL;
-    binding->shared_borrow_count = 0;
-    binding->mutable_borrow_active = 0;
-    binding->mut_borrow_held = 0;
-    binding->last_shared_borrow_loc = semantic_location_unknown();
-    binding->last_mut_borrow_loc = semantic_location_unknown();
+    binding->read_in_place_arg_count = 0;
+    binding->borrow_active = 0;
+    binding->borrow_held = 0;
+    binding->last_borrow_loc = semantic_location_unknown();
 }
 
 static void check_return_reference_escape(SemanticContext *ctx, ASTNode *expr) {
@@ -1201,18 +1200,18 @@ static void revive_binding_if_identifier(SemanticContext *ctx, ASTNode *node) {
  * `Option<borrow T> o = v.at(0);` keeps `v` borrowed while `o` is in scope.
  */
 
-/* REFKIND_MUT or REFKIND_NONE: the borrow a value of this type carries,
+/* REFKIND_BORROW or REFKIND_NONE: the borrow a value of this type carries,
  * directly or in a payload field. */
 static int typeinfo_borrow_kind_at(SemanticContext *ctx, const SemanticTypeInfo *info, int depth) {
     if (!info || depth > 4) return REFKIND_NONE;
-    if (info->ref_kind != REFKIND_NONE) return info->ref_kind;
+    if (info->borrow_kind != REFKIND_NONE) return info->borrow_kind;
     if (info->pointer_level > 0 || info->is_array || !info->base_type) return REFKIND_NONE;
     for (int i = 0; i < ctx->struct_layout_count; i++) {
         const SemanticStructLayout *layout = &ctx->struct_layouts[i];
         if (strcmp(layout->name, info->base_type) != 0) continue;
         for (int m = 0; m < layout->member_count; m++) {
-            if (typeinfo_borrow_kind_at(ctx, &layout->members[m].type, depth + 1) == REFKIND_MUT)
-                return REFKIND_MUT;
+            if (typeinfo_borrow_kind_at(ctx, &layout->members[m].type, depth + 1) == REFKIND_BORROW)
+                return REFKIND_BORROW;
         }
         break;
     }
@@ -1232,7 +1231,7 @@ static int type_ast_borrow_kind(SemanticContext *ctx, ASTNode *type) {
 /* A parameter a returned borrow may come from: a borrow, a pointer, or a
  * value that itself carries a borrow (`Option<borrow T> self`). */
 static int typeinfo_is_borrow_source(SemanticContext *ctx, const SemanticTypeInfo *info) {
-    return info->ref_kind != REFKIND_NONE || info->pointer_level > 0 ||
+    return info->borrow_kind != REFKIND_NONE || info->pointer_level > 0 ||
            typeinfo_borrow_kind(ctx, info) != REFKIND_NONE;
 }
 
@@ -1311,7 +1310,7 @@ static BorrowOrigin borrow_origin(SemanticContext *ctx, ASTNode *expr,
             typeinfo_borrow_kind(ctx, &root->type_info) != REFKIND_NONE)
             return BORROW_ORIGIN_NONE;
         *owner = root;
-        if (root->is_param && root->has_type && root->type_info.ref_kind != REFKIND_NONE) {
+        if (root->is_param && root->has_type && root->type_info.borrow_kind != REFKIND_NONE) {
             *reborrow = 1;
             if (via) *via = root;
         }
@@ -1341,15 +1340,15 @@ static BorrowOrigin borrow_origin(SemanticContext *ctx, ASTNode *expr,
 static void report_borrow_conflict(SemanticContext *ctx, SemanticBinding *owner, ASTNode *at) {
     semantic_error_at(ctx, semantic_location_from_ast(at),
                       "cannot borrow '%s' while it is already borrowed", owner->name);
-    if (semantic_location_is_known(owner->last_mut_borrow_loc)) {
-        semantic_note_at(ctx, owner->last_mut_borrow_loc, "borrow of '%s' starts here", owner->name);
+    if (semantic_location_is_known(owner->last_borrow_loc)) {
+        semantic_note_at(ctx, owner->last_borrow_loc, "borrow of '%s' starts here", owner->name);
     } else {
         note_binding_decl_if_known(ctx, owner, NULL);
     }
 }
 
 static int borrow_conflicts(const SemanticBinding *owner) {
-    return owner->mutable_borrow_active || owner->shared_borrow_count > 0;
+    return owner->borrow_active || owner->read_in_place_arg_count > 0;
 }
 
 /* Makes `binding`, whose type carries a borrow, hold the borrow `expr`
@@ -1365,7 +1364,7 @@ static void hold_borrow(SemanticContext *ctx, SemanticBinding *binding, ASTNode 
     /* Taken through a raw pointer (`p->rows.at(i)`): the pointer does not
      * own what it points at, so there is no owner here to keep borrowed. */
     if (owner->has_type && owner->type_info.pointer_level > 0 &&
-        owner->type_info.ref_kind == REFKIND_NONE)
+        owner->type_info.borrow_kind == REFKIND_NONE)
         return;
 
     SemanticLocation at = semantic_location_from_ast(expr);
@@ -1511,26 +1510,22 @@ static void use_identifier(SemanticContext *ctx, ASTNode *node, ExprContext expr
     }
 
     if (expr_ctx == EXPRCTX_MOVE &&
-        (binding->mutable_borrow_active || binding->shared_borrow_count > 0)) {
+        (binding->borrow_active || binding->read_in_place_arg_count > 0)) {
         semantic_error_at(ctx, semantic_location_from_ast(node),
                           "cannot move '%s' while it is borrowed", ident->identifier.name);
-        if (binding->mutable_borrow_active && semantic_location_is_known(binding->last_mut_borrow_loc)) {
-            semantic_note_at(ctx, binding->last_mut_borrow_loc,
+        if (binding->borrow_active && semantic_location_is_known(binding->last_borrow_loc)) {
+            semantic_note_at(ctx, binding->last_borrow_loc,
                              "borrow of '%s' starts here", binding->name);
-        } else if (binding->shared_borrow_count > 0 &&
-                   semantic_location_is_known(binding->last_shared_borrow_loc)) {
-            semantic_note_at(ctx, binding->last_shared_borrow_loc,
-                             "read of '%s' starts here", binding->name);
         }
         return;
     }
 
     /* Rule B5: while a local holds `&x`, `x` is used only through it. */
-    if (expr_ctx != EXPRCTX_WRITE && binding->mut_borrow_held && !ctx->in_borrow_operand) {
-        semantic_error_code_at(ctx, semantic_location_from_ast(node), SEMCODE_USE_WHILE_MUT_BORROWED,
+    if (expr_ctx != EXPRCTX_WRITE && binding->borrow_held && !ctx->in_borrow_operand) {
+        semantic_error_code_at(ctx, semantic_location_from_ast(node), SEMCODE_USE_WHILE_BORROWED,
                                "cannot use '%s' while it is borrowed", ident->identifier.name);
-        if (semantic_location_is_known(binding->last_mut_borrow_loc)) {
-            semantic_note_at(ctx, binding->last_mut_borrow_loc,
+        if (semantic_location_is_known(binding->last_borrow_loc)) {
+            semantic_note_at(ctx, binding->last_borrow_loc,
                              "borrow of '%s' starts here", binding->name);
         }
         return;
@@ -1633,9 +1628,9 @@ static int semantic_infer_unary_type(SemanticContext *ctx, ASTNode *expr, Semant
         return 1;
     }
     if (expr->unary.op == ASTARISK) {
-        if (operand.ref_kind != REFKIND_NONE) {
+        if (operand.borrow_kind != REFKIND_NONE) {
             *out = operand;
-            out->ref_kind = REFKIND_NONE;
+            out->borrow_kind = REFKIND_NONE;
             return 1;
         }
         if (operand.pointer_level <= 0) return 0;
@@ -1763,7 +1758,7 @@ static int semantic_infer_expr_type(SemanticContext *ctx, ASTNode *expr, Semanti
         return semantic_infer_identifier_type(ctx, expr, out);
     case AST_BORROW:
         if (!semantic_infer_expr_type(ctx, expr->borrow.expr, out)) return 0;
-        out->ref_kind = REFKIND_MUT;
+        out->borrow_kind = REFKIND_BORROW;
         return 1;
     case AST_UNARY:
         return semantic_infer_unary_type(ctx, expr, out);
@@ -1837,16 +1832,16 @@ static void check_binary_type(SemanticContext *ctx, ASTNode *node) {
         if ((node->binary.op == EQ || node->binary.op == NEQ) &&
             find_newtype(ctx, left.base_type) &&
             semantic_typeinfo_compatible(ctx, &left, &right)) return;
-        if ((semantic_typeinfo_is_integer_like_or_enum(ctx, &left) || left.pointer_level > 0 || left.ref_kind != REFKIND_NONE) &&
-            (semantic_typeinfo_is_integer_like_or_enum(ctx, &right) || right.pointer_level > 0 || right.ref_kind != REFKIND_NONE)) {
+        if ((semantic_typeinfo_is_integer_like_or_enum(ctx, &left) || left.pointer_level > 0 || left.borrow_kind != REFKIND_NONE) &&
+            (semantic_typeinfo_is_integer_like_or_enum(ctx, &right) || right.pointer_level > 0 || right.borrow_kind != REFKIND_NONE)) {
             return;
         }
     } else if (semantic_binary_is_arithmetic(node->binary.op)) {
         /* A pointer-like operand is a raw pointer (`*`), an array (decays to a
          * pointer), or a reference (`borrow`): all support pointer +/-
          * integer arithmetic. */
-        int left_ptrish = left.pointer_level > 0 || left.is_array || left.ref_kind != REFKIND_NONE;
-        int right_ptrish = right.pointer_level > 0 || right.is_array || right.ref_kind != REFKIND_NONE;
+        int left_ptrish = left.pointer_level > 0 || left.is_array || left.borrow_kind != REFKIND_NONE;
+        int right_ptrish = right.pointer_level > 0 || right.is_array || right.borrow_kind != REFKIND_NONE;
         if (semantic_typeinfo_is_integer_like_or_enum(ctx, &left) && semantic_typeinfo_is_integer_like_or_enum(ctx, &right)) return;
         if ((node->binary.op == ADD || node->binary.op == SUB) &&
             left_ptrish && semantic_typeinfo_is_integer_like_or_enum(ctx, &right)) return;
@@ -1913,7 +1908,7 @@ static void check_condition_type(SemanticContext *ctx, ASTNode *cond) {
 
     if (!ctx || !cond) return;
     if (!semantic_infer_expr_type(ctx, cond, &info)) return;
-    if (semantic_typeinfo_is_integer_like_or_enum(ctx, &info) || info.pointer_level > 0 || info.ref_kind != REFKIND_NONE) return;
+    if (semantic_typeinfo_is_integer_like_or_enum(ctx, &info) || info.pointer_level > 0 || info.borrow_kind != REFKIND_NONE) return;
 
     semantic_typeinfo_format(&info, type_buf, sizeof(type_buf));
     semantic_error_code_at(ctx, semantic_location_from_ast(cond),
@@ -2273,14 +2268,14 @@ static int semantic_in_unsafe_source(SemanticContext *ctx) {
 static int semantic_is_raw_pointer(SemanticContext *ctx, ASTNode *expr) {
     SemanticTypeInfo type;
     if (!semantic_infer_expr_type(ctx, expr, &type)) return 0;
-    return type.pointer_level > 0 && type.ref_kind == REFKIND_NONE && !type.is_array &&
+    return type.pointer_level > 0 && type.borrow_kind == REFKIND_NONE && !type.is_array &&
            !type.is_function;
 }
 
 static int semantic_type_ast_is_raw_pointer(ASTNode *type_node) {
     SemanticTypeInfo type;
     if (!semantic_typeinfo_from_type_ast(type_node, &type)) return 0;
-    return type.pointer_level > 0 && type.ref_kind == REFKIND_NONE && !type.is_array &&
+    return type.pointer_level > 0 && type.borrow_kind == REFKIND_NONE && !type.is_array &&
            !type.is_function;
 }
 
@@ -2326,7 +2321,7 @@ static void check_dereference(SemanticContext *ctx, ASTNode *node) {
     ASTNode *operand = node->type == AST_UNARY ? node->unary.operand : node->arrow_access.lhs;
     SemanticTypeInfo type;
     if (!operand || operand->type == AST_BINARY || !semantic_infer_expr_type(ctx, operand, &type)) return;
-    if (type.pointer_level > 0 || type.ref_kind != REFKIND_NONE || type.is_array || type.is_function) return;
+    if (type.pointer_level > 0 || type.borrow_kind != REFKIND_NONE || type.is_array || type.is_function) return;
     char shown[128];
     semantic_typeinfo_format(&type, shown, sizeof(shown));
     semantic_error_code_at(ctx, semantic_location_from_ast(node), SEMCODE_INVALID_DEREFERENCE,
@@ -2408,7 +2403,7 @@ static void check_write_place(SemanticContext *ctx, ASTNode *place, WriteKind ki
                 operand = operand->binary.left;
             SemanticTypeInfo type;
             if (!operand || !semantic_infer_expr_type(ctx, operand, &type) ||
-                (type.pointer_level > 0 && type.ref_kind == REFKIND_NONE && !type.is_array))
+                (type.pointer_level > 0 && type.borrow_kind == REFKIND_NONE && !type.is_array))
                 return;
             place = operand;
         } else {
@@ -2444,15 +2439,12 @@ static void check_write_place(SemanticContext *ctx, ASTNode *place, WriteKind ki
      * is held or passed (hold_borrow, the call check). Reading the place to
      * write into it already reported a value held by `&`. */
     if (kind == WRITE_BORROW) return;
-    if (binding->mut_borrow_held && !(kind == WRITE_ASSIGN && whole)) return;
-    if (binding->shared_borrow_count > 0 || binding->mutable_borrow_active) {
+    if (binding->borrow_held && !(kind == WRITE_ASSIGN && whole)) return;
+    if (binding->read_in_place_arg_count > 0 || binding->borrow_active) {
         semantic_error_code_at(ctx, semantic_location_from_ast(at), SEMCODE_WRITE_WHILE_BORROWED,
                                "cannot modify '%s' while it is borrowed", binding->name);
-        if (binding->mutable_borrow_active && semantic_location_is_known(binding->last_mut_borrow_loc)) {
-            semantic_note_at(ctx, binding->last_mut_borrow_loc,
-                             "borrow of '%s' starts here", binding->name);
-        } else if (semantic_location_is_known(binding->last_shared_borrow_loc)) {
-            semantic_note_at(ctx, binding->last_shared_borrow_loc,
+        if (binding->borrow_active && semantic_location_is_known(binding->last_borrow_loc)) {
+            semantic_note_at(ctx, binding->last_borrow_loc,
                              "borrow of '%s' starts here", binding->name);
         }
     }
@@ -2486,7 +2478,7 @@ static int stmt_always_exits(ASTNode *node) {
 }
 
 static int typeinfo_holds_bytes_inline(SemanticContext *ctx, const SemanticTypeInfo *info, int depth) {
-    if (!info || depth > 4 || info->pointer_level > 0 || info->ref_kind != REFKIND_NONE) return 0;
+    if (!info || depth > 4 || info->pointer_level > 0 || info->borrow_kind != REFKIND_NONE) return 0;
     if (info->is_array) return 1;
     if (!info->base_type) return 0;
     for (int i = 0; i < ctx->struct_layout_count; i++) {
@@ -2520,7 +2512,7 @@ static int expr_views_local(SemanticContext *ctx, ASTNode *expr) {
     /* A view reaches into a value only where its bytes are held inline. */
     if (!typeinfo_holds_bytes_inline(ctx, &first_type, 0)) return 0;
     SemanticBinding *owner = borrow_target_binding(ctx, target);
-    if (!owner || owner->is_global || !owner->has_type || owner->type_info.ref_kind != REFKIND_NONE)
+    if (!owner || owner->is_global || !owner->has_type || owner->type_info.borrow_kind != REFKIND_NONE)
         return 0;
     /* A parameter that is only read is the caller's value. */
     return !owner->is_param || owner->param_is_move || owner->param_is_written;
@@ -2540,7 +2532,7 @@ static int call_takes_argument(const SemanticFunctionSig *callee, int i) {
 static int call_reads_argument(const SemanticFunctionSig *callee, int i) {
     return callee && callee->has_param_types && i < callee->fixed_param_count &&
            i < SEMANTIC_MAX_FUNCTION_PARAMS && !callee->param_is_move[i] &&
-           callee->param_types[i].ref_kind == REFKIND_NONE &&
+           callee->param_types[i].borrow_kind == REFKIND_NONE &&
            callee->param_types[i].pointer_level == 0;
 }
 
@@ -2550,7 +2542,7 @@ static void read_named_borrows(SemanticContext *ctx, ASTNode *call, const Semant
         ASTNode *arg = call->call.args[i];
         SemanticTypeInfo actual;
         if (!arg || arg->type == AST_BORROW || !call_reads_argument(callee, i) ||
-            !semantic_infer_expr_type(ctx, arg, &actual) || actual.ref_kind == REFKIND_NONE)
+            !semantic_infer_expr_type(ctx, arg, &actual) || actual.borrow_kind == REFKIND_NONE)
             continue;
         call->call.args[i] = new_unary(ASTARISK, arg);
     }
@@ -2696,11 +2688,11 @@ static void semantic_walk_expr(SemanticContext *ctx, ASTNode *node, ExprContext 
     case AST_CALL: {
         /* Keep temporary argument borrows alive until the entire call has
          * been checked, including nested calls in later arguments. */
-        int saved_shared[256], saved_mutable[256];
+        int saved_read_in_place[256], saved_borrow_active[256];
         int saved_count = ctx->binding_count;
         for (int i = 0; i < saved_count; i++) {
-            saved_shared[i] = ctx->bindings[i].shared_borrow_count;
-            saved_mutable[i] = ctx->bindings[i].mutable_borrow_active;
+            saved_read_in_place[i] = ctx->bindings[i].read_in_place_arg_count;
+            saved_borrow_active[i] = ctx->bindings[i].borrow_active;
         }
         SemanticFunctionSig *callee = find_function_sig(ctx, node->call.name);
         read_named_borrows(ctx, node, callee);
@@ -2711,7 +2703,7 @@ static void semantic_walk_expr(SemanticContext *ctx, ASTNode *node, ExprContext 
             ASTNode *arg = node->call.args[i];
             SemanticBinding *reference = arg && arg->type == AST_IDENTIFIER
                 ? find_binding(ctx, arg->identifier.name) : NULL;
-            if (reference && (!reference->has_type || reference->type_info.ref_kind == REFKIND_NONE))
+            if (reference && (!reference->has_type || reference->type_info.borrow_kind == REFKIND_NONE))
                 reference = NULL;
             /* Passing a named borrow on reborrows it: a conflict is reported
              * below, as for `&x`. */
@@ -2724,23 +2716,23 @@ static void semantic_walk_expr(SemanticContext *ctx, ASTNode *node, ExprContext 
             ASTNode *arg = node->call.args[i];
             SemanticBinding *reference = arg && arg->type == AST_IDENTIFIER
                 ? find_binding(ctx, arg->identifier.name) : NULL;
-            if (reference && (!reference->has_type || reference->type_info.ref_kind == REFKIND_NONE))
+            if (reference && (!reference->has_type || reference->type_info.borrow_kind == REFKIND_NONE))
                 reference = NULL;
             /* An address handed to a raw pointer is no longer tracked (B9). */
             if (callee && callee->has_param_types && i < callee->fixed_param_count &&
                 i < SEMANTIC_MAX_FUNCTION_PARAMS && callee->param_types[i].pointer_level > 0 &&
-                callee->param_types[i].ref_kind == REFKIND_NONE)
+                callee->param_types[i].borrow_kind == REFKIND_NONE)
                 continue;
-            int is_mut = arg && arg->type == AST_BORROW;
-            ASTNode *target = is_mut ? arg->borrow.expr : NULL;
+            int lends = arg && arg->type == AST_BORROW;
+            ASTNode *target = lends ? arg->borrow.expr : NULL;
             /* A nested call that returns a borrow keeps its first argument
              * lent (rule B6) through this call too. */
             if (!target && arg && arg->type == AST_CALL && arg->call.arg_count > 0) {
                 SemanticTypeInfo returned;
-                if (semantic_infer_expr_type(ctx, arg, &returned) && returned.ref_kind != REFKIND_NONE) {
+                if (semantic_infer_expr_type(ctx, arg, &returned) && returned.borrow_kind != REFKIND_NONE) {
                     ASTNode *first = arg->call.args[0];
                     target = first && first->type == AST_BORROW ? first->borrow.expr : first;
-                    is_mut = 1;
+                    lends = 1;
                 }
             }
             /* A read argument travels as an address when it is an aggregate:
@@ -2749,23 +2741,23 @@ static void semantic_walk_expr(SemanticContext *ctx, ASTNode *node, ExprContext 
             SemanticBinding *owner = borrow_target_binding(ctx, target);
             /* Reborrowing a named reference uses that reference as the
              * capability. Its owner's lexical borrow remains active, while
-             * two uses of the same mutable capability in one call conflict. */
+             * two uses of the same capability in one call conflict. */
             if (reference) {
                 owner = reference;
-                is_mut = reference->type_info.ref_kind == REFKIND_MUT;
+                lends = reference->type_info.borrow_kind == REFKIND_BORROW;
             }
             if (!owner) continue;
-            if (owner->mutable_borrow_active || (is_mut && owner->shared_borrow_count)) {
+            if (owner->borrow_active || (lends && owner->read_in_place_arg_count)) {
                 semantic_error_at(ctx, semantic_location_from_ast(arg),
                                   "conflicting borrow of '%s' in function call", owner->name);
             }
-            if (is_mut) owner->mutable_borrow_active = 1;
-            else owner->shared_borrow_count++;
+            if (lends) owner->borrow_active = 1;
+            else owner->read_in_place_arg_count++;
         }
         check_call_signature(ctx, node);
         for (int i = 0; i < saved_count; i++) {
-            ctx->bindings[i].shared_borrow_count = saved_shared[i];
-            ctx->bindings[i].mutable_borrow_active = saved_mutable[i];
+            ctx->bindings[i].read_in_place_arg_count = saved_read_in_place[i];
+            ctx->bindings[i].borrow_active = saved_borrow_active[i];
         }
         break;
     }
@@ -3027,7 +3019,7 @@ static void semantic_walk_stmt(SemanticContext *ctx, ASTNode *node) {
         if (node->typedef_stmt.is_newtype) {
             SemanticTypeInfo base;
             if (!semantic_typeinfo_from_type_ast(node->typedef_stmt.src_type, &base) ||
-                base.pointer_level != 0 || base.ref_kind != REFKIND_NONE ||
+                base.pointer_level != 0 || base.borrow_kind != REFKIND_NONE ||
                 base.is_array || base.is_function ||
                 !semantic_is_builtin_type(base.base_type) ||
                 strcmp(base.base_type, "void") == 0 || strcmp(base.base_type, "str") == 0) {

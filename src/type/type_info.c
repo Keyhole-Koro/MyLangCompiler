@@ -6,7 +6,7 @@ void mylang_type_clear(MylangType *type) {
     if (!type) return;
     *type = (MylangType){
         .base_type = "",
-        .ref_kind = REFKIND_NONE,
+        .borrow_kind = REFKIND_NONE,
     };
 }
 
@@ -55,7 +55,7 @@ int mylang_type_from_ast(const ASTNode *type_node, MylangType *out) {
     }
     out->pointer_level = node->type_node.pointer_level;
     out->type_modifiers = node->type_node.type_modifiers;
-    out->ref_kind = node->type_node.ref_kind;
+    out->borrow_kind = node->type_node.borrow_kind;
     return 1;
 }
 

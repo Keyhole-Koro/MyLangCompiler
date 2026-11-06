@@ -81,13 +81,13 @@ ASTNode *new_fun_literal(ASTNode **params, int param_count, ASTNode *body, bool 
     return node;
 }
 
-ASTNode *new_type_node(ASTNode *base_type, int pointer_level, int modifiers, int ref_kind) {
+ASTNode *new_type_node(ASTNode *base_type, int pointer_level, int modifiers, int borrow_kind) {
     ASTNode *node = calloc(1, sizeof(ASTNode));
     node->type = AST_TYPE;
     node->type_node.base_type = base_type;
     node->type_node.pointer_level = pointer_level;
     node->type_node.type_modifiers = modifiers;
-    node->type_node.ref_kind = ref_kind;
+    node->type_node.borrow_kind = borrow_kind;
     return node;
 }
 

@@ -27,8 +27,8 @@ Defined in `inc/mylang/semantic/semantic_internal.h`, this context tracks owners
 Each variable tracked in `SemanticContext` maintains:
 - `is_copy`: Whether the type has copy semantics.
 - `moved`: Flag indicating if the value has been moved.
-- `shared_borrow_count`: Arguments of the call being checked that read the value in place.
-- `mutable_borrow_active`: Flag indicating if a borrow (`&`) is active.
+- `read_in_place_arg_count`: Arguments of the call being checked that read the value in place.
+- `borrow_active`: Flag indicating if a borrow (`&`) is active.
 - `decl_loc` / `move_loc` / `borrow_loc`: Source locations for diagnostics.
 
 ---

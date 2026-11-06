@@ -11,7 +11,7 @@ typedef struct MylangType {
     const char *base_type;
     int pointer_level;
     int type_modifiers;
-    int ref_kind;
+    int borrow_kind;
     int is_array;
     int dims[MYLANG_TYPE_MAX_DIMS];
     int dims_count;

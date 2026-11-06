@@ -216,7 +216,7 @@ static void append_type_key(StringBuilder *sb, ASTNode *type) {
     }
     switch (type->type) {
     case AST_TYPE: {
-        if (type->type_node.ref_kind == REFKIND_MUT) sb_append(sb, "borrow ");
+        if (type->type_node.borrow_kind == REFKIND_BORROW) sb_append(sb, "borrow ");
         if (type->type_node.type_modifiers) sb_append(sb, "m%d ", type->type_node.type_modifiers);
         append_type_key(sb, type->type_node.base_type);
         for (int i = 0; i < type->type_node.pointer_level; i++) sb_append(sb, "*");
@@ -291,7 +291,7 @@ static int demangle_instance(const char **p, StringBuilder *out) {
         int ptr = 0, ref = 0, mods = 0, used = 0;
         if (sscanf(s, "_p%d_r%d_m%d_n%n", &ptr, &ref, &mods, &used) < 3 || used == 0) return 0;
         s += used;
-        if (ref == REFKIND_MUT) sb_append(out, "borrow ");
+        if (ref == REFKIND_BORROW) sb_append(out, "borrow ");
         if (!demangle_name(&s, out)) return 0;
         for (int i = 0; i < ptr; i++) sb_append(out, "*");
     }
@@ -395,8 +395,8 @@ static void subst_type_slot(ASTNode **slot, void *user_data) {
             if (replacement->type == AST_TYPE) {
                 replacement->type_node.pointer_level += node->type_node.pointer_level;
                 replacement->type_node.type_modifiers |= node->type_node.type_modifiers;
-                if (node->type_node.ref_kind != REFKIND_NONE)
-                    replacement->type_node.ref_kind = node->type_node.ref_kind;
+                if (node->type_node.borrow_kind != REFKIND_NONE)
+                    replacement->type_node.borrow_kind = node->type_node.borrow_kind;
             }
             replacement->line = node->line;
             replacement->col = node->col;
@@ -812,7 +812,7 @@ static int self_type_is_plain(ASTNode *type) {
     return type->type == AST_TYPE && type->type_node.base_type &&
            (type->type_node.base_type->type == AST_IDENTIFIER ||
             type->type_node.base_type->type == AST_TYPE_GENERIC) &&
-           !type->type_node.pointer_level && type->type_node.ref_kind == REFKIND_NONE &&
+           !type->type_node.pointer_level && type->type_node.borrow_kind == REFKIND_NONE &&
            !type->type_node.type_modifiers;
 }
 

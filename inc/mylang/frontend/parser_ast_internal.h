@@ -27,7 +27,7 @@ ASTNode *new_borrow(ASTNode *expr);
 ASTNode *new_cast(ASTNode *type, ASTNode *expr);
 ASTNode *new_assign(ASTNode *left, ASTNode *right);
 ASTNode *new_ternary(ASTNode *cond, ASTNode *then_expr, ASTNode *else_expr);
-ASTNode *new_type_node(ASTNode *base_type, int pointer_level, int modifiers, int ref_kind);
+ASTNode *new_type_node(ASTNode *base_type, int pointer_level, int modifiers, int borrow_kind);
 ASTNode *new_generic_type(char *name, ASTNode **args, int arg_count);
 ASTNode *new_expr_stmt(ASTNode *expr);
 ASTNode *new_typedef(ASTNode *src_type, char *alias);

@@ -52,7 +52,7 @@
 /* E06xx: ownership and borrows (docs/design/mylang-values.md) */
 #define SEMCODE_WRITE_TO_READ_PARAM "E0601"
 #define SEMCODE_WRITE_WHILE_BORROWED "E0602"
-#define SEMCODE_USE_WHILE_MUT_BORROWED "E0603"
+#define SEMCODE_USE_WHILE_BORROWED "E0603"
 #define SEMCODE_MOVE_IN_LOOP "E0604"
 #define SEMCODE_WRITE_TO_CONST "E0605"
 

@@ -10,7 +10,7 @@ static void copy_written_params(CompilerContext *cc, ASTNode *fn)
     for (int i = 0; i < fn->fundef.param_count; i++) {
         ASTNode *p = fn->fundef.params[i];
         if (p->param.is_rest || p->param.is_move || !p->param.type) continue;
-        if (p->param.type->type == AST_TYPE && p->param.type->type_node.ref_kind != REFKIND_NONE) continue;
+        if (p->param.type->type == AST_TYPE && p->param.type->type_node.borrow_kind != REFKIND_NONE) continue;
         if (aggregate_type_size(cc, p->param.type) <= 0) continue;
         if (!ast_writes_name(fn->fundef.body, p->param.name)) continue;
 

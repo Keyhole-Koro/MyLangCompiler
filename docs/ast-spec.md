@@ -148,15 +148,14 @@ Nodes are represented by the `ASTNode` struct, which contains a union of specifi
 - `var_decl.var_type`: `ASTNode*`
 - `var_decl.name`: `char*`
 - `var_decl.init`: `ASTNode*` (Optional)
-- `var_decl.is_mut`: `int`
 - `var_decl.is_exported`: `int`
 - `var_decl.package`: `char*`
 
 ### AST_PARAM
 - `param.type`: `ASTNode*`
 - `param.name`: `char*`
-- `param.is_mut`: `int`
 - `param.is_rest`: `int` (For `rest` parameters)
+- `param.is_move`: `int` (`move T x`)
 
 ### AST_TYPEDEF
 - `typedef_stmt.src_type`: `ASTNode*`
@@ -191,7 +190,7 @@ Nodes are represented by the `ASTNode` struct, which contains a union of specifi
 - `type_node.base_type`: `ASTNode*` (Identifier or nested type)
 - `type_node.pointer_level`: `int`
 - `type_node.type_modifiers`: `int` (Bitmask of `TYPEMOD_CONST`, etc.)
-- `type_node.ref_kind`: `RefKind` (`NONE`, `MUT`)
+- `type_node.borrow_kind`: `BorrowKind` (`NONE`, `BORROW`)
 
 `AST_TYPEDEF` uses `typedef_stmt.is_newtype` to distinguish an ABI transparent
 nominal `newtype` declaration from a source alias.
