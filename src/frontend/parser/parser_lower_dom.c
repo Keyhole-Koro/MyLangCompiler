@@ -138,7 +138,7 @@ static ASTNode *lower_handler_value(ParserContext *context, ASTNode *el, const D
                 int by_ref = rt && rt->type == AST_TYPE && rt->type_node.pointer_level == 0 && rt->type_node.ref_kind != REFKIND_NONE;
                 if (!by_pointer && !by_ref) {
                     dom_error(context, el, prop->line, prop->col,
-                              "handler method '%s' must take its receiver by pointer or reference, `(%s *self)` or `(borrow mut %s self)`",
+                              "handler method '%s' must take its receiver by pointer or reference, `(%s *self)` or `(borrow %s self)`",
                               member, type_name, type_name);
                 }
                 if (m->fundef->fundef.param_count > 3) {
@@ -381,9 +381,6 @@ static void lower_expr(ParserContext *context, ASTNode **slot, DomEmit *out) {
     case AST_BORROW:
         lower_expr(context, &node->borrow.expr, out);
         break;
-    case AST_BORROW_MUT:
-        lower_expr(context, &node->borrow_mut.expr, out);
-        break;
     case AST_CAST:
         lower_expr(context, &node->cast.expr, out);
         break;
@@ -555,9 +552,6 @@ void ensure_no_dom_elements(ParserContext *context, ASTNode *node) {
         break;
     case AST_BORROW:
         ensure_no_dom_elements(context, node->borrow.expr);
-        break;
-    case AST_BORROW_MUT:
-        ensure_no_dom_elements(context, node->borrow_mut.expr);
         break;
     case AST_CAST:
         ensure_no_dom_elements(context, node->cast.expr);

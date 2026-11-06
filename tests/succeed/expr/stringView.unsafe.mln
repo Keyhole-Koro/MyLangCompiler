@@ -31,7 +31,7 @@ i32 main() {
     if (greeting != "global") { return 13; }
     str result = returned();
     if (result != "returned") { return 14; }
-    mut str changed = "before";
+    str changed = "before";
     changed = "after";
     if (changed != "after") { return 15; }
     Holder holder = Holder { text: "field" };

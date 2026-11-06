@@ -4,14 +4,14 @@ import { Eq } from "@std/core/cmp.mln";
 
 struct Point { i32 x; };
 impl Eq for Point {
-    bool (borrow Point self) eq(borrow Point other) { return self.x == other.x; }
+    bool (Point self) eq(Point other) { return self.x == other.x; }
 }
 struct Opaque { i32 v; };   // no Eq: Box<Opaque> gets no Eq impl
 
 struct Box<T> { T value; i32 tag; };
 
 impl<T: Eq> Eq for Box<T> {
-    bool (borrow Self self) eq(borrow Box<T> other) {
+    bool (Self self) eq(Box<T> other) {
         return self.value == other.value && self.tag == other.tag;
     }
 }

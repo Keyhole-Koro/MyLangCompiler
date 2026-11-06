@@ -316,12 +316,12 @@ static void emit_entity_core(Model *model, const Entity *e) {
                 "export %s %s_from_raw(i32 id) { return %s { id: id }; }\n\n", T, t, T);
     emit(model,
          "/** The row's columns. A stale id traps. */\n"
-         "export borrow mut %sRow (%s x) row() { return &mut g_%s_rows[%s_checked(x)]; }\n\n",
+         "export borrow %sRow (%s x) row() { return &g_%s_rows[%s_checked(x)]; }\n\n",
          T, T, t, t);
     emit(model,
          "export struct %s_all_Iter { i32 next; };\n\n"
          "export impl Iterator<%s> for %s_all_Iter {\n"
-         "    Option<%s> (borrow mut Self self) next() {\n"
+         "    Option<%s> (borrow Self self) next() {\n"
          "        while (self.next < g_%s_high) {\n"
          "            i32 slot = self.next;\n"
          "            self.next = slot + 1;\n"
@@ -348,12 +348,12 @@ static void emit_entity_core(Model *model, const Entity *e) {
          t, (1 << ID_SLOT_BITS) - 1, e->max, t, t, ID_SLOT_BITS);
     emit(model,
          "/** The row of an id given as a word. A stale id traps. */\n"
-         "export borrow mut %sRow %s_row_id(i32 id) {\n"
+         "export borrow %sRow %s_row_id(i32 id) {\n"
          "    i32 s = (id & %d) - 1;\n"
          "    if (s < 0 || s >= %d || !g_%s_rows[s].__used || g_%s_rows[s].__gen != ((id >> %d) & 0xFFFFF)) {\n"
          "        s = %d;\n"
          "    }\n"
-         "    return &mut g_%s_rows[s];\n"
+         "    return &g_%s_rows[s];\n"
          "}\n\n",
          T, t, (1 << ID_SLOT_BITS) - 1, e->max, t, t, ID_SLOT_BITS, e->max, t);
     emit(model,
@@ -487,7 +487,7 @@ static void emit_chain(Model *model, const Relation *r) {
     emit(model,
          "export struct %s_%s_Iter { i32 next; };\n\n"
          "export impl Iterator<%s> for %s_%s_Iter {\n"
-         "    Option<%s> (borrow mut Self self) next() {\n"
+         "    Option<%s> (borrow Self self) next() {\n"
          "        if (self.next == 0) { return None; }\n"
          "        i32 ref = self.next;\n"
          "        self.next = g_%s_rows[ref - 1].__%s_next;\n"
@@ -604,7 +604,7 @@ static void emit_index(Model *model, const Index *index) {
     emit(model,
          "export struct %s_by_%s_Iter { i32 next; i32 value; };\n\n"
          "export impl Iterator<%s> for %s_by_%s_Iter {\n"
-         "    Option<%s> (borrow mut Self self) next() {\n"
+         "    Option<%s> (borrow Self self) next() {\n"
          "        while (self.next != 0) {\n"
          "            i32 ref = self.next;\n"
          "            self.next = g_%s_rows[ref - 1].__ixn_%s;\n"

@@ -9,7 +9,7 @@ i32 g_closed = 0;
 struct Handle { i32 fd; };
 
 impl Drop for Handle {
-    void (borrow mut Self self) drop() { g_closed = g_closed + self.fd; }
+    void (borrow Self self) drop() { g_closed = g_closed + self.fd; }
 }
 
 enum E { Missing }

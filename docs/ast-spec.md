@@ -66,7 +66,7 @@ Nodes are represented by the `ASTNode` struct, which contains a union of specifi
 - `arrow_access.lhs`: `ASTNode*`
 - `arrow_access.member`: `char*` (Member name)
 
-### AST_BORROW (`&`) / AST_BORROW_MUT (`&mut`)
+### AST_BORROW (`&`)
 - `borrow.expr`: `ASTNode*`
 
 ### AST_ASSIGN (`=`)
@@ -191,7 +191,7 @@ Nodes are represented by the `ASTNode` struct, which contains a union of specifi
 - `type_node.base_type`: `ASTNode*` (Identifier or nested type)
 - `type_node.pointer_level`: `int`
 - `type_node.type_modifiers`: `int` (Bitmask of `TYPEMOD_CONST`, etc.)
-- `type_node.ref_kind`: `RefKind` (`NONE`, `SHARED`, `MUT`)
+- `type_node.ref_kind`: `RefKind` (`NONE`, `MUT`)
 
 `AST_TYPEDEF` uses `typedef_stmt.is_newtype` to distinguish an ABI transparent
 nominal `newtype` declaration from a source alias.

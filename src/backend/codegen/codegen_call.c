@@ -290,7 +290,7 @@ static void clear_moved_call_args(CompilerContext *cc, ASTNode *node,
                                   const FunctionSig *sig, StringBuilder *sb) {
     if (!sig) return;
     for (int i = 0; i < node->call.arg_count && i < sig->param_count; i++) {
-        if (sig_arg_is_aggregate(cc, sig, i))
+        if (sig->param_is_move && sig->param_is_move[i] && sig_arg_is_aggregate(cc, sig, i))
             clear_moved_drop_binding(cc, node->call.args[i], sb);
     }
 }

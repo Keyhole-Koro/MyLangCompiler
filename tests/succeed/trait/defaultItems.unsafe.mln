@@ -26,7 +26,7 @@ impl Shape for Tri {
 }
 
 trait Counter<T> {
-    Option<T> (borrow mut Self self) next();
+    Option<T> (borrow Self self) next();
     // A default written against the trait's own parameter T.
     i32 (Self *self) count() {
         i32 n = 0;
@@ -43,7 +43,7 @@ trait Counter<T> {
 struct Upto { i32 at; i32 end; };
 
 impl Counter<i32> for Upto {
-    Option<i32> (borrow mut Upto self) next() {
+    Option<i32> (borrow Upto self) next() {
         if (self.at >= self.end) { return None; }
         self.at = self.at + 1;
         return Some(self.at);

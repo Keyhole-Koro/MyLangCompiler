@@ -91,6 +91,7 @@ typedef struct {
     TypeInfo return_type;
     bool *param_is_aggregate; // param_count entries, or NULL if param_count == 0
     bool *param_has_type;
+    bool *param_is_move;
     TypeInfo *param_types;
     // Non-NULL for a call through a typed function value. Its AST supplies
     // the same parameter/return information as the cached arrays above.

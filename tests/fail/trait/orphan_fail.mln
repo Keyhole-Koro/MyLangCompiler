@@ -4,7 +4,7 @@ import { Eq } from "@std/core/cmp.mln";
 import { AllocationError } from "@std/memory/allocator.mln";
 
 impl Eq for AllocationError {
-    bool (borrow AllocationError self) eq(borrow AllocationError other) { return true; }
+    bool (AllocationError self) eq(AllocationError other) { return true; }
 }
 
 i32 main() { return 0; }

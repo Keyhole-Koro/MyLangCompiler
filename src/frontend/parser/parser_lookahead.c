@@ -27,7 +27,7 @@ int is_type(ParserContext *context, TokenKind kind, Token *cur) {
 }
 
 static Token *skip_type_tokens(ParserContext *context, Token *t) {
-    while (t && (t->kind == CONST || t->kind == BORROW || t->kind == MUT)) t = t->next;
+    while (t && (t->kind == CONST || t->kind == BORROW || t->kind == MOVE)) t = t->next;
     if (!t || !is_type(context, t->kind, t)) return NULL;
     if (t->kind == FN) {
         t = t->next;
@@ -96,7 +96,7 @@ int looks_like_function_type_declaration(ParserContext *context, Token *cur) {
 // right after the type, `void (borrow User u) display()` has '('.
 int looks_like_method(ParserContext *context, Token *cur) {
     Token *t = cur;
-    while (t && (t->kind == CONST || t->kind == BORROW || t->kind == MUT)) {
+    while (t && (t->kind == CONST || t->kind == BORROW || t->kind == MOVE)) {
         t = t->next;
     }
     /* A receiver-bound generic method may use its receiver's formal type
@@ -151,7 +151,7 @@ int looks_like_method(ParserContext *context, Token *cur) {
 
 Token *generic_function_type_params_start(ParserContext *context, Token *cur) {
     Token *t = cur;
-    while (t && (t->kind == CONST || t->kind == BORROW || t->kind == MUT)) t = t->next;
+    while (t && (t->kind == CONST || t->kind == BORROW || t->kind == MOVE)) t = t->next;
     if (!t || !(is_type(context, t->kind, t) || t->kind == IDENTIFIER)) return NULL;
     t = t->next;
 
@@ -245,11 +245,8 @@ int looks_like_fun_literal(ParserContext *context, Token *cur) {
             }
             return 0;
         }
-        if (t && t->kind == MUT) t = t->next;
-        while (t && (t->kind == CONST || t->kind == BORROW)) {
-            t = t->next;
-            if (t && t->kind == MUT) t = t->next;
-        }
+        if (t && t->kind == MOVE) t = t->next;
+        while (t && (t->kind == CONST || t->kind == BORROW)) t = t->next;
         if (!t || !is_type(context, t->kind, t)) return 0;
         t = t->next; // base type
         while (t && t->kind == ASTARISK) t = t->next;

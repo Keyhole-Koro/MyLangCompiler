@@ -1,0 +1,15 @@
+// Rule P1: only `move T x` takes the value over (E0601).
+import { Drop } from "@std/core/drop.mln";
+
+struct Res { i32 id; };
+impl Drop for Res { void (borrow Self self) drop() { } }
+
+Res keep(Res r) {
+    return r;
+}
+
+i32 main() {
+    Res a = Res { id: 1 };
+    Res b = keep(a);
+    return b.id;
+}

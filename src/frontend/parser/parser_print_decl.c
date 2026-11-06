@@ -25,8 +25,7 @@ static void fprint_ref_kind(FILE *out, ASTNode *node, int indent) {
     fprint_indent(out, indent);
     fprintf(out, "refkind: ");
     switch (node->type_node.ref_kind) {
-    case REFKIND_SHARED: fprintf(out, "borrow\n"); break;
-    case REFKIND_MUT: fprintf(out, "borrow mut\n"); break;
+    case REFKIND_MUT: fprintf(out, "borrow\n"); break;
     default: fprintf(out, "none\n"); break;
     }
 }
@@ -65,7 +64,6 @@ int fprint_ast_decl_node(FILE *out, ASTNode *node, int indent) {
         fprint_indent(out, indent); fprintf(out, "VarDecl:\n");
         fprint_indent(out, indent); fprintf(out, "  Type:\n");
         fprint_ast(out, node->var_decl.var_type, indent + 2);
-        fprint_indent(out, indent); fprintf(out, "  Mutable: %s\n", node->var_decl.is_mut ? "yes" : "no");
         fprint_indent(out, indent); fprintf(out, "  Name: %s\n", node->var_decl.name);
         if (node->var_decl.init) {
             fprint_indent(out, indent); fprintf(out, "  Init:\n");
@@ -76,7 +74,7 @@ int fprint_ast_decl_node(FILE *out, ASTNode *node, int indent) {
         if (node->param.is_rest) {
             fprint_indent(out, indent); fprintf(out, "Param:  rest %s\n", node->param.name);
         } else {
-            fprint_indent(out, indent); fprintf(out, "Param:  %s%s\n", node->param.is_mut ? "mut " : "", node->param.name);
+            fprint_indent(out, indent); fprintf(out, "Param:  %s%s\n", node->param.is_move ? "move " : "", node->param.name);
         }
         return 1;
     case AST_STRUCT:

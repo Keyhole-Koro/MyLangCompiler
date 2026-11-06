@@ -335,12 +335,8 @@ ASTNode *parse_type(ParserContext *context, Token **cur) {
     }
 
     if ((*cur)->kind == BORROW) {
-        ref_kind = REFKIND_SHARED;
+        ref_kind = REFKIND_MUT;
         *cur = (*cur)->next;
-        if ((*cur)->kind == MUT) {
-            ref_kind = REFKIND_MUT;
-            *cur = (*cur)->next;
-        }
     }
 
     if ((*cur)->kind == FN) {

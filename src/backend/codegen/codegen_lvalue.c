@@ -171,11 +171,11 @@ void gen_lvalue_addr(CompilerContext *cc, ASTNode *node, StringBuilder *sb, cons
                     node->line, node->col, lhs_type.base_type, node->member_access.member);
             exit(1);
         }
-        // `s.v` on a `borrow S` / `borrow mut S` (a pointer underneath: the type
+        // `s.v` on a `borrow S` (a pointer underneath: the type
         // layer folds borrow into pointer_level) reads through the reference,
         // exactly like `p->v`. Taking the slot's own address instead treated
         // the stored pointer as the struct's first field, so writes through
-        // a `borrow mut` parameter never reached the caller's value.
+        // a `borrow` parameter never reached the caller's value.
         if (lhs_type.pointer_level > 0) {
             gen_expr(cc, node->member_access.lhs, sb, target_reg, params, param_count, locals, local_count);
         } else {

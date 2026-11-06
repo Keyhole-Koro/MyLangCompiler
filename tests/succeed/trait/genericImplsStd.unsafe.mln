@@ -10,13 +10,13 @@ i32 g_dropped = 0;
 struct Guard<T> { T value; i32 id; };
 
 impl<T> Drop for Guard<T> {
-    void (borrow mut Self self) drop() { g_dropped = g_dropped * 10 + self.id; }
+    void (borrow Self self) drop() { g_dropped = g_dropped * 10 + self.id; }
 }
 
 struct Cursor<T> { T *items; i32 at; i32 len; };
 
 impl<T> Iterator<T> for Cursor<T> {
-    Option<T> (borrow mut Self self) next() {
+    Option<T> (borrow Self self) next() {
         if (self.at >= self.len) { return None; }
         T item = self.items[self.at];
         self.at = self.at + 1;

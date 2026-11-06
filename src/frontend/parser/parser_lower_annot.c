@@ -129,9 +129,9 @@ static const char *tramp_args(ParserContext *context, const ASTNode *fn, int par
 
 /* A method reached through the handler ABI is called with the instance's
  * address as its first argument, so its receiver must be one that is an
- * address underneath: a pointer (`T *self`) or a reference (`borrow T`,
- * `borrow mut T`). A value receiver would be a move, which makes no sense for
- * a callback invoked on a persistent instance. */
+ * address underneath: a pointer (`T *self`) or a reference (`borrow T`).
+ * A value receiver would only read, which makes no sense for a callback that
+ * changes a persistent instance. */
 static void require_pointer_receiver(ParserContext *context, const ASTNode *fn, int line, int col) {
     ASTNode *recv = fn->fundef.param_count > 0 ? fn->fundef.params[0] : NULL;
     ASTNode *type = recv && recv->type == AST_PARAM ? recv->param.type : NULL;
@@ -141,7 +141,7 @@ static void require_pointer_receiver(ParserContext *context, const ASTNode *fn, 
                  type->type_node.ref_kind != REFKIND_NONE;
     if (!by_pointer && !by_ref) {
         annot_error(context, line, col,
-                    "handler method '%s' must take its receiver by pointer or reference, `(%s *self)` or `(borrow mut %s self)`",
+                    "handler method '%s' must take its receiver by pointer or reference, `(%s *self)` or `(borrow %s self)`",
                     method_short_name(fn), fn->fundef.recv_type_name ? fn->fundef.recv_type_name : "T",
                     fn->fundef.recv_type_name ? fn->fundef.recv_type_name : "T");
     }

@@ -30,12 +30,12 @@ int resolver_get_function_info(const ModuleSymbol *sym, ResolverFunctionInfo *ou
             if (p && p->type == AST_PARAM) {
                 out_info->params[i].name = p->param.name ? p->param.name : "";
                 out_info->params[i].type_ast = p->param.type;
-                out_info->params[i].is_mut = p->param.is_mut;
+                out_info->params[i].is_move = p->param.is_move;
                 out_info->params[i].is_rest = p->param.is_rest;
             } else {
                 out_info->params[i].name = "";
                 out_info->params[i].type_ast = NULL;
-                out_info->params[i].is_mut = 0;
+                out_info->params[i].is_move = 0;
                 out_info->params[i].is_rest = 0;
             }
         }

@@ -1,0 +1,24 @@
+// Rule P1: a plain parameter only reads an owned value, so the owner stays
+// and drops it. `move T x` takes it over, and the callee drops it.
+import { Drop } from "@std/core/drop.mln";
+
+i32 g_dropped = 0;
+
+struct Res { i32 id; };
+impl Drop for Res { void (borrow Self self) drop() { g_dropped = g_dropped + self.id; } }
+
+i32 read(Res r) { return r.id; }
+void take(move Res r) { }
+
+i32 main() {
+    Res a = Res { id: 1 };
+    Res b = Res { id: 10 };
+    i32 seen = read(a) + read(a);
+    take(b);
+    i32 before = g_dropped;
+    {
+        Res c = Res { id: 100 };
+        seen = seen + read(c);
+    }
+    return (before * 1000 + g_dropped) * 1000 + seen;
+}

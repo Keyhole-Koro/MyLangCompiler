@@ -14,7 +14,6 @@ typedef enum {
     AST_TYPE_FUNCTION,
     AST_VAR_DECL,
     AST_BORROW,
-    AST_BORROW_MUT,
     AST_ASSIGN,
     AST_UNARY,
     AST_CAST,
@@ -56,7 +55,6 @@ typedef enum {
 
 typedef enum {
     REFKIND_NONE = 0,
-    REFKIND_SHARED,
     REFKIND_MUT,
 } RefKind;
 
@@ -146,7 +144,6 @@ struct ASTNode {
             ASTNode *var_type;
             char *name;
             ASTNode *init;
-            int is_mut;
             int is_exported;
             int is_extern;   // `extern T name;`: defined in another object, so no storage here
             char *package;
@@ -178,7 +175,6 @@ struct ASTNode {
             ASTNode *expr;
         } cast;
         struct { ASTNode *expr; } borrow;
-        struct { ASTNode *expr; } borrow_mut;
         
         struct { TokenKind op; ASTNode *operand; } unary;
         struct { ASTNode *expr; } expr_stmt;
@@ -255,7 +251,7 @@ struct ASTNode {
         struct {
             ASTNode *type;
             char *name;
-            int is_mut;
+            int is_move;     // `move T x`: the callee takes the value and drops it
             int is_rest;
             // `i32 x = 0`: a literal a call or DOM element may leave out.
             ASTNode *default_value;
@@ -270,7 +266,7 @@ struct ASTNode {
              * resolve_method_calls() (parser_method_resolve.c) rewriting it
              * into an ordinary call: `name` still holds the bare method name,
              * and `recv` the receiver expression, which resolution moves into
-             * args[0] (inserting `&`/`&mut`/`*` as the declared receiver
+             * args[0] (inserting `&`/`*` as the declared receiver
              * needs) before renaming `name` to the mangled method and
              * clearing this field. No later pass should ever see it set --
              * parser_check.c's ensure_no_unresolved_method_calls() checks. */
@@ -407,6 +403,10 @@ char *astType2str(ASTNodeType type);
 void ast_visit_children(ASTNode *node, void (*visit)(ASTNode **, void *), void *context);
 /* Deep copy: the result shares no owned strings, arrays, or children. */
 ASTNode *ast_clone(const ASTNode *node);
+/* The body assigns to `name`, steps it, or lends it or a part of it with `&` to
+ * a call or a `borrow` local. In an unsafe source `&self.data[0]` elsewhere only
+ * takes an address, as a view of the caller's value does. */
+int ast_writes_name(ASTNode *body, const char *name);
 extern int g_parsing_safe_decl;
 
 #endif

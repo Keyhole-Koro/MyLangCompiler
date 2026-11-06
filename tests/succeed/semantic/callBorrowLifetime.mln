@@ -1,11 +1,11 @@
-void change(borrow mut i32 a, borrow mut i32 b) { *a = *a + 1; *b = *b + 2; }
-void read(borrow i32 a, borrow i32 b) { }
+void change(borrow i32 a, borrow i32 b) { *a = *a + 1; *b = *b + 2; }
+void read(i32 a, i32 b) { }
 i32 main() {
-    mut i32 x = 0; mut i32 y = 0;
-    read(&x, &x);
+    i32 x = 0; i32 y = 0;
+    read(x, x);
     { borrow i32 r = &x; read(r, r); }
-    change(&mut x, &mut y);
-    change(&mut x, &mut y);
-    borrow mut i32 after = &mut x;
+    change(&x, &y);
+    change(&x, &y);
+    borrow i32 after = &x;
     return *after + y;
 }

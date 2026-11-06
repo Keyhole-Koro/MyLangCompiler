@@ -20,9 +20,6 @@ void ensure_no_fun_literals(ASTNode *node) {
     case AST_BORROW:
         ensure_no_fun_literals(node->borrow.expr);
         break;
-    case AST_BORROW_MUT:
-        ensure_no_fun_literals(node->borrow_mut.expr);
-        break;
     case AST_BINARY:
         ensure_no_fun_literals(node->binary.left);
         ensure_no_fun_literals(node->binary.right);

@@ -6,7 +6,7 @@ import { Iterator } from "@std/core/iter.mln";
 struct Range { i32 cur; i32 end; };
 
 impl Iterator<i32> for Range {
-    Option<i32> (borrow mut Range self) next() {
+    Option<i32> (borrow Range self) next() {
         if (self.cur >= self.end) { return None; }
         i32 v = self.cur;
         self.cur = self.cur + 1;
@@ -18,7 +18,7 @@ struct Pair { i32 a; i32 b; };
 struct Pairs { i32 i; };
 
 impl Iterator<Pair> for Pairs {
-    Option<Pair> (borrow mut Pairs self) next() {
+    Option<Pair> (borrow Pairs self) next() {
         if (self.i >= 3) { return None; }
         self.i = self.i + 1;
         return Some(Pair { a: self.i, b: self.i * 10 });

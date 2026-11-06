@@ -1,4 +1,4 @@
-// A mutable borrow returned by at_mut() keeps the vector mutably borrowed.
+// A borrow returned by at() keeps the vector borrowed while the result is in scope.
 import { Option } from "@std/core/option.mln";
 import { Slice } from "@std/memory/slice.mln";
 i32 main() {
@@ -6,7 +6,7 @@ i32 main() {
     storage[0] = 1; storage[1] = 2;
     Slice<i32> s;
     s.init(&storage[0], 2);
-    Option<borrow mut i32> a = s.at_mut(0);
-    borrow Slice<i32> view = &s; // s is already mutably borrowed through a
+    Option<borrow i32> a = s.at(0);
+    borrow Slice<i32> view = &s; // s is already borrowed through a
     return 0;
 }

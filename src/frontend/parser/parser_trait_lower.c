@@ -175,10 +175,9 @@ static ASTNode *infer_type(TraitLowering *L, ASTNode *expr) {
     }
     case AST_CAST:
         return ast_clone(expr->cast.type);
-    case AST_BORROW:
-    case AST_BORROW_MUT: {
+    case AST_BORROW: {
         /* `&x` is the address of x, as a pointer would be. */
-        ASTNode *inner = infer_type(L, expr->type == AST_BORROW ? expr->borrow.expr : expr->borrow_mut.expr);
+        ASTNode *inner = infer_type(L, expr->borrow.expr);
         if (!inner || inner->type != AST_TYPE) {
             free_ast(inner);
             return NULL;
@@ -316,7 +315,7 @@ static void lower_equality(TraitLowering *L, ASTNode **slot) {
     ASTNode *left = hoist_operand(L, node->binary.left, type, &decls, &decl_count);
     ASTNode *right = hoist_operand(L, node->binary.right, type, &decls, &decl_count);
     ASTNode **args = malloc(sizeof(ASTNode *));
-    args[0] = new_borrow(right);
+    args[0] = right;
     ASTNode *call = new_call("eq", args, 1);
     call->call.recv = left;
     call->line = node->line;

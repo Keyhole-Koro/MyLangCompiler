@@ -85,7 +85,7 @@ static ASTNode *parse_for_in(ParserContext *context, Token **cur, Token *for_tok
     ASTNode *iter_ref = iter;
     if (iter->type != AST_IDENTIFIER || strstr(iter->identifier.name, "::")) {
         ASTNode *placeholder = new_type_node(new_identifier("__mlg_for_iter_type"), 0, 0, REFKIND_NONE);
-        ASTNode *decl = new_var_decl_mut(placeholder, iter_name, iter, 1);
+        ASTNode *decl = new_var_decl(placeholder, iter_name, iter);
         set_node_loc_from_tokens(decl, for_tok, NULL);
         outer[outer_count++] = decl;
         iter_ref = new_identifier(iter_name);
@@ -137,9 +137,8 @@ ASTNode *parse_for_stmt(ParserContext *context, Token **cur) {
     ASTNode *init = NULL, *cond = NULL, *inc = NULL;
 
     if ((*cur)->kind != SEMICOLON) {
-        if ((is_type(context, (*cur)->kind, *cur) &&
-             ((*cur)->kind != FN || looks_like_function_type_declaration(context, *cur))) ||
-            ((*cur)->kind == MUT && (*cur)->next && is_type(context, (*cur)->next->kind, (*cur)->next))) {
+        if (is_type(context, (*cur)->kind, *cur) &&
+            ((*cur)->kind != FN || looks_like_function_type_declaration(context, *cur))) {
             init = parse_variable_declaration(context, cur, 0);
         } else {
             init = parse_expr(context, cur);
@@ -233,13 +232,7 @@ static ASTNode *parse_init_list(ParserContext *context, Token **cur) {
     return new_init_list(elems, count);
 }
 ASTNode *parse_variable_declaration(ParserContext *context, Token **cur, int need_semicolon) {
-    int is_mut = 0;
     Token *start = *cur;
-    if ((*cur)->kind == MUT) {
-        is_mut = 1;
-        *cur = (*cur)->next;
-        start = *cur;
-    }
     ASTNode *type = parse_type(context, cur);
     if (!token_is_name(*cur))
         parse_error(context, "expected identifier for variable name", *cur);
@@ -286,7 +279,7 @@ ASTNode *parse_variable_declaration(ParserContext *context, Token **cur, int nee
         if (!expect(cur, SEMICOLON))
             parse_error(context, "expected ';' after variable declaration", *cur);
     }
-    ASTNode *decl = new_var_decl_mut(final_type, name, init, is_mut);
+    ASTNode *decl = new_var_decl(final_type, name, init);
     set_node_loc_from_tokens(decl, start, name_tok);
     if (init) {
         set_node_range_from_children(decl, decl, init);
@@ -346,7 +339,6 @@ ASTNode *parse_stmt(ParserContext *context, Token **cur) {
     }
 
     if ((*cur)->kind == L_BRACE) return parse_block(context, cur);
-    if ((*cur)->kind == MUT && (*cur)->next && is_type(context, (*cur)->next->kind, (*cur)->next)) return parse_variable_declaration(context, cur, 1);
     if (is_type(context, (*cur)->kind, *cur) &&
         ((*cur)->kind != FN || looks_like_function_type_declaration(context, *cur)))
         return parse_variable_declaration(context, cur, 1);

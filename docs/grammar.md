@@ -64,24 +64,23 @@ this manifest instead of scanning MyLang source text independently.
 - `receiver` -> `( param )`
 - `type_params` -> `< IDENTIFIER ( , IDENTIFIER )* >`
 - `param_list` -> `( param ( , param )* ( , rest_param )? )?`
-- `param` -> `mut? type IDENTIFIER ( [ NUMBER? ] )*`
+- `param` -> `move? type IDENTIFIER ( [ NUMBER? ] )*`
 - `rest_param` -> `rest IDENTIFIER`
 
 A `fundef` carrying a `receiver` is a **method** on the receiver's base type:
 
 ```mylang
-void (borrow User u)      display()          { ... }
-void (borrow mut User u)  rename(char* n)    { ... }
-i32  (User* u)         raw_id()           { ... }
-User (User u)          into_admin()       { ... }   // value receiver: a move
+void (User u)             display()          { ... }   // reads
+void (borrow User u)      rename(char* n)    { ... }   // changes
+i32  (User* u)            raw_id()           { ... }
+User (move User u)        into_admin()       { ... }   // takes
 ```
 
 The receiver is one `param`, never a list, so its spelling is exactly a
-parameter's: `mut`, `borrow`, `borrow mut`, pointer, and array suffixes all read the
-same as they do in `param_list`. Lowering prepends it to the parameter list, so
-a method is an ordinary function from the AST onward and the ownership rules
-apply to the receiver unchanged -- notably, **a value receiver moves**, which is
-why `borrow` / `borrow mut` are the usual forms.
+parameter's: `move`, `borrow`, pointer, and array suffixes all read the same as
+they do in `param_list`. Lowering prepends it to the parameter list, so a method
+is an ordinary function from the AST onward and the ownership rules apply to the
+receiver unchanged: a plain receiver reads, `borrow` changes, and `move` takes.
 
 Methods are called with `.` on any receiver expression, and `->` also works on a
 pointer. The address-of / dereference needed to match the declared receiver is
@@ -173,7 +172,7 @@ name.
 
 ### Default parameters
 
-- `param` -> `mut? type IDENTIFIER ( [ NUMBER? ] )* ( = literal )?`
+- `param` -> `move? type IDENTIFIER ( [ NUMBER? ] )* ( = literal )?`
 - `literal` -> `-? NUMBER` | `STRING_LITERAL` | `CHAR_LITERAL` | `true` | `false`
 
 ```mylang
@@ -253,7 +252,7 @@ name or a surplus argument is an error. Annotations cannot be put on a
 struct or a generic declaration.
 
 An annotated method must take its receiver by pointer or reference
-(`T *self`, `borrow mut T self`): the recorded function is called later with
+(`T *self`, `borrow T self`): the recorded function is called later with
 an instance's address as its first argument, and because the calling
 convention ignores trailing arguments, the DOM's uniform handler shape
 `(owner, id, arg)` reaches `(T *self, i32 id)` or `(T *self)` directly --
@@ -300,7 +299,7 @@ cannot complete when it is:
 Only a number literal counts as a constant condition.
 
 ### Variables
-- `var_decl` -> `mut? type IDENTIFIER ( [ ( NUMBER | const_parameter )? ] )* ( = ( expr | init_list ) )? ;`
+- `var_decl` -> `type IDENTIFIER ( [ ( NUMBER | const_parameter )? ] )* ( = ( expr | init_list ) )? ;`
 - `init_list` -> `{ expr ( , expr )* ,? }`
 
 ### Types and Enumerations
@@ -341,7 +340,7 @@ i32 raw_pid = (i32)pid;
 Each newtype has nominal identity while keeping its base scalar's size,
 alignment, and calling convention. Construction and extraction are explicit;
 arithmetic requires extracting the base value first.
-- `type` -> `const* ( borrow mut? )? base_type ( * )*`
+- `type` -> `const* borrow? base_type ( * )*`
 - `base_type` -> `primitive_type` | `IDENTIFIER type_args?`
 - `generic_params` -> `< generic_param ( , generic_param )* >`
 - `generic_param` -> `IDENTIFIER ( : bound ( + bound )* )?` | `const IDENTIFIER`

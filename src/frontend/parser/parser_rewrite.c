@@ -87,9 +87,6 @@ void rewrite_node(ParserContext *context, ASTNode *node, char **scope, int scope
     case AST_BORROW:
         rewrite_node(context, node->borrow.expr, scope, scope_count);
         break;
-    case AST_BORROW_MUT:
-        rewrite_node(context, node->borrow_mut.expr, scope, scope_count);
-        break;
     case AST_YIELD:
         rewrite_node(context, node->yield_stmt.expr, scope, scope_count);
         break;

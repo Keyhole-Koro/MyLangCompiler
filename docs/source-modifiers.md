@@ -85,7 +85,7 @@ with warning W0003:
 - keeping a borrow as a raw pointer or an integer address: `T *p = &x;`,
   `Holder { p: r }`, `return r;` from a function declared to return `T *`
 
-A `borrow` / `borrow mut` and an array are not raw pointers: `r.x` through a
+A `borrow` and an array are not raw pointers: `r.x` through a
 reference and `arr[i]` on an array are checked code. Taking an address,
 `&x`, is a borrow. A file reports its first eight operations where they are
 and the rest as one count.

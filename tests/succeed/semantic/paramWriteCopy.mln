@@ -1,0 +1,15 @@
+// Rule P1: a plain parameter is the caller's value to read. A body that
+// writes to one works on its own copy, whichever way it writes.
+struct V { i32 a; i32 b; };
+
+i32 change(V v) { v.a = 9; return v.a; }
+i32 step(V v) { v.b++; return v.b; }
+
+void bump(borrow i32 n) { *n = *n + 1; }
+i32 lend(V v) { bump(&v.a); return v.a; }
+
+i32 main() {
+    V x = V { a: 1, b: 2 };
+    i32 r = change(x) * 100 + step(x) * 10 + lend(x);
+    return r * 100 + x.a * 10 + x.b;
+}

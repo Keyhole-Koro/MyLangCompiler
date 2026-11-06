@@ -2,6 +2,6 @@ export struct ImportedBox<T> {
     T value;
 };
 
-U (borrow ImportedBox<U> self) get() {
+U (ImportedBox<U> self) get() {
     return self.value;
 }

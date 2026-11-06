@@ -48,13 +48,14 @@ Bands `E08xx` and above are unused and reserved for future categories.
 | `E0302` | Expression type | Invalid binary operands | `invalid operands to '+': i32 and char*` |
 | `E0303` | Expression type | Invalid condition type | `condition must be integer-like, pointer, or reference, got ...` |
 | `E0304` | Expression type | Constant index outside a fixed-size array | `index 4 is out of range for an array of 4 elements` |
+| `E0305` | Expression type | `*` on a value that is not a borrow, pointer, or array | `cannot dereference a value of type 'i32'` |
 | `E0501` | Generics | Type-argument count mismatch | `generic type 'Pair' expects 1 type argument but got 2` |
 | `E0502` | Generics | Generic name used without required type arguments | `generic type 'Pair' requires type arguments` |
-| `E0601` | Ownership and borrows | Write or `&mut` through a shared borrow (rule B4) | `cannot modify through 'p', a shared borrow` |
+| `E0601` | Ownership and borrows | Change to, move of, or a temporary for a parameter that only reads an owned value (rule P1) | `cannot change 'p', which this function only reads` |
 | `E0602` | Ownership and borrows | Change to a value while it is borrowed (rules B4, B5) | `cannot modify 'p' while it is borrowed` |
-| `E0603` | Ownership and borrows | Use of a value while a local holds `&mut` of it (rule B5) | `cannot use 'q' while it is mutably borrowed` |
+| `E0603` | Ownership and borrows | Use of a value while a local holds `&` of it (rule B4) | `cannot use 'q' while it is borrowed` |
 | `E0604` | Ownership and borrows | Value from outside a loop moved inside it (rule V4) | `'q' is moved inside a loop, so the next iteration would use it after the move` |
-| `E0605` | Ownership and borrows | Write to, or `&mut` of, a `const` value (rule B1) | `cannot modify const value 'c'` |
+| `E0605` | Ownership and borrows | Write to, or `&` of, a `const` value (rule W3) | `cannot modify const value 'c'` |
 | `E0701` | Error | A raw-pointer operation, a raw pointer type, or a call of an `.unsafe.mln` function without `@safe`, in a checked source | `calling 'mem_write_word', which is not @safe, outside an .unsafe.mln file` |
 | `E0702` | Error | A `@safe` function whose signature has a raw pointer | `a @safe function cannot take or return a raw pointer` |
 

@@ -1,5 +1,5 @@
 // An impl item's signature must match the trait's, with Self and the trait's parameters substituted.
-trait Eq { bool (borrow Self self) eq(borrow Self other); }
+trait Eq { bool (Self self) eq(Self other); }
 struct P { i32 x; };
-impl Eq for P { i32 (borrow P self) eq(borrow P other) { return 1; } }
+impl Eq for P { i32 (P self) eq(P other) { return 1; } }
 i32 main() { return 0; }

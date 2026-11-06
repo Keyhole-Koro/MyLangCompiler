@@ -173,10 +173,6 @@ int infer_expr_type(CompilerContext *cc, ASTNode *expr, TypeInfo *out) {
         if (!infer_expr_type(cc, expr->borrow.expr, out)) return 0;
         out->pointer_level += 1;
         return 1;
-    case AST_BORROW_MUT:
-        if (!infer_expr_type(cc, expr->borrow_mut.expr, out)) return 0;
-        out->pointer_level += 1;
-        return 1;
     case AST_UNARY:
         return infer_unary_type(cc, expr, out);
     case AST_CAST:

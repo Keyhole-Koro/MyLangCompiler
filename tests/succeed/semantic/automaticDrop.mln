@@ -9,7 +9,7 @@ struct Holder {
     Resource resource;
 };
 
-void (borrow mut Resource self) drop() {
+void (borrow Resource self) drop() {
     dropped = dropped + self.value;
     self.value = 0;
 }

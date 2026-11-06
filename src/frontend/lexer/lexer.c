@@ -63,7 +63,7 @@ StringTokenKindMap operators[] = {
 StringTokenKindMap reservedWords[] = {
     {"sizeof", SIZEOF}, {"bool", BOOL}, {"true", TRUE_LITERAL}, {"false", FALSE_LITERAL}, {"u8", U8}, {"u16", U16}, {"i32", I32}, {"u32", U32}, {"char", CHAR}, {"float", FLOAT},
     {"double", DOUBLE}, {"void", VOID}, {"long", LONG}, {"short", SHORT},
-    {"const", CONST}, {"static", STATIC}, {"mut", MUT}, {"borrow", BORROW},
+    {"const", CONST}, {"static", STATIC}, {"move", MOVE}, {"borrow", BORROW},
     {"extern", EXTERN}, {"auto", AUTO}, {"register", REGISTER},
     {"if", IF}, {"else", ELSE}, {"while", WHILE}, {"do", DO}, {"for", FOR},
     {"switch", SWITCH}, {"case", CASE}, {"default", DEFAULT},
@@ -134,7 +134,7 @@ char *tokenkind2str(TokenKind kind) {
         case SHORT: return "SHORT";
         case CONST: return "CONST";
         case STATIC: return "STATIC";
-        case MUT: return "MUT";
+        case MOVE: return "MOVE";
         case BORROW: return "BORROW";
         case EXTERN: return "EXTERN";
         case AUTO: return "AUTO";

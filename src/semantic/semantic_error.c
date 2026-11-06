@@ -30,8 +30,6 @@ SemanticLocation semantic_location_from_ast(ASTNode *node) {
         return semantic_location_from_ast(node->unary.operand);
     case AST_BORROW:
         return semantic_location_from_ast(node->borrow.expr);
-    case AST_BORROW_MUT:
-        return semantic_location_from_ast(node->borrow_mut.expr);
     case AST_ASSIGN:
         return semantic_location_from_ast(node->assign.left);
     case AST_EXPR_STMT:

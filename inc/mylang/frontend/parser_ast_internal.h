@@ -14,9 +14,8 @@ ASTNode *new_type_array_param(ASTNode *elem_type, const char *size_param);
 ASTNode *new_function_type(ASTNode **param_types, int param_count,
                            ASTNode *return_type, bool is_variadic);
 ASTNode *new_var_decl(ASTNode *type, char *name, ASTNode *init);
-ASTNode *new_var_decl_mut(ASTNode *type, char *name, ASTNode *init, int is_mut);
 ASTNode *new_param(ASTNode *type, char *name);
-ASTNode *new_param_mut(ASTNode *type, char *name, int is_mut);
+ASTNode *new_param_move(ASTNode *type, char *name, int is_move);
 ASTNode *new_param_rest(char *name);
 ASTNode *new_fundef(ASTNode *ret_type, char *name, ASTNode **params, int param_count, ASTNode *body, bool is_variadic);
 ASTNode *new_fun_literal(ASTNode **params, int param_count, ASTNode *body, bool is_variadic);
@@ -25,7 +24,6 @@ ASTNode *new_identifier(char *name);
 ASTNode *new_binary(TokenKind op, ASTNode *left, ASTNode *right);
 ASTNode *new_unary(TokenKind op, ASTNode *operand);
 ASTNode *new_borrow(ASTNode *expr);
-ASTNode *new_borrow_mut(ASTNode *expr);
 ASTNode *new_cast(ASTNode *type, ASTNode *expr);
 ASTNode *new_assign(ASTNode *left, ASTNode *right);
 ASTNode *new_ternary(ASTNode *cond, ASTNode *then_expr, ASTNode *else_expr);

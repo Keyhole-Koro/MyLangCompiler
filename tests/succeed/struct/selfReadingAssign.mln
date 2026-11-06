@@ -9,7 +9,7 @@ struct Res { i32 n; };
 P g;
 i32 drops = 0;
 
-void (borrow mut Res self) drop() { drops = drops + 1; }
+void (borrow Res self) drop() { drops = drops + 1; }
 
 i32 packed(P p) { return p.x * 100 + p.y; }
 P swapped(P p) { return P { x: p.y, y: p.x }; }

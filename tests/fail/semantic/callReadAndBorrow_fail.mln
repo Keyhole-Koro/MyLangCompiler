@@ -1,0 +1,4 @@
+// Rule B8: a place lent with `&` cannot also be read by the same call.
+struct P { i32 x; };
+void change(P a, borrow P b) { b.x = a.x + 1; }
+i32 main() { P p = P { x: 0 }; change(p, &p); return p.x; }

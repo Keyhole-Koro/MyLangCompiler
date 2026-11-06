@@ -16,7 +16,7 @@
 typedef struct ResolverParamInfo {
     const char *name;      /* borrowed */
     ASTNode *type_ast;     /* borrowed */
-    int is_mut;
+    int is_move;
     int is_rest;
 } ResolverParamInfo;
 

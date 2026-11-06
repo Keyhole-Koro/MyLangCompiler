@@ -1,5 +1,5 @@
 // for-in needs an Iterator impl; a next() method alone is not one.
 import { Option } from "@std/core/option.mln";
 struct P { i32 x; };
-Option<i32> (borrow mut P self) next() { return None; }
+Option<i32> (borrow P self) next() { return None; }
 i32 main() { P p; i32 s = 0; for (i32 v in p) { s = s + v; } return s; }

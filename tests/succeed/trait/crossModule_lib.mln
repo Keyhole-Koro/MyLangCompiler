@@ -9,7 +9,7 @@ export enum RawErr { R1, R2 }
 export struct Counter { i32 n; };
 
 export impl Eq for P {
-    bool (borrow P self) eq(borrow P other) { return self.x == other.x && self.y == other.y; }
+    bool (P self) eq(P other) { return self.x == other.x && self.y == other.y; }
 }
 
 export impl From<RawErr> for LibErr {
@@ -19,7 +19,7 @@ export impl From<RawErr> for LibErr {
 }
 
 export impl Iterator<i32> for Counter {
-    Option<i32> (borrow mut Counter self) next() {
+    Option<i32> (borrow Counter self) next() {
         if (self.n == 0) { return None; }
         self.n = self.n - 1;
         return Some(self.n);

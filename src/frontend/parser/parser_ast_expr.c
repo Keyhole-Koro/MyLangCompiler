@@ -27,14 +27,6 @@ ASTNode *new_borrow(ASTNode *expr) {
     return node;
 }
 
-ASTNode *new_borrow_mut(ASTNode *expr) {
-    ASTNode *node = calloc(1, sizeof(ASTNode));
-    node->type = AST_BORROW_MUT;
-    node->borrow_mut.expr = expr;
-    set_node_range_from_children(node, expr, expr);
-    return node;
-}
-
 ASTNode *new_cast(ASTNode *type, ASTNode *expr) {
     ASTNode *node = calloc(1, sizeof(ASTNode));
     node->type = AST_CAST;

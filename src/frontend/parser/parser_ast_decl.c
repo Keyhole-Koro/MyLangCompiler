@@ -21,31 +21,26 @@ ASTNode *new_type_array_param(ASTNode *elem_type, const char *size_param) {
 }
 
 ASTNode *new_var_decl(ASTNode *type, char *name, ASTNode *init) {
-    return new_var_decl_mut(type, name, init, 0);
-}
-
-ASTNode *new_var_decl_mut(ASTNode *type, char *name, ASTNode *init, int is_mut) {
     ASTNode *node = calloc(1, sizeof(ASTNode));
     node->type = AST_VAR_DECL;
     node->var_decl.var_type = type;
     node->var_decl.name = strdup(name);
     node->var_decl.init = init;
-    node->var_decl.is_mut = is_mut;
     node->var_decl.is_exported = 0;
     node->var_decl.package = NULL;
     return node;
 }
 
 ASTNode* new_param(ASTNode *type, char *name) {
-    return new_param_mut(type, name, 0);
+    return new_param_move(type, name, 0);
 }
 
-ASTNode* new_param_mut(ASTNode *type, char *name, int is_mut) {
+ASTNode* new_param_move(ASTNode *type, char *name, int is_move) {
     ASTNode *node = calloc(1, sizeof(ASTNode));
     node->type = AST_PARAM;
     node->param.type = type;
     node->param.name = strdup(name);
-    node->param.is_mut = is_mut;
+    node->param.is_move = is_move;
     node->param.is_rest = 0;
     return node;
 }
@@ -55,7 +50,7 @@ ASTNode *new_param_rest(char *name) {
     node->type = AST_PARAM;
     node->param.type = NULL;
     node->param.name = strdup(name);
-    node->param.is_mut = 0;
+    node->param.is_move = 0;
     node->param.is_rest = 1;
     return node;
 }

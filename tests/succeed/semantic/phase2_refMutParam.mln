@@ -1,10 +1,10 @@
-i32 bump(borrow mut i32 rx) {
+i32 bump(borrow i32 rx) {
     *rx = *rx + 1;
     return *rx;
 }
 
 i32 main() {
-    mut i32 x = 8;
-    bump(&mut x);
+    i32 x = 8;
+    bump(&x);
     return x;
 }

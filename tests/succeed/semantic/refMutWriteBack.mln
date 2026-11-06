@@ -1,17 +1,17 @@
-// Writes through a `borrow mut` parameter or receiver reach the caller's value:
+// Writes through a `borrow` parameter or receiver reach the caller's value:
 // a reference is a pointer underneath, and `s.v` on one reads through it
 // (codegen_lvalue.c). Before, the slot holding the pointer was treated as
 // the struct itself and the caller never saw the change.
 struct S { i32 v; };
 
-void bump(borrow mut S s, i32 d) { s.v = s.v + d; }
-void (borrow mut S s) twice() { s.v = s.v * 2; }
-i32 (borrow S s) peek() { return s.v; }
+void bump(borrow S s, i32 d) { s.v = s.v + d; }
+void (borrow S s) twice() { s.v = s.v * 2; }
+i32 (S s) peek() { return s.v; }
 
 i32 main() {
-    mut S s;
+    S s;
     s.v = 1;
-    bump(&mut s, 5);        // 6
+    bump(&s, 5);        // 6
     s.twice();              // 12
     i32 seen = s.peek();    // 12
     return s.v * 100 + seen;   // 1212

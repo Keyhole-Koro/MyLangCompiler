@@ -1,0 +1,11 @@
+// Rule B6: `&x` of a plain parameter is a copy in this frame.
+struct P { i32 x; };
+
+borrow i32 inside(P p) {
+    return &p.x;
+}
+
+i32 main() {
+    P a = P { x: 1 };
+    return *inside(a);
+}

@@ -42,9 +42,6 @@ void free_ast(ASTNode *node) {
         case AST_BORROW:
             free_ast(node->borrow.expr);
             break;
-        case AST_BORROW_MUT:
-            free_ast(node->borrow_mut.expr);
-            break;
         case AST_TYPE:
             free_ast(node->type_node.base_type);
             break;

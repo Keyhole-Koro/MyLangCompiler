@@ -203,13 +203,12 @@ static int infer_recv_shape(ParserContext *ctx, MethodScope *scope, ASTNode *exp
             return 1;
         }
         return 0;
-    case AST_BORROW:
-    case AST_BORROW_MUT: {
-        ASTNode *inner_expr = expr->type == AST_BORROW ? expr->borrow.expr : expr->borrow_mut.expr;
+    case AST_BORROW: {
+        ASTNode *inner_expr = expr->borrow.expr;
         RecvShape inner;
         if (!infer_recv_shape(ctx, scope, inner_expr, &inner)) return 0;
         *out = inner;
-        out->ref_kind = expr->type == AST_BORROW ? REFKIND_SHARED : REFKIND_MUT;
+        out->ref_kind = REFKIND_MUT;
         return 1;
     }
     default:
@@ -231,11 +230,10 @@ static void method_error(ParserContext *ctx, ASTNode *node, const char *fmt, ...
 
 /* Builds the expression that goes into args[0] to turn `recv` (whose static
  * shape is `actual`) into what the method's declared receiver (`expected`)
- * needs -- see docs/grammar.md's receiver table. An exact match (including
- * both being plain values, which is a move) passes through unchanged.
- * A raw pointer is dereferenced and borrowed for a `borrow`/`borrow mut`
- * receiver; a borrow reaching a pointer receiver has no auto-conversion yet
- * -- it needs an explicit local. */
+ * needs -- see docs/grammar.md's receiver table. An exact match passes
+ * through unchanged. A raw pointer is dereferenced, and borrowed for a
+ * `borrow` receiver; a borrow reaching a pointer receiver has no
+ * auto-conversion yet -- it needs an explicit local. */
 static ASTNode *convert_receiver(ParserContext *ctx, ASTNode *call, ASTNode *recv,
                                  const RecvShape *actual, const RecvShape *expected) {
     if (actual->pointer_level == expected->pointer_level && actual->ref_kind == expected->ref_kind) {
@@ -246,33 +244,26 @@ static ASTNode *convert_receiver(ParserContext *ctx, ASTNode *call, ASTNode *rec
     int expected_plain_value = expected->pointer_level == 0 && expected->ref_kind == REFKIND_NONE;
 
     if (actual_plain) {
-        if (expected->pointer_level == 0 && expected->ref_kind == REFKIND_SHARED) return new_borrow(recv);
-        if (expected->pointer_level == 0 && expected->ref_kind == REFKIND_MUT) return new_borrow_mut(recv);
+        if (expected->pointer_level == 0 && expected->ref_kind == REFKIND_MUT) return new_borrow(recv);
         if (expected->pointer_level == 1 && expected->ref_kind == REFKIND_NONE) return new_borrow(recv);
     }
     if (actual->pointer_level == 1 && actual->ref_kind == REFKIND_NONE && expected_plain_value) {
         return new_unary(ASTARISK, recv);
     }
-    /* `p.push(x)` with `Vec<T> *p` against a `borrow mut Vec<T>` receiver:
-     * borrow the pointee. Like any raw deref it is unchecked. */
-    if (actual->pointer_level == 1 && actual->ref_kind == REFKIND_NONE && expected->pointer_level == 0) {
-        if (expected->ref_kind == REFKIND_SHARED) return new_borrow(new_unary(ASTARISK, recv));
-        if (expected->ref_kind == REFKIND_MUT) return new_borrow_mut(new_unary(ASTARISK, recv));
+    /* `p.push(x)` with `Vec<T> *p` against a `borrow Vec<T>` receiver: borrow
+     * the pointee. Like any raw deref it is unchecked. */
+    if (actual->pointer_level == 1 && actual->ref_kind == REFKIND_NONE &&
+        expected->pointer_level == 0 && expected->ref_kind == REFKIND_MUT) {
+        return new_borrow(new_unary(ASTARISK, recv));
     }
 
-    /* A value receiver takes a copy of what the borrow names. */
+    /* A reading receiver reads what the borrow names. */
     if (actual->pointer_level == 0 && actual->ref_kind != REFKIND_NONE && expected_plain_value) {
         return new_unary(ASTARISK, recv);
     }
-    /* A `borrow mut` lends itself on as a shared `borrow` for the call: both
-     * are the same address, and the checker's B4/B5 rules see the use. */
-    if (actual->pointer_level == 0 && actual->ref_kind == REFKIND_MUT &&
-        expected->pointer_level == 0 && expected->ref_kind == REFKIND_SHARED) {
-        return recv;
-    }
 
     method_error(ctx, call,
-        "cannot call method '%s' on this receiver: its declared kind (value/borrow/borrow mut/pointer) "
+        "cannot call method '%s' on this receiver: its declared kind (value/borrow/pointer) "
         "doesn't match what the method expects, and auto-ref/deref doesn't bridge them -- bind it "
         "to a local of the exact receiver type first",
         call->call.name);
@@ -407,8 +398,6 @@ static void resolve_calls_node(ParserContext *context, MethodScope *scope, ASTNo
     case AST_BORROW:
         resolve_calls_node(context, scope, node->borrow.expr);
         break;
-    case AST_BORROW_MUT:
-        resolve_calls_node(context, scope, node->borrow_mut.expr);
         break;
     case AST_TERNARY:
         resolve_calls_node(context, scope, node->ternary.cond);

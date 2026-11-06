@@ -1,0 +1,12 @@
+// Rule P1: nothing would drop an owned value that a call only reads (E0601).
+import { Drop } from "@std/core/drop.mln";
+
+struct Res { i32 id; };
+impl Drop for Res { void (borrow Self self) drop() { } }
+
+Res make() { return Res { id: 1 }; }
+i32 read(Res r) { return r.id; }
+
+i32 main() {
+    return read(make());
+}

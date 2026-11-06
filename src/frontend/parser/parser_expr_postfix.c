@@ -171,7 +171,7 @@ ASTNode *parse_postfix(ParserContext *context, Token **cur) {
                  * resolve_method_calls() to mangle once every method
                  * declared in this file is known. `.` and `->` are treated
                  * identically here -- which conversion the declared receiver
-                 * needs (none, `&`, `&mut`, or `*`) is decided from `recv`'s
+                 * needs (none, `&`, or `*`) is decided from `recv`'s
                  * static type during resolution, not from which token got us
                  * here. */
                 int is_member = node->type == AST_MEMBER_ACCESS;

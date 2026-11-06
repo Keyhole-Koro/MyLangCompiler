@@ -1,5 +1,5 @@
 // An impl must implement every item of its trait.
-trait Eq { bool (borrow Self self) eq(borrow Self other); }
+trait Eq { bool (Self self) eq(Self other); }
 struct P { i32 x; };
 impl Eq for P { }
 i32 main() { return 0; }

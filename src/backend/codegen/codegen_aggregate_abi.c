@@ -20,10 +20,9 @@
 // on gen_lvalue_addr -- member access, aggregate assignment, borrowing -- gets
 // the fix for free by construction, without its own special case.
 //
-// A move-checked language makes this safe without a copy: passing a non-Copy
-// struct by value already moves it (docs/ownership.md), so aliasing the
-// caller's memory instead of copying it is indistinguishable from a copy to a
-// well-typed program -- confirmed against the semantic layer, which rejects
+// No copy is made at the call. A plain parameter only reads, and a body that
+// writes to one gets a copy on entry (copy_written_params, codegen_func.c).
+// `move T x` takes the caller's memory over: the semantic layer rejects
 // `consume(x); return x.a;` with "use of moved value 'x'".
 
 int aggregate_type_size(CompilerContext *cc, ASTNode *type_ast) {

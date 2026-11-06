@@ -3,7 +3,7 @@ struct Resource {
     i32 handle;
 };
 
-void (borrow mut Resource self) drop() {
+void (borrow Resource self) drop() {
     self.handle = 0;
 }
 

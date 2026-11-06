@@ -1,2 +1,2 @@
-void change(borrow mut i32 a) { *a = 1; }
-i32 main() { mut i32 x = 0; borrow i32 r = &x; change(&mut x); return *r; }
+void change(borrow i32 a) { *a = 1; }
+i32 main() { i32 x = 0; borrow i32 r = &x; change(&x); return *r; }

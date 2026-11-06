@@ -1,10 +1,10 @@
-// Rule B1: a const value cannot be borrowed mutably (E0605).
-void bump(borrow mut i32 n) {
+// Rule W3: a const value cannot be borrowed (E0605).
+void bump(borrow i32 n) {
     *n = *n + 1;
 }
 
 i32 main() {
     const i32 c = 3;
-    bump(&mut c);
+    bump(&c);
     return c;
 }

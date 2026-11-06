@@ -42,8 +42,12 @@ typedef struct {
     SemanticTypeInfo type_info;
     SemanticLocation decl_loc;
     SemanticLocation move_loc;
+    /* A parameter: `move T x`, written in the function's body, and a plain
+     * parameter of a type that cannot be copied, which can only be read. */
+    int param_is_move;
+    int param_is_written;
+    int reads_owned_value;
     const char *borrowed_from;  /* root owner this local borrows, or NULL */
-    int borrow_is_mut;
     /* Derived from another borrow (`borrow T r2 = r1;`, `r1.at(0)`): the
      * owner's counts belong to that borrow, not to this one. */
     int borrow_is_reborrow;
@@ -93,6 +97,7 @@ typedef struct {
     SemanticTypeInfo param_types[SEMANTIC_MAX_FUNCTION_PARAMS];
     const char *param_names[SEMANTIC_MAX_FUNCTION_PARAMS];
     int param_borrow_kinds[SEMANTIC_MAX_FUNCTION_PARAMS];
+    int param_is_move[SEMANTIC_MAX_FUNCTION_PARAMS];
     ASTNode *declaration;
     SemanticLocation decl_loc;
 } SemanticFunctionSig;
@@ -128,7 +133,7 @@ typedef struct {
     int defer_depth;
     /* The innermost loop being walked, or NULL. */
     SemanticLoopFrame *loop;
-    /* Walking the operand of `&` / `&mut`: the borrow checks report a
+    /* Walking the operand of `&`: the borrow checks report a
      * conflict there, so a use of the operand is not reported again. */
     int in_borrow_operand;
     ASTNode *current_function;

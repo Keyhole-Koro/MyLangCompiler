@@ -73,7 +73,7 @@ void collect_drop_bindings(CompilerContext *cc, ASTNode *node, bool is_param,
                            int param_count, int local_count) {
     if (!node) return;
     if (node->type == AST_PARAM) {
-        if (type_needs_drop(cc, node->param.type))
+        if (node->param.is_move && type_needs_drop(cc, node->param.type))
             add_drop_binding(cc, node->param.name, node->param.type, true,
                              param_count, local_count);
         return;

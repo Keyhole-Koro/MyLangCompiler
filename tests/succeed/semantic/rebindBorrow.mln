@@ -1,4 +1,4 @@
-// Rule B4: assigning a shared borrow variable re-points it; it does not
+// Rule B4: assigning a borrow variable re-points it; it does not
 // write through it.
 struct P { i32 x; };
 

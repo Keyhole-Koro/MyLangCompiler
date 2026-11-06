@@ -14,7 +14,6 @@ char *astType2str(ASTNodeType type) {
         case AST_TYPE_FUNCTION: return "AST_TYPE_FUNCTION";
         case AST_VAR_DECL: return "AST_VAR_DECL";
         case AST_BORROW: return "AST_BORROW";
-        case AST_BORROW_MUT: return "AST_BORROW_MUT";
         case AST_ASSIGN: return "AST_ASSIGN";
         case AST_UNARY: return "AST_UNARY";
         case AST_CAST: return "AST_CAST";
@@ -75,7 +74,6 @@ void ast_visit_children(ASTNode *n, void (*visit)(ASTNode **, void *), void *ctx
     case AST_TYPEDEF: CHILD(typedef_stmt.src_type); break;
     case AST_CAST: CHILD(cast.type); CHILD(cast.expr); break;
     case AST_BORROW: CHILD(borrow.expr); break;
-    case AST_BORROW_MUT: CHILD(borrow_mut.expr); break;
     case AST_UNARY: CHILD(unary.operand); break;
     case AST_EXPR_STMT: CHILD(expr_stmt.expr); break;
     case AST_IF: CHILD(if_stmt.cond); CHILD(if_stmt.then_stmt); CHILD(if_stmt.else_stmt); break;
@@ -243,4 +241,84 @@ ASTNode *ast_clone(const ASTNode *src) {
 #undef STRINGS
     ast_visit_children(n, clone_child, NULL);
     return n;
+}
+
+static const char *written_place_root(ASTNode *place) {
+    while (place) {
+        switch (place->type) {
+        case AST_IDENTIFIER:
+            return place->identifier.name;
+        case AST_MEMBER_ACCESS:
+            place = place->member_access.lhs;
+            break;
+        case AST_ARROW_ACCESS:
+            place = place->arrow_access.lhs;
+            break;
+        case AST_UNARY:
+            if (place->unary.op != ASTARISK) return NULL;
+            place = place->unary.operand;
+            /* `a[i]` is `*(a + i)`. */
+            if (place && place->type == AST_BINARY &&
+                (place->binary.op == ADD || place->binary.op == SUB))
+                place = place->binary.left;
+            break;
+        default:
+            return NULL;
+        }
+    }
+    return NULL;
+}
+
+typedef struct {
+    const char *name;
+    int found;
+} WriteSearch;
+
+static int place_is_named(ASTNode *place, const char *name) {
+    const char *root = place ? written_place_root(place) : NULL;
+    return root && strcmp(root, name) == 0;
+}
+
+static int lends_name(ASTNode *expr, const char *name) {
+    return expr && expr->type == AST_BORROW && place_is_named(expr->borrow.expr, name);
+}
+
+static void find_write(ASTNode **slot, void *context) {
+    WriteSearch *search = context;
+    ASTNode *node = *slot;
+    if (!node || search->found) return;
+    int found = 0;
+    switch (node->type) {
+    case AST_ASSIGN:
+        found = place_is_named(node->assign.left, search->name);
+        break;
+    case AST_UNARY:
+        found = (node->unary.op == INC || node->unary.op == DEC ||
+                 node->unary.op == POST_INC || node->unary.op == POST_DEC) &&
+                place_is_named(node->unary.operand, search->name);
+        break;
+    case AST_CALL:
+        for (int i = 0; i < node->call.arg_count; i++) {
+            if (lends_name(node->call.args[i], search->name)) found = 1;
+        }
+        break;
+    case AST_VAR_DECL:
+        found = node->var_decl.var_type && node->var_decl.var_type->type == AST_TYPE &&
+                node->var_decl.var_type->type_node.ref_kind != REFKIND_NONE &&
+                lends_name(node->var_decl.init, search->name);
+        break;
+    default:
+        break;
+    }
+    if (found) {
+        search->found = 1;
+        return;
+    }
+    ast_visit_children(node, find_write, context);
+}
+
+int ast_writes_name(ASTNode *body, const char *name) {
+    WriteSearch search = { name, 0 };
+    if (body && name) find_write(&body, &search);
+    return search.found;
 }

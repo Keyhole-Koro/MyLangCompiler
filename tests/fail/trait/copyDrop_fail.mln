@@ -4,7 +4,7 @@ import { Drop } from "@std/core/drop.mln";
 struct Owner { i32 handle; };
 
 impl Drop for Owner {
-    void (borrow mut Owner self) drop() { self.handle = 0; }
+    void (borrow Owner self) drop() { self.handle = 0; }
 }
 
 impl Copy for Owner {}

@@ -1,0 +1,15 @@
+// Rule P1: a parameter that reads an owned value has nothing to copy it into (E0601).
+import { Drop } from "@std/core/drop.mln";
+
+struct Res { i32 id; };
+impl Drop for Res { void (borrow Self self) drop() { } }
+
+void change(Res r) {
+    r.id = 2;
+}
+
+i32 main() {
+    Res a = Res { id: 1 };
+    change(a);
+    return 0;
+}

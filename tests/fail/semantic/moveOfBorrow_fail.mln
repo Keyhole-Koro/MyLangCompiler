@@ -1,0 +1,3 @@
+// Rule P1: `move` takes a value, not a borrow.
+void take(move borrow i32 x) { }
+i32 main() { return 0; }

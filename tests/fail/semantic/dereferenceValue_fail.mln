@@ -1,0 +1,4 @@
+// `*x` needs an address (E0305). A plain parameter is the value itself.
+struct P { i32 x; };
+i32 read(P p) { return (*p).x; }
+i32 main() { P a = P { x: 1 }; return read(a); }

@@ -12,14 +12,14 @@ describes how the compiler implements them.
 Every value has a variable that is its "owner". There can only be one owner at a time.
 
 ### Move Semantics
-When a value is assigned to another variable or passed to a function, its ownership is **moved** by default, unless the type implements `Copy`. After a move, the original variable can no longer be used.
+When a value is assigned to another variable, returned, or passed to a `move T x` parameter, its ownership is **moved**, unless the type implements `Copy`. After a move, the original variable can no longer be used.
 
 ### Copy Types
 Certain types are considered "Copy" and are duplicated instead of moved:
 - Built-in numeric types (`i32`, `u32`, `float`, etc.)
 - Booleans
 - Enumerations
-- Pointers and shared borrows (`borrow T`)
+- Pointers
 - Structs without `drop()` whose fields are all data -- scalars, enums,
   newtypes, function values, fixed-size arrays of those, and other such
   structs -- with no `impl Copy` needed (rule V2). `Option<i32>` and
@@ -29,31 +29,42 @@ Certain types are considered "Copy" and are duplicated instead of moved:
 - Structs with an explicit `impl Copy`, when every field is Copy and the type
   does not implement `Drop`
 
-## 2. Borrowing
+## 2. Parameters and Borrowing
 
-Borrowing allows you to access a value without taking ownership.
+A parameter is passed in one of three ways. Reading is the default:
 
-A borrow's type is written `borrow T` (shared) or `borrow mut T` (mutable),
-and its value is taken with `&x` / `&mut x`:
+| Form | Meaning |
+| --- | --- |
+| `T x` | Reads. The caller's value stays as it is. |
+| `borrow T x` | Changes the caller's place. |
+| `move T x` | Takes the value. The callee becomes its owner. |
+
+### Reading (`T x`)
+- A struct or array travels as an address, so no copy is made at the call.
+- A body that writes to the parameter works on a copy taken on entry, so the
+  caller sees no change (`copy_written_params`, `codegen_func.c`).
+- A value with a `drop` cannot be copied. A parameter of such a type can only
+  read: writing to it or moving it is E0601. The caller keeps it and drops it.
+- An owned value straight from a call has no owner to drop it, so it cannot go
+  to a reading parameter (E0601): give it a name first.
+- A `borrow T` variable passed to a `T` parameter is read through.
+
+### Taking (`move T x`)
+- The caller's variable is spent and the callee drops the value.
+- Use it where a function keeps the value, such as `push(move T value)`.
+
+### Borrowing (`borrow T`)
+A borrow is taken with `&x` and lends the place for writing:
 
 ```mylang
 borrow Node r = &n;
-void (borrow mut Counter c) click(i32 id) { ... }
+void (borrow Counter c) click(i32 id) { ... }
 ```
 
-### Shared Borrows (`borrow T`)
-- Created using the `&` operator.
-- Multiple shared borrows can exist simultaneously.
-- The underlying value cannot be modified through a shared borrow.
-- The owner cannot move or mutably borrow the value while shared borrows are active.
-
-### Mutable Borrows (`borrow mut T`)
-- Created using the `&mut` operator. Variables need no `mut` declaration:
-  every variable can be written, as in C. A `const` value cannot be borrowed
-  mutably (E0605).
-- Only **one** mutable borrow can exist at a time for a particular piece of data.
-- No other borrows (shared or mutable) can exist while a mutable borrow is active.
-- The owner cannot move or access the value while it is mutably borrowed.
+- Only **one** borrow can exist at a time for a particular piece of data.
+- The owner cannot move, read or write the value while it is borrowed.
+- A `const` value cannot be borrowed (E0605).
+- Every variable can be written, as in C: there is no `mut` declaration.
 
 ## 3. Enforcement Rules
 
@@ -62,21 +73,20 @@ The semantic analyzer (`semantic_walk.c`) enforces these rules:
 1. **Use After Move**: Attempting to use a variable after its value has been moved results in a compiler error.
    A branch that ends in `return`, `break` or `continue` does not carry its
    moves past the `if`.
-2. **Borrow Conflicts**: 
-   - Cannot mutably borrow a value if it is already borrowed (shared or mutably).
-   - Cannot shared borrow a value if it is already mutably borrowed.
+2. **Borrow Conflicts**: a value cannot be borrowed while it is borrowed, and a
+   call cannot both lend a place with `&` and read it through another argument.
 3. **Move while Borrowed**: Cannot move a variable if it currently has active borrows.
 4. **Reference Escape**: Cannot return a reference to a local variable from a function.
-5. **Write through a shared borrow** (E0601): `p.x = 1`, `p.x++` and `&mut p.x`
-   are errors when `p` is a `borrow T`. Assigning `p = &other` re-points the
-   borrow and is allowed.
+5. **Change to a reading parameter of an owned value** (E0601): `p.x = 1`,
+   `p.x++`, `&p.x`, and moving `p` are errors when `p` is a plain parameter
+   whose type has a `drop`.
 6. **Change while borrowed** (E0602): the owner, or any field of it, cannot be
    assigned or stepped (`++` / `--`) while a borrow of it is in scope.
-7. **Use while mutably borrowed** (E0603): while a local holds `&mut x`, `x`
-   itself cannot be read.
+7. **Use while borrowed** (E0603): while a local holds `&x`, `x` itself cannot
+   be read.
 8. **Reborrows lock what they go through**: a borrow taken through a
-   `borrow` parameter or a local holding one (`v.at_mut(0)` on
-   `borrow mut Vec<T> v`) keeps that parameter or local borrowed too, so
+   `borrow` parameter or a local holding one (`v.at(0)` on
+   `borrow Vec<T> v`) keeps that parameter or local borrowed too, so
    `v.push(..)` cannot reallocate under it.
 9. **Move inside a loop** (E0604): a variable declared outside a loop and
    moved inside it must be assigned again before the next iteration, or the
@@ -124,8 +134,7 @@ Option<borrow i32> a = v.at(0);   // v is borrowed while a is in scope
 v.push(4);                        // error: v is borrowed
 ```
 
-`at_mut()` / `get_mut()` return `Option<borrow mut T>` and keep the
-collection mutably borrowed. A borrow taken through a raw pointer
+A borrow taken through a raw pointer
 (`p->rows.at(i)`) has no owner to track. An instance of a generic written over
 `T` (`unwrap_or` with `T = borrow i32`) is only checked for borrows of its own
 locals.
@@ -138,11 +147,11 @@ MyLang uses lexical scopes to manage borrow lifetimes.
 
 ## 5. Raw pointers and `.unsafe.mln`
 
-The borrow rules above follow references (`borrow` / `borrow mut`, and `&x` while
+The borrow rules above follow references (`borrow`, and `&x` while
 it is held as one). A raw pointer (`T *`) is not tracked: a pointer taken
 from a value stays usable after the value is moved or dropped. Dereferencing
 one, pointer arithmetic, and casts to or from pointers therefore belong in
-`.unsafe.mln` sources; elsewhere they raise warning W0003 (see
+`.unsafe.mln` sources; elsewhere they are error E0701 (see
 [Source filename modifiers](source-modifiers.md)).
 
 Keeping a borrow as a raw pointer or an integer address -- initializing or

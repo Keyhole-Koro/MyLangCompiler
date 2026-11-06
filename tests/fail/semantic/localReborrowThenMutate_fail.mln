@@ -4,8 +4,8 @@ import { Option } from "@std/core/option.mln";
 
 i32 main() {
     Vec<i32> v = Vec<i32> {};
-    borrow mut Vec<i32> r = &mut v;
-    Option<borrow mut i32> first = r.at_mut(0);
+    borrow Vec<i32> r = &v;
+    Option<borrow i32> first = r.at(0);
     r.push(1);
     return case first of { Some(x) -> *x; None -> 0; };
 }

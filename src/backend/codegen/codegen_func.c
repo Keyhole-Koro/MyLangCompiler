@@ -1,9 +1,40 @@
 #include "mylang/backend/codegen_internal.h"
+#include "mylang/frontend/parser_ast_internal.h"
+
+// A plain struct or array parameter arrives as the address of the caller's
+// value. A body that writes to it gets a copy of its own: the parameter keeps
+// an internal name and the original name becomes a local initialised from it.
+static void copy_written_params(CompilerContext *cc, ASTNode *fn)
+{
+    if (!fn->fundef.body || fn->fundef.body->type != AST_BLOCK) return;
+    for (int i = 0; i < fn->fundef.param_count; i++) {
+        ASTNode *p = fn->fundef.params[i];
+        if (p->param.is_rest || p->param.is_move || !p->param.type) continue;
+        if (p->param.type->type == AST_TYPE && p->param.type->type_node.ref_kind != REFKIND_NONE) continue;
+        if (aggregate_type_size(cc, p->param.type) <= 0) continue;
+        if (!ast_writes_name(fn->fundef.body, p->param.name)) continue;
+
+        char *name = p->param.name;
+        size_t size = strlen(name) + sizeof("__param_");
+        char *hidden = malloc(size);
+        snprintf(hidden, size, "__param_%s", name);
+        ASTNode *copy = new_var_decl(ast_clone(p->param.type), name, new_identifier(hidden));
+
+        ASTNode *body = fn->fundef.body;
+        ASTNode **stmts = malloc(sizeof(ASTNode *) * (size_t)(body->block.count + 1));
+        stmts[0] = copy;
+        for (int s = 0; s < body->block.count; s++) stmts[s + 1] = body->block.stmts[s];
+        body->block.stmts = stmts;
+        body->block.count++;
+        p->param.name = hidden;
+    }
+}
 
 void gen_func(CompilerContext *cc, ASTNode *node, StringBuilder *sb)
 {
     ASTNode *fn = cg_as_fundef(node);
     if (!fn) return;
+    copy_written_params(cc, fn);
 
     char *fname = is_entry_name(fn->fundef.name) ? "__START__" : fn->fundef.name;
 

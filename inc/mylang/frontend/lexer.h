@@ -52,7 +52,7 @@ typedef enum {
     SHORT,    // short
     CONST,    // const
     STATIC,   // static
-    MUT,      // mut
+    MOVE,     // move
     BORROW,   // borrow
     EXTERN,   // extern
     AUTO,     // auto
