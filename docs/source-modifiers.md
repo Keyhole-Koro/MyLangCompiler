@@ -117,7 +117,9 @@ return __dom0;
 ```
 
 Generated statements are hoisted ahead of the statement that held the element,
-which is replaced by the root node's id. Node ids are `i32`.
+which is replaced by the root node's id. A generated local has the type the
+called function returns: `i32` above, or a nominal id type (imported by the
+source) when the package's elements return one, which `ref=` then keeps.
 
 Because tags are function names, adding an element means adding a function to
 the imported package, and an event handler is simply a parameter (`onClick`
@@ -140,7 +142,9 @@ Two properties are handled by the compiler rather than the callee:
   receives `owner` as `c` and `id` as `id`. The method must take a pointer
   receiver. A plain local function with fewer than three parameters is
   wrapped so `id` lands in the right slot. Any other value is passed
-  through unchanged. See grammar.md, "Attributes and annotations".
+  through unchanged. A method or wrapper is passed as the function type the
+  callee declares for that parameter. See grammar.md, "Attributes and
+  annotations".
 
 ```text
 i32 (Counter *c) view() {

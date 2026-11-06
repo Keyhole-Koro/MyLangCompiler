@@ -117,6 +117,7 @@ phase_restParam|0|succeed/semantic/phase_restParam.unsafe.mln
 annotationTable|4422313|succeed/app/annotated.unsafe.mln,support/app/counter.unsafe.mln,support/app/annotations.unsafe.mln,../../MyStdLib/meta/annotations.unsafe.mln,../../MyStdLib/memory/section.unsafe.mln,../../MyStdLib/memory/slice.unsafe.mln,../../MyStdLib/format/mbin.mln,../../MyStdLib/text/str.unsafe.mln,../../MyStdLib/core/option.mln,../../MyStdLib/text/ascii.mln,../../MyStdLib/text/bytes.unsafe.mln,../../MyStdLib/core/int32.mln
 defaultArguments|62|succeed/function/defaultArgs.mln,support/app/lib.mln
 domRefAndDefaults|113|succeed/dom/refAndDefaults.dom.mln,support/app/dom.unsafe.mln
+domNominalId|127|succeed/dom/nominalId.dom.unsafe.mln
 breakInCaseArm|562|succeed/enum/breakInCaseArm.mln
 borrowWriteBack|1212|succeed/semantic/borrowWriteBack.mln
 globalPointerInit|104710106|succeed/data/globalPointerInit.unsafe.mln
