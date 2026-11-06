@@ -122,6 +122,10 @@ void gen_func(CompilerContext *cc, ASTNode *node, StringBuilder *sb)
 
     sb_append(sb, "\n");
     sb_append(sb, "%s:\n", fname);
+    codegen_debug_func(sb, fn->fundef.name,
+                       fn->fundef.origin_path ? fn->fundef.origin_path : codegen_current_source_path(),
+                       node->line);
+    codegen_cost_begin(sb, "frame");
     sb_append(sb, "; prologue\n");
     sb_append(sb, "  push lr\n");
     sb_append(sb, "  push bp\n");
@@ -159,9 +163,12 @@ void gen_func(CompilerContext *cc, ASTNode *node, StringBuilder *sb)
     cc->sret_offset = sret_offset;
     cc->sret_size_bytes = ret_agg_size;
 
+    codegen_cost_end(sb);
     gen_stmt(cc, fn->fundef.body, sb, params, param_count, locals, local_count);
 
     sb_append(sb, "%s:\n", ret_label);
+    codegen_debug_loc(sb, node->end_line);
+    codegen_cost_begin(sb, "frame");
     emit_drop_all(cc, sb, params, param_count, locals, local_count);
     if (cc->drop_return_offset != 0) {
         sb_append(sb, "  mov r3, bp\n");

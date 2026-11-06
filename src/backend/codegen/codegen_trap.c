@@ -19,8 +19,10 @@ void emit_trap(CompilerContext *cc, StringBuilder *sb, int kind, int line) {
  * longer sequence. */
 void emit_index_check(CompilerContext *cc, StringBuilder *sb, const char *index_reg,
                       const char *keep_reg, int length, int line) {
+    codegen_cost_begin(sb, "check");
     if (length > 0 && length <= 0x1FFFFF) {
         sb_append(sb, "  chk %s, %d\n", index_reg, length);
+        codegen_cost_end(sb);
         return;
     }
     static const char *candidates[] = { "r3", "r4", "r2", "r5" };
@@ -41,4 +43,5 @@ void emit_index_check(CompilerContext *cc, StringBuilder *sb, const char *index_
     sb_append(sb, "  jb b_L_index_ok_%d\n", label);
     emit_trap(cc, sb, MYLANG_TRAP_INDEX, line);
     sb_append(sb, "b_L_index_ok_%d:\n", label);
+    codegen_cost_end(sb);
 }

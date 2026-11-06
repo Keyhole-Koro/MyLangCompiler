@@ -50,6 +50,7 @@ int gen_math_binop(CompilerContext *cc, ASTNode *node, StringBuilder *sb) {
         // be non-negative or the decrement loop never reaches 0, so if r1 is
         // negative we negate both the count and the addend: (-a)*b == a*(-b).
         sb_append(sb, "\n; multiply r2 * r1\n");
+        codegen_cost_begin(sb, "arith");
         sb_append(sb, "  movi r4, 0      ; r4 = result\n");
         sb_append(sb, "  mov r5, r1     ; r5 = count\n");
         int lbl_mul = next_label(cc);
@@ -73,10 +74,12 @@ int gen_math_binop(CompilerContext *cc, ASTNode *node, StringBuilder *sb) {
         sb_append(sb, "  jmp b_mul_loop_%d\n", lbl_mul);
         sb_append(sb, "b_mul_end_%d:\n", lbl_mul);
         sb_append(sb, "  mov r1, r4\n");
+        codegen_cost_end(sb);
         return 1;
     }
     case DIV: {
         sb_append(sb, "\n; divide r2 / r1\n");
+        codegen_cost_begin(sb, "arith");
         sb_append(sb, "  movi r4, 0      ; r4 = result (quotient)\n");
         int lbl_div = next_label(cc);
         sb_append(sb, "b_div_loop_%d:\n", lbl_div);
@@ -87,10 +90,12 @@ int gen_math_binop(CompilerContext *cc, ASTNode *node, StringBuilder *sb) {
         sb_append(sb, "  jmp b_div_loop_%d\n", lbl_div);
         sb_append(sb, "b_div_end_%d:\n", lbl_div);
         sb_append(sb, "  mov r1, r4\n");
+        codegen_cost_end(sb);
         return 1;
     }
     case MOD: {
         sb_append(sb, "\n; modulo r2 %% r1\n");
+        codegen_cost_begin(sb, "arith");
         sb_append(sb, "  mov r6, r2     ; r6 = dividend backup (r2)\n");
         sb_append(sb, "  movi r4, 0      ; r4 = result (quotient)\n");
         int lbl_mod = next_label(cc);
@@ -103,6 +108,7 @@ int gen_math_binop(CompilerContext *cc, ASTNode *node, StringBuilder *sb) {
         sb_append(sb, "b_mod_end_%d:\n", lbl_mod);
         sb_append(sb, "  ; r2 now contains remainder\n");
         sb_append(sb, "  mov r1, r2\n");
+        codegen_cost_end(sb);
         return 1;
     }
     case AMPERSAND:

@@ -16,7 +16,8 @@ void driver_print_usage(const char *prog) {
             "  --dump-tokens     Print lexer tokens to stdout\n"
             "  --dump-ast        Print the parsed AST to stdout\n"
             "  --Werror          Treat semantic warnings as errors\n"
-            "  --error-trace     Record Err origins and ? hops for @std/debug/error_trace.mln\n",
+            "  --error-trace     Record Err origins and ? hops for @std/debug/error_trace.mln\n"
+            "  --line-info       Emit source positions and cost regions for the line table\n",
             prog, prog);
 }
 
@@ -87,6 +88,8 @@ int driver_parse_args(int argc, char *argv[], DriverOptions *opts) {
             opts->warnings_as_errors = 1;
         } else if (strcmp(argv[i], "--error-trace") == 0) {
             opts->error_trace = 1;
+        } else if (strcmp(argv[i], "--line-info") == 0) {
+            opts->line_info = 1;
         } else if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
             driver_print_usage(argv[0]);
             return 1;
