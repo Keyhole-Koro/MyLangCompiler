@@ -123,12 +123,23 @@ typedef struct ModuleAlias {
     char *target;
 } ModuleAlias;
 
+/* What an import path came to on disk, so that the next import of it need not
+ * ask the disk. `raw` has the importer's directory and any alias applied. */
+typedef struct ResolvedPath {
+    char *raw;
+    char *canonical;
+    struct ResolvedPath *next;
+} ResolvedPath;
+
+#define RESOLVED_PATH_BUCKETS 256
+
 /*
  * Loader responsible for resolving relative import paths, canonicalizing them,
  * and caching parsed Module representations.
  */
 typedef struct ModuleLoader {
     ModuleGraph *graph;
+    ResolvedPath *resolved_paths[RESOLVED_PATH_BUCKETS];
     /* Borrowed. Every parser context created by this loader inherits it. */
     FrontendSession *session;
     ModuleAlias *aliases;
@@ -164,7 +175,7 @@ void module_add_symbol(Module *module, SymbolKind kind, const char *source_name,
 ModuleLoader *module_loader_create(ModuleGraph *graph, FrontendSession *session);
 void module_loader_destroy(ModuleLoader *loader);
 int module_loader_is_mylang_source(const char *path);
-int module_loader_resolve_import_path(const ModuleLoader *loader,
+int module_loader_resolve_import_path(ModuleLoader *loader,
                                       const char *importer_path,
                                       const char *import_path,
                                       char *out_canonical,

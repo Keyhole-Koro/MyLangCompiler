@@ -157,6 +157,8 @@ typedef struct {
     int mlx_tag_depth;
     TokenKind last_token_kind;
     bool eot_returned;
+    /* Holds the text of the token being read: as long as the whole input. */
+    char *token_text;
 } LexerContext;
 
 LexerContext *lexer_context_create(char *input);

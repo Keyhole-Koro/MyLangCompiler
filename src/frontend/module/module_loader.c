@@ -26,6 +26,16 @@ void module_loader_destroy(ModuleLoader *loader) {
         free(loader->aliases[i].target);
     }
     free(loader->aliases);
+    for (int i = 0; i < RESOLVED_PATH_BUCKETS; i++) {
+        ResolvedPath *entry = loader->resolved_paths[i];
+        while (entry) {
+            ResolvedPath *next = entry->next;
+            free(entry->raw);
+            free(entry->canonical);
+            free(entry);
+            entry = next;
+        }
+    }
     free(loader);
 }
 
@@ -84,7 +94,68 @@ static const ModuleAlias *find_alias(const ModuleLoader *loader, const char *pat
     return best;
 }
 
-int module_loader_resolve_import_path(const ModuleLoader *loader,
+static ResolvedPath **resolved_path_bucket(ModuleLoader *loader, const char *raw) {
+    unsigned hash = 5381;
+    for (const char *c = raw; *c; c++) hash = hash * 33 + (unsigned char)*c;
+    return &loader->resolved_paths[hash % RESOLVED_PATH_BUCKETS];
+}
+
+static const char *find_resolved_path(ModuleLoader *loader, const char *raw) {
+    if (!loader) return NULL;
+    for (ResolvedPath *entry = *resolved_path_bucket(loader, raw); entry; entry = entry->next) {
+        if (strcmp(entry->raw, raw) == 0) return entry->canonical;
+    }
+    return NULL;
+}
+
+/* Only a shortcut: running out of memory here just means asking the disk again. */
+static void remember_resolved_path(ModuleLoader *loader, const char *raw, const char *canonical) {
+    if (!loader) return;
+    ResolvedPath *entry = calloc(1, sizeof(ResolvedPath));
+    if (!entry) return;
+    entry->raw = strdup(raw);
+    entry->canonical = strdup(canonical);
+    if (!entry->raw || !entry->canonical) {
+        free(entry->raw);
+        free(entry->canonical);
+        free(entry);
+        return;
+    }
+    ResolvedPath **bucket = resolved_path_bucket(loader, raw);
+    entry->next = *bucket;
+    *bucket = entry;
+}
+
+/* Find the file a path means. `resolved` must hold PATH_MAX bytes. */
+static int resolve_on_disk(const char *raw_buf, char *resolved) {
+    /* Rule U3: an import names `fs.mln`; whether that file is checked or
+     * `fs.unsafe.mln` is the file's own business, so moving code into an
+     * unsafe file does not touch its importers. */
+    char unsafe_path[PATH_MAX];
+    size_t raw_len = strlen(raw_buf);
+    int unsafe_exists = 0;
+    if (raw_len > 4 && strcmp(raw_buf + raw_len - 4, ".mln") == 0 &&
+        !(raw_len > 11 && strcmp(raw_buf + raw_len - 11, ".unsafe.mln") == 0) &&
+        raw_len + 7 < sizeof(unsafe_path)) {
+        memcpy(unsafe_path, raw_buf, raw_len - 4);
+        memcpy(unsafe_path + raw_len - 4, ".unsafe.mln", 12);
+        unsafe_exists = access(unsafe_path, F_OK) == 0;
+    }
+    if (unsafe_exists && access(raw_buf, F_OK) == 0) {
+        fprintf(stderr, "module_loader: both '%s' and '%s' exist; keep one\n", raw_buf, unsafe_path);
+        return 0;
+    }
+    /* A model is imported the same way: its expansion is a plain module. */
+    if (!unsafe_exists && raw_len > 4 && strcmp(raw_buf + raw_len - 4, ".mln") == 0 &&
+        access(raw_buf, F_OK) != 0 && raw_len + 6 < sizeof(unsafe_path)) {
+        memcpy(unsafe_path, raw_buf, raw_len - 4);
+        memcpy(unsafe_path + raw_len - 4, ".model.mln", 11);
+        unsafe_exists = access(unsafe_path, F_OK) == 0;
+    }
+    return realpath(unsafe_exists ? unsafe_path : raw_buf, resolved) != NULL;
+}
+
+int module_loader_resolve_import_path(ModuleLoader *loader,
                                       const char *importer_path,
                                       const char *rel_path,
                                       char *out_canonical,
@@ -123,33 +194,16 @@ int module_loader_resolve_import_path(const ModuleLoader *loader,
         if (written < 0 || (size_t)written >= sizeof(raw_buf)) return 0;
     }
 
-    /* Rule U3: an import names `fs.mln`; whether that file is checked or
-     * `fs.unsafe.mln` is the file's own business, so moving code into an
-     * unsafe file does not touch its importers. */
-    char unsafe_path[PATH_MAX];
-    size_t raw_len = strlen(raw_buf);
-    int unsafe_exists = 0;
-    if (raw_len > 4 && strcmp(raw_buf + raw_len - 4, ".mln") == 0 &&
-        !(raw_len > 11 && strcmp(raw_buf + raw_len - 11, ".unsafe.mln") == 0) &&
-        raw_len + 7 < sizeof(unsafe_path)) {
-        memcpy(unsafe_path, raw_buf, raw_len - 4);
-        memcpy(unsafe_path + raw_len - 4, ".unsafe.mln", 12);
-        unsafe_exists = access(unsafe_path, F_OK) == 0;
+    /* The same few paths come back from every importer, and files do not move
+     * during a compile. A failure is not kept, so it is reported each time. */
+    const char *canonical = find_resolved_path(loader, raw_buf);
+    if (!canonical) {
+        if (!resolve_on_disk(raw_buf, resolved)) return 0;
+        remember_resolved_path(loader, raw_buf, resolved);
+        canonical = resolved;
     }
-    if (unsafe_exists && access(raw_buf, F_OK) == 0) {
-        fprintf(stderr, "module_loader: both '%s' and '%s' exist; keep one\n", raw_buf, unsafe_path);
-        return 0;
-    }
-    /* A model is imported the same way: its expansion is a plain module. */
-    if (!unsafe_exists && raw_len > 4 && strcmp(raw_buf + raw_len - 4, ".mln") == 0 &&
-        access(raw_buf, F_OK) != 0 && raw_len + 6 < sizeof(unsafe_path)) {
-        memcpy(unsafe_path, raw_buf, raw_len - 4);
-        memcpy(unsafe_path + raw_len - 4, ".model.mln", 11);
-        unsafe_exists = access(unsafe_path, F_OK) == 0;
-    }
-    if (!realpath(unsafe_exists ? unsafe_path : raw_buf, resolved)) return 0;
-    if (strlen(resolved) >= out_size) return 0;
-    snprintf(out_canonical, out_size, "%s", resolved);
+    if (strlen(canonical) >= out_size) return 0;
+    snprintf(out_canonical, out_size, "%s", canonical);
     return 1;
 }
 
