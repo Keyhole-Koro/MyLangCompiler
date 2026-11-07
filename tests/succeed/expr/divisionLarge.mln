@@ -1,0 +1,27 @@
+// Division takes the same few steps at any size, and matches the old results.
+i32 check(i32 a, i32 b, i32 q, i32 r) {
+    if (a / b != q) { return 1; }
+    if (a % b != r) { return 1; }
+    return 0;
+}
+
+i32 main() {
+    i32 bad = 0;
+    bad = bad + check(2147483647, 10, 214748364, 7);
+    bad = bad + check(2147483647, 1, 2147483647, 0);
+    bad = bad + check(2147483647, 2147483647, 1, 0);
+    bad = bad + check(2147483646, 2147483647, 0, 2147483646);
+    bad = bad + check(1073741824, 3, 357913941, 1);
+    bad = bad + check(1000, 7, 142, 6);
+    bad = bad + check(7, 1000, 0, 7);
+    bad = bad + check(0, 5, 0, 0);
+    bad = bad + check(1, 1, 1, 0);
+    bad = bad + check(-7, 2, 0, -7);
+    i32 i = 1;
+    while (i < 3000) {
+        i32 q = 1000003 / i;
+        if (q * i + 1000003 % i != 1000003) { bad = bad + 1; }
+        i = i + 7;
+    }
+    return 40 + bad;
+}

@@ -8,6 +8,10 @@ MYCC = mlc
 SYNTAX_CHECK = mylang-syntax-check
 MYTEST = ../MyLangTester/build/mytest
 
+# Test runs keep scratch files out of /tmp, which is memory on some machines.
+export TMPDIR ?= $(CURDIR)/build/tmp
+$(shell mkdir -p $(TMPDIR))
+
 .PHONY: all syntax-check test test-component test-all test-e2e test-integration test-semantic test-generics \
 	test-source-profiles test-syntax-check test-tokens debug-mycc clean
 

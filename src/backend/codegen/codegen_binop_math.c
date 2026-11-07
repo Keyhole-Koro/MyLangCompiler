@@ -17,6 +17,43 @@ static int literal_value(ASTNode *node, long *out) {
     return 0;
 }
 
+// The target has no divide instruction. Leaves the quotient of r2 / r1 in r4 and
+// the remainder in r2, in about 32 steps however large the quotient is: the
+// divisor is shifted up past the dividend, then subtracted back down bit by bit.
+// A dividend below the divisor is its own remainder, which covers a negative
+// one. A divisor of zero or below gives quotient 0.
+static void emit_divide(CompilerContext *cc, StringBuilder *sb) {
+    int lbl = next_label(cc);
+    sb_append(sb, "  movi r4, 0\n");
+    sb_append(sb, "  cmp r1, 0\n");
+    sb_append(sb, "  jl b_div_done_%d\n", lbl);
+    sb_append(sb, "  jz b_div_done_%d\n", lbl);
+    sb_append(sb, "  mov r5, r1\n");
+    sb_append(sb, "  movi r6, 1\n");
+    sb_append(sb, "b_div_grow_%d:\n", lbl);
+    sb_append(sb, "  cmp r5, r2\n");
+    sb_append(sb, "  jg b_div_step_%d\n", lbl);
+    sb_append(sb, "  shl r5\n");
+    sb_append(sb, "  cmp r5, 0\n");
+    sb_append(sb, "  jl b_div_top_%d\n", lbl);
+    sb_append(sb, "  shl r6\n");
+    sb_append(sb, "  jmp b_div_grow_%d\n", lbl);
+    sb_append(sb, "b_div_top_%d:\n", lbl);
+    sb_append(sb, "  shr r5\n");
+    sb_append(sb, "b_div_step_%d:\n", lbl);
+    sb_append(sb, "  cmp r6, 0\n");
+    sb_append(sb, "  jz b_div_done_%d\n", lbl);
+    sb_append(sb, "  cmp r2, r5\n");
+    sb_append(sb, "  jl b_div_next_%d\n", lbl);
+    sb_append(sb, "  sub r2, r5\n");
+    sb_append(sb, "  add r4, r6\n");
+    sb_append(sb, "b_div_next_%d:\n", lbl);
+    sb_append(sb, "  shr r5\n");
+    sb_append(sb, "  shr r6\n");
+    sb_append(sb, "  jmp b_div_step_%d\n", lbl);
+    sb_append(sb, "b_div_done_%d:\n", lbl);
+}
+
 int gen_math_binop(CompilerContext *cc, ASTNode *node, StringBuilder *sb) {
     switch (node->binary.op)
     {
@@ -77,40 +114,20 @@ int gen_math_binop(CompilerContext *cc, ASTNode *node, StringBuilder *sb) {
         codegen_cost_end(sb);
         return 1;
     }
-    case DIV: {
+    case DIV:
         sb_append(sb, "\n; divide r2 / r1\n");
         codegen_cost_begin(sb, "arith");
-        sb_append(sb, "  movi r4, 0      ; r4 = result (quotient)\n");
-        int lbl_div = next_label(cc);
-        sb_append(sb, "b_div_loop_%d:\n", lbl_div);
-        sb_append(sb, "  cmp r2, r1\n");
-        sb_append(sb, "  jl b_div_end_%d\n", lbl_div);
-        sb_append(sb, "  sub r2, r1\n");
-        sb_append(sb, "  addis r4, 1\n");
-        sb_append(sb, "  jmp b_div_loop_%d\n", lbl_div);
-        sb_append(sb, "b_div_end_%d:\n", lbl_div);
+        emit_divide(cc, sb);
         sb_append(sb, "  mov r1, r4\n");
         codegen_cost_end(sb);
         return 1;
-    }
-    case MOD: {
+    case MOD:
         sb_append(sb, "\n; modulo r2 %% r1\n");
         codegen_cost_begin(sb, "arith");
-        sb_append(sb, "  mov r6, r2     ; r6 = dividend backup (r2)\n");
-        sb_append(sb, "  movi r4, 0      ; r4 = result (quotient)\n");
-        int lbl_mod = next_label(cc);
-        sb_append(sb, "b_mod_loop_%d:\n", lbl_mod);
-        sb_append(sb, "  cmp r2, r1\n");
-        sb_append(sb, "  jl b_mod_end_%d\n", lbl_mod);
-        sb_append(sb, "  sub r2, r1\n");
-        sb_append(sb, "  addis r4, 1\n");
-        sb_append(sb, "  jmp b_mod_loop_%d\n", lbl_mod);
-        sb_append(sb, "b_mod_end_%d:\n", lbl_mod);
-        sb_append(sb, "  ; r2 now contains remainder\n");
+        emit_divide(cc, sb);
         sb_append(sb, "  mov r1, r2\n");
         codegen_cost_end(sb);
         return 1;
-    }
     case AMPERSAND:
         sb_append(sb, "\n; bitwise AND\n  and r1, r2\n");
         return 1;
