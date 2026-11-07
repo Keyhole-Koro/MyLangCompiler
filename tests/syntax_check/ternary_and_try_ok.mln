@@ -1,0 +1,5 @@
+i32 pick(bool flag, i32 a, i32 b) {
+    i32 inner = flag ? a : flag ? b : 0;
+    i32 tried = flag ? (step()?) : 0;
+    return take(flag ? a : b, step()?);
+}

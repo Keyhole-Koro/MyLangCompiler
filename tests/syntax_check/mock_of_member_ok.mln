@@ -1,0 +1,3 @@
+void test_it() {
+    mock.of(sequence).when(mock.any()).ret(10);
+}

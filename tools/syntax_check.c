@@ -16,6 +16,12 @@ typedef enum {
     ANGLE_GENERIC_DOUBLE_CLOSE,
 } AngleKind;
 
+/* What the LR grammar cannot tell from the token kinds alone. */
+typedef struct {
+    int *terminals;        /* the terminal each source token is parsed as */
+    size_t *case_key_ends; /* at a key the grammar has no pattern for, its last token */
+} TokenRewrites;
+
 static const char *default_grammar_path =
     "../MySyntaxEngine/tests/fixtures/grammars/mylang_lsp.grammar";
 static const char *default_table_cache_path = "mylang-syntax-check.table";
@@ -130,6 +136,7 @@ static const char *expected_label(const char *token) {
         {"DOT", "."},
         {"NOT", "!"},
         {"QUESTION", "?"},
+        {"TERNARY", "?"},
         {"COLON", ":"},
         {"BITOR", "|"},
         {"BITXOR", "^"},
@@ -313,34 +320,43 @@ static void mark_generic_span(
     }
 }
 
-/* The LR grammar intentionally cannot distinguish `(Name *)value` from a
+/* A token that can only begin an operand, so `(name)` before it is a cast. */
+static int begins_operand(TokenKind kind) {
+    return kind == IDENTIFIER || kind == NUMBER || kind == STRING_LITERAL ||
+           kind == CHAR_LITERAL || kind == TRUE_LITERAL || kind == FALSE_LITERAL;
+}
+
+/* The LR grammar intentionally cannot distinguish `(Name)value` from a
  * parenthesized identifier expression without a resolver for user-defined
  * type names. It also cannot parse generic types in cast position without
- * adding conflicts to the grammar. Treat named pointer-cast prefixes as
- * transparent so valid compiler input does not become an editor-only syntax
- * error. */
-static size_t named_pointer_cast_end(Token **tokens, size_t token_count, size_t start) {
+ * adding conflicts to the grammar. Treat named cast prefixes as transparent so
+ * valid compiler input does not become an editor-only syntax error. Without a
+ * `*`, `(name)` is a cast only before an operand, and `if (name) value;` is
+ * not one. `(name)(value)` and `(name) - value` parse fine as they are. */
+static size_t named_cast_end(Token **tokens, size_t token_count, size_t start) {
     if (start + 2 >= token_count || tokens[start]->kind != L_PARENTHESES ||
         tokens[start + 1]->kind != IDENTIFIER)
         return token_count;
 
-    size_t index;
-    if (tokens[start + 2]->kind == ASTARISK) {
-        index = start + 2;
-    } else if (tokens[start + 2]->kind == LT) {
+    size_t index = start + 2;
+    if (tokens[index]->kind == LT) {
         size_t type_args_end = 0;
-        if (!find_angle_close(tokens, token_count, start + 2, &type_args_end))
+        if (!find_angle_close(tokens, token_count, index, &type_args_end))
             return token_count;
         index = type_args_end + 1;
-        if (index >= token_count || tokens[index]->kind != ASTARISK)
-            return token_count;
-    } else {
-        return token_count;
     }
+    int is_pointer = 0;
+    while (index < token_count && tokens[index]->kind == ASTARISK) {
+        is_pointer = 1;
+        index++;
+    }
+    if (index >= token_count || tokens[index]->kind != R_PARENTHESES) return token_count;
+    if (is_pointer) return index;
 
-    while (index + 1 < token_count && tokens[index + 1]->kind == ASTARISK) index++;
-    return index + 1 < token_count && tokens[index + 1]->kind == R_PARENTHESES
-        ? index + 1 : token_count;
+    TokenKind before = start > 0 ? tokens[start - 1]->kind : EOT;
+    if (before == IF || before == WHILE) return token_count;
+    return index + 1 < token_count && begins_operand(tokens[index + 1]->kind)
+        ? index : token_count;
 }
 
 /* A compound statement expression, `({ statement; ... })`, is a valid
@@ -460,6 +476,7 @@ static void tag_statement_expression_roles(
     Token **tokens,
     size_t token_count,
     AngleKind *angles,
+    const TokenRewrites *rewrites,
     size_t start,
     size_t end,
     int *source_roles,
@@ -489,9 +506,15 @@ static void tag_statement_expression_roles(
 
     int generic_depth = 0;
     for (size_t i = start + 1; i < end; i++) {
+        if (rewrites->case_key_ends[i]) {
+            token_ids[count] = token_map[UNDERSCORE];
+            source_indices[count++] = i;
+            i = rewrites->case_key_ends[i];
+            continue;
+        }
         size_t nested_end = statement_expression_end(tokens, end, i);
         if (nested_end != end) {
-            tag_statement_expression_roles(table, token_map, tokens, token_count, angles,
+            tag_statement_expression_roles(table, token_map, tokens, token_count, angles, rewrites,
                                            i, nested_end, source_roles,
                                            type_role, property_role);
             token_ids[count] = token_map[NUMBER];
@@ -509,7 +532,7 @@ static void tag_statement_expression_roles(
             continue;
         }
 
-        size_t cast_end = named_pointer_cast_end(tokens, end, i);
+        size_t cast_end = named_cast_end(tokens, end, i);
         if (cast_end != end) {
             i = cast_end;
             continue;
@@ -525,7 +548,7 @@ static void tag_statement_expression_roles(
             continue;
         }
 
-        token_ids[count] = token_map[tokens[i]->kind];
+        token_ids[count] = rewrites->terminals[i];
         source_indices[count++] = i;
     }
 
@@ -723,6 +746,11 @@ static AngleKind *classify_generic_angles(Token **tokens, size_t token_count) {
         /* `impl From<SsdError> for FsError` */
         int is_impl_trait = i > 0 && tokens[i - 1]->kind == IMPL && next_kind == FOR;
         int is_function_declaration = brace_depth == 0 && next_kind == L_PARENTHESES;
+        /* `Rule<i32, i32> rules[8];` with `Rule` from an imported package */
+        TokenKind before = i > 0 ? tokens[i - 1]->kind : SEMICOLON;
+        int is_local_declaration = next_kind == IDENTIFIER &&
+            (before == SEMICOLON || before == L_BRACE || before == R_BRACE ||
+             before == CONST || before == BORROW || before == MOVE);
         /* `pkg.run<T>()` */
         int is_package_call = i > 1 && tokens[i - 1]->kind == DOT &&
             tokens[i - 2]->kind == IDENTIFIER && next_kind == L_PARENTHESES;
@@ -730,7 +758,8 @@ static AngleKind *classify_generic_angles(Token **tokens, size_t token_count) {
             mark_generic_span(tokens, angles, i + 1, close_index);
             continue;
         }
-        if (!is_type_declaration && !is_function_declaration && !is_impl_trait) continue;
+        if (!is_type_declaration && !is_function_declaration && !is_impl_trait &&
+            !is_local_declaration) continue;
 
         generic_name_add(&generic_names, &generic_name_count, tokens[i]->value);
         mark_generic_span(tokens, angles, i + 1, close_index);
@@ -747,6 +776,99 @@ static AngleKind *classify_generic_angles(Token **tokens, size_t token_count) {
 
     free(generic_names);
     return angles;
+}
+
+/* Same rule as the compiler's is_try_question: `?` that closes an expression
+ * propagates an error, and `?` with an expression after it is a ternary. */
+static int is_try_question(Token **tokens, size_t token_count, size_t index) {
+    if (index + 1 >= token_count) return 0;
+    TokenKind next = tokens[index + 1]->kind;
+    return next == SEMICOLON || next == COMMA || next == R_PARENTHESES ||
+           next == R_BRACKET || next == R_BRACE;
+}
+
+/* `fn` begins a function type only when `(...) ->` follows. Anywhere else it is
+ * an ordinary name, as in `CodeAddress fn;`. */
+static int fn_begins_type(Token **tokens, size_t token_count, size_t index) {
+    if (index + 1 >= token_count || tokens[index + 1]->kind != L_PARENTHESES) return 0;
+    int depth = 0;
+    for (size_t i = index + 1; i < token_count; i++) {
+        if (tokens[i]->kind == L_PARENTHESES) depth++;
+        else if (tokens[i]->kind == R_PARENTHESES && --depth == 0)
+            return i + 1 < token_count && tokens[i + 1]->kind == ARROW;
+    }
+    return 0;
+}
+
+static int is_name(TokenKind kind) {
+    return kind == IDENTIFIER || kind == TEST || kind == FN;
+}
+
+static int is_case_pattern_token(TokenKind kind) {
+    return kind == IDENTIFIER || kind == COLONCOLON || kind == UNDERSCORE ||
+           kind == L_PARENTHESES || kind == R_PARENTHESES || kind == COMMA;
+}
+
+/* The first token at depth 0 from `start` that is a `;`, the arm's `->` or the
+ * end of the case, with whether every token before it can be part of a pattern.
+ * As in the compiler, `->` is an access when a name and another `->` follow. */
+static size_t scan_case_arm(Token **tokens, size_t token_count, const AngleKind *angles,
+                            size_t start, int stop_at_arrow, int *is_pattern) {
+    int depth = 0;
+    *is_pattern = 1;
+    for (size_t i = start; i < token_count; i++) {
+        TokenKind kind = tokens[i]->kind;
+        if (depth == 0) {
+            if (kind == SEMICOLON || kind == R_BRACE) return i;
+            if (stop_at_arrow && kind == ARROW &&
+                !(i + 2 < token_count && is_name(tokens[i + 1]->kind) &&
+                  tokens[i + 2]->kind == ARROW))
+                return i;
+        }
+        if (kind == L_PARENTHESES || kind == L_BRACKET || kind == L_BRACE) depth++;
+        else if (kind == R_PARENTHESES || kind == R_BRACKET || kind == R_BRACE) depth--;
+        if (!angles[i] && !is_case_pattern_token(kind)) *is_pattern = 0;
+    }
+    return token_count;
+}
+
+/* A case key can be any expression, and telling the arm's `->` from an access
+ * takes more lookahead than LR(1) has, so the grammar has only patterns. Other
+ * keys, such as `1` or `p->kind`, are collapsed to `_`. mlc still checks them. */
+static size_t *classify_case_keys(Token **tokens, size_t token_count, const AngleKind *angles) {
+    size_t *key_ends = calloc(token_count ? token_count : 1, sizeof(size_t));
+    if (!key_ends) return NULL;
+    for (size_t i = 0; i + 1 < token_count; i++) {
+        if (tokens[i]->kind != OF || tokens[i + 1]->kind != L_BRACE) continue;
+        size_t arm = i + 2;
+        while (arm < token_count && tokens[arm]->kind != R_BRACE) {
+            int is_pattern = 1;
+            size_t arrow = scan_case_arm(tokens, token_count, angles, arm, 1, &is_pattern);
+            if (arrow >= token_count || tokens[arrow]->kind != ARROW) break;
+            if (!is_pattern && arrow > arm) key_ends[arm] = arrow - 1;
+            int ignored = 0;
+            size_t semicolon = scan_case_arm(tokens, token_count, angles, arrow + 1, 0, &ignored);
+            if (semicolon >= token_count || tokens[semicolon]->kind != SEMICOLON) break;
+            arm = semicolon + 1;
+        }
+    }
+    return key_ends;
+}
+
+static int *classify_terminals(const SyntaxGrammar *grammar, const int *token_map,
+                               Token **tokens, size_t token_count) {
+    int *terminals = calloc(token_count ? token_count : 1, sizeof(int));
+    if (!terminals) return NULL;
+    int ternary = syntax_terminal_id(grammar, "TERNARY");
+    for (size_t i = 0; i < token_count; i++) {
+        TokenKind kind = tokens[i]->kind;
+        terminals[i] = token_map[kind];
+        if (kind == QUESTION && !is_try_question(tokens, token_count, i))
+            terminals[i] = ternary;
+        else if (kind == FN && !fn_begins_type(tokens, token_count, i))
+            terminals[i] = token_map[IDENTIFIER];
+    }
+    return terminals;
 }
 
 static SyntaxTable *load_or_build_table(SyntaxGrammar *grammar, const char *cache_path) {
@@ -795,6 +917,10 @@ static int check_tokens(
         return 1;
     }
     AngleKind *angles = classify_generic_angles(source_tokens, source_count);
+    TokenRewrites rewrites = {
+        .terminals = classify_terminals(grammar, token_map, source_tokens, source_count),
+        .case_key_ends = classify_case_keys(source_tokens, source_count, angles),
+    };
     size_t parse_capacity = source_count * 2 + 1;
     int *token_ids = calloc(parse_capacity, sizeof(int));
     Token **token_refs = calloc(parse_capacity, sizeof(Token *));
@@ -803,10 +929,12 @@ static int check_tokens(
     int *source_roles = calloc(source_count ? source_count : 1, sizeof(int));
     SyntaxSymbol *symbols = calloc(parse_capacity, sizeof(SyntaxSymbol));
     size_t symbol_count = 0;
-    if (!angles || !token_ids || !token_refs ||
+    if (!angles || !rewrites.terminals || !rewrites.case_key_ends || !token_ids || !token_refs ||
         !token_source_indices || !roles || !source_roles || !symbols) {
         free(source_tokens);
         free(angles);
+        free(rewrites.terminals);
+        free(rewrites.case_key_ends);
         free(token_ids);
         free(token_refs);
         free(token_source_indices);
@@ -821,10 +949,17 @@ static int check_tokens(
     int generic_depth = 0;
     for (size_t i = 0; i < source_count; i++) {
         Token *t = source_tokens[i];
+        if (rewrites.case_key_ends[i]) {
+            token_ids[token_count] = token_map[UNDERSCORE];
+            token_refs[token_count] = t;
+            token_source_indices[token_count++] = i;
+            i = rewrites.case_key_ends[i];
+            continue;
+        }
         size_t statement_expr_end = statement_expression_end(source_tokens, source_count, i);
         if (statement_expr_end != source_count) {
             tag_statement_expression_roles(table, token_map, source_tokens, source_count, angles,
-                                           i, statement_expr_end, source_roles,
+                                           &rewrites, i, statement_expr_end, source_roles,
                                            type_role, property_role);
             // A number is an unambiguous primary expression in the grammar.
             // Keep the opening paren as the diagnostic anchor.
@@ -845,7 +980,7 @@ static int check_tokens(
             i = struct_literal_end;
             continue;
         }
-        size_t cast_end = named_pointer_cast_end(source_tokens, source_count, i);
+        size_t cast_end = named_cast_end(source_tokens, source_count, i);
         if (cast_end != source_count) {
             i = cast_end;
             continue;
@@ -859,7 +994,7 @@ static int check_tokens(
             else if (angles[i] == ANGLE_GENERIC_DOUBLE_CLOSE) generic_depth -= 2;
             continue;
         }
-        token_ids[token_count] = token_map[t->kind];
+        token_ids[token_count] = rewrites.terminals[i];
         token_refs[token_count] = t;
         token_source_indices[token_count++] = i;
     }
@@ -939,6 +1074,8 @@ static int check_tokens(
     free(token_source_indices);
     free(roles);
     free(angles);
+    free(rewrites.terminals);
+    free(rewrites.case_key_ends);
     free(source_tokens);
     free_tokens(tokens);
     return 0;

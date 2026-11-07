@@ -1,0 +1,6 @@
+i32 main() {
+    i32 adder = (i32 x) {
+        return x + 1;
+    };
+    return 0;
+}

@@ -1,0 +1,8 @@
+T first<T>(T a[2], i32 raw) {
+    T copy = (T)a[0];
+    T number = (T)1;
+    fn(i32 value) -> void entry = (fn(i32 value) -> void)raw;
+    if (raw) copy = (T)raw;
+    while (raw) raw = raw - 1;
+    return (T)read(raw);
+}

@@ -1,0 +1,5 @@
+void declare(i32 a, i32 b, i32 c, i32 d) {
+    Rule<i32, i32> rules[8];
+    if (a < b && c > d) a = 1;
+    bool below = a < b;
+}

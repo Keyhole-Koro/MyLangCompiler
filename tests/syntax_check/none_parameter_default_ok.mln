@@ -1,0 +1,5 @@
+import { Option } from "@std/core/option.mln";
+
+i32 read(Option<i32> value = None) {
+    return 0;
+}

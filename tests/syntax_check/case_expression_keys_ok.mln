@@ -1,0 +1,12 @@
+i32 pick(i32 x, Node *p) {
+    i32 first = case x of {
+        1 -> 10;
+        p->kind -> 20;
+        p->next->kind -> p->value;
+        -1 -> 30;
+        None -> p->value;
+        Some(v) -> v;
+        _ -> 0;
+    };
+    return first;
+}
