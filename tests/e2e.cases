@@ -133,8 +133,8 @@ refImportLongLocals|49|succeed/semantic/refImportLongLocals_main.mln,succeed/sem
 phase_restParam|0|succeed/semantic/phase_restParam.unsafe.mln
 annotationTable|4422313|succeed/app/annotated.unsafe.mln,support/app/counter.unsafe.mln,support/app/annotations.unsafe.mln,../../MyStdLib/meta/annotations.unsafe.mln,../../MyStdLib/memory/section.unsafe.mln,../../MyStdLib/memory/slice.unsafe.mln,../../MyStdLib/format/mbin.mln,../../MyStdLib/text/str.unsafe.mln,../../MyStdLib/core/option.mln,../../MyStdLib/text/ascii.mln,../../MyStdLib/text/bytes.unsafe.mln,../../MyStdLib/core/int32.mln
 defaultArguments|62|succeed/function/defaultArgs.mln,support/app/lib.mln
-domRefAndDefaults|113|succeed/dom/refAndDefaults.dom.mln,support/app/dom.unsafe.mln
-domNominalId|127|succeed/dom/nominalId.dom.unsafe.mln
+domDefaults|13|succeed/dom/defaults.dom.mln,support/app/dom.unsafe.mln
+domNominalId|17|succeed/dom/nominalId.dom.unsafe.mln
 domHandlerNominalId|34572|succeed/dom/handlerNominalId.dom.mln
 domNoneDefault|77|succeed/dom/noneDefault.dom.mln,../../MyStdLib/core/option.mln
 domPartProperty|81|succeed/dom/partProperty.dom.mln
