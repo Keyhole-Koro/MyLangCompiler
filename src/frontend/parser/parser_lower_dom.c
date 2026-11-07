@@ -28,7 +28,7 @@ static ASTNode *i32_type(void);
  *     return __dom0;
  *
  * A generated local has the type the callee returns, so a package whose
- * elements return a nominal id type keeps that type through `ref=`.
+ * elements return a nominal id type keeps it.
  *
  * Properties are ordered by the callee's parameter names, so source order does
  * not matter and a misspelled property is reported against the signature. A
@@ -36,15 +36,11 @@ static ASTNode *i32_type(void);
  * The generated statements are hoisted ahead of the statement that contained
  * the element, which is replaced by the id of the tree's root node.
  *
- * Two properties are handled by the compiler rather than the callee:
- *
- *   - `ref={lvalue}` stores the new node's id: `lvalue = __dom0;` follows the
- *     create call, so app code keeps ids without walking the tree afterwards.
- *   - A handler property -- any parameter named `on` + a capital letter, such
- *     as onClick -- whose value names a method (`onClick={c.click}`) or a
- *     local function is passed as the parameter's declared function type,
- *     through a trampoline when the function takes fewer arguments; see
- *     parser_lower_annot.c. Any other value is passed through as written.
+ * A handler property -- any parameter named `on` + a capital letter, such as
+ * onClick -- whose value names a method (`onClick={c.click}`) or a local
+ * function is passed as the parameter's declared function type, through a
+ * trampoline when the function takes fewer arguments; see
+ * parser_lower_annot.c. Any other value is passed through as written.
  *
  * `view` is the one method treated apart: a method of that name that reads its
  * receiver and holds markup. Writing to the receiver there is an error, and a
@@ -68,7 +64,6 @@ static ASTNode *i32_type(void);
  */
 
 #define DOM_APPEND_CHILD "append_child"
-#define DOM_REF_PROP "ref"
 #define DOM_BIND "bind"
 #define DOM_VIEW_METHOD "view"
 #define DOM_VIEW_UPDATE "__view_update"
@@ -566,7 +561,6 @@ static char *emit_element(ParserContext *context, ASTNode *el, DomEmit *out) {
                 dom_error(context, el, p->line, p->col, "<%s> sets '%s' twice", tag, p->name);
             }
         }
-        if (strcmp(p->name, DOM_REF_PROP) == 0) continue;
         int matched = 0;
         for (int j = 0; j < sig.param_count; j++) {
             if (strcmp(sig.param_names[j], p->name) == 0) { matched = 1; break; }
@@ -654,14 +648,6 @@ static char *emit_element(ParserContext *context, ASTNode *el, DomEmit *out) {
                                                 new_number(number), new_identifier(var))));
     }
     free(bound_slots);
-
-    ASTNode *ref_target = take_prop(el, DOM_REF_PROP);
-    if (ref_target) {
-        ASTNode *assign = new_assign(ref_target, new_identifier(var));
-        assign->line = el->line;
-        assign->col = el->col;
-        emit_stmt(out, new_expr_stmt(assign));
-    }
 
     if (el->dom_element.child_count > 0) {
         DomSignature append_sig;

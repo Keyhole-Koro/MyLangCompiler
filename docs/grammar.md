@@ -7,7 +7,7 @@ A program consists of a sequence of top-level declarations and definitions.
 
 - `program` -> `toplevel*`
 - `toplevel` -> 
-    - `attribute* fundef` (see "Attributes and annotations")
+    - `attribute* ( fundef | struct_decl )` (see "Attributes and annotations")
     - `package_decl`
     - `import_stmt`
     - `export_decl`
@@ -197,43 +197,39 @@ calls take no defaults.
 
 - `attribute` -> `@ IDENTIFIER ( ( attr_arg ( , attr_arg )* ) )?`
 - `attr_arg` -> `IDENTIFIER` | `literal` | `IDENTIFIER = literal`
-- `toplevel` -> `attribute* export? fundef`
+- `toplevel` -> `attribute* export? ( fundef | struct_decl )`
 
-An annotation is metadata on a function or method. It is declared as a
-function prototype -- never called -- whose first three parameters are
-fixed (the annotated function, the name of its receiver type, that type's
-size) and whose remaining parameters are the annotation's own arguments:
+An annotation is metadata on a function, a method or a struct. It is declared
+as a function prototype -- never called -- whose parameters are the
+annotation's own arguments:
 
 ```mylang
 // annotations.mln (a Java @interface, in effect)
-import { CodeAddress } from "@std/core/address.mln";
-
-export void app(CodeAddress fn, char *type, i32 size, bool single = false, char *name = "");
-export void timer(CodeAddress fn, char *type, i32 size, i32 ms);
+export void app(bool single = false, char *name = "");
+export void timer(i32 ms);
 
 // terminal.dom.mln
 import { app, timer } from "annotations.mln";
 
 @app(name = "Terminal")
-i32 (Terminal *t) view() { ... }
+struct Terminal { ... };
 
 @timer(100)
-void (Terminal *t) poll() { ... }
+void (borrow Terminal t) poll() { ... }
 ```
 
 For every `@a(args)` the compiler emits one row of static data in the
 module's chunk of the `annotations` collected section
 (`codegen_annotations.c`; see `docs/design/toolchain-collected-sections.md`),
-eight words per row:
+seven words per row:
 
 | word | content |
 | --- | --- |
 | 0 | annotation name (`char*`) |
-| 1 | the annotated function |
+| 1 | the annotated function (0 on a struct) |
 | 2 | receiver type name (`char*`; `""` for a plain function) |
-| 3 | `sizeof` that type (0 for a plain function) |
-| 4 | number of annotation arguments |
-| 5..7 | the arguments: a number, a bool as 0/1, a string as `char*` |
+| 3 | number of annotation arguments |
+| 4..6 | the arguments: a number, a bool as 0/1, a string as `char*` |
 
 The linker lays every object's chunk out contiguously as one section,
 defines `__section_annotations` / `__section_annotations_size` and lists
@@ -245,20 +241,17 @@ an object that carries a chunk is kept by the linker on that account
 alone. Whoever reads a row decides what it means and when.
 
 The compiler checks that `a` resolves (a function in this file, or one
-exported by a module named in a symbol-list import), that its first
-parameters are `(i32, char*, i32)` and that it takes at most three more,
-and matches the written arguments to those: keyed by name, positional, or
-a bare bool parameter's name as a flag (`@app(single)`); a parameter left
-out takes its `= literal` default; a literal of the wrong kind, an unknown
-name or a surplus argument is an error. Annotations cannot be put on a
-struct or a generic declaration.
+exported by a module named in a symbol-list import), that it is a prototype
+and that it takes at most three parameters, and matches the written arguments
+to those: keyed by name, positional, or a bare bool parameter's name as a flag
+(`@app(single)`); a parameter left out takes its `= literal` default; a literal
+of the wrong kind, an unknown name or a surplus argument is an error.
+Annotations cannot be put on a generic declaration.
 
 An annotated method must take its receiver by pointer or reference
-(`T *self`, `borrow T self`): the recorded function is called later with
-an instance's address as its first argument, and because the calling
-convention ignores trailing arguments, the DOM's uniform handler shape
-`(owner, id, arg)` reaches `(T *self, i32 id)` or `(T *self)` directly --
-no wrapper is generated. A value receiver is a move and is rejected.
+(`T *self`, `borrow T self`): the recorded function is called later with an
+instance's address as its first argument, directly -- no wrapper is generated.
+A value receiver is a move and is rejected.
 
 `@safe` and `@noreturn` belong to the language: they are not annotations and
 emit no row.

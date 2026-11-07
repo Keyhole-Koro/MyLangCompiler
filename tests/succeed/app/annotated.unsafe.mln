@@ -1,5 +1,5 @@
 // Annotations are metadata. Each @a(args) on a function or method becomes a
-// row -- [name, fn, type, size, argc, arg0..arg2] -- in the module's chunk
+// row -- [name, fn, type, argc, arg0..arg2] -- in the module's chunk
 // of the `annotations` collected section; the linker lays every chunk out
 // contiguously and lists the section in its directory (`__sections`), so
 // MyStdLib's annotations iterator finds the table by name. Nothing calls
@@ -36,7 +36,7 @@ i32 main() {
         CodeAddress function_address = annotation_code(it.fn());
         fn(i32) -> i32 callback = (fn(i32) -> i32)function_address;
         i32 v = callback(self);                            // 42
-        out = out + v * 10000 + annotation_i32(it.size()) * 100 + annotation_i32(it.arg(0)) * 10;   // size 16, single 1
+        out = out + v * 10000 + annotation_i32(it.arg(0)) * 10;   // single 1
         str label = annotation_text(it.text(1));
         if (label.data[0] == 'C') { out = out + 1; }
         str type = annotation_text(it.type());
@@ -56,7 +56,7 @@ i32 main() {
     if (on_counter != 3) { return 5; }                       // app, timer, key
 
     Annotations marks = annotations.named("mark");
-    while (marks.next()) { str t = annotation_text(marks.type()); if (t.length == 0) { if (annotation_i32(marks.size()) == 0) { out = out + 400; } } }
+    while (marks.next()) { str t = annotation_text(marks.type()); if (t.length == 0) { out = out + 400; } }
 
     Annotations first = annotations.named("app");
     if (first.row().is_some()) { return 6; }                 // nothing selected yet
@@ -72,5 +72,5 @@ i32 main() {
     i32 n = 0;
     while (all.next()) { n++; }
     if (n != rows) { return 3; }
-    return out;   // 4000000 + 420000 + 1600 + 10 + 3 + 100 + 200 + 400 = 4422313
+    return out;   // 4000000 + 420000 + 10 + 3 + 100 + 200 + 400 = 4420713
 }

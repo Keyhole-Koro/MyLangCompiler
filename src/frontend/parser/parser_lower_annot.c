@@ -7,43 +7,42 @@
 #include <stdarg.h>
 #include <ctype.h>
 
-/* Annotations: `@a(args)` on a function or method is metadata.
+/* Annotations: `@a(args)` on a function, method or struct is metadata.
  *
- * An annotation is declared as a function prototype whose first three
- * parameters are fixed -- the annotated function, its receiver type's name
- * and that type's size -- followed by the annotation's own arguments:
+ * An annotation is declared as a function prototype whose parameters are the
+ * annotation's own arguments:
  *
  *     // annotations.mln
- *     export void timer(CodeAddress fn, char *type, i32 size, i32 ms);
+ *     export void timer(i32 ms);
  *
  *     // terminal.dom.mln
- *     import { app, timer } from "annotations.mln";
+ *     import { timer } from "annotations.mln";
  *     @timer(100)
- *     void (Terminal *t) poll() { ... }
+ *     void (borrow Terminal t) poll() { ... }
  *
  * The compiler never calls `timer`. It checks the use against the
- * declaration (resolvable: local or a symbol-list import; first parameters
- * (CodeAddress, char*, i32); the written arguments matched to the rest by name,
- * position or a bare bool parameter's name as a flag, defaults filling the
- * gaps) and records one row per use. Codegen emits the rows as static data
- * in the `annotations` collected section (codegen_annotations.c):
+ * declaration (resolvable: local or a symbol-list import; a prototype, so an
+ * ordinary function cannot stand in for one; the written arguments matched
+ * to the parameters by name, position or a bare bool parameter's name as a
+ * flag, defaults filling the gaps) and records one row per use. Codegen emits
+ * the rows as static data in the `annotations` collected section
+ * (codegen_annotations.c):
  *
  *     .section annotations
  *     __annotations_rows:
- *       .word s_0, Terminal__poll, s_1, 24, 1, 100, 0, 0
+ *       .word s_0, Terminal__poll, s_1, 1, 100, 0, 0
  *
- * eight words per row: name, fn, type, size, argc, arg0..arg2. The linker
- * lays every object's chunk out contiguously as the `annotations` section
- * (MyLinker/inc/ObjectFormat.h, CollectEntry) and lists it in its section
- * directory, so whoever reads the rows -- MyStdLib's meta/annotations.mln,
- * for the application framework at boot -- finds them all without any
- * module listing them. What a row means is the reader's business.
+ * seven words per row: name, fn, type, argc, arg0..arg2. A row on a struct has
+ * no function. The linker lays every object's chunk out contiguously as the
+ * `annotations` section (MyLinker/inc/ObjectFormat.h, CollectEntry) and lists
+ * it in its directory, so whoever reads the rows -- MyStdLib's
+ * meta/annotations.mln, for the application framework at boot -- finds them
+ * all without any module listing them. What a row means is the reader's
+ * business.
  *
- * Because the calling convention ignores extra arguments, a method
- * `(T *self, i32 id)` can be called through the DOM's uniform handler shape
- * `(owner, id, arg)` directly -- a row holds the real method, not a
- * wrapper. A method reached this way must take its receiver by pointer or
- * reference.
+ * Because the calling convention ignores extra arguments, a row holds the real
+ * method, not a wrapper, and a reader calls it with what it takes. A method
+ * reached this way must take its receiver by pointer or reference.
  */
 
 static void annot_error(ParserContext *context, int line, int col, const char *fmt, ...) {
@@ -235,14 +234,6 @@ static int param_is_bool(const ASTNode *param) {
     return strcmp(param_base_type(param), "bool") == 0;
 }
 
-static int param_is_plain(const ASTNode *param, const char *base) {
-    const ASTNode *type = param->param.type;
-    return type && type->type == AST_TYPE && type->type_node.pointer_level == 0 &&
-           strcmp(param_base_type(param), base) == 0;
-}
-
-
-#define ANNOT_FIXED_PARAMS 3
 #define ANNOT_MAX_ARGS 3
 
 static AnnotationRow *g_rows = NULL;
@@ -296,40 +287,37 @@ static void record_annotation(ParserContext *context, ASTNode *program, ASTNode 
     }
     int is_struct = target->type == AST_STRUCT;
     int n = decl->fundef.param_count;
-    if (n < ANNOT_FIXED_PARAMS ||
-        !param_is_plain(decl->fundef.params[0], "CodeAddress") ||
-        !param_is_string(decl->fundef.params[1]) ||
-        !param_is_plain(decl->fundef.params[2], "i32")) {
+    if (decl->fundef.body) {
         annot_error(context, attr->line, attr->col,
-                    "'%s' cannot be used as an annotation: its first parameters must be "
-                    "(CodeAddress fn, char *type, i32 size)", attr->name);
+                    "'%s' cannot be used as an annotation: an annotation is a prototype, with no body",
+                    attr->name);
     }
-    if (decl->fundef.is_variadic || n > ANNOT_FIXED_PARAMS + ANNOT_MAX_ARGS) {
+    if (decl->fundef.is_variadic || n > ANNOT_MAX_ARGS) {
         annot_error(context, attr->line, attr->col,
-                    "'%s' cannot be used as an annotation: at most %d arguments after (fn, type, size)",
+                    "'%s' cannot be used as an annotation: at most %d arguments",
                     attr->name, ANNOT_MAX_ARGS);
     }
 
     int is_method = !is_struct && target->fundef.recv_type_name != NULL;
     if (is_method) require_pointer_receiver(context, target, attr->line, attr->col);
 
-    // Bind the written arguments to the parameters after the fixed three.
+    // Bind the written arguments to the parameters.
     const ASTNode **values = calloc((size_t)n, sizeof(ASTNode *));
     static ASTNode one_literal;
     one_literal.type = AST_NUMBER;
     one_literal.number.value = "1";
-    int positional = ANNOT_FIXED_PARAMS;
+    int positional = 0;
     for (int i = 0; i < attr->arg_count; i++) {
         const AttrArg *arg = &attr->args[i];
         const ASTNode *value = arg->value;
         int slot = -1;
         if (arg->name) {
-            for (int p = ANNOT_FIXED_PARAMS; p < n; p++) {
+            for (int p = 0; p < n; p++) {
                 if (strcmp(decl->fundef.params[p]->param.name, arg->name) == 0) { slot = p; break; }
             }
             if (slot < 0) annot_error(context, arg->line, arg->col, "@%s has no parameter '%s'", attr->name, arg->name);
         } else if (value && value->type == AST_IDENTIFIER) {
-            for (int p = ANNOT_FIXED_PARAMS; p < n; p++) {
+            for (int p = 0; p < n; p++) {
                 if (param_is_bool(decl->fundef.params[p]) &&
                     strcmp(decl->fundef.params[p]->param.name, value->identifier.name) == 0) { slot = p; break; }
             }
@@ -339,7 +327,7 @@ static void record_annotation(ParserContext *context, ASTNode *program, ASTNode 
             while (positional < n && values[positional]) positional++;
             if (positional >= n) {
                 annot_error(context, arg->line, arg->col, "@%s takes %d argument%s", attr->name,
-                            n - ANNOT_FIXED_PARAMS, n - ANNOT_FIXED_PARAMS == 1 ? "" : "s");
+                            n, n == 1 ? "" : "s");
             }
             slot = positional;
         }
@@ -356,7 +344,7 @@ static void record_annotation(ParserContext *context, ASTNode *program, ASTNode 
         }
         values[slot] = value;
     }
-    for (int p = ANNOT_FIXED_PARAMS; p < n; p++) {
+    for (int p = 0; p < n; p++) {
         if (!values[p]) {
             values[p] = decl->fundef.params[p]->param.default_value;
             if (!values[p]) annot_error(context, attr->line, attr->col, "@%s is missing argument '%s'", attr->name, decl->fundef.params[p]->param.name);
@@ -370,10 +358,9 @@ static void record_annotation(ParserContext *context, ASTNode *program, ASTNode 
     row->fn = is_struct ? NULL : strdup(target->fundef.name);
     row->type = is_struct ? strdup(target->struct_stmt.name)
                           : is_method ? strdup(target->fundef.recv_type_name) : NULL;
-    row->argc = n - ANNOT_FIXED_PARAMS;
+    row->argc = n;
     for (int k = 0; k < ANNOTATION_MAX_ARGS; k++) {
-        int p = ANNOT_FIXED_PARAMS + k;
-        record_arg(&row->args[k], p < n ? values[p] : NULL);
+        record_arg(&row->args[k], k < n ? values[k] : NULL);
     }
     free(values);
 }

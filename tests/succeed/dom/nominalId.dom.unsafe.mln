@@ -1,9 +1,9 @@
 // A generated local has the type the element returns, and a handler method is
 // passed as the function type the element declares, so a nominal node id keeps
-// its type through `ref=` and into the handler.
+// its type into the handler.
 newtype Id = i32;
 
-struct App { Id label; Id seen; };
+struct App { Id seen; };
 
 void no_click(i32 owner, Id id, i32 arg) { }
 fn(i32 owner, Id id, i32 arg) -> void g_click = no_click;
@@ -19,7 +19,7 @@ void (borrow App a) click(Id id) { a.seen = id; }
 
 Id (borrow App a) view() {
     return <Window title="t">
-        <Button ref={a.label} text="ok" onClick={a.click} />
+        <Button text="ok" onClick={a.click} />
     </Window>;
 }
 
@@ -27,5 +27,5 @@ i32 main() {
     App app = App {};
     Id root = app.view();
     g_click((i32)(&app), Id(7), 0);
-    return (i32)root * 100 + (i32)app.label * 10 + (i32)app.seen;   // 127
+    return (i32)root * 10 + (i32)app.seen;   // 17
 }

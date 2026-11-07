@@ -119,7 +119,7 @@ return __dom0;
 Generated statements are hoisted ahead of the statement that held the element,
 which is replaced by the root node's id. A generated local has the type the
 called function returns: `i32` above, or a nominal id type (imported by the
-source) when the package's elements return one, which `ref=` then keeps.
+source) when the package's elements return one.
 
 Because tags are function names, adding an element means adding a function to
 the imported package, and an event handler is simply a parameter (`onClick`
@@ -129,34 +129,26 @@ against the callee's signature -- except that a parameter with a
 `= literal` default (see grammar.md, "Default parameters") may be left out,
 in which case the default is passed.
 
-Two properties are handled by the compiler rather than the callee:
-
-- `ref={lvalue}` stores the new node's id: `lvalue = __dom1;` follows the
-  create call. The lvalue is anything assignable -- a local, a global, or a
-  struct field such as `c->label`.
-- A *handler property* -- any parameter named `on` plus a capital letter
-  (`onClick`, `onChange`, `onTick`) -- takes a function the dispatcher calls
-  as `handler(owner, id, arg)`. `onClick={c->click}`, where `c` is a local
-  or parameter of a type with that method, passes the method itself: the
-  calling convention ignores trailing arguments, so `(Counter *c, i32 id)`
-  receives `owner` as `c` and `id` as `id`. The method must take a pointer
-  receiver. A plain local function with fewer than three parameters is
-  wrapped so `id` lands in the right slot, and the wrapper converts `id` and
-  `arg` to the types the function declares, so `void f(NodeId id)` works. A
-  parameter taken by reference is an error. Any other value is passed through
-  unchanged. A method or wrapper is passed as the function type the
-  callee declares for that parameter. See grammar.md, "Attributes and
-  annotations".
+A *handler property* -- any parameter named `on` plus a capital letter
+(`onClick`, `onChange`, `onTick`) -- is handled by the compiler rather than the
+callee. `onClick={c.click}`, where `c` is a local or parameter of a type with
+that method, passes the method itself as the function type the callee declares
+for that parameter: the calling convention ignores trailing arguments, so the
+method takes the values that type carries, in order, or fewer of them. The
+method must take its receiver by pointer or reference. A plain local function
+with fewer than three parameters is wrapped so the event's words land in the
+right slots, and the wrapper converts them to the types the function declares.
+A parameter taken by reference is an error. Any other value is passed through
+unchanged. See grammar.md, "Attributes and annotations".
 
 ```text
-i32 (Counter *c) view() {
-    return <Window ref={c->win} title="Counter" w={400}>
-        <Button text="Click me" onClick={c->click} />
+i32 (Counter c) view() {
+    return <Window title="Counter" w={400}>
+        <Button text="Click me" onClick={c.click} />
     </Window>;
 }
 
-i32 __dom0 = dom.Window("Counter", 0, 0, 400, 200);   // x, y, h defaulted
-c->win = __dom0;
+i32 __dom0 = dom.Window("Counter", 400, 200);   // h defaulted
 i32 __dom1 = dom.Button("Click me", 0, 0, 90, 34, Counter__click);
 dom.append_child(__dom0, __dom1);
 return __dom0;

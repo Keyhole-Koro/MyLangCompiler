@@ -6,12 +6,12 @@
  *
  *     .section annotations
  *     __annotations_rows:
- *       .word s_0, Terminal__poll, s_1, 24, 1, 100, 0, 0
+ *       .word s_0, Terminal__poll, s_1, 1, 100, 0, 0
  *
- * Eight words per row: name (char*), the annotated function, receiver type
- * name (char*, "" for a plain function), sizeof that type (0 for a plain
- * function), the argument count, then three arguments -- a number, a bool
- * as 0/1, or a string as a char*. Symbol operands are filled in by the
+ * Seven words per row: name (char*), the annotated function (0 on a struct),
+ * receiver type name (char*, "" for a plain function), the argument count,
+ * then three arguments -- a number, a bool as 0/1, or a string as a char*.
+ * Symbol operands are filled in by the
  * linker (RELOC_WORD32); the linker also lays every object's chunk out
  * contiguously as the `annotations` section and lists it in its section
  * directory (`__sections`; ObjectFormat.h, CollectEntry), which is how
@@ -21,18 +21,13 @@ void emit_annotation_rows(CompilerContext *cc, StringBuilder *sb) {
     int count = annotation_row_count();
     if (count == 0) return;
 
-    sb_append(sb, "\n; annotation rows: name, fn, type, size, argc, arg0, arg1, arg2\n");
+    sb_append(sb, "\n; annotation rows: name, fn, type, argc, arg0, arg1, arg2\n");
     sb_append(sb, ".section annotations\n__annotations_rows:\n");
     for (int i = 0; i < count; i++) {
         const AnnotationRow *row = annotation_row(i);
         const char *name_label = intern_string_literal(cc, row->name);
         const char *type_label = intern_string_literal(cc, row->type ? row->type : "");
-        int size = 0;
-        if (row->type) {
-            const StructInfo *si = find_struct(cc, row->type);
-            size = si ? si->size_bytes : 0;
-        }
-        sb_append(sb, "  .word %s, %s, %s, %d, %d", name_label, row->fn ? row->fn : "0", type_label, size, row->argc);
+        sb_append(sb, "  .word %s, %s, %s, %d", name_label, row->fn ? row->fn : "0", type_label, row->argc);
         for (int k = 0; k < ANNOTATION_MAX_ARGS; k++) {
             const AnnotationArg *arg = &row->args[k];
             if (k >= row->argc) sb_append(sb, ", 0");
