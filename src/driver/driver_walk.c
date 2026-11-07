@@ -50,7 +50,8 @@ int walk_dir(WalkCtx *ctx, const char *dir_path) {
             ensure_parent_dir(out_path);
             if (compile_one(child_path, out_path,
                             ctx->dump_tokens, ctx->dump_ast,
-                            ctx->aliases, ctx->alias_count, NULL, NULL) != 0) {
+                            ctx->aliases, ctx->alias_count, NULL, NULL,
+                            COMPILE_TO_OUTPUT) != 0) {
                 fprintf(stderr, "Failed to compile %s\n", child_path);
                 free(rel_out);
                 free(out_path);

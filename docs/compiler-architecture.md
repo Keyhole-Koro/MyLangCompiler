@@ -209,6 +209,16 @@ successful compile still writes `<output>_tokens.txt` and `<output>_ast.txt`
 beside the generated assembly for later inspection. Use `--dump-tokens` or
 `--dump-ast` when the corresponding debug dump is also needed on stdout.
 
+### Checking a source
+
+`mlc --check <input.mln>` runs the parser and the semantic checks and stops, and
+`mlc --parse-only <input.mln>` stops after the parser. Neither writes a file or
+prints anything but diagnostics, and both return 1 on an error. The parser stops
+at its first error in a file; the semantic checks report all of theirs.
+
+`make check` runs `--check` on every source in the repository. `make lsp-check`
+uses `--parse-only` to tell an editor's false alarm from a real syntax error.
+
 ### Symbol files
 
 `mlc --emit-symbols <path> <input.mln> <output.masm>` also writes what the

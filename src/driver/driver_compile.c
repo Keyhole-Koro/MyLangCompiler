@@ -295,7 +295,9 @@ static int write_dependency_file(const char *depfile_path,
 int compile_one(const char *input_path, const char *output_path,
                 int dump_tokens_to_stdout, int dump_ast_to_stdout,
                 const char **aliases, int alias_count,
-                const char *depfile_path, const char *symbols_path) {
+                const char *depfile_path, const char *symbols_path,
+                CompileStage stage) {
+    int writes_output = stage == COMPILE_TO_OUTPUT;
     MyLangSourceSpecResult source = mylang_source_spec_parse(input_path);
     if (!source.ok) {
         fprintf(stderr, "Invalid MyLang source filename: %s\n", source.error);
@@ -319,9 +321,11 @@ int compile_one(const char *input_path, const char *output_path,
         return 1;
     }
 
-    printf("Source profile: syntax=%s, safety=%s\n",
-           mylang_syntax_profile_name(source.spec.syntax),
-           mylang_safety_profile_name(source.spec.safety));
+    if (writes_output) {
+        printf("Source profile: syntax=%s, safety=%s\n",
+               mylang_syntax_profile_name(source.spec.syntax),
+               mylang_safety_profile_name(source.spec.safety));
+    }
 
     parser_reset();
     FrontendSession *session = frontend_session_create();
@@ -354,15 +358,15 @@ int compile_one(const char *input_path, const char *output_path,
     ASTNode *root = parse_program(&cur);
 
     if (dump_ast_to_stdout) print_ast(root, 0);
-    printf("AST parsing completed.\n");
+    if (writes_output) printf("AST parsing completed.\n");
 
-    int success = semantic_check_with_session(root, session);
-    if (!success) {
-        fprintf(stderr, "Semantic analysis failed.\n");
+    int success = stage == COMPILE_PARSE_ONLY || semantic_check_with_session(root, session);
+    if (!success && writes_output) fprintf(stderr, "Semantic analysis failed.\n");
+    if (!success || !writes_output) {
         free_ast(root);
         free_tokens(tokens);
         destroy_compile_session(session);
-        return 1;
+        return success ? 0 : 1;
     }
     printf("Semantic analysis completed.\n");
 

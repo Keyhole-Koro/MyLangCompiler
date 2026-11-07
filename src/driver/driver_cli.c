@@ -5,8 +5,11 @@ void driver_print_usage(const char *prog) {
             "Usage:\n"
             "  %s [options] <input.mln> <output.masm>\n"
             "  %s [options] <input_dir> <output_dir>\n"
+            "  %s --check | --parse-only [options] <input.mln>\n"
             "\n"
             "Options:\n"
+            "  --check           Report the errors in one source and write nothing\n"
+            "  --parse-only      Like --check, stopping once the source has parsed\n"
             "  -exclude <path>   Exclude relative path or directory name (repeatable)\n"
             "  -entry <name>     Entry function name mapped to __START__ (default: main)\n"
             "  --alias <@name=path>  Resolve an import prefix to a source directory (repeatable)\n"
@@ -19,7 +22,7 @@ void driver_print_usage(const char *prog) {
             "  --Werror          Treat semantic warnings as errors\n"
             "  --error-trace     Record Err origins and ? hops for @std/debug/error_trace.mln\n"
             "  --line-info       Emit source positions and cost regions for the line table\n",
-            prog, prog);
+            prog, prog, prog);
 }
 
 void driver_options_dispose(DriverOptions *opts) {
@@ -97,6 +100,10 @@ int driver_parse_args(int argc, char *argv[], DriverOptions *opts) {
             opts->error_trace = 1;
         } else if (strcmp(argv[i], "--line-info") == 0) {
             opts->line_info = 1;
+        } else if (strcmp(argv[i], "--check") == 0) {
+            opts->stage = COMPILE_CHECK;
+        } else if (strcmp(argv[i], "--parse-only") == 0) {
+            opts->stage = COMPILE_PARSE_ONLY;
         } else if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
             driver_print_usage(argv[0]);
             return 1;
@@ -111,7 +118,17 @@ int driver_parse_args(int argc, char *argv[], DriverOptions *opts) {
         }
     }
 
-    if (!opts->input_path || !opts->output_path) {
+    if (opts->stage != COMPILE_TO_OUTPUT) {
+        if (opts->output_path || opts->depfile_path || opts->symbols_path) {
+            fprintf(stderr, "--check and --parse-only write nothing: "
+                            "give one source and no output\n");
+            return -1;
+        }
+    } else if (!opts->output_path) {
+        driver_print_usage(argv[0]);
+        return -1;
+    }
+    if (!opts->input_path) {
         driver_print_usage(argv[0]);
         return -1;
     }

@@ -18,6 +18,14 @@
 #include "mylang/semantic/semantic.h"
 #include "mylang/support/utils.h"
 
+/* How far compile_one goes. The two checks stop early, write no file and print
+   only diagnostics. */
+typedef enum {
+    COMPILE_TO_OUTPUT,
+    COMPILE_CHECK,
+    COMPILE_PARSE_ONLY,
+} CompileStage;
+
 typedef struct {
     const char *entry_name;
     const char *input_path;
@@ -36,6 +44,7 @@ typedef struct {
     int line_info;
     int dump_tokens;
     int dump_ast;
+    CompileStage stage;
 } DriverOptions;
 
 typedef struct {
@@ -69,7 +78,8 @@ int copy_file(const char *src, const char *dst);
 int compile_one(const char *input_path, const char *output_path,
                 int dump_tokens_to_stdout, int dump_ast_to_stdout,
                 const char **aliases, int alias_count,
-                const char *depfile_path, const char *symbols_path);
+                const char *depfile_path, const char *symbols_path,
+                CompileStage stage);
 int write_symbol_file(const char *symbols_path, const char *input_path, ASTNode *root,
                       const char *assembly);
 int walk_dir(WalkCtx *ctx, const char *dir_path);

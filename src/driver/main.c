@@ -1,6 +1,10 @@
 #include "mylang/driver/driver_internal.h"
 
 static int run_directory_mode(const DriverOptions *opts) {
+    if (opts->stage != COMPILE_TO_OUTPUT) {
+        fprintf(stderr, "--check and --parse-only take one source, not a directory\n");
+        return 1;
+    }
     if (opts->depfile_path) {
         fprintf(stderr, "--depfile is supported only for single-file compilation\n");
         return 1;
@@ -48,7 +52,7 @@ static int run_single_file_mode(const DriverOptions *opts) {
     return compile_one(opts->input_path, opts->output_path,
                        opts->dump_tokens, opts->dump_ast,
                        opts->aliases, opts->alias_count,
-                       opts->depfile_path, opts->symbols_path);
+                       opts->depfile_path, opts->symbols_path, opts->stage);
 }
 
 int main(int argc, char *argv[]) {
