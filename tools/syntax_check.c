@@ -16,10 +16,16 @@ typedef enum {
     ANGLE_GENERIC_DOUBLE_CLOSE,
 } AngleKind;
 
+typedef enum {
+    CASE_KEY_NONE = 0,
+    CASE_KEY_START,
+    CASE_KEY_ARROW,
+} CaseKeyMark;
+
 /* What the LR grammar cannot tell from the token kinds alone. */
 typedef struct {
-    int *terminals;        /* the terminal each source token is parsed as */
-    size_t *case_key_ends; /* at a key the grammar has no pattern for, its last token */
+    int *terminals;             /* the terminal each source token is parsed as */
+    CaseKeyMark *case_key_marks; /* where a case key that is not a pattern starts and ends */
 } TokenRewrites;
 
 static const char *default_grammar_path =
@@ -486,7 +492,7 @@ static void tag_statement_expression_roles(
     if (!table || !token_map || !tokens || !source_roles || end <= start + 2)
         return;
 
-    size_t capacity = end - start + 5;
+    size_t capacity = (end - start) * 2 + 5;
     int *token_ids = calloc(capacity, sizeof(int));
     size_t *source_indices = calloc(capacity, sizeof(size_t));
     int *roles = calloc(capacity, sizeof(int));
@@ -506,11 +512,10 @@ static void tag_statement_expression_roles(
 
     int generic_depth = 0;
     for (size_t i = start + 1; i < end; i++) {
-        if (rewrites->case_key_ends[i]) {
-            token_ids[count] = token_map[UNDERSCORE];
+        if (rewrites->case_key_marks[i] != CASE_KEY_NONE) {
+            token_ids[count] = token_map[rewrites->case_key_marks[i] == CASE_KEY_START
+                                             ? L_PARENTHESES : R_PARENTHESES];
             source_indices[count++] = i;
-            i = rewrites->case_key_ends[i];
-            continue;
         }
         size_t nested_end = statement_expression_end(tokens, end, i);
         if (nested_end != end) {
@@ -833,11 +838,13 @@ static size_t scan_case_arm(Token **tokens, size_t token_count, const AngleKind 
 }
 
 /* A case key can be any expression, and telling the arm's `->` from an access
- * takes more lookahead than LR(1) has, so the grammar has only patterns. Other
- * keys, such as `1` or `p->kind`, are collapsed to `_`. mlc still checks them. */
-static size_t *classify_case_keys(Token **tokens, size_t token_count, const AngleKind *angles) {
-    size_t *key_ends = calloc(token_count ? token_count : 1, sizeof(size_t));
-    if (!key_ends) return NULL;
+ * takes more lookahead than LR(1) has. So a key that is not a pattern, such as
+ * `1` or `p->kind`, is parsed as if parenthesized, which closes it before the
+ * arrow: the marks say where the parentheses go. */
+static CaseKeyMark *classify_case_keys(Token **tokens, size_t token_count,
+                                       const AngleKind *angles) {
+    CaseKeyMark *marks = calloc(token_count ? token_count : 1, sizeof(CaseKeyMark));
+    if (!marks) return NULL;
     for (size_t i = 0; i + 1 < token_count; i++) {
         if (tokens[i]->kind != OF || tokens[i + 1]->kind != L_BRACE) continue;
         size_t arm = i + 2;
@@ -845,14 +852,17 @@ static size_t *classify_case_keys(Token **tokens, size_t token_count, const Angl
             int is_pattern = 1;
             size_t arrow = scan_case_arm(tokens, token_count, angles, arm, 1, &is_pattern);
             if (arrow >= token_count || tokens[arrow]->kind != ARROW) break;
-            if (!is_pattern && arrow > arm) key_ends[arm] = arrow - 1;
+            if (!is_pattern && arrow > arm) {
+                marks[arm] = CASE_KEY_START;
+                marks[arrow] = CASE_KEY_ARROW;
+            }
             int ignored = 0;
             size_t semicolon = scan_case_arm(tokens, token_count, angles, arrow + 1, 0, &ignored);
             if (semicolon >= token_count || tokens[semicolon]->kind != SEMICOLON) break;
             arm = semicolon + 1;
         }
     }
-    return key_ends;
+    return marks;
 }
 
 static int *classify_terminals(const SyntaxGrammar *grammar, const int *token_map,
@@ -919,7 +929,7 @@ static int check_tokens(
     AngleKind *angles = classify_generic_angles(source_tokens, source_count);
     TokenRewrites rewrites = {
         .terminals = classify_terminals(grammar, token_map, source_tokens, source_count),
-        .case_key_ends = classify_case_keys(source_tokens, source_count, angles),
+        .case_key_marks = classify_case_keys(source_tokens, source_count, angles),
     };
     size_t parse_capacity = source_count * 2 + 1;
     int *token_ids = calloc(parse_capacity, sizeof(int));
@@ -929,12 +939,12 @@ static int check_tokens(
     int *source_roles = calloc(source_count ? source_count : 1, sizeof(int));
     SyntaxSymbol *symbols = calloc(parse_capacity, sizeof(SyntaxSymbol));
     size_t symbol_count = 0;
-    if (!angles || !rewrites.terminals || !rewrites.case_key_ends || !token_ids || !token_refs ||
+    if (!angles || !rewrites.terminals || !rewrites.case_key_marks || !token_ids || !token_refs ||
         !token_source_indices || !roles || !source_roles || !symbols) {
         free(source_tokens);
         free(angles);
         free(rewrites.terminals);
-        free(rewrites.case_key_ends);
+        free(rewrites.case_key_marks);
         free(token_ids);
         free(token_refs);
         free(token_source_indices);
@@ -949,12 +959,11 @@ static int check_tokens(
     int generic_depth = 0;
     for (size_t i = 0; i < source_count; i++) {
         Token *t = source_tokens[i];
-        if (rewrites.case_key_ends[i]) {
-            token_ids[token_count] = token_map[UNDERSCORE];
+        if (rewrites.case_key_marks[i] != CASE_KEY_NONE) {
+            token_ids[token_count] = token_map[rewrites.case_key_marks[i] == CASE_KEY_START
+                                                   ? L_PARENTHESES : R_PARENTHESES];
             token_refs[token_count] = t;
             token_source_indices[token_count++] = i;
-            i = rewrites.case_key_ends[i];
-            continue;
         }
         size_t statement_expr_end = statement_expression_end(source_tokens, source_count, i);
         if (statement_expr_end != source_count) {
@@ -1075,7 +1084,7 @@ static int check_tokens(
     free(roles);
     free(angles);
     free(rewrites.terminals);
-    free(rewrites.case_key_ends);
+    free(rewrites.case_key_marks);
     free(source_tokens);
     free_tokens(tokens);
     return 0;

@@ -1,0 +1,6 @@
+i32 pick(i32 x) {
+    return case x of {
+        1 + -> 2;
+        _ -> 0;
+    };
+}
