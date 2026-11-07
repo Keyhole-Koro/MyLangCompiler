@@ -4,93 +4,128 @@
 package examples;
 
 // 1. Imports
-import { print_int, print_str } from "std/io";
-import math; // Entire package
+import { Option } from "@std/core/option.mln";
+import { Result } from "@std/core/result.mln";
 
 // 2. Enums
 enum Color {
     RED = 1,
     GREEN,
     BLUE = 4
-}
+};
+
+// An enum can carry a payload.
+enum Shape {
+    Circle(i32),
+    Square(i32),
+    Empty
+};
 
 // 3. Structs and Typedefs
 struct Point {
     i32 x;
     i32 y;
-}
+};
 
-typedef struct Point Point2D;
+typedef Point Point2D;
 typedef i32 Integer;
+
+// A generic struct, and a method that takes it by value.
+struct Box<T> {
+    T value;
+};
+
+T (Box<T> self) get() {
+    return self.value;
+}
 
 // 4. Global variables and Exports
 export i32 global_counter = 0;
 extern void external_func();
 
-// 5. Functions with various parameter types
-export i32 process_data(i32 x, borrow Point p, rest args) {
-    p->x = x;
-    
-    // Local variables and Ownership
-    Point p2 = { x: 10, y: 20 }; // Initializer list
-    i32[5] arr = {1, 2, 3, 4, 5}; // Array
-    
-    // 6. Control Flow
+// 5. Parameters: read by default, borrowed to write, moved to take over.
+void set_x(i32 x, borrow Point p) {
+    p.x = x;
+}
+
+i32 area(move Shape shape) {
+    return case shape of {
+        Circle(r) -> r * r * 3;
+        Square(side) -> side * side;
+        Empty -> 0;
+    };
+}
+
+// 6. Errors are values, and `?` passes them on.
+Result<i32, i32> checked_half(i32 x) {
+    if (x % 2 != 0) { return Err(x); }
+    return Ok(x / 2);
+}
+
+Result<i32, i32> quarter(i32 x) {
+    i32 half = checked_half(x)?;
+    return checked_half(half);
+}
+
+i32 process_data(i32 x, borrow Point p) {
+    set_x(x, &p);
+
+    // Local variables
+    Point p2 = Point { x: 10, y: 20 }; // Struct literal
+    i32 arr[5] = {1, 2, 3, 4, 5};      // Array
+
+    // 7. Control Flow
     if (x > 0) {
         x = x + 1;
     } else {
         x = 0;
     }
-    
+
     for (i32 i = 0; i < 5; i++) {
         global_counter = global_counter + arr[i];
     }
-    
+
     while (x < 100) {
         x = x * 2;
         if (x == 50) break;
     }
-    
+
     do {
         x = x - 1;
     } while (x > 80);
 
-    // 7. Ownership: Borrowing and Moving
-    Point r = &p2; // Shared borrow
-    // borrow Point rm = &p2; // Mutable borrow (error if 'r' is still active)
-    
     // 8. Advanced Expressions
-    
+
     // Case expression
     i32 status = case x of {
         100 -> 1;
         200 -> 2;
         _   -> 0;
     };
-    
-    // Function literal (Lambda)
-    auto f = (i32 a, i32 b) {
+
+    // Function literal
+    i32 add = (i32 a, i32 b) => {
         return a + b;
     };
-    
+
     // Statement expression
     i32 complex_val = ({
         i32 temp = x * 2;
         yield temp + 5;
     });
-    
+
     // Cast and Sizeof
     u32 size = (u32)sizeof(Point);
-    
+
     // Ternary
     i32 result = (status > 0) ? x : -1;
-    
-    return result;
+
+    return result + complex_val + (i32)size + p2.x;
 }
 
-// 10. Simple main-like function
+// 9. Simple main-like function
 i32 main() {
-    Point p = { x: 0, y: 0 };
-    process_data(10, &p);
-    return 0;
+    Point p = Point { x: 0, y: 0 };
+    Box<i32> box = Box<i32> { value: 7 };
+    return process_data(10, &p) + box.get() + area(Shape::Square(2));
 }
