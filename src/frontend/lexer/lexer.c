@@ -239,6 +239,10 @@ bool isReservedWord(char *ptr, TokenKind *tk, char *buffer) {
 
 static bool is_bin_digit(char c) { return c == '0' || c == '1'; }
 
+// A hex or binary literal becomes decimal text, which can be longer than the
+// literal was.
+#define NUMBER_TEXT_MAX 64
+
 // Recognizes decimal, hexadecimal (0x...), and binary (0b...) integer
 // literals, plus decimal floats. Hex/binary literals are normalized to their
 // decimal text in `buffer` so the rest of the pipeline (codegen -> assembler)
@@ -266,7 +270,7 @@ bool isNumber(char *ptr, char *buffer, size_t *src_len) {
 
         unsigned long value = strtoul(digits, NULL, base);
         long signed_value = negative ? -(long)value : (long)value;
-        snprintf(buffer, 64, "%ld", signed_value);
+        snprintf(buffer, NUMBER_TEXT_MAX, "%ld", signed_value);
         *src_len = (size_t)(d - start);
         return true;
     }
@@ -353,16 +357,18 @@ LexerContext *lexer_context_create(char *input) {
     ctx->mlx_tag_depth = 0;
     ctx->last_token_kind = EOT;
     ctx->eot_returned = false;
+    ctx->token_text = malloc(strlen(input) + NUMBER_TEXT_MAX);
     return ctx;
 }
 
 void lexer_context_destroy(LexerContext *ctx) {
+    free(ctx->token_text);
     free(ctx);
 }
 
 Token *lexer_next_token(LexerContext *ctx) {
     if (ctx->eot_returned) return NULL;
-    char *buffer = malloc(strlen(ctx->ptr) + 1);
+    char *buffer = ctx->token_text;
     if (!buffer) return NULL;
     size_t consumed_len = 0;
     TokenKind kind;
@@ -383,7 +389,6 @@ Token *lexer_next_token(LexerContext *ctx) {
                 Token *t = createTokenSingle(MLX_TEXT, buffer, ctx->line, ctx->col, len);
                 advance_pos(start, len, &ctx->line, &ctx->col);
                 ctx->last_token_kind = MLX_TEXT;
-                free(buffer);
                 return t;
             }
             if (*ctx->ptr == '<') {
@@ -397,7 +402,6 @@ Token *lexer_next_token(LexerContext *ctx) {
                     ctx->mode_stack[ctx->depth++] = MODE_MLX_CLOSE_TAG;
                     ctx->mlx_tag_depth--;
                     ctx->last_token_kind = MLX_CLOSE_TAG_OPEN;
-                    free(buffer);
                     return t;
                 } else {
                     Token *t = createTokenSingle(MLX_TAG_OPEN, "<", ctx->line, ctx->col, 1);
@@ -406,7 +410,6 @@ Token *lexer_next_token(LexerContext *ctx) {
                     ctx->mode_stack[ctx->depth++] = MODE_MLX_TAG;
                     ctx->mlx_tag_depth++; // push MODE_MLX_TAG
                     ctx->last_token_kind = MLX_TAG_OPEN;
-                    free(buffer);
                     return t;
                 }
             } else if (*ctx->ptr == '{') {
@@ -415,7 +418,6 @@ Token *lexer_next_token(LexerContext *ctx) {
                 ctx->ptr += 1;
                 ctx->mode_stack[ctx->depth++] = MODE_DEFAULT;
                 ctx->last_token_kind = L_BRACE;
-                free(buffer);
                 return t;
             }
         }
@@ -441,7 +443,6 @@ Token *lexer_next_token(LexerContext *ctx) {
                 // once elements nested three deep.)
                 ctx->depth--;
                 ctx->last_token_kind = MLX_TAG_CLOSE;
-                free(buffer);
                 return t;
             }
         }
@@ -454,7 +455,6 @@ Token *lexer_next_token(LexerContext *ctx) {
                 ctx->depth--;
                 ctx->mlx_tag_depth--;
                 ctx->last_token_kind = MLX_TAG_SELF_CLOSE;
-                free(buffer);
                 return t;
             }
             if (*ctx->ptr == '>') {
@@ -465,7 +465,6 @@ Token *lexer_next_token(LexerContext *ctx) {
                 if (ctx->mlx_tag_depth > 0) ctx->mode_stack[ctx->depth++] = MODE_MLX_TEXT;
                 else ctx->mode_stack[ctx->depth - 1] = MODE_DEFAULT;
                 ctx->last_token_kind = MLX_TAG_CLOSE;
-                free(buffer);
                 return t;
             }
             if (*ctx->ptr == '{') {
@@ -474,7 +473,6 @@ Token *lexer_next_token(LexerContext *ctx) {
                 ctx->ptr += 1;
                 ctx->mode_stack[ctx->depth++] = MODE_DEFAULT;
                 ctx->last_token_kind = L_BRACE;
-                free(buffer);
                 return t;
             }
         }
@@ -489,7 +487,6 @@ Token *lexer_next_token(LexerContext *ctx) {
                 ctx->depth--;
             }
             ctx->last_token_kind = R_BRACE;
-            free(buffer);
             return t;
         }
 
@@ -521,7 +518,6 @@ Token *lexer_next_token(LexerContext *ctx) {
             Token *t = createTokenSingle(kind, buffer, tok_line, tok_col, (int)consumed);
             advance_pos(ctx->ptr, consumed, &ctx->line, &ctx->col);
             ctx->ptr += consumed;
-            free(buffer);
             ctx->last_token_kind = kind;
             return t;
         }
@@ -532,7 +528,6 @@ Token *lexer_next_token(LexerContext *ctx) {
             Token *t = createTokenSingle(kind, buffer, tok_line, tok_col, (int)consumed);
             advance_pos(ctx->ptr, consumed, &ctx->line, &ctx->col);
             ctx->ptr += consumed;
-            free(buffer);
             ctx->last_token_kind = kind;
             return t;
         }
@@ -542,7 +537,6 @@ Token *lexer_next_token(LexerContext *ctx) {
             Token *t = createTokenSingle(NUMBER, buffer, tok_line, tok_col, (int)consumed_len);
             advance_pos(ctx->ptr, consumed_len, &ctx->line, &ctx->col);
             ctx->ptr += consumed_len;
-            free(buffer);
             ctx->last_token_kind = NUMBER;
             return t;
         }
@@ -553,7 +547,6 @@ Token *lexer_next_token(LexerContext *ctx) {
             Token *t = createTokenSingle(IDENTIFIER, buffer, tok_line, tok_col, (int)consumed);
             advance_pos(ctx->ptr, consumed, &ctx->line, &ctx->col);
             ctx->ptr += consumed;
-            free(buffer);
             ctx->last_token_kind = IDENTIFIER;
             return t;
         }
@@ -573,7 +566,6 @@ Token *lexer_next_token(LexerContext *ctx) {
             memcpy(t->value, buffer, decoded_len);
             t->value[decoded_len] = '\0';
             t->value_length = (int)decoded_len;
-            free(buffer);
             ctx->last_token_kind = STRING_LITERAL;
             return t;
         }
@@ -584,7 +576,6 @@ Token *lexer_next_token(LexerContext *ctx) {
             Token *t = createTokenSingle(CHAR_LITERAL, buffer, tok_line, tok_col, len);
             advance_pos(ctx->ptr, (size_t)len, &ctx->line, &ctx->col);
             ctx->ptr += len;
-            free(buffer);
             ctx->last_token_kind = CHAR_LITERAL;
             return t;
         }
@@ -596,7 +587,6 @@ Token *lexer_next_token(LexerContext *ctx) {
     ctx->eot_returned = true;
     Token *t = createTokenSingle(EOT, "", ctx->line, ctx->col, 0);
     ctx->last_token_kind = EOT;
-    free(buffer);
     return t;
 }
 

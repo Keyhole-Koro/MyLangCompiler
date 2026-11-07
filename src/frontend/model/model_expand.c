@@ -52,6 +52,7 @@ typedef struct {
 typedef struct {
     Entity *entity;
     char column[MODEL_NAME_CAP];
+    char type[MODEL_TYPE_CAP];
     int unique;
     int buckets;
     ModelSpan span; /* the column's own declaration */
@@ -356,6 +357,15 @@ static const char *parse_relation(Model *model, const char *p) {
     return p + 1;
 }
 
+/* An index hashes a word: an i32 or a newtype of one. The expansion sees only
+ * the type's text, so a named type that is not a word fails at the generated
+ * cast to i32. */
+static int column_is_word(const char *type) {
+    if (strcmp(type, "i32") == 0) return 1;
+    if (!isupper((unsigned char)*type)) return 0;
+    return type[strspn(type, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_")] == '\0';
+}
+
 /* `index Node.owner;`, `unique Process.pid;`. */
 static const char *parse_index(Model *model, const char *p, int unique) {
     const char *statement = p;
@@ -379,8 +389,9 @@ static const char *parse_index(Model *model, const char *p, int unique) {
         Column *column = &index->entity->columns[i];
         if (strcmp(column->name, index->column) == 0) {
             mark(model, column_at, column_length, "IDENTIFIER", "variable", column->span);
-            if (strcmp(column->type, "i32") != 0)
-                model_error(model, column_at, column_length, "only an i32 column can be indexed: '%s'", index->column);
+            if (!column_is_word(column->type))
+                model_error(model, column_at, column_length, "only an i32 or newtype column can be indexed: '%s'", index->column);
+            snprintf(index->type, sizeof(index->type), "%s", column->type);
             index->span = column->span;
             found = 1;
         }
@@ -718,13 +729,13 @@ static void emit_reference(Model *model, const Relation *r) {
 
 static void emit_index(Model *model, const Index *index) {
     const Entity *e = index->entity;
-    const char *T = e->name, *t = e->lower, *c = index->column;
+    const char *T = e->name, *t = e->lower, *c = index->column, *v = index->type;
     int mask = index->buckets - 1;
     model->origin = index->span;
     emit(model, "i32 g_%s_ix_%s[%d];\n\n", t, c, index->buckets);
     emit(model,
          "void %s_ix_%s_unlink(i32 ref) {\n"
-         "    i32 value = g_%s_rows[ref - 1].__ix_%s;\n"
+         "    i32 value = (i32)g_%s_rows[ref - 1].__ix_%s;\n"
          "    i32 before = g_%s_rows[ref - 1].__ixp_%s;\n"
          "    i32 after = g_%s_rows[ref - 1].__ixn_%s;\n"
          "    if (before != 0) { g_%s_rows[before - 1].__ixn_%s = after; }\n"
@@ -736,7 +747,7 @@ static void emit_index(Model *model, const Index *index) {
          t, c, t, c, t, c, t, c, t, c, t, c, mask, t, c, mask, t, c, t, c, t, c);
     emit(model,
          "void %s_ix_%s_link(i32 ref) {\n"
-         "    i32 bucket = g_%s_rows[ref - 1].__ix_%s & %d;\n"
+         "    i32 bucket = (i32)g_%s_rows[ref - 1].__ix_%s & %d;\n"
          "    i32 head = g_%s_ix_%s[bucket];\n"
          "    g_%s_rows[ref - 1].__ixn_%s = head;\n"
          "    g_%s_rows[ref - 1].__ixp_%s = 0;\n"
@@ -744,19 +755,19 @@ static void emit_index(Model *model, const Index *index) {
          "    g_%s_ix_%s[bucket] = ref;\n"
          "}\n\n",
          t, c, t, c, mask, t, c, t, c, t, c, t, c, t, c);
-    emit(model, "export i32 (%s x) %s() { return g_%s_rows[%s_checked(x)].__ix_%s; }\n\n", T, c, t, t, c);
+    emit(model, "export %s (%s x) %s() { return g_%s_rows[%s_checked(x)].__ix_%s; }\n\n", v, T, c, t, t, c);
     emit(model,
          "/** Sets the indexed column; `row()` does not expose it. */\n"
-         "export void (%s x) set_%s(i32 value) {\n"
+         "export void (%s x) set_%s(%s value) {\n"
          "    i32 ref = %s_checked(x) + 1;\n"
          "    %s_ix_%s_unlink(ref);\n"
          "    g_%s_rows[ref - 1].__ix_%s = value;\n"
          "    %s_ix_%s_link(ref);\n"
-         "}\n\n", T, c, t, t, c, t, c, t, c);
+         "}\n\n", T, c, v, t, t, c, t, c, t, c);
     if (index->unique) {
         emit(model,
-             "export Option<%s> %s_by_%s(i32 value) {\n"
-             "    i32 ref = g_%s_ix_%s[value & %d];\n"
+             "export Option<%s> %s_by_%s(%s value) {\n"
+             "    i32 ref = g_%s_ix_%s[(i32)value & %d];\n"
              "    while (ref != 0) {\n"
              "        if (g_%s_rows[ref - 1].__ix_%s == value) {\n"
              "            %s found = %s_at(ref);\n"
@@ -765,11 +776,11 @@ static void emit_index(Model *model, const Index *index) {
              "        ref = g_%s_rows[ref - 1].__ixn_%s;\n"
              "    }\n"
              "    return None;\n"
-             "}\n\n", T, t, c, t, c, mask, t, c, T, t, t, c);
+             "}\n\n", T, t, c, v, t, c, mask, t, c, T, t, t, c);
         return;
     }
     emit(model,
-         "export struct %s_by_%s_Iter { i32 next; i32 value; };\n\n"
+         "export struct %s_by_%s_Iter { i32 next; %s value; };\n\n"
          "export impl Iterator<%s> for %s_by_%s_Iter {\n"
          "    Option<%s> (borrow Self self) next() {\n"
          "        while (self.next != 0) {\n"
@@ -783,11 +794,11 @@ static void emit_index(Model *model, const Index *index) {
          "        return None;\n"
          "    }\n"
          "}\n\n",
-         t, c, T, t, c, T, t, c, t, c, T, t);
+         t, c, v, T, t, c, T, t, c, t, c, T, t);
     emit(model,
-         "export %s_by_%s_Iter %s_by_%s(i32 value) {\n"
-         "    return %s_by_%s_Iter { next: g_%s_ix_%s[value & %d], value: value };\n"
-         "}\n\n", t, c, t, c, t, c, t, c, mask);
+         "export %s_by_%s_Iter %s_by_%s(%s value) {\n"
+         "    return %s_by_%s_Iter { next: g_%s_ix_%s[(i32)value & %d], value: value };\n"
+         "}\n\n", t, c, t, c, v, t, c, t, c, mask);
 }
 
 static void emit_delete(Model *model, const Entity *e) {
