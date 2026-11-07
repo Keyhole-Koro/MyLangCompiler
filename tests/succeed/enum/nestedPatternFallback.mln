@@ -1,0 +1,79 @@
+// A narrow pattern that does not match goes to the match's `_` arm, and a `_`
+// binding names nothing, so `_` keeps meaning the unit value in the arm.
+import { Result } from "@std/core/result.mln";
+import { Option } from "@std/core/option.mln";
+
+enum Fault {
+    Missing,
+    Bad(i32),
+    Worse(i32),
+}
+
+enum Reason {
+    Lost,
+    Broken(Fault),
+}
+
+i32 classify(Result<i32, Fault> r) {
+    return case r of {
+        Err(Fault::Bad(n)) -> n;
+        Ok(v) -> v + 100;
+        _ -> 7;
+    };
+}
+
+// Only the `_` arm is left for every other variant, of both enums.
+bool is_bad(Result<i32, Fault> r) {
+    return case r of { Err(Fault::Bad(_)) -> true; _ -> false; };
+}
+
+// Two levels down, and the arm falls through both.
+i32 deep(Result<i32, Reason> r) {
+    return case r of {
+        Err(Reason::Broken(Fault::Bad(n))) -> n;
+        _ -> 9;
+    };
+}
+
+// An arm that does nothing is a fallback too.
+i32 counted(Result<i32, Fault> r) {
+    i32 total = 1;
+    case r of {
+        Err(Fault::Bad(n)) -> ({ total = total + n; });
+        _ -> _;
+    };
+    return total;
+}
+
+Result<_, Fault> forget(Result<Option<i32>, Fault> r) {
+    Fault fault = case r of {
+        Ok(_) -> ({ return Ok(_); });
+        Err(value) -> value;
+    };
+    return Err(fault);
+}
+
+i32 main() {
+    Result<i32, Fault> bad = Err(Fault::Bad(3));
+    Result<i32, Fault> worse = Err(Fault::Worse(4));
+    Result<i32, Fault> missing = Err(Fault::Missing);
+    Result<i32, Fault> good = Ok(5);
+    i32 total = 0;
+    if (classify(bad) == 3) { total = total + 1; }
+    if (classify(worse) == 7) { total = total + 2; }
+    if (classify(missing) == 7) { total = total + 4; }
+    if (classify(good) == 105) { total = total + 8; }
+    if (is_bad(bad) && !is_bad(worse) && !is_bad(good)) { total = total + 16; }
+
+    Result<i32, Reason> deep_bad = Err(Reason::Broken(Fault::Bad(6)));
+    Result<i32, Reason> deep_worse = Err(Reason::Broken(Fault::Worse(6)));
+    Result<i32, Reason> lost = Err(Reason::Lost);
+    if (deep(deep_bad) == 6 && deep(deep_worse) == 9 && deep(lost) == 9) { total = total + 32; }
+    if (counted(bad) == 4 && counted(worse) == 1) { total = total + 64; }
+
+    Option<i32> some = Some(1);
+    Result<Option<i32>, Fault> kept = Ok(some);
+    Result<Option<i32>, Fault> failed = Err(Fault::Missing);
+    if (forget(kept).is_ok() && forget(failed).is_err()) { total = total + 128; }
+    return total;
+}

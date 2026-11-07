@@ -123,6 +123,9 @@ static void walk_case_items(SemanticContext *ctx, ASTNode *node, int allow_noop)
                 semantic_error_at(ctx, semantic_location_from_ast(node),
                                   "a `-> _` case arm is only valid when the case is used as a statement");
             }
+        } else if (allow_noop && expr && expr->type == AST_CASE) {
+            /* An arm of a statement is a statement, as a nested pattern's is. */
+            semantic_walk_case(ctx, expr, 1);
         } else {
             semantic_walk_expr(ctx, expr, EXPRCTX_READ);
         }

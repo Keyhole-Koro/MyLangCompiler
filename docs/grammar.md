@@ -426,6 +426,9 @@ Expressions are listed in order of decreasing precedence.
   `impl From<E> for F` when the function returns `Result<_, F>`. A `?` is
   postfix only where it ends the expression (before `;`, `,`, `)`, `]`, `}`);
   elsewhere it is the ternary.
+- **Division**: `/` truncates toward zero and `%` takes the sign of the
+  dividend, so `-7 / 2` is `-3` and `-7 % 2` is `-1`. Dividing by zero is not an
+  error: `x / 0` is `0` and `x % 0` is `x`.
 - **Associated function call**: `Type::name(args)` calls an associated
   function of a trait impl for `Type`, e.g. `FsError::from(e)`.
 - **Equality through Eq**: `a == b` and `a != b` call `Eq::eq` when `a`'s type

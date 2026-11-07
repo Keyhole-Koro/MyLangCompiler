@@ -1,0 +1,77 @@
+// Division truncates toward zero and a remainder takes the dividend's sign, the
+// same at run time as in a constant.
+const i32 FOLDED_QUOTIENT = (0 - 7) / 2;
+const i32 FOLDED_REMAINDER = (0 - 7) % 2;
+
+i32 g_failed = 0;
+
+void expect(i32 got, i32 want) {
+    if (got != want) { g_failed = g_failed + 1; }
+}
+
+i32 main() {
+    i32 seven = 7;
+    i32 two = 2;
+    i32 minus_seven = 0 - seven;
+    i32 minus_two = 0 - two;
+    expect(seven / two, 3);
+    expect(minus_seven / two, 0 - 3);
+    expect(seven / minus_two, 0 - 3);
+    expect(minus_seven / minus_two, 3);
+    expect(seven % two, 1);
+    expect(minus_seven % two, 0 - 1);
+    expect(seven % minus_two, 1);
+    expect(minus_seven % minus_two, 0 - 1);
+
+    // A literal divisor takes a shorter path.
+    expect(minus_seven / 2, 0 - 3);
+    expect(minus_seven % 2, 0 - 1);
+    expect(seven / 2, 3);
+    expect(seven % 2, 1);
+    expect(FOLDED_QUOTIENT, minus_seven / two);
+    expect(FOLDED_REMAINDER, minus_seven % two);
+
+    // Two equal numbers, and numbers that go exactly.
+    expect(seven / seven, 1);
+    expect(minus_seven / minus_seven, 1);
+    expect(minus_seven / seven, 0 - 1);
+    expect(minus_seven % seven, 0);
+    expect(two / seven, 0);
+    expect(two % seven, 2);
+    expect((0 - two) % seven, 0 - 2);
+
+    // Nothing to divide by: the quotient is 0 and the dividend remains.
+    i32 zero = 0;
+    expect(seven / zero, 0);
+    expect(seven % zero, 7);
+    expect(minus_seven / zero, 0);
+    expect(minus_seven % zero, 0 - 7);
+    expect(zero / seven, 0);
+    expect(zero % seven, 0);
+
+    // The ends of the range.
+    i32 max = 2147483647;
+    i32 min = 0 - max - 1;
+    i32 one = 1;
+    i32 minus_one = 0 - one;
+    expect(max / max, 1);
+    expect(max % 10, 7);
+    expect(max / minus_one, 0 - max);
+    expect(min / one, min);
+    expect(min / 10, 0 - 214748364);
+    expect(min % 10, 0 - 8);
+    expect(min / minus_one, min);
+    expect(min % minus_one, 0);
+    expect(min / max, 0 - 1);
+    expect(min % max, 0 - 1);
+    expect(max / min, 0);
+    expect(max % min, max);
+    expect(min / min, 1);
+    expect(min % min, 0);
+
+    // The stack is left as it was, inside a larger expression.
+    expect(1 + minus_seven / two + (minus_seven % two) * 10, 0 - 12);
+
+    if (g_failed != 0) { return g_failed; }
+    return 77;
+}

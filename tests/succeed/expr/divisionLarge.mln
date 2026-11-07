@@ -1,4 +1,4 @@
-// Division takes the same few steps at any size, and matches the old results.
+// Division takes the same few steps at any size.
 i32 check(i32 a, i32 b, i32 q, i32 r) {
     if (a / b != q) { return 1; }
     if (a % b != r) { return 1; }
@@ -16,7 +16,7 @@ i32 main() {
     bad = bad + check(7, 1000, 0, 7);
     bad = bad + check(0, 5, 0, 0);
     bad = bad + check(1, 1, 1, 0);
-    bad = bad + check(-7, 2, 0, -7);
+    bad = bad + check(-7, 2, -3, -1);
     i32 i = 1;
     while (i < 3000) {
         i32 q = 1000003 / i;

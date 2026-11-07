@@ -373,8 +373,10 @@ static void substitute_identifier(ASTNode **slot, void *user_data) {
     ASTNode *node = *slot;
     if (!node) return;
     Binding *binding = user_data;
+    /* `_` binds nothing: in the arm it is still the unit value. */
     if (node->type == AST_IDENTIFIER && node->identifier.name &&
-        strcmp(node->identifier.name, binding->name) == 0) {
+        strcmp(node->identifier.name, binding->name) == 0 &&
+        strcmp(binding->name, "_") != 0) {
         ASTNode *copy = ast_clone(binding->replacement);
         copy->line = node->line;
         copy->col = node->col;
@@ -873,6 +875,16 @@ static void merge_nested_patterns(VariantTable *table, ASTNode *node) {
         inner_cases = realloc(inner_cases, sizeof(ASTNode *) * (size_t)(out_count + 1));
         out[out_count] = (CaseItem){key, inner, 0};
         inner_cases[out_count++] = inner;
+    }
+
+    /* A narrow pattern that does not match goes to the match's own `_` arm. */
+    for (int i = 0; i < out_count; i++) {
+        ASTNode *inner = inner_cases[i];
+        if (!inner || inner->case_expr.default_expr || inner->case_expr.default_is_noop)
+            continue;
+        inner->case_expr.default_is_noop = node->case_expr.default_is_noop;
+        if (node->case_expr.default_expr)
+            inner->case_expr.default_expr = ast_clone(node->case_expr.default_expr);
     }
 
     free(original);
