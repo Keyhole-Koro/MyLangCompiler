@@ -93,10 +93,6 @@ static int is_handler_param(const char *name) {
     return name && name[0] == 'o' && name[1] == 'n' && isupper((unsigned char)name[2]);
 }
 
-/* The base type name of a local or parameter named `name` in the function
- * being lowered, or NULL. Parameters first, then any declaration inside the
- * body -- MyLang has no shadowing across DOM-bearing statements worth
- * modelling here. */
 static const char *base_type_name(ASTNode *type) {
     if (!type || type->type != AST_TYPE || !type->type_node.base_type) return NULL;
     ASTNode *base = type->type_node.base_type;
@@ -105,32 +101,26 @@ static const char *base_type_name(ASTNode *type) {
     return NULL;
 }
 
-static const char *find_decl_type_in(ASTNode *node, const char *name) {
-    if (!node) return NULL;
-    if (node->type == AST_VAR_DECL && node->var_decl.name && strcmp(node->var_decl.name, name) == 0) {
-        return base_type_name(node->var_decl.var_type);
+typedef struct {
+    const char *name;
+    const char *type_name;
+} DeclSearch;
+
+static void find_decl(ASTNode **slot, void *data) {
+    ASTNode *node = slot ? *slot : NULL;
+    DeclSearch *search = data;
+    if (!node || search->type_name) return;
+    if (node->type == AST_VAR_DECL && node->var_decl.name && strcmp(node->var_decl.name, search->name) == 0) {
+        search->type_name = base_type_name(node->var_decl.var_type);
+        return;
     }
-    const char *found = NULL;
-    switch (node->type) {
-    case AST_BLOCK:
-        for (int i = 0; i < node->block.count && !found; i++) found = find_decl_type_in(node->block.stmts[i], name);
-        break;
-    case AST_IF:
-        found = find_decl_type_in(node->if_stmt.then_stmt, name);
-        if (!found) found = find_decl_type_in(node->if_stmt.else_stmt, name);
-        break;
-    case AST_WHILE: found = find_decl_type_in(node->while_stmt.body, name); break;
-    case AST_DO_WHILE: found = find_decl_type_in(node->do_while_stmt.body, name); break;
-    case AST_FOR:
-        found = find_decl_type_in(node->for_stmt.init, name);
-        if (!found) found = find_decl_type_in(node->for_stmt.body, name);
-        break;
-    case AST_STMT_EXPR: found = find_decl_type_in(node->stmt_expr.block, name); break;
-    default: break;
-    }
-    return found;
+    ast_visit_children(node, find_decl, data);
 }
 
+/* The base type name of a local or parameter named `name` in the function
+ * being lowered, or NULL. Parameters first, then the first declaration inside
+ * the body, `case` arms and statement expressions included -- MyLang has no
+ * shadowing across DOM-bearing statements worth modelling here. */
 static const char *local_type_name(ParserContext *context, const char *name) {
     ASTNode *fn = context->lowering.dom_current_fn;
     if (!fn) return NULL;
@@ -140,7 +130,9 @@ static const char *local_type_name(ParserContext *context, const char *name) {
             return base_type_name(p->param.type);
         }
     }
-    return find_decl_type_in(fn->fundef.body, name);
+    DeclSearch search = { name, NULL };
+    find_decl(&fn->fundef.body, &search);
+    return search.type_name;
 }
 
 /* The function an element tag names, found as dom_signature_lookup finds it.
@@ -887,6 +879,36 @@ static void lower_nested_blocks(ParserContext *context, ASTNode *stmt) {
     }
 }
 
+static void lower_case_arm(ParserContext *context, ASTNode *arm) {
+    if (arm && arm->type == AST_STMT_EXPR) lower_dom_block(context, arm->stmt_expr.block);
+}
+
+/* A `case` arm runs only when it is chosen, so markup in one cannot be hoisted
+ * ahead of the whole statement. An arm written as a statement expression is a
+ * block of its own and is lowered in place: in
+ * `Err(e) -> ({ return <Alert text={e.describe()} />; })` the element is built
+ * only when that arm runs. Markup that is itself an arm's value is left for
+ * ensure_no_dom_elements to reject. Blocks, statement expressions and function
+ * literals are lowered on their own, so the search stops at them. */
+static void lower_case_arm_blocks(ASTNode **slot, void *data) {
+    ParserContext *context = data;
+    ASTNode *node = *slot;
+    if (!node) return;
+    switch (node->type) {
+    case AST_BLOCK:
+    case AST_STMT_EXPR:
+    case AST_FUN_LITERAL:
+        return;
+    case AST_CASE:
+        for (int i = 0; i < node->case_expr.case_count; i++) lower_case_arm(context, node->case_expr.cases[i].expr);
+        lower_case_arm(context, node->case_expr.default_expr);
+        break;
+    default:
+        break;
+    }
+    ast_visit_children(node, lower_case_arm_blocks, data);
+}
+
 void lower_dom_block(ParserContext *context, ASTNode *block) {
     if (!block || block->type != AST_BLOCK) return;
 
@@ -906,6 +928,7 @@ void lower_dom_block(ParserContext *context, ASTNode *block) {
         free(emit.stmts);
 
         lower_nested_blocks(context, stmt);
+        lower_case_arm_blocks(&stmt, context);
 
         stmts = realloc(stmts, sizeof(ASTNode*) * (count + 1));
         stmts[count++] = stmt;

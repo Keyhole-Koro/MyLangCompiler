@@ -1,0 +1,27 @@
+// A handler property in a `case` arm finds the local it names inside that
+// arm's block, so `c.click` is passed as the method itself.
+struct Counter { i32 clicks; };
+
+fn(i32 owner, i32 id, i32 arg) -> void g_click = 0;
+
+void append_child(i32 parent, i32 child) { }
+i32 Button(fn(i32 owner, i32 id, i32 arg) -> void onClick) { g_click = onClick; return 9; }
+
+void (borrow Counter c) click(i32 id) { c.clicks = c.clicks + id; }
+
+i32 clicked(i32 k) {
+    case k of {
+        1 -> ({
+            Counter c = Counter { clicks: 40 };
+            i32 id = <Button onClick={c.click} />;
+            g_click((i32)&c, 2, 0);
+            return c.clicks + id;
+        });
+        _ -> _;
+    };
+    return 0;
+}
+
+i32 main() {
+    return clicked(1) + clicked(5);   // 42 + 9
+}

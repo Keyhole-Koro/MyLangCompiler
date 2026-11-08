@@ -1,0 +1,40 @@
+// Markup in a `case` arm written as a statement expression is lowered inside
+// that arm's block, so an element is built only when its arm runs.
+i32 g_next = 1;
+i32 g_made = 0;
+
+void append_child(i32 parent, i32 child) { }
+i32 A(i32 v = 1) { g_made = g_made * 10 + v; g_next = g_next + 1; return g_next; }
+i32 B(i32 v = 2) { g_made = g_made * 10 + v; g_next = g_next + 1; return g_next; }
+
+i32 returned(i32 k) {
+    case k of {
+        1 -> ({ return <A />; });
+        2 -> ({ return <B v={3} />; });
+        _ -> _;
+    };
+    return 0;
+}
+
+i32 yielded(i32 k) {
+    i32 id = case k of {
+        1 -> ({ yield (<A v={4} />); });
+        2 -> case k + 1 of {
+            3 -> ({ yield (<B v={5}><A v={6} /></B>); });
+            _ -> 0;
+        };
+        _ -> 0;
+    };
+    return id;
+}
+
+i32 main() {
+    i32 a = returned(1);    // A(1): id 2
+    i32 b = returned(2);    // B(3): id 3
+    i32 none = returned(7); // nothing
+    i32 c = yielded(1);     // A(4): id 4
+    i32 d = yielded(2);     // B(5) holding A(6): ids 5 and 6
+    i32 e = yielded(9);     // nothing
+    // 13456 * 10000 + 2345 = 134562345
+    return g_made * 10000 + a * 1000 + b * 100 + c * 10 + d + none + e;
+}

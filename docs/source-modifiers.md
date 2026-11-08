@@ -121,6 +121,13 @@ which is replaced by the root node's id. A generated local has the type the
 called function returns: `i32` above, or a nominal id type (imported by the
 source) when the package's elements return one.
 
+A `case` arm runs only when it is chosen, so an element in one is lowered inside
+the arm's own block: write the arm as a statement expression,
+`Ok(v) -> ({ return <Label text={v} />; })` or `1 -> ({ yield (<A />); })`, and
+the element is built only when that arm runs. An element that is itself an
+arm's value would be hoisted ahead of the whole `case` and built whichever arm
+runs, so it is an error.
+
 Because tags are function names, adding an element means adding a function to
 the imported package, and an event handler is simply a parameter (`onClick`
 above). A tag with no matching function, a property with no matching parameter,
