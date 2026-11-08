@@ -189,8 +189,10 @@ typedef struct {
 /* The first REG_ARG_COUNT argument words of a call travel in arg_regs (of a
  * variadic call, only fixed arguments do, and r4 holds the rest count); the
  * others go in a stack area the caller reserves at sp, one SLOT_SIZE word
- * each in argument order, which the callee finds at bp + 8 onwards. */
+ * each in argument order. The callee finds them from bp + STACK_ARG_OFFSET
+ * on, past the lr and bp its prologue pushed. */
 #define REG_ARG_COUNT 3
+#define STACK_ARG_OFFSET (2 * SLOT_SIZE)
 extern const char *arg_regs[REG_ARG_COUNT];
 
 static inline ASTNode *cg_as_block(ASTNode *node) {
@@ -246,6 +248,7 @@ const char *intern_word_constant(CompilerContext *cc, long value);
 void emit_load_const(CompilerContext *cc, StringBuilder *sb, const char *target_reg, long value);
 
 int param_offset(int n);
+int stack_param_offset(int n);
 int local_offset(int param_count, int n);
 int param_index(const char *name, char **params, int param_count);
 int local_index_last(const char *name, char **locals, int local_count);

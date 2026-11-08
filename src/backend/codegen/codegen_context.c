@@ -124,11 +124,13 @@ int cg_current_rest_info(CompilerContext *cc, const char *name, int *out_rest_in
     return 1;
 }
 
+/* The rest arguments are the stack words that follow the fixed arguments
+ * passed on the stack, if there are any. */
 int cg_rest_stack_base(CompilerContext *cc, const char *name, int *out_rest_stack_base) {
     int fixed_count = 0;
     if (!cg_current_rest_info(cc, name, NULL, &fixed_count)) return 0;
     if (out_rest_stack_base) {
-        *out_rest_stack_base = 8 + ((fixed_count > REG_ARG_COUNT) ? ((fixed_count - REG_ARG_COUNT) * SLOT_SIZE) : 0);
+        *out_rest_stack_base = stack_param_offset(fixed_count > REG_ARG_COUNT ? fixed_count : REG_ARG_COUNT);
     }
     return 1;
 }

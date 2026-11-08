@@ -56,9 +56,11 @@ static void gen_mock_call_original_sret(CompilerContext *cc, ASTNode *node,
     // target's register arguments. Preserve them while resolving its dynamic
     // address; stack-passed arguments stay below these temporary saves.
     note_import_func(cc, "mock_current_target");
-    sb_append(sb, "  push r5\n  push r6\n  push r7\n");
+    for (int i = 0; i < REG_ARG_COUNT; i++)
+        sb_append(sb, "  push %s\n", arg_regs[i]);
     sb_append(sb, "  call mock_current_target\n  mov r2, r1\n");
-    sb_append(sb, "  pop r7\n  pop r6\n  pop r5\n");
+    for (int i = REG_ARG_COUNT - 1; i >= 0; i--)
+        sb_append(sb, "  pop %s\n", arg_regs[i]);
     int ret = next_label(cc);
     int missing = next_label(cc);
     const char *reason = intern_string_literal(cc, "mock.call_original.outside_fake");

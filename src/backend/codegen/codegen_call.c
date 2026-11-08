@@ -30,14 +30,13 @@ static void gen_builtin_rest_get(CompilerContext *cc, ASTNode *node, StringBuild
         exit(1);
     }
 
-    int fixed_count = 0;
-    if (!cg_current_rest_info(cc, node->call.args[0]->identifier.name, NULL, &fixed_count)) {
+    int rest_stack_base = 0;
+    if (!cg_rest_stack_base(cc, node->call.args[0]->identifier.name, &rest_stack_base)) {
         fprintf(stderr, "Codegen error at %d:%d: __rest_get requires a variadic function rest parameter\n",
                 node->line, node->col);
         exit(1);
     }
 
-    int rest_stack_base = 8 + ((fixed_count > REG_ARG_COUNT) ? ((fixed_count - REG_ARG_COUNT) * SLOT_SIZE) : 0);
     gen_expr(cc, node->call.args[1], sb, "r1", params, param_count, locals, local_count);
     emit_scale_reg_const(cc, sb, "r1", SLOT_SIZE);
     sb_append(sb, "  mov r3, bp\n");
