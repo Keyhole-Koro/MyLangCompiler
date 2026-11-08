@@ -75,6 +75,7 @@ selfReadingAssign|2|succeed/struct/selfReadingAssign.mln
 selfReadingAssignPointer|1000|succeed/struct/selfReadingAssignPointer.unsafe.mln
 payloadEnumFieldLiteral|57|succeed/struct/payloadEnumFieldLiteral.unsafe.mln
 arrayInit|106|succeed/array/arrayInit.mln
+arrayInitFromValues|648850|succeed/array/initFromValues.mln
 multiArray|6|succeed/array/multiArray.mln
 arraySizeof|24|succeed/array/arraySizeof.mln
 arrayLength|63766|succeed/array/arrayLength.unsafe.mln

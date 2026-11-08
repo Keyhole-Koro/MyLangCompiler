@@ -1,0 +1,30 @@
+// Regression: a local array initialised from values that are not literals.
+// r3 holds the array's address while its elements are stored, and loading
+// a variable or making a call used r3 as scratch, so every element after it
+// was stored next to that variable instead: in `digits` the stores ran past
+// the frame into the caller's, and the program trapped.
+
+i32 twice(i32 x) { return x + x; }
+
+i32 digits(i32 p1, i32 p2, i32 p3, i32 p4, i32 p5, i32 p6) {
+    i32 a[6] = {p1, p2, p3, p4, p5, p6};
+    return a[0] + a[1] * 10 + a[2] * 100 + a[3] * 1000 + a[4] * 10000 + a[5] * 100000;
+}
+
+// Calls among the elements, and a zero after the last one.
+i32 calls(i32 p) {
+    i32 b[5] = {twice(p), p, twice(twice(p)), -7};
+    return b[0] + b[1] * 10 + b[2] * 100 + b[3] * 1000 + b[4] * 10000;
+}
+
+// Byte and halfword stores.
+i32 narrow(i32 p) {
+    u8 c[3] = {p, twice(p), 'a'};
+    u16 h[2] = {twice(300), p};
+    return c[0] + c[1] + c[2] + h[0] + h[1];
+}
+
+i32 main() {
+    // 654321 + (4 + 20 + 800 - 7000) + (2 + 4 + 97 + 600 + 2)
+    return digits(1, 2, 3, 4, 5, 6) + calls(2) + narrow(2);
+}

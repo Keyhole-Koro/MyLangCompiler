@@ -77,6 +77,23 @@ static void gen_mock_call_original_sret(CompilerContext *cc, ASTNode *node,
     sb_append(sb, "mock_sret_original_done_%d:\n", missing);
 }
 
+/* Whether gen_expr evaluates `expr` into r1 without touching r3: a literal
+ * is one movi into r1 (a large number: and a load from its constant word),
+ * and negating one uses r2 besides. */
+static int leaves_r3_alone(ASTNode *expr) {
+    switch (expr->type) {
+    case AST_NUMBER:
+    case AST_CHAR_LITERAL:
+    case AST_STRING_LITERAL:
+    case AST_SIZEOF:
+        return 1;
+    case AST_UNARY:
+        return expr->unary.op == SUB && leaves_r3_alone(expr->unary.operand);
+    default:
+        return 0;
+    }
+}
+
 static void gen_array_init(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
                            char **params, int param_count,
                            char **locals, int local_count) {
@@ -116,7 +133,13 @@ static void gen_array_init(CompilerContext *cc, ASTNode *node, StringBuilder *sb
         int total = total_elems > 0 ? total_elems : count;
         int limit = count < total ? count : total;
         for (int i = 0; i < limit; i++) {
-            gen_expr(cc, node->var_decl.init->init_list.elements[i], sb, "r1", params, param_count, locals, local_count);
+            // r3 holds the array's address, and gen_expr uses r3 as scratch
+            // for anything but a literal (a variable's address, a call).
+            ASTNode *element = node->var_decl.init->init_list.elements[i];
+            int keeps_r3 = leaves_r3_alone(element);
+            if (!keeps_r3) sb_append(sb, "  push r3\n");
+            gen_expr(cc, element, sb, "r1", params, param_count, locals, local_count);
+            if (!keeps_r3) sb_append(sb, "  pop r3\n");
             int offset = elem_size * i;
             if (offset == 0) {
                 emit_store_width_to_addr(sb, "r3", "r1", elem_size);
