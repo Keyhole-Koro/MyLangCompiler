@@ -441,6 +441,10 @@ Expressions are listed in order of decreasing precedence.
   - A statement-expression branch may calculate its value with `yield`, e.g.
     `Ok(v) -> ({ i32 adjusted = v + 1; yield adjusted; });`.
 - **Function Literal (Lambda)**: `( param_list ) block` or `( param_list ) => block`
+  - Only as the initializer of a declaration: `i32 twice = (i32 x) { return
+    x + x; };` declares a function `twice` that returns the declared type, and
+    the name is called like any function in its scope. The literal is not a
+    value, so it cannot be an argument, a `return` value or an operand.
 - **Statement Expression**: `( block )`
 - **`sizeof`**: `sizeof ( expr )` or `sizeof ( type )`. With a type -- a
   primitive, a struct, or a generic parameter, which is a concrete type by

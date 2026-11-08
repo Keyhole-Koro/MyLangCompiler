@@ -68,88 +68,51 @@ void lower_fun_literals_block(ParserContext *context, ASTNode *block,
     lower_alias_free_all(local_aliases, local_count);
 }
 
+typedef struct {
+    ParserContext *context;
+    const char *func_prefix;
+    FunAlias **aliases;
+    int *alias_count;
+} LowerScope;
+
+static void lower_child(ASTNode **slot, void *data) {
+    LowerScope *scope = data;
+    lower_fun_literals_node(scope->context, *slot, scope->func_prefix, scope->aliases,
+                            scope->alias_count);
+}
+
+/* A function literal is lowered to a function only where a declaration in a
+ * block initializes it, which names that function: lower_fun_literals_block
+ * takes those. Anywhere else it would be a value, and it is not one. */
+static void reject_fun_literal(ParserContext *context, const ASTNode *literal) {
+    fprintf(stderr, "%s:%d:%d: error: a function literal is only allowed as the initializer "
+            "of a declaration, such as `i32 twice = (i32 x) { return x + x; };`\n",
+            context->module.filename ? context->module.filename : "<input>",
+            literal->line, literal->col);
+    exit(1);
+}
+
+static void rename_alias(FunAlias *aliases, int alias_count, char **name) {
+    const char *rep = lower_alias_lookup(aliases, alias_count, *name);
+    if (!rep) return;
+    free(*name);
+    *name = strdup(rep);
+}
+
 static void lower_fun_literals_node(ParserContext *context, ASTNode *node,
                                     const char *func_prefix, FunAlias **aliases,
                                     int *alias_count) {
     if (!node) return;
     switch (node->type) {
-    case AST_IDENTIFIER: {
-        const char *rep = lower_alias_lookup(*aliases, *alias_count, node->identifier.name);
-        if (rep) {
-            free(node->identifier.name);
-            node->identifier.name = strdup(rep);
-        }
-        break;
-    }
-    case AST_CALL: {
-        const char *rep = lower_alias_lookup(*aliases, *alias_count, node->call.name);
-        if (rep) {
-            free(node->call.name);
-            node->call.name = strdup(rep);
-        }
-        for (int i = 0; i < node->call.arg_count; i++)
-            lower_fun_literals_node(context, node->call.args[i], func_prefix, aliases, alias_count);
-        break;
-    }
-    case AST_ASSIGN:
-        lower_fun_literals_node(context, node->assign.left, func_prefix, aliases, alias_count);
-        lower_fun_literals_node(context, node->assign.right, func_prefix, aliases, alias_count);
-        break;
-    case AST_BINARY:
-        lower_fun_literals_node(context, node->binary.left, func_prefix, aliases, alias_count);
-        lower_fun_literals_node(context, node->binary.right, func_prefix, aliases, alias_count);
-        break;
-    case AST_UNARY:
-        lower_fun_literals_node(context, node->unary.operand, func_prefix, aliases, alias_count);
-        break;
-    case AST_TERNARY:
-        lower_fun_literals_node(context, node->ternary.cond, func_prefix, aliases, alias_count);
-        lower_fun_literals_node(context, node->ternary.then_expr, func_prefix, aliases, alias_count);
-        lower_fun_literals_node(context, node->ternary.else_expr, func_prefix, aliases, alias_count);
-        break;
-    case AST_IF:
-        lower_fun_literals_node(context, node->if_stmt.cond, func_prefix, aliases, alias_count);
-        lower_fun_literals_node(context, node->if_stmt.then_stmt, func_prefix, aliases, alias_count);
-        lower_fun_literals_node(context, node->if_stmt.else_stmt, func_prefix, aliases, alias_count);
-        break;
-    case AST_WHILE:
-        lower_fun_literals_node(context, node->while_stmt.cond, func_prefix, aliases, alias_count);
-        lower_fun_literals_node(context, node->while_stmt.body, func_prefix, aliases, alias_count);
-        break;
-    case AST_DO_WHILE:
-        lower_fun_literals_node(context, node->do_while_stmt.cond, func_prefix, aliases, alias_count);
-        lower_fun_literals_node(context, node->do_while_stmt.body, func_prefix, aliases, alias_count);
-        break;
-    case AST_FOR:
-        lower_fun_literals_node(context, node->for_stmt.init, func_prefix, aliases, alias_count);
-        lower_fun_literals_node(context, node->for_stmt.cond, func_prefix, aliases, alias_count);
-        lower_fun_literals_node(context, node->for_stmt.inc, func_prefix, aliases, alias_count);
-        lower_fun_literals_node(context, node->for_stmt.body, func_prefix, aliases, alias_count);
-        break;
-    case AST_RETURN:
-        lower_fun_literals_node(context, node->ret.expr, func_prefix, aliases, alias_count);
-        break;
-    case AST_DEFER:
-        lower_fun_literals_node(context, node->defer_stmt.body, func_prefix, aliases, alias_count);
-        break;
-    case AST_YIELD:
-        lower_fun_literals_node(context, node->yield_stmt.expr, func_prefix, aliases, alias_count);
-        break;
-    case AST_EXPR_STMT:
-        lower_fun_literals_node(context, node->expr_stmt.expr, func_prefix, aliases, alias_count);
-        break;
-    case AST_MEMBER_ACCESS:
-        lower_fun_literals_node(context, node->member_access.lhs, func_prefix, aliases, alias_count);
-        break;
-    case AST_ARROW_ACCESS:
-        lower_fun_literals_node(context, node->arrow_access.lhs, func_prefix, aliases, alias_count);
-        break;
-    case AST_CAST:
-        lower_fun_literals_node(context, node->cast.expr, func_prefix, aliases, alias_count);
+    case AST_IDENTIFIER:
+        rename_alias(*aliases, *alias_count, &node->identifier.name);
+        return;
+    case AST_CALL:
+        rename_alias(*aliases, *alias_count, &node->call.name);
         break;
     case AST_BLOCK:
         lower_fun_literals_block(context, node, func_prefix, *aliases, *alias_count);
-        break;
+        return;
     case AST_FUNDEF: {
         int copy_count = 0;
         FunAlias *copy = lower_alias_copy(*aliases, *alias_count, &copy_count);
@@ -158,28 +121,35 @@ static void lower_fun_literals_node(ParserContext *context, ASTNode *node,
         }
         lower_fun_literals_block(context, node->fundef.body, node->fundef.name, copy, copy_count);
         lower_alias_free_all(copy, copy_count);
-        break;
+        return;
     }
-    case AST_CASE:
-        lower_fun_literals_node(context, node->case_expr.target, func_prefix, aliases, alias_count);
-        for (int i = 0; i < node->case_expr.case_count; i++) {
-            lower_fun_literals_node(context, node->case_expr.cases[i].key, func_prefix, aliases, alias_count);
-            lower_fun_literals_node(context, node->case_expr.cases[i].expr, func_prefix, aliases, alias_count);
-        }
-        lower_fun_literals_node(context, node->case_expr.default_expr, func_prefix, aliases, alias_count);
-        break;
-    case AST_STMT_EXPR:
-        lower_fun_literals_node(context, node->stmt_expr.block, func_prefix, aliases, alias_count);
-        break;
-    case AST_ENUM:
-        for (int i = 0; i < node->enum_stmt.member_count; i++) {
-            lower_fun_literals_node(context, node->enum_stmt.members[i], func_prefix, aliases, alias_count);
-        }
-        break;
-    case AST_ENUM_MEMBER:
-        lower_fun_literals_node(context, node->enum_member.value, func_prefix, aliases, alias_count);
-        break;
+    case AST_FOR: {
+        /* A variable the init declares hides an alias of its name for the
+         * rest of the loop. */
+        int copy_count = 0;
+        FunAlias *copy = lower_alias_copy(*aliases, *alias_count, &copy_count);
+        ASTNode *init = node->for_stmt.init;
+        lower_fun_literals_node(context, init, func_prefix, &copy, &copy_count);
+        if (init && init->type == AST_VAR_DECL)
+            lower_alias_push(&copy, &copy_count, init->var_decl.name, NULL);
+        lower_fun_literals_node(context, node->for_stmt.cond, func_prefix, &copy, &copy_count);
+        lower_fun_literals_node(context, node->for_stmt.inc, func_prefix, &copy, &copy_count);
+        lower_fun_literals_node(context, node->for_stmt.body, func_prefix, &copy, &copy_count);
+        lower_alias_free_all(copy, copy_count);
+        return;
+    }
+    case AST_FUN_LITERAL:
+        reject_fun_literal(context, node);
+        return;
+    /* A type names no value. */
+    case AST_TYPE:
+    case AST_TYPE_ARRAY:
+    case AST_TYPE_GENERIC:
+    case AST_TYPE_FUNCTION:
+        return;
     default:
         break;
     }
+    LowerScope scope = { context, func_prefix, aliases, alias_count };
+    ast_visit_children(node, lower_child, &scope);
 }

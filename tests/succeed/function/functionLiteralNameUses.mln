@@ -1,0 +1,30 @@
+// The name a function literal declares can be called wherever a function's
+// can. In a `for` init, an initializer list, a struct literal, under `&` or in
+// `sizeof` it used to keep its own name instead of the lowered function's, and
+// the call was reported as "undefined function 'inc'". A variable of the same
+// name declared by a `for` init hides it for the rest of that loop.
+
+struct Point {
+    i32 x;
+    i32 y;
+};
+
+i32 read(borrow i32 value) {
+    return value;
+}
+
+i32 main() {
+    i32 inc = (i32 x) => {
+        return x + 1;
+    };
+    i32 total = 0;
+    for (i32 i = inc(0); i < 3; i = i + 1) total = total + i;     // 3
+    i32 pair[2] = {inc(1), inc(2)};                                // 2, 3
+    Point p = Point{x: inc(3), y: inc(4)};                         // 4, 5
+    i32 cells[3] = {0, 70, 0};
+    i32 seen = read(&cells[inc(0)]);                               // 70
+    i32 hidden = 0;
+    for (i32 inc = 0; inc < 3; inc = inc + 1) hidden = hidden + inc; // 3
+    return total + pair[0] * 10 + pair[1] * 100 + p.x * 1000 + p.y * 10000
+        + seen * 100000 + hidden * 10000000 + sizeof(inc(5));     // 37054327
+}

@@ -1,0 +1,14 @@
+// A function literal is lowered to a function only as a declaration's
+// initializer, which names it. Passed as an argument it would be a value, so it
+// is rejected: "a function literal is only allowed as the initializer of a
+// declaration". It used to stop the compiler with an internal error instead.
+
+i32 apply(i32 value) {
+    return value;
+}
+
+i32 main() {
+    return apply((i32 x) => {
+        return x + 1;
+    });
+}

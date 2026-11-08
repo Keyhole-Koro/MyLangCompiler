@@ -318,6 +318,7 @@ if ((*cur)->kind == NUMBER) {
         return parse_dom_element(context, cur);
     }
     if ((*cur)->kind == L_PARENTHESES && looks_like_fun_literal(context, *cur)) {
+        Token *open = *cur;
         *cur = (*cur)->next;
         ASTNode **params = NULL;
         int param_count = 0;
@@ -330,7 +331,9 @@ if ((*cur)->kind == NUMBER) {
             *cur = (*cur)->next;
         }
         ASTNode *body = parse_block(context, cur);
-        return new_fun_literal(params, param_count, body, is_variadic);
+        ASTNode *literal = new_fun_literal(params, param_count, body, is_variadic);
+        set_node_loc_from_tokens(literal, open, NULL);
+        return literal;
     }
     if ((*cur)->kind == L_PARENTHESES) {
         *cur = (*cur)->next;

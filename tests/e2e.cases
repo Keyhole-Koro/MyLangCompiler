@@ -126,6 +126,7 @@ functionLiteral|10|succeed/function/functionLiteral.mln
 arrowFunctionLiteral|13|succeed/function/arrowFunctionLiteral.mln
 localFunctionLiteral|10|succeed/function/localFunctionLiteral.mln
 nestedFunctionLiteral|6|succeed/function/nestedFunctionLiteral.mln
+functionLiteralNameUses|37054327|succeed/function/functionLiteralNameUses.mln
 globalInit|42|succeed/global/globalInit.mln
 testGlobalScalar|105|succeed/global/testGlobalScalar.mln
 globalUninit|83|succeed/global/globalUninit.mln
