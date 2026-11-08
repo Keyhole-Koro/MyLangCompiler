@@ -91,7 +91,6 @@ void rewrite_node(ParserContext *context, ASTNode *node, char **scope, int scope
     case AST_YIELD:
         rewrite_node(context, node->yield_stmt.expr, scope, scope_count);
         break;
-        break;
     case AST_TERNARY:
         rewrite_node(context, node->ternary.cond, scope, scope_count);
         rewrite_node(context, node->ternary.then_expr, scope, scope_count);

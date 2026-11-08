@@ -876,7 +876,6 @@ static void lower_nested_blocks(ParserContext *context, ASTNode *stmt) {
     case AST_DEFER:
         lower_nested_blocks(context, stmt->defer_stmt.body);
         break;
-        break;
     case AST_STMT_EXPR:
         lower_nested_blocks(context, stmt->stmt_expr.block);
         break;
@@ -917,107 +916,19 @@ void lower_dom_block(ParserContext *context, ASTNode *block) {
     block->block.count = count;
 }
 
-void ensure_no_dom_elements(ParserContext *context, ASTNode *node) {
+static void reject_dom_element(ASTNode **slot, void *data) {
+    ASTNode *node = *slot;
     if (!node) return;
-    switch (node->type) {
-    case AST_DOM_ELEMENT:
-        dom_error(context, node, 0, 0,
+    if (node->type == AST_DOM_ELEMENT) {
+        dom_error(data, node, 0, 0,
                   "a DOM element is only allowed as a value inside a statement, "
                   "such as `return <%s .../>;`", node->dom_element.tag);
-        break;
-    case AST_VAR_DECL:
-        ensure_no_dom_elements(context, node->var_decl.init);
-        break;
-    case AST_ASSIGN:
-        ensure_no_dom_elements(context, node->assign.left);
-        ensure_no_dom_elements(context, node->assign.right);
-        break;
-    case AST_BINARY:
-        ensure_no_dom_elements(context, node->binary.left);
-        ensure_no_dom_elements(context, node->binary.right);
-        break;
-    case AST_UNARY:
-        ensure_no_dom_elements(context, node->unary.operand);
-        break;
-    case AST_BORROW:
-        ensure_no_dom_elements(context, node->borrow.expr);
-        break;
-    case AST_CAST:
-        ensure_no_dom_elements(context, node->cast.expr);
-        break;
-    case AST_TERNARY:
-        ensure_no_dom_elements(context, node->ternary.cond);
-        ensure_no_dom_elements(context, node->ternary.then_expr);
-        ensure_no_dom_elements(context, node->ternary.else_expr);
-        break;
-    case AST_IF:
-        ensure_no_dom_elements(context, node->if_stmt.cond);
-        ensure_no_dom_elements(context, node->if_stmt.then_stmt);
-        ensure_no_dom_elements(context, node->if_stmt.else_stmt);
-        break;
-    case AST_WHILE:
-        ensure_no_dom_elements(context, node->while_stmt.cond);
-        ensure_no_dom_elements(context, node->while_stmt.body);
-        break;
-    case AST_DO_WHILE:
-        ensure_no_dom_elements(context, node->do_while_stmt.cond);
-        ensure_no_dom_elements(context, node->do_while_stmt.body);
-        break;
-    case AST_FOR:
-        ensure_no_dom_elements(context, node->for_stmt.init);
-        ensure_no_dom_elements(context, node->for_stmt.cond);
-        ensure_no_dom_elements(context, node->for_stmt.inc);
-        ensure_no_dom_elements(context, node->for_stmt.body);
-        break;
-    case AST_RETURN:
-        ensure_no_dom_elements(context, node->ret.expr);
-        break;
-    case AST_DEFER:
-        ensure_no_dom_elements(context, node->defer_stmt.body);
-        break;
-    case AST_YIELD:
-        ensure_no_dom_elements(context, node->yield_stmt.expr);
-        break;
-    case AST_EXPR_STMT:
-        ensure_no_dom_elements(context, node->expr_stmt.expr);
-        break;
-    case AST_CALL:
-        for (int i = 0; i < node->call.arg_count; i++) {
-            ensure_no_dom_elements(context, node->call.args[i]);
-        }
-        break;
-    case AST_INIT_LIST:
-        for (int i = 0; i < node->init_list.count; i++) {
-            ensure_no_dom_elements(context, node->init_list.elements[i]);
-        }
-        break;
-    case AST_BLOCK:
-        for (int i = 0; i < node->block.count; i++) {
-            ensure_no_dom_elements(context, node->block.stmts[i]);
-        }
-        break;
-        break;
-    case AST_STMT_EXPR:
-        ensure_no_dom_elements(context, node->stmt_expr.block);
-        break;
-    case AST_FUNDEF:
-        ensure_no_dom_elements(context, node->fundef.body);
-        break;
-    case AST_FUN_LITERAL:
-        ensure_no_dom_elements(context, node->fun_literal.body);
-        break;
-    case AST_MEMBER_ACCESS:
-        ensure_no_dom_elements(context, node->member_access.lhs);
-        break;
-    case AST_ARROW_ACCESS:
-        ensure_no_dom_elements(context, node->arrow_access.lhs);
-        break;
-    case AST_SIZEOF:
-        ensure_no_dom_elements(context, node->sizeof_expr.expr);
-        break;
-    default:
-        break;
     }
+    ast_visit_children(node, reject_dom_element, data);
+}
+
+void ensure_no_dom_elements(ParserContext *context, ASTNode *node) {
+    reject_dom_element(&node, context);
 }
 
 void dom_lowering_reset(ParserContext *context) {

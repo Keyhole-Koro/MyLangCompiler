@@ -12,266 +12,127 @@ void free_attributes(Attribute *attrs, int count) {
     free(attrs);
 }
 
+static void free_child(ASTNode **slot, void *unused) {
+    (void)unused;
+    free_ast(*slot);
+    *slot = NULL;
+}
+
+static void free_strings(char **strings, int count) {
+    for (int i = 0; strings && i < count; i++) free(strings[i]);
+    free(strings);
+}
+
+static void free_type_params(char **names, unsigned char *is_const, ASTNode **bounds, int count) {
+    free_strings(names, count);
+    free(is_const);
+    for (int i = 0; bounds && i < count; i++) free_ast(bounds[i]);
+    free(bounds);
+}
+
+/* The mirror of ast_clone (AST.c): the children go through ast_visit_children,
+ * then each kind frees the strings and arrays it owns. A struct's payload enum
+ * and type parameter bounds are not children, so they are freed here. */
 void free_ast(ASTNode *node) {
     if (!node) return;
     free_attributes(node->attrs, node->attr_count);
     node->attrs = NULL;
     node->attr_count = 0;
+    ast_visit_children(node, free_child, NULL);
     switch (node->type) {
-        case AST_NUMBER:
-            free(node->number.value);
-            free(node->number.enum_name);
-            break;
-        case AST_IDENTIFIER:
-            free(node->identifier.name);
-            break;
-        case AST_BINARY:
-            free_ast(node->binary.left);
-            free_ast(node->binary.right);
-            break;
-        case AST_ASSIGN:
-            free_ast(node->assign.left);
-            free_ast(node->assign.right);
-            break;
-        case AST_VAR_DECL:
-            free_ast(node->var_decl.var_type);
-            free(node->var_decl.name);
-            free(node->var_decl.package);
-            free(node->var_decl.link_name);
-            if (node->var_decl.init) free_ast(node->var_decl.init);
-            break;
-        case AST_BORROW:
-            free_ast(node->borrow.expr);
-            break;
-        case AST_TYPE:
-            free_ast(node->type_node.base_type);
-            break;
-        case AST_TYPE_GENERIC:
-            free(node->generic_type.name);
-            for (int i = 0; i < node->generic_type.arg_count; i++)
-                free_ast(node->generic_type.args[i]);
-            free(node->generic_type.args);
-            break;
-        case AST_TYPE_ARRAY:
-            free_ast(node->type_array.element_type);
-            free(node->type_array.array_size_param);
-            break;
-        case AST_TYPE_FUNCTION:
-            for (int i = 0; i < node->function_type.param_count; i++)
-                free_ast(node->function_type.param_types[i]);
-            free(node->function_type.param_types);
-            free_ast(node->function_type.return_type);
-            break;
-        case AST_STRING_LITERAL:
-            free(node->string_literal.value);
-            break;
-        case AST_CHAR_LITERAL:
-            free(node->char_literal.value);
-            break;
-        case AST_UNARY:
-            free_ast(node->unary.operand);
-            break;
-        case AST_CAST:
-            if (node->cast.type) free_ast(node->cast.type);
-            if (node->cast.expr) free_ast(node->cast.expr);
-            break;
-        case AST_TERNARY:
-            free_ast(node->ternary.cond);
-            free_ast(node->ternary.then_expr);
-            free_ast(node->ternary.else_expr);
-            break;
-        case AST_IMPORT:
-            free(node->import_stmt.path);
-            for(int i=0; i<node->import_stmt.symbol_count; i++) free(node->import_stmt.symbols[i]);
-            free(node->import_stmt.symbols);
-            break;
-        case AST_EXPR_STMT:
-            free_ast(node->expr_stmt.expr);
-            break;
-        case AST_IF:
-            free_ast(node->if_stmt.cond);
-            free_ast(node->if_stmt.then_stmt);
-            if (node->if_stmt.else_stmt) free_ast(node->if_stmt.else_stmt);
-            break;
-            case AST_RETURN:
-                    free_ast(node->ret.expr);
-                    free(node->ret.trace_note);
-                    break;
-            case AST_DEFER:
-                    free_ast(node->defer_stmt.body);
-                    break;
-            case AST_YIELD:
-                    free_ast(node->yield_stmt.expr);
-                    break;
-            case AST_BLOCK:
-                    for (int i = 0; i < node->block.count; i++)
-                        free_ast(node->block.stmts[i]);
-                    free(node->block.stmts);
-                    break;
-            break;
-        case AST_STMT_EXPR:
-                free_ast(node->stmt_expr.block);
-                break;
-            case AST_CASE:
-                    free_ast(node->case_expr.target);
-                    for(int i=0; i<node->case_expr.case_count; i++) {
-                        free_ast(node->case_expr.cases[i].key);
-                        free_ast(node->case_expr.cases[i].expr);
-                    }
-                    free(node->case_expr.cases);
-                    if (node->case_expr.default_expr) free_ast(node->case_expr.default_expr);
-                    break;                case AST_FUN_LITERAL:
-            for (int i = 0; i < node->fun_literal.param_count; i++)
-                free_ast(node->fun_literal.params[i]);
-            free(node->fun_literal.params);
-            free_ast(node->fun_literal.body);
-            break;
-                case AST_FUNDEF:            if (node->fundef.ret_type) free_ast(node->fundef.ret_type);
-            free(node->fundef.name);
-            free(node->fundef.package);
-            free(node->fundef.recv_type_name);
-            free(node->fundef.origin_path);
-            for (int i = 0; i < node->fundef.type_param_count; i++)
-                free(node->fundef.type_params[i]);
-            free(node->fundef.type_params);
-            free(node->fundef.type_param_is_const);
-            if (node->fundef.type_param_bounds) {
-                for (int i = 0; i < node->fundef.type_param_count; i++)
-                    free_ast(node->fundef.type_param_bounds[i]);
-                free(node->fundef.type_param_bounds);
-            }
-            for (int i = 0; i < node->fundef.param_count; i++)
-                free_ast(node->fundef.params[i]);
-            free(node->fundef.params);
-            free_ast(node->fundef.body);
-            break;
-        case AST_CALL:
-            free(node->call.name);
-            for (int i = 0; i < node->call.type_arg_count; i++)
-                free_ast(node->call.type_args[i]);
-            free(node->call.type_args);
-            for (int i = 0; i < node->call.arg_count; i++)
-                free_ast(node->call.args[i]);
-            free(node->call.args);
-            /* Only ever non-NULL between parsing and resolve_method_calls();
-             * kept alive here too in case a parse error aborts in between. */
-            if (node->call.recv) free_ast(node->call.recv);
-            break;
-        case AST_PARAM:
-            if (node->param.type) free_ast(node->param.type);
-            if (node->param.default_value) free_ast(node->param.default_value);
-            free(node->param.name);
-            break;
-        case AST_STRUCT:
-            free(node->struct_stmt.name);
-            free(node->struct_stmt.package);
-            free_ast(node->struct_stmt.payload_enum);
-            for (int i = 0; i < node->struct_stmt.type_param_count; i++)
-                free(node->struct_stmt.type_params[i]);
-            free(node->struct_stmt.type_params);
-            free(node->struct_stmt.type_param_is_const);
-            if (node->struct_stmt.type_param_bounds) {
-                for (int i = 0; i < node->struct_stmt.type_param_count; i++)
-                    free_ast(node->struct_stmt.type_param_bounds[i]);
-                free(node->struct_stmt.type_param_bounds);
-            }
-            for (int i = 0; i < node->struct_stmt.member_count; i++)
-                free_ast(node->struct_stmt.members[i]);
-            free(node->struct_stmt.members);
-            break;
-        case AST_STRUCT_MEMBER:
-            free(node->struct_member.type);
-            free(node->struct_member.name);
-            break;
-        case AST_TYPEDEF:
-            free(node->typedef_stmt.alias);
-            free(node->typedef_stmt.package);
-            free_ast(node->typedef_stmt.src_type);
-            break;
-        case AST_TYPEDEF_STRUCT:
-            free(node->typedef_struct.struct_name);
-            for (int i = 0; i < node->typedef_struct.member_count; i++)
-                free_ast(node->typedef_struct.members[i]);
-            free(node->typedef_struct.members);
-            free(node->typedef_struct.typedef_name);
-            free(node->typedef_struct.package);
-            break;
-        case AST_ENUM:
-            free(node->enum_stmt.name);
-            free(node->enum_stmt.package);
-            for (int i = 0; i < node->enum_stmt.type_param_count; i++)
-                free(node->enum_stmt.type_params[i]);
-            free(node->enum_stmt.type_params);
-            free(node->enum_stmt.type_param_is_const);
-            if (node->enum_stmt.type_param_bounds) {
-                for (int i = 0; i < node->enum_stmt.type_param_count; i++)
-                    free_ast(node->enum_stmt.type_param_bounds[i]);
-                free(node->enum_stmt.type_param_bounds);
-            }
-            for (int i = 0; i < node->enum_stmt.member_count; i++)
-                free_ast(node->enum_stmt.members[i]);
-            free(node->enum_stmt.members);
-            break;
-        case AST_ENUM_MEMBER:
-            free(node->enum_member.name);
-            free_ast(node->enum_member.value);
-            free_ast(node->enum_member.payload_type);
-            break;
-        case AST_MEMBER_ACCESS:
-            free(node->member_access.member);
-            free_ast(node->member_access.lhs);
-            break;
-        case AST_ARROW_ACCESS:
-            free(node->arrow_access.member);
-            free_ast(node->arrow_access.lhs);
-            break;
-        case AST_INIT_LIST:
-            for (int i = 0; i < node->init_list.count; i++)
-                free_ast(node->init_list.elements[i]);
-            free(node->init_list.elements);
-            for (int i = 0; i < node->init_list.struct_type_arg_count; i++)
-                free_ast(node->init_list.struct_type_args[i]);
-            free(node->init_list.struct_type_args);
-            free(node->init_list.struct_type_name);
-            for (int i = 0; i < node->init_list.count; i++)
-                free(node->init_list.field_names ? node->init_list.field_names[i] : NULL);
-            free(node->init_list.field_names);
-            break;
-        case AST_SIZEOF:
-            free_ast(node->sizeof_expr.expr);
-            break;
-        case AST_WHILE:
-            free_ast(node->while_stmt.cond);
-            free_ast(node->while_stmt.body);
-            break;
-        case AST_DO_WHILE:
-            free_ast(node->do_while_stmt.cond);
-            free_ast(node->do_while_stmt.body);
-            break;
-        case AST_FOR:
-            if (node->for_stmt.init) free_ast(node->for_stmt.init);
-            if (node->for_stmt.cond) free_ast(node->for_stmt.cond);
-            if (node->for_stmt.inc) free_ast(node->for_stmt.inc);
-            free_ast(node->for_stmt.body);
-            break;
-        case AST_BREAK:
-        case AST_CONTINUE:
-            break;
-        case AST_DOM_ELEMENT:
-            for (int i = 0; i < node->dom_element.prop_count; i++) {
-                free(node->dom_element.props[i].name);
-                if (node->dom_element.props[i].value) free_ast(node->dom_element.props[i].value);
-            }
-            free(node->dom_element.props);
-            for (int i = 0; i < node->dom_element.child_count; i++) {
-                free_ast(node->dom_element.children[i]);
-            }
-            free(node->dom_element.children);
-            free(node->dom_element.tag);
-            break;
-        default:
-            fprintf(stderr, "Unknown AST Node Type: %d\n", node->type);
-            exit(1);
+    case AST_NUMBER:
+        free(node->number.value);
+        free(node->number.enum_name);
+        break;
+    case AST_IDENTIFIER: free(node->identifier.name); break;
+    case AST_TYPE_GENERIC:
+        free(node->generic_type.name);
+        free(node->generic_type.args);
+        break;
+    case AST_TYPE_ARRAY: free(node->type_array.array_size_param); break;
+    case AST_TYPE_FUNCTION: free(node->function_type.param_types); break;
+    case AST_VAR_DECL:
+        free(node->var_decl.name);
+        free(node->var_decl.package);
+        free(node->var_decl.link_name);
+        break;
+    case AST_TYPEDEF:
+        free(node->typedef_stmt.alias);
+        free(node->typedef_stmt.package);
+        break;
+    case AST_BLOCK: free(node->block.stmts); break;
+    case AST_FUN_LITERAL: free(node->fun_literal.params); break;
+    case AST_CASE: free(node->case_expr.cases); break;
+    case AST_FUNDEF:
+        free(node->fundef.name);
+        free(node->fundef.package);
+        free(node->fundef.recv_type_name);
+        free(node->fundef.origin_path);
+        free(node->fundef.params);
+        free_type_params(node->fundef.type_params, node->fundef.type_param_is_const,
+                         node->fundef.type_param_bounds, node->fundef.type_param_count);
+        break;
+    case AST_PARAM: free(node->param.name); break;
+    case AST_CALL:
+        free(node->call.name);
+        free(node->call.type_args);
+        free(node->call.args);
+        break;
+    case AST_DOM_ELEMENT:
+        for (int i = 0; i < node->dom_element.prop_count; i++) free(node->dom_element.props[i].name);
+        free(node->dom_element.props);
+        free(node->dom_element.children);
+        free(node->dom_element.tag);
+        break;
+    case AST_STRUCT:
+        free(node->struct_stmt.name);
+        free(node->struct_stmt.package);
+        free(node->struct_stmt.members);
+        free_ast(node->struct_stmt.payload_enum);
+        free_type_params(node->struct_stmt.type_params, node->struct_stmt.type_param_is_const,
+                         node->struct_stmt.type_param_bounds, node->struct_stmt.type_param_count);
+        break;
+    case AST_STRUCT_MEMBER:
+        free(node->struct_member.type);
+        free(node->struct_member.name);
+        break;
+    case AST_TYPEDEF_STRUCT:
+        free(node->typedef_struct.struct_name);
+        free(node->typedef_struct.typedef_name);
+        free(node->typedef_struct.package);
+        free(node->typedef_struct.members);
+        break;
+    case AST_ENUM:
+        free(node->enum_stmt.name);
+        free(node->enum_stmt.package);
+        free(node->enum_stmt.members);
+        free_type_params(node->enum_stmt.type_params, node->enum_stmt.type_param_is_const,
+                         node->enum_stmt.type_param_bounds, node->enum_stmt.type_param_count);
+        break;
+    case AST_ENUM_MEMBER: free(node->enum_member.name); break;
+    case AST_CHAR_LITERAL: free(node->char_literal.value); break;
+    case AST_STRING_LITERAL: free(node->string_literal.value); break;
+    case AST_MEMBER_ACCESS: free(node->member_access.member); break;
+    case AST_ARROW_ACCESS: free(node->arrow_access.member); break;
+    case AST_INIT_LIST:
+        free(node->init_list.elements);
+        free(node->init_list.struct_type_args);
+        free(node->init_list.struct_type_name);
+        free_strings(node->init_list.field_names, node->init_list.count);
+        break;
+    case AST_IMPORT:
+        free(node->import_stmt.path);
+        free_strings(node->import_stmt.symbols, node->import_stmt.symbol_count);
+        break;
+    case AST_RETURN: free(node->ret.trace_note); break;
+    case AST_BINARY: case AST_ASSIGN: case AST_TYPE: case AST_BORROW: case AST_UNARY:
+    case AST_CAST: case AST_EXPR_STMT: case AST_IF: case AST_DEFER: case AST_YIELD:
+    case AST_STMT_EXPR: case AST_WHILE: case AST_DO_WHILE: case AST_FOR: case AST_SIZEOF:
+    case AST_TERNARY: case AST_BREAK: case AST_CONTINUE:
+        break;
+    default:
+        fprintf(stderr, "Unknown AST Node Type: %d\n", node->type);
+        exit(1);
     }
     free(node);
 }

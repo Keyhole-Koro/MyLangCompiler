@@ -251,7 +251,6 @@ void semantic_walk_stmt(SemanticContext *ctx, ASTNode *node) {
         walk_block_items(ctx, node->block.stmts, node->block.count);
         semantic_leave_scope(ctx);
         break;
-        break;
     case AST_STMT_EXPR:
         semantic_walk_stmt(ctx, node->stmt_expr.block);
         break;

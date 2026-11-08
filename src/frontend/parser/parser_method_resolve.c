@@ -382,7 +382,6 @@ static void resolve_calls_node(ParserContext *context, MethodScope *scope, ASTNo
     case AST_BORROW:
         resolve_calls_node(context, scope, node->borrow.expr);
         break;
-        break;
     case AST_TERNARY:
         resolve_calls_node(context, scope, node->ternary.cond);
         resolve_calls_node(context, scope, node->ternary.then_expr);
@@ -435,7 +434,6 @@ static void resolve_calls_node(ParserContext *context, MethodScope *scope, ASTNo
         break;
     case AST_STMT_EXPR:
         resolve_calls_node(context, scope, node->stmt_expr.block);
-        break;
         break;
     case AST_INIT_LIST:
         for (int i = 0; i < node->init_list.count; i++) resolve_calls_node(context, scope, node->init_list.elements[i]);

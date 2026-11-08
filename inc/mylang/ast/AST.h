@@ -428,7 +428,10 @@ struct ASTNode {
 
 char *astType2str(ASTNodeType type);
 
-/* Visit immediate owned child slots. The callback may replace each child. */
+/* Visit immediate owned child slots. The callback may replace each child.
+ * A struct's payload_enum and the type parameter bounds of a function, struct
+ * or enum are owned but not visited: they describe the declaration rather than
+ * belong to its tree, and ast_clone and free_ast handle them themselves. */
 void ast_visit_children(ASTNode *node, void (*visit)(ASTNode **, void *), void *context);
 /* Deep copy: the result shares no owned strings, arrays, or children. */
 ASTNode *ast_clone(const ASTNode *node);
