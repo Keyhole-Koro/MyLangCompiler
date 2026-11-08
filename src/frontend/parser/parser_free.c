@@ -66,6 +66,7 @@ void free_ast(ASTNode *node) {
     case AST_FUNDEF:
         free(node->fundef.name);
         free(node->fundef.package);
+        free(node->fundef.link_name);
         free(node->fundef.recv_type_name);
         free(node->fundef.origin_path);
         free(node->fundef.params);

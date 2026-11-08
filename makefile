@@ -37,6 +37,7 @@ test-component: mlc syntax-check
 	python3 tests/check_emit_symbols.py
 	python3 tests/check_model_trace.py
 	python3 tests/check_stages.py
+	python3 tests/check_ast_free.py
 
 test-e2e: mlc
 	$(MAKE) -C ../MyLangTester all
