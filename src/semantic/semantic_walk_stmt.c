@@ -260,7 +260,6 @@ void semantic_walk_stmt(SemanticContext *ctx, ASTNode *node) {
         ctx->function_depth++;
         semantic_enter_scope(ctx);
         walk_params(ctx, node->fun_literal.params, node->fun_literal.param_count, node->fun_literal.body);
-        semantic_walk_stmt(ctx, node->fun_literal.ret_type);
         semantic_walk_stmt(ctx, node->fun_literal.body);
         semantic_leave_scope(ctx);
         ctx->function_depth--;
@@ -339,8 +338,6 @@ void semantic_walk_stmt(SemanticContext *ctx, ASTNode *node) {
         break;
     case AST_STRUCT:
         walk_block_items(ctx, node->struct_stmt.members, node->struct_stmt.member_count);
-        break;
-    case AST_STRUCT_MEMBER:
         break;
     case AST_TYPEDEF_STRUCT:
         walk_block_items(ctx, node->typedef_struct.members, node->typedef_struct.member_count);

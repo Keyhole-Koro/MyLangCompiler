@@ -126,11 +126,6 @@ void add_exported_payload_enum(ParserContext *context, ASTNode *declaration) {
     context->symbols.exported_payload_enums.declarations[context->symbols.exported_payload_enums.count++] = declaration;
 }
 
-ASTNode *exported_payload_enum_at(ParserContext *context, int index) {
-    if (index < 0 || index >= context->symbols.exported_payload_enums.count) return NULL;
-    return context->symbols.exported_payload_enums.declarations[index];
-}
-
 int exported_payload_enum_count(ParserContext *context) {
     return context->symbols.exported_payload_enums.count;
 }

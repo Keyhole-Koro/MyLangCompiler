@@ -137,16 +137,6 @@ void module_add_symbol(Module *module, SymbolKind kind, const char *source_name,
     sym->is_exported = is_exported;
 }
 
-ModuleSymbol *module_find_symbol(const Module *module, const char *source_name) {
-    if (!module || !source_name) return NULL;
-    for (int i = 0; i < module->symbol_count; i++) {
-        if (strcmp(module->symbols[i].source_name, source_name) == 0) {
-            return &module->symbols[i];
-        }
-    }
-    return NULL;
-}
-
 ModuleSymbol *module_find_exported_symbol(const Module *module, const char *source_name) {
     if (!module || !source_name) return NULL;
     for (int i = 0; i < module->symbol_count; i++) {

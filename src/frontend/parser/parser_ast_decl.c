@@ -31,10 +31,6 @@ ASTNode *new_var_decl(ASTNode *type, char *name, ASTNode *init) {
     return node;
 }
 
-ASTNode* new_param(ASTNode *type, char *name) {
-    return new_param_move(type, name, 0);
-}
-
 ASTNode* new_param_move(ASTNode *type, char *name, int is_move) {
     ASTNode *node = calloc(1, sizeof(ASTNode));
     node->type = AST_PARAM;
@@ -76,7 +72,6 @@ ASTNode *new_fun_literal(ASTNode **params, int param_count, ASTNode *body, bool 
     node->fun_literal.params = params;
     node->fun_literal.param_count = param_count;
     node->fun_literal.body = body;
-    node->fun_literal.ret_type = NULL;
     node->fun_literal.is_variadic = is_variadic;
     return node;
 }
@@ -163,13 +158,5 @@ ASTNode *new_import_stmt(char *path, char **symbols, int count) {
     node->import_stmt.path = strdup(path);
     node->import_stmt.symbols = symbols;
     node->import_stmt.symbol_count = count;
-    return node;
-}
-
-ASTNode *new_struct_member(char *type, char *name) {
-    ASTNode *node = calloc(1, sizeof(ASTNode));
-    node->type = AST_STRUCT_MEMBER;
-    node->struct_member.type = strdup(type);
-    node->struct_member.name = strdup(name);
     return node;
 }

@@ -43,30 +43,11 @@ const MemberInfo *find_member_info(CompilerContext *cc, const char *type_name, c
     return NULL;
 }
 
-int base_type_is_char(const char *name) {
-    return name && strcmp(name, "char") == 0;
-}
-
 static int base_type_size_bytes(const char *name) {
     if (!name) return SLOT_SIZE;
     if (strcmp(name, "char") == 0 || strcmp(name, "u8") == 0) return 1;
     if (strcmp(name, "u16") == 0) return 2;
     return SLOT_SIZE;
-}
-
-int ast_type_is_char_scalar(ASTNode *type_node) {
-    if (!type_node || type_node->type != AST_TYPE) return 0;
-    if (type_node->type_node.pointer_level != 0) return 0;
-    ASTNode *bt = type_node->type_node.base_type;
-    if (bt && bt->type == AST_IDENTIFIER)
-        return base_type_size_bytes(bt->identifier.name) == 1;
-    return 0;
-}
-
-int is_char_scalar_var(CompilerContext *cc, const char *name) {
-    const LocalInfo *li = find_local_info(cc, name);
-    if (!li) li = find_global_info(cc, name);
-    return (li && li->pointer_level == 0 && !li->is_array && base_type_size_bytes(li->base_type) == 1);
 }
 
 int scalar_var_width_bytes(CompilerContext *cc, const char *name) {

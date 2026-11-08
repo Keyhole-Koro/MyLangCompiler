@@ -198,7 +198,6 @@ void add_imported_plain_type(ParserContext *context, ASTNode *declaration);
 ASTNode *imported_plain_type_at(ParserContext *context, int index);
 int imported_plain_type_count(ParserContext *context);
 void add_exported_payload_enum(ParserContext *context, ASTNode *declaration);
-ASTNode *exported_payload_enum_at(ParserContext *context, int index);
 int exported_payload_enum_count(ParserContext *context);
 void add_structdef(ParserContext *context, char *name, ASTNode **members, int member_count);
 StructDef *find_structdef(ParserContext *context, const char *name);

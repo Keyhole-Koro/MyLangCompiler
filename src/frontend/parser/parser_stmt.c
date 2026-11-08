@@ -292,27 +292,6 @@ ASTNode *parse_variable_declaration(ParserContext *context, Token **cur, int nee
 }
 
 
-ASTNode *parse_variable_assignment(ParserContext *context, Token **cur) {
-    if (!token_is_name(*cur)) parse_error(context, "expected identifier for assignment", *cur);
-    Token *name_tok = *cur;
-    char *name = name_tok->value;
-    *cur = (*cur)->next;
-    if (!expect(cur, ASSIGN)) parse_error(context, "expected '=' for assignment", *cur);
-    ASTNode *expr = parse_expr(context, cur);
-    Token *end_tok = *cur;
-    if (!expect(cur, SEMICOLON)) parse_error(context, "expected ';' after assignment", *cur);
-    ASTNode *lhs = new_identifier(name);
-    set_node_loc_from_tokens(lhs, name_tok, NULL);
-    ASTNode *assign = new_assign(lhs, expr);
-    set_node_loc_from_tokens(assign, name_tok, NULL);
-    if (expr) {
-        set_node_range_from_children(assign, assign, expr);
-    } else {
-        set_node_end_from_token(assign, end_tok);
-    }
-    return assign;
-}
-
 ASTNode *parse_stmt(ParserContext *context, Token **cur) {
     if ((*cur)->kind == IF) return parse_if_stmt(context, cur);
     if ((*cur)->kind == WHILE) return parse_while_stmt(context, cur);

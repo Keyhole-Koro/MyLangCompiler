@@ -305,12 +305,6 @@ int array_total_elements(ASTNode *array_type) {
     return n * array_total_elements(array_type->type_array.element_type);
 }
 
-int lvalue_is_byte(CompilerContext *cc, ASTNode *node) {
-    TypeInfo info = (TypeInfo){0};
-    if (!infer_expr_type(cc, node, &info)) return 0;
-    return typeinfo_is_byte(&info);
-}
-
 int lvalue_width_bytes(CompilerContext *cc, ASTNode *node) {
     TypeInfo info = (TypeInfo){0};
     if (!infer_expr_type(cc, node, &info)) return SLOT_SIZE;

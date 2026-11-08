@@ -255,9 +255,6 @@ const StructInfo *find_struct(CompilerContext *cc, const char *type_name);
 /* Annotation rows as a collected data section (codegen_annotations.c). */
 void emit_annotation_rows(CompilerContext *cc, StringBuilder *sb);
 const MemberInfo *find_member_info(CompilerContext *cc, const char *type_name, const char *member);
-int base_type_is_char(const char *name);
-int ast_type_is_char_scalar(ASTNode *type_node);
-int is_char_scalar_var(CompilerContext *cc, const char *name);
 int scalar_var_width_bytes(CompilerContext *cc, const char *name);
 int typeinfo_is_byte(const TypeInfo *info);
 int typeinfo_scalar_width_bytes(const TypeInfo *info);
@@ -268,7 +265,6 @@ int typeinfo_total_size_bytes(CompilerContext *cc, const TypeInfo *info);
 int pointer_step_bytes(CompilerContext *cc, const TypeInfo *info);
 int array_element_size_bytes(ASTNode *array_type);
 int array_total_elements(ASTNode *array_type);
-int lvalue_is_byte(CompilerContext *cc, ASTNode *node);
 int lvalue_width_bytes(CompilerContext *cc, ASTNode *node);
 int lvalue_is_const(CompilerContext *cc, ASTNode *node);
 const LocalInfo *find_local_info(CompilerContext *cc, const char *name);

@@ -156,7 +156,6 @@ void rewrite_node(ParserContext *context, ASTNode *node, char **scope, int scope
     case AST_TYPE:
     case AST_TYPE_ARRAY:
     case AST_STRUCT:
-    case AST_STRUCT_MEMBER:
     case AST_TYPEDEF_STRUCT:
     case AST_TYPEDEF:
         break;

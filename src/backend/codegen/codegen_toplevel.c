@@ -56,12 +56,6 @@ static void fill_member_info(CompilerContext *cc, ASTNode *mem, MemberInfo *out,
                 total_size_bytes = typeinfo_total_size_bytes(cc, &ti);
             }
         }
-    } else if (mem->type == AST_STRUCT_MEMBER) {
-        mname = mem->struct_member.name ? mem->struct_member.name : "";
-        tmp.base_type = mem->struct_member.type ? mem->struct_member.type : "";
-        tmp.pointer_level = 0;
-        tmp.is_array = 0;
-        tmp.array_length = 0;
     } else {
         tmp.base_type = "";
         tmp.pointer_level = 0;

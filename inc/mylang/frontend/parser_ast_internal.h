@@ -5,7 +5,6 @@
 
 #include "mylang/frontend/parser_internal.h"
 
-ASTNode *new_string_literal(char *str);
 ASTNode *new_string_literal_n(const char *str, int length);
 ASTNode *new_char_literal(char *str);
 ASTNode *new_sizeof(ASTNode *expr);
@@ -14,7 +13,6 @@ ASTNode *new_type_array_param(ASTNode *elem_type, const char *size_param);
 ASTNode *new_function_type(ASTNode **param_types, int param_count,
                            ASTNode *return_type, bool is_variadic);
 ASTNode *new_var_decl(ASTNode *type, char *name, ASTNode *init);
-ASTNode *new_param(ASTNode *type, char *name);
 ASTNode *new_param_move(ASTNode *type, char *name, int is_move);
 ASTNode *new_param_rest(char *name);
 ASTNode *new_fundef(ASTNode *ret_type, char *name, ASTNode **params, int param_count, ASTNode *body, bool is_variadic);
@@ -40,7 +38,6 @@ ASTNode *new_enum_member(char *name, ASTNode *value, ASTNode *payload_type,
 ASTNode *new_import_stmt(char *path, char **symbols, int count);
 ASTNode *new_member_access(ASTNode *lhs, char *member_name);
 ASTNode *new_arrow_access(ASTNode *lhs, char *member_name);
-ASTNode *new_struct_member(char *type, char *name);
 ASTNode *new_init_list(ASTNode **elems, int count);
 ASTNode *new_struct_init_list(const char *type_name, char **field_names,
                               ASTNode **elems, int count);

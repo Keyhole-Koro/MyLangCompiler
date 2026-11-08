@@ -29,7 +29,6 @@ char *astType2str(ASTNodeType type) {
         case AST_FOR: return "AST_FOR";
         case AST_TYPEDEF: return "AST_TYPEDEF";
         case AST_STRUCT: return "AST_STRUCT";
-        case AST_STRUCT_MEMBER: return "AST_STRUCT_MEMBER";
         case AST_TYPEDEF_STRUCT: return "AST_TYPEDEF_STRUCT";
         case AST_ENUM: return "AST_ENUM";
         case AST_ENUM_MEMBER: return "AST_ENUM_MEMBER";
@@ -84,7 +83,7 @@ void ast_visit_children(ASTNode *n, void (*visit)(ASTNode **, void *), void *ctx
     case AST_STMT_EXPR: CHILD(stmt_expr.block); break;
     case AST_FUN_LITERAL:
         CHILDREN(fun_literal.params, fun_literal.param_count);
-        CHILD(fun_literal.body); CHILD(fun_literal.ret_type); break;
+        CHILD(fun_literal.body); break;
     case AST_CASE:
         CHILD(case_expr.target);
         for (int i = 0; i < n->case_expr.case_count; i++) {
@@ -118,7 +117,7 @@ void ast_visit_children(ASTNode *n, void (*visit)(ASTNode **, void *), void *ctx
         break;
     case AST_SIZEOF: CHILD(sizeof_expr.expr); break;
     case AST_TERNARY: CHILD(ternary.cond); CHILD(ternary.then_expr); CHILD(ternary.else_expr); break;
-    case AST_NUMBER: case AST_IDENTIFIER: case AST_STRUCT_MEMBER:
+    case AST_NUMBER: case AST_IDENTIFIER:
     case AST_STRING_LITERAL: case AST_CHAR_LITERAL: case AST_BREAK: case AST_CONTINUE: case AST_IMPORT: break;
     }
 #undef CHILD
@@ -202,7 +201,6 @@ ASTNode *ast_clone(const ASTNode *src) {
                 n->struct_stmt.type_param_bounds[i] = ast_clone(src->struct_stmt.type_param_bounds[i]);
         }
         break;
-    case AST_STRUCT_MEMBER: STR(struct_member.type); STR(struct_member.name); break;
     case AST_TYPEDEF_STRUCT:
         STR(typedef_struct.struct_name); STR(typedef_struct.typedef_name); STR(typedef_struct.package);
         ARRAY(typedef_struct.members, typedef_struct.member_count); break;

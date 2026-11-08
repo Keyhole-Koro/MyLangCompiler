@@ -93,10 +93,6 @@ void free_ast(ASTNode *node) {
         free_type_params(node->struct_stmt.type_params, node->struct_stmt.type_param_is_const,
                          node->struct_stmt.type_param_bounds, node->struct_stmt.type_param_count);
         break;
-    case AST_STRUCT_MEMBER:
-        free(node->struct_member.type);
-        free(node->struct_member.name);
-        break;
     case AST_TYPEDEF_STRUCT:
         free(node->typedef_struct.struct_name);
         free(node->typedef_struct.typedef_name);

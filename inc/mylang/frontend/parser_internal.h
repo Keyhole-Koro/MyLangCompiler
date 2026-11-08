@@ -104,7 +104,6 @@ ASTNode *parse_variable_declaration(ParserContext *context, Token **cur, int nee
 ASTNode *parse_literal_value(ParserContext *context, Token **cur);
 // `@name(args)`* before a top-level declaration; NULL/0 when there are none.
 Attribute *parse_attributes(ParserContext *context, Token **cur, int *out_count);
-ASTNode *parse_variable_assignment(ParserContext *context, Token **cur);
 ASTNode *parse_stmt(ParserContext *context, Token **cur);
 ASTNode *parse_fundef(ParserContext *context, Token **cur);
 ASTNode *parse_method(ParserContext *context, Token **cur);

@@ -166,7 +166,6 @@ Module *module_graph_find(ModuleGraph *graph, const char *canonical_path);
 Module *module_graph_add(ModuleGraph *graph, const char *canonical_path);
 
 /* ModuleSymbol queries */
-ModuleSymbol *module_find_symbol(const Module *module, const char *source_name);
 ModuleSymbol *module_find_exported_symbol(const Module *module, const char *source_name);
 void module_add_symbol(Module *module, SymbolKind kind, const char *source_name,
                        const char *link_name, ASTNode *declaration, int is_exported);

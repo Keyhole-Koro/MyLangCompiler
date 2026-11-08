@@ -420,7 +420,6 @@ void semantic_walk_expr(SemanticContext *ctx, ASTNode *node, ExprContext expr_ct
     case AST_FOR:
     case AST_TYPEDEF:
     case AST_STRUCT:
-    case AST_STRUCT_MEMBER:
     case AST_TYPEDEF_STRUCT:
     case AST_ENUM:
     case AST_ENUM_MEMBER:

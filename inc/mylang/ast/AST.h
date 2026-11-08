@@ -29,7 +29,6 @@ typedef enum {
     AST_FOR,
     AST_TYPEDEF,
     AST_STRUCT,
-    AST_STRUCT_MEMBER,
     AST_TYPEDEF_STRUCT,
     AST_ENUM,
     AST_ENUM_MEMBER,
@@ -213,7 +212,6 @@ struct ASTNode {
             ASTNode **params;
             int param_count;
             ASTNode *body;
-            ASTNode *ret_type; // set during lowering (from declaration type)
             bool is_variadic;
         } fun_literal;
         struct {
@@ -344,11 +342,6 @@ struct ASTNode {
              * anything, and it may be all an importer has. */
             ASTNode *payload_enum;
         } struct_stmt;
-        
-        struct {
-            char *type;
-            char *name;
-        } struct_member;
 
         struct {
             char *struct_name;

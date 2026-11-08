@@ -20,10 +20,6 @@ void semantic_set_safety_profile(SemanticSafetyProfile profile) {
     g_safety_profile = profile;
 }
 
-SemanticSafetyProfile semantic_get_safety_profile(void) {
-    return g_safety_profile;
-}
-
 int semantic_check_with_session(ASTNode *root, FrontendSession *session) {
     SemanticContext ctx;
     memset(&ctx, 0, sizeof(ctx));
@@ -61,8 +57,4 @@ int semantic_check_with_session(ASTNode *root, FrontendSession *session) {
     }
 
     return ctx.error_count == 0 && (!ctx.warnings_as_errors || ctx.warning_count == 0);
-}
-
-int semantic_check(ASTNode *root) {
-    return semantic_check_with_session(root, frontend_session_current());
 }

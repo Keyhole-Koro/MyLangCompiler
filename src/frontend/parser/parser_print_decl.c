@@ -5,8 +5,7 @@ static void fprint_indent(FILE *out, int indent) {
 }
 
 static void fprint_member_name(FILE *out, ASTNode *member, int indent) {
-    const char *name = (member->type == AST_STRUCT_MEMBER) ? member->struct_member.name :
-                       (member->type == AST_VAR_DECL) ? member->var_decl.name : "";
+    const char *name = member->type == AST_VAR_DECL ? member->var_decl.name : "";
     fprint_indent(out, indent);
     fprintf(out, "Member:  %s\n", name);
 }
@@ -93,9 +92,6 @@ int fprint_ast_decl_node(FILE *out, ASTNode *node, int indent) {
                                             node->typedef_stmt.alias);
         fprint_indent(out, indent); fprintf(out, "  BaseType:\n");
         fprint_ast(out, node->typedef_stmt.src_type, indent + 2);
-        return 1;
-    case AST_STRUCT_MEMBER:
-        fprint_indent(out, indent); fprintf(out, "StructMember: %s %s\n", node->struct_member.type, node->struct_member.name);
         return 1;
     case AST_TYPEDEF_STRUCT:
         fprint_indent(out, indent); fprintf(out, "TypedefStruct:  -> %s\n", node->typedef_struct.typedef_name);

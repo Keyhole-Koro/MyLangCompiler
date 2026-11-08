@@ -1,9 +1,5 @@
 #include "mylang/frontend/parser_ast_internal.h"
 
-ASTNode *new_string_literal(char *str) {
-    return new_string_literal_n(str, str ? (int)strlen(str) : 0);
-}
-
 ASTNode *new_string_literal_n(const char *str, int length) {
     ASTNode *node = calloc(1, sizeof(ASTNode));
     node->type = AST_STRING_LITERAL;
