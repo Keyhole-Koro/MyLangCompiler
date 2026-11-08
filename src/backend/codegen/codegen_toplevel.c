@@ -398,6 +398,12 @@ void cleanup_codegen_context(CompilerContext *cc) {
         cg_strings = NULL;
         cg_string_count = 0;
     }
+    if (cg_consts) {
+        for (int i = 0; i < cg_const_count; i++) free(cg_consts[i].label);
+        free(cg_consts);
+        cg_consts = NULL;
+        cg_const_count = 0;
+    }
     if (cg_data_sb_inited) {
         sb_free(&cg_data_sb);
         cg_data_sb_inited = 0;
