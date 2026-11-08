@@ -13,7 +13,7 @@ ASTNode *new_type_array_param(ASTNode *elem_type, const char *size_param);
 ASTNode *new_function_type(ASTNode **param_types, int param_count,
                            ASTNode *return_type, bool is_variadic);
 ASTNode *new_var_decl(ASTNode *type, char *name, ASTNode *init);
-ASTNode *new_param_move(ASTNode *type, char *name, int is_move);
+ASTNode *new_param(ASTNode *type, char *name, int is_move);
 ASTNode *new_param_rest(char *name);
 ASTNode *new_fundef(ASTNode *ret_type, char *name, ASTNode **params, int param_count, ASTNode *body, bool is_variadic);
 ASTNode *new_fun_literal(ASTNode **params, int param_count, ASTNode *body, bool is_variadic);

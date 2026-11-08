@@ -49,7 +49,7 @@ ASTNode* parse_param(ParserContext *context, Token **cur) {
             : new_type_array(final_type, size);
     }
 
-    ASTNode *param = new_param_move(final_type, name, is_move);
+    ASTNode *param = new_param(final_type, name, is_move);
     set_node_loc_from_tokens(param, start, name_tok);
 
     // `i32 x = 0`: a default a caller (or a DOM element) may leave out. Only

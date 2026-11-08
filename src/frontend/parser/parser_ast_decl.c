@@ -31,7 +31,7 @@ ASTNode *new_var_decl(ASTNode *type, char *name, ASTNode *init) {
     return node;
 }
 
-ASTNode* new_param_move(ASTNode *type, char *name, int is_move) {
+ASTNode* new_param(ASTNode *type, char *name, int is_move) {
     ASTNode *node = calloc(1, sizeof(ASTNode));
     node->type = AST_PARAM;
     node->param.type = type;

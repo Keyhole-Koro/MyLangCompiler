@@ -673,7 +673,7 @@ static ASTNode *synthesize_short_impl(ParserContext *context, TraitDef *trait, T
         ? malloc(sizeof(ASTNode *) * (size_t)item->fundef.param_count) : NULL;
     for (int i = 0; i < item->fundef.param_count; i++) {
         ASTNode *param = item->fundef.params[i];
-        params[i] = new_param_move(subst_type(param->param.type, sub), param->param.name, param->param.is_move);
+        params[i] = new_param(subst_type(param->param.type, sub), param->param.name, param->param.is_move);
     }
     ASTNode **stmts = malloc(sizeof(ASTNode *));
     stmts[0] = new_return(value);
