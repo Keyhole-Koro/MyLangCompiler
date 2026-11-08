@@ -50,7 +50,7 @@ static void gen_mock_call_original_sret(CompilerContext *cc, ASTNode *node,
     int stack_bytes = emit_stack_args(cc, node, NULL, argc,
                                       "push stack arguments (aggregate mock.call_original)",
                                       sb, params, param_count, locals, local_count);
-    emit_reg_args(cc, node, NULL, sb, params, param_count, locals, local_count);
+    emit_reg_args(cc, node, NULL, argc, sb, params, param_count, locals, local_count);
 
     // The context accessor is an ordinary call and may clobber the original
     // target's register arguments. Preserve them while resolving its dynamic

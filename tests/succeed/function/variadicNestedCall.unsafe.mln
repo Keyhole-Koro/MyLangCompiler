@@ -1,0 +1,37 @@
+// Regression: the fixed arguments of a variadic call must not clobber each
+// other. They used to be evaluated straight into the argument registers, so
+// in `pair(5, inc(9), 1)` the call to inc loaded its own argument into r5
+// over the 5 already there, and pair received a = 9 (910, not 510).
+
+struct Pair {
+    i32 x;
+    i32 y;
+};
+
+i32 inc(i32 x) { return x + 1; }
+
+i32 pair(i32 a, i32 b, rest args) { return a * 100 + b; }
+
+i32 three(i32 a, i32 b, i32 c, rest args) {
+    return a * 10000 + b * 100 + c + args.len;
+}
+
+// The fourth fixed argument travels on the stack, before the rest.
+i32 four(i32 a, i32 b, i32 c, i32 d, rest args) {
+    return a * 1000 + b * 100 + c * 10 + d + args[0];
+}
+
+i32 aggregate(Pair p, i32 b, rest args) {
+    return p.x * 100 + p.y * 10 + b + args.len;
+}
+
+i32 main() {
+    Pair p;
+    p.x = 1;
+    p.y = 2;
+    i32 total = pair(5, inc(9), 1);                          // 510
+    total = total + three(inc(0), inc(1), inc(2), 7, 8);     // 10205
+    total = total + four(inc(0), inc(1), inc(2), inc(3), 5); // 1239
+    total = total + aggregate(p, inc(2), 1, 2, 3);           // 126
+    return total;                                            // 12080
+}

@@ -106,6 +106,7 @@ byvalArgumentDirectCall|3|succeed/struct/byval/directCallArgument.mln
 indirectAggregateReturn|94|succeed/function/indirectAggregateReturn.mln
 functionAddressArgument|42|succeed/function/functionAddressArgument.mln,../../MyStdLib/core/address.mln
 argNestedCall|706|succeed/function/argNestedCall.mln
+variadicNestedCall|12080|succeed/function/variadicNestedCall.unsafe.mln
 multiInclude|11|succeed/package/multiInclude.mln,succeed/package/multiInclude_part1.mln,succeed/package/multiInclude_part2.mln
 multiInclude_complex|21|succeed/package/multiInclude_complex.mln,succeed/package/multiInclude_midA.mln,succeed/package/multiInclude_midB.mln,succeed/package/multiInclude_shared.mln
 importFrom|11|succeed/package/importFrom_main.mln,succeed/package/importFrom_helper.mln

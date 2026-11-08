@@ -115,6 +115,13 @@ static void emit_store_r1_at_sp(StringBuilder *sb, int offset)
     sb_append(sb, "  mov r2, sp\n  addis r2, %d\n  store r2, r1\n", offset);
 }
 
+// How many arguments travel in arg_regs when the first fixed_count are
+// fixed (every argument, for a call that is not variadic).
+static int reg_arg_count(int fixed_count)
+{
+    return fixed_count < REG_ARG_COUNT ? fixed_count : REG_ARG_COUNT;
+}
+
 // The arguments that do not travel in arg_regs: those past the first
 // REG_ARG_COUNT, and the whole variadic tail (from fixed_count on), which is
 // always passed as plain words. They are evaluated left to right into the
@@ -124,7 +131,7 @@ int emit_stack_args(CompilerContext *cc, ASTNode *node, const FunctionSig *sig,
                     char **params, int param_count, char **locals, int local_count)
 {
     int argc = node->call.arg_count;
-    int first = fixed_count < REG_ARG_COUNT ? fixed_count : REG_ARG_COUNT;
+    int first = reg_arg_count(fixed_count);
     if (argc <= first) return 0;
     int bytes = (argc - first) * SLOT_SIZE;
     sb_append(sb, "  ; %s\n", comment);
@@ -138,21 +145,16 @@ int emit_stack_args(CompilerContext *cc, ASTNode *node, const FunctionSig *sig,
     return bytes;
 }
 
-static int reg_arg_count(ASTNode *node)
-{
-    return node->call.arg_count < REG_ARG_COUNT ? node->call.arg_count : REG_ARG_COUNT;
-}
-
 // Evaluates the register arguments left to right, pushing each word, then
 // pops them into arg_regs: evaluating an argument may involve a nested call
 // that clobbers the argument registers, so earlier results must not be left
 // sitting in them. No argument may leave a temporary on the stack here -- it
 // would sit between the pushes and the pops -- so a call that passes an
 // aggregate call result uses emit_reg_args_into_slots instead.
-void emit_reg_args(CompilerContext *cc, ASTNode *node, const FunctionSig *sig, StringBuilder *sb,
-                   char **params, int param_count, char **locals, int local_count)
+void emit_reg_args(CompilerContext *cc, ASTNode *node, const FunctionSig *sig, int fixed_count,
+                   StringBuilder *sb, char **params, int param_count, char **locals, int local_count)
 {
-    int reg_argc = reg_arg_count(node);
+    int reg_argc = reg_arg_count(fixed_count);
     for (int i = 0; i < reg_argc; i++) {
         gen_arg_word(cc, node->call.args[i], sb, "r1", params, param_count,
                      locals, local_count, sig_arg_is_aggregate(cc, sig, i),
@@ -173,7 +175,7 @@ static int emit_reg_args_into_slots(CompilerContext *cc, ASTNode *node, const Fu
                                     StringBuilder *sb, char **params, int param_count,
                                     char **locals, int local_count)
 {
-    int reg_argc = reg_arg_count(node);
+    int reg_argc = reg_arg_count(node->call.arg_count);
     int slot_bytes = reg_argc * SLOT_SIZE;
     int temp_bytes = 0;
     sb_append(sb, "  addis sp, -%d\n", slot_bytes);
@@ -243,7 +245,7 @@ static void gen_indirect_call(CompilerContext *cc, ASTNode *node, StringBuilder 
     sb_append(sb, "  ; evaluate indirect callee '%s'\n", node->call.name);
     emit_load_var(cc, sb, node->call.name, "r1", params, param_count, locals, local_count);
     sb_append(sb, "  push r1\n");
-    emit_reg_args(cc, node, sig, sb, params, param_count, locals, local_count);
+    emit_reg_args(cc, node, sig, argc, sb, params, param_count, locals, local_count);
     sb_append(sb, "  pop r2\n"); // callee address (r2 is free once args are placed)
 
     int ret = next_label(cc);
@@ -417,10 +419,15 @@ void gen_call(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char 
         int stack_bytes = emit_stack_args(cc, node, sig, fixed, "push variadic stack arguments",
                                           sb, params, param_count, locals, local_count);
 
-        for (int i = 0; i < fixed && i < REG_ARG_COUNT; i++) {
-            gen_arg_word(cc, node->call.args[i], sb, arg_regs[i], params, param_count, locals, local_count,
-                        sig_arg_is_aggregate(cc, sig, i), node->call.name, i);
-        }
+        // Two or more fixed register arguments are protected from each
+        // other's nested calls like any call's. A lone one has nothing
+        // evaluated after it, so it goes straight into its register.
+        if (fixed == 1)
+            gen_arg_word(cc, node->call.args[0], sb, arg_regs[0], params, param_count,
+                         locals, local_count, sig_arg_is_aggregate(cc, sig, 0),
+                         node->call.name, 0);
+        else
+            emit_reg_args(cc, node, sig, fixed, sb, params, param_count, locals, local_count);
         sb_append(sb, "  movi r4, %d\n", argc - fixed);
         sb_append(sb, "  call %s\n", direct_call_target(node->call.name));
         clear_moved_call_args(cc, node, sig, sb);
@@ -459,7 +466,7 @@ void gen_call(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char 
 
     int stack_bytes = emit_stack_args(cc, node, sig, argc, "push stack arguments",
                                       sb, params, param_count, locals, local_count);
-    emit_reg_args(cc, node, sig, sb, params, param_count, locals, local_count);
+    emit_reg_args(cc, node, sig, argc, sb, params, param_count, locals, local_count);
 
     sb_append(sb, "  call %s\n", direct_call_target(node->call.name));
     clear_moved_call_args(cc, node, sig, sb);
@@ -545,7 +552,7 @@ void gen_call_sret(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
         emit_load_var(cc, sb, node->call.name, "r1", params, param_count,
                       locals, local_count);
         sb_append(sb, "  push r1\n");
-        emit_reg_args(cc, node, sig, sb, params, param_count, locals, local_count);
+        emit_reg_args(cc, node, sig, argc, sb, params, param_count, locals, local_count);
         sb_append(sb, "  pop r2\n");
 
         sb_append(sb, "  ; load hidden out-pointer for indirect by-value return\n");
@@ -591,7 +598,7 @@ void gen_call_sret(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
 
     int stack_bytes = emit_stack_args(cc, node, sig, argc, "push stack arguments (sret call)",
                                       sb, params, param_count, locals, local_count);
-    emit_reg_args(cc, node, sig, sb, params, param_count, locals, local_count);
+    emit_reg_args(cc, node, sig, argc, sb, params, param_count, locals, local_count);
 
     // The destination address sits just past the stack-args reservation
     // (net zero from the register push/pop pairs above), so it is read at a

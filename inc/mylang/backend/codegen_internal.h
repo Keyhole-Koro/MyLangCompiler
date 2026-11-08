@@ -318,13 +318,13 @@ void gen_call_sret(CompilerContext *cc, ASTNode *node, StringBuilder *sb, char *
 // every argument is a plain word). emit_stack_args reserves the stack area and
 // stores the arguments that do not go in registers, under a `; <comment>` line;
 // arguments from `fixed_count` on are a variadic tail. It returns the bytes to
-// release after the call. emit_reg_args then evaluates the register arguments
-// and puts them in arg_regs.
+// release after the call. emit_reg_args then evaluates the register arguments,
+// those among the first `fixed_count`, and puts them in arg_regs.
 int emit_stack_args(CompilerContext *cc, ASTNode *node, const FunctionSig *sig,
                     int fixed_count, const char *comment, StringBuilder *sb,
                     char **params, int param_count, char **locals, int local_count);
-void emit_reg_args(CompilerContext *cc, ASTNode *node, const FunctionSig *sig, StringBuilder *sb,
-                   char **params, int param_count, char **locals, int local_count);
+void emit_reg_args(CompilerContext *cc, ASTNode *node, const FunctionSig *sig, int fixed_count,
+                   StringBuilder *sb, char **params, int param_count, char **locals, int local_count);
 void gen_assign(CompilerContext *cc, ASTNode *node, StringBuilder *sb, char **params, int param_count, char **locals, int local_count, const char *target_reg);
 void gen_struct_literal_into_addr(CompilerContext *cc, ASTNode *literal,
                                   StringBuilder *sb, const char *dest_addr_reg,
