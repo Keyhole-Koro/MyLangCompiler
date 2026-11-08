@@ -125,14 +125,19 @@ static void append_builtin_str_info(CompilerContext *cc) {
 // and the callee's own prologue (gen_func) agree on which words in the
 // existing register/stack argument mechanism carry a value directly and
 // which carry a hidden pointer instead (MLC-015).
-static void append_func_sig(CompilerContext *cc, ASTNode *node) {
-    ASTNode *fn = cg_fundef_with_name(node);
-    if (!cc || !fn) return;
-    if (find_func_sig(cc, fn->fundef.name)) return;
+//
+// `name` is what calls in this unit use: a local function's own name, or the
+// link or source name an import makes visible. The signature borrows it and
+// the declaration's types, which the module graph keeps alive past codegen.
+static void append_func_sig(CompilerContext *cc, const char *name, ASTNode *fundef) {
+    ASTNode *fn = cg_as_fundef(fundef);
+    if (!cc || !name || !fn || find_func_sig(cc, name)) return;
     cc->func_sigs = (FunctionSig*)realloc(cc->func_sigs, sizeof(FunctionSig) * (cc->func_sig_count + 1));
     FunctionSig *sig = &cc->func_sigs[cc->func_sig_count];
-    sig->name = fn->fundef.name;
+    sig->name = name;
     sig->param_count = fn->fundef.param_count;
+    // A variadic function's rest parameter is the last of its params, so a
+    // variadic param_count is never 0.
     sig->fixed_param_count =
         fn->fundef.is_variadic ? (fn->fundef.param_count - 1) : fn->fundef.param_count;
     sig->is_variadic = fn->fundef.is_variadic;
@@ -141,55 +146,16 @@ static void append_func_sig(CompilerContext *cc, ASTNode *node) {
     sig->function_type = NULL;
     sig->has_return_type = fn->fundef.ret_type &&
                            typeinfo_from_type_ast(cc, fn->fundef.ret_type, &sig->return_type);
-    sig->param_is_aggregate = NULL;
-    sig->param_has_type = NULL;
-    sig->param_is_move = NULL;
-    sig->param_types = NULL;
+    sig->params = NULL;
     if (sig->param_count > 0) {
-        sig->param_is_aggregate = (bool*)calloc((size_t)sig->param_count, sizeof(bool));
-        sig->param_has_type = (bool*)calloc((size_t)sig->param_count, sizeof(bool));
-        sig->param_is_move = (bool*)calloc((size_t)sig->param_count, sizeof(bool));
-        sig->param_types = (TypeInfo*)calloc((size_t)sig->param_count, sizeof(TypeInfo));
+        sig->params = (FunctionSigParam*)calloc((size_t)sig->param_count, sizeof(FunctionSigParam));
         for (int i = 0; i < sig->param_count; i++) {
             ASTNode *p = fn->fundef.params[i];
             if (p->param.is_rest) continue; // rest args are always i32
-            sig->param_is_move[i] = p->param.is_move;
-            sig->param_is_aggregate[i] = aggregate_type_size(cc, p->param.type) > 0;
-            sig->param_has_type[i] = typeinfo_from_type_ast(cc, p->param.type, &sig->param_types[i]);
-        }
-    }
-    cc->func_sig_count++;
-}
-
-static void append_imported_func_sig(CompilerContext *cc, const char *name,
-                                     const ResolverFunctionInfo *fn_info) {
-    if (!cc || !name || !fn_info || find_func_sig(cc, name)) return;
-    cc->func_sigs = (FunctionSig*)realloc(cc->func_sigs, sizeof(FunctionSig) * (cc->func_sig_count + 1));
-    FunctionSig *sig = &cc->func_sigs[cc->func_sig_count];
-    sig->name = strdup(name);
-    sig->param_count = fn_info->param_count;
-    sig->fixed_param_count = fn_info->is_variadic ? (fn_info->param_count - 1) : fn_info->param_count;
-    sig->is_variadic = fn_info->is_variadic;
-    sig->ret_size_bytes = aggregate_type_size(cc, fn_info->ret_type_ast);
-    sig->ret_is_aggregate = sig->ret_size_bytes > 0;
-    sig->function_type = NULL;
-    sig->has_return_type = fn_info->ret_type_ast &&
-                           typeinfo_from_type_ast(cc, fn_info->ret_type_ast, &sig->return_type);
-    sig->param_is_aggregate = NULL;
-    sig->param_has_type = NULL;
-    sig->param_is_move = NULL;
-    sig->param_types = NULL;
-    if (sig->param_count > 0) {
-        sig->param_is_aggregate = (bool*)calloc((size_t)sig->param_count, sizeof(bool));
-        sig->param_has_type = (bool*)calloc((size_t)sig->param_count, sizeof(bool));
-        sig->param_is_move = (bool*)calloc((size_t)sig->param_count, sizeof(bool));
-        sig->param_types = (TypeInfo*)calloc((size_t)sig->param_count, sizeof(TypeInfo));
-        for (int i = 0; i < sig->param_count; i++) {
-            if (fn_info->params[i].is_rest) continue;
-            sig->param_is_move[i] = fn_info->params[i].is_move;
-            sig->param_is_aggregate[i] = aggregate_type_size(cc, fn_info->params[i].type_ast) > 0;
-            sig->param_has_type[i] = typeinfo_from_type_ast(
-                cc, fn_info->params[i].type_ast, &sig->param_types[i]);
+            FunctionSigParam *param = &sig->params[i];
+            param->is_move = p->param.is_move;
+            param->is_aggregate = aggregate_type_size(cc, p->param.type) > 0;
+            param->has_type = typeinfo_from_type_ast(cc, p->param.type, &param->type);
         }
     }
     cc->func_sig_count++;
@@ -238,11 +204,7 @@ static void append_import_sigs_from_source(CompilerContext *cc, ASTNode *node) {
             }
             if (sym->kind != SYMBOL_FUNCTION) continue;
 
-            ResolverFunctionInfo fn_info;
-            if (resolver_get_function_info(sym, &fn_info)) {
-                append_imported_func_sig(cc, sym->link_name, &fn_info);
-                resolver_free_function_info(&fn_info);
-            }
+            append_func_sig(cc, sym->link_name, sym->declaration);
         }
     } else {
         for (int i = 0; i < node->import_stmt.symbol_count; i++) {
@@ -258,11 +220,7 @@ static void append_import_sigs_from_source(CompilerContext *cc, ASTNode *node) {
             }
 
             if (sym->kind == SYMBOL_FUNCTION) {
-                ResolverFunctionInfo fn_info;
-                if (resolver_get_function_info(sym, &fn_info)) {
-                    append_imported_func_sig(cc, sym->source_name, &fn_info);
-                    resolver_free_function_info(&fn_info);
-                }
+                append_func_sig(cc, sym->source_name, sym->declaration);
                 continue;
             }
 
@@ -276,11 +234,7 @@ static void append_import_sigs_from_source(CompilerContext *cc, ASTNode *node) {
                     if (!m->is_exported || m->kind != SYMBOL_FUNCTION || !m->declaration) continue;
                     const char *recv = m->declaration->fundef.recv_type_name;
                     if (!recv || strcmp(recv, req_name) != 0) continue;
-                    ResolverFunctionInfo fn_info;
-                    if (resolver_get_function_info(m, &fn_info)) {
-                        append_imported_func_sig(cc, m->link_name, &fn_info);
-                        resolver_free_function_info(&fn_info);
-                    }
+                    append_func_sig(cc, m->link_name, m->declaration);
                 }
             }
         }
@@ -314,11 +268,11 @@ void build_codegen_toplevel_info(CompilerContext *cc, ASTNode *root) {
     if (!block) return;
 
     // Struct layouts have to exist before function signatures are registered:
-    // append_func_sig/append_imported_func_sig now ask find_struct whether a
-    // parameter or return type is an aggregate (MLC-015), and a struct's own
-    // members can reference a typedef or an enum's constants, so the order
-    // below is typedef/enum, then struct, then function -- each pass only
-    // depending on tables the earlier ones already filled in.
+    // append_func_sig asks find_struct whether a parameter or return type is
+    // an aggregate (MLC-015), and a struct's own members can reference a
+    // typedef or an enum's constants, so the order below is typedef/enum,
+    // then struct, then function -- each pass only depending on tables the
+    // earlier ones already filled in.
     for (int i = 0; i < block->block.count; i++) {
         ASTNode *n = block->block.stmts[i];
         if (n->type == AST_TYPEDEF) {
@@ -340,7 +294,7 @@ void build_codegen_toplevel_info(CompilerContext *cc, ASTNode *root) {
     for (int i = 0; i < block->block.count; i++) {
         ASTNode *n = block->block.stmts[i];
         if (cg_as_fundef(n)) {
-            append_func_sig(cc, n);
+            append_func_sig(cc, n->fundef.name, n);
         } else if (n->type == AST_IMPORT) {
             append_import_sigs_from_source(cc, n);
         }
@@ -470,9 +424,7 @@ void cleanup_codegen_context(CompilerContext *cc) {
     cc->object_local_func_count = 0;
     if (cc->func_sigs) {
         for (int i = 0; i < cc->func_sig_count; i++) {
-            free(cc->func_sigs[i].param_is_aggregate);
-            free(cc->func_sigs[i].param_has_type);
-            free(cc->func_sigs[i].param_types);
+            free(cc->func_sigs[i].params);
         }
         free(cc->func_sigs);
         cc->func_sigs = NULL;

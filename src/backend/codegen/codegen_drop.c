@@ -7,9 +7,9 @@ static const char *drop_func_for_base(CompilerContext *cc, const char *base_type
     const FunctionSig *sig = find_func_sig(cc, name);
     if (!sig || sig->param_count != 1 || !sig->has_return_type ||
         !sig->return_type.base_type || strcmp(sig->return_type.base_type, "void") != 0 ||
-        !sig->param_has_type || !sig->param_has_type[0] ||
-        (sig->param_types[0].pointer_level == 0 &&
-         sig->param_types[0].borrow_kind == REFKIND_NONE)) return NULL;
+        !sig->params || !sig->params[0].has_type ||
+        (sig->params[0].type.pointer_level == 0 &&
+         sig->params[0].type.borrow_kind == REFKIND_NONE)) return NULL;
     return sig->name;
 }
 

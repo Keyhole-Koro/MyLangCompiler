@@ -165,12 +165,13 @@ uses one of those still needs it exported.
 The resolver provides, at minimum:
 
 - target package name;
-- exported declaration for a source name;
+- exported declaration for a source name, whose AST carries a function's
+  parameter names and types, parameter count and variadic metadata;
 - link name;
-- function parameter names and types;
-- parameter count and variadic metadata;
-- exported generic function and struct templates;
 - visibility under the selected import form.
+
+Exported generic function and struct templates are read from the cached
+module's `generic_templates`.
 
 ## Phase responsibilities
 

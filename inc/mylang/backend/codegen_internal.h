@@ -75,6 +75,15 @@ typedef struct {
     char *label;
 } ConstItem;
 
+// One declared parameter of a FunctionSig. A rest parameter's entry stays
+// zeroed: the variadic tail is always passed as plain words.
+typedef struct {
+    bool is_aggregate;
+    bool is_move;
+    bool has_type;
+    TypeInfo type;
+} FunctionSigParam;
+
 typedef struct {
     const char *name;
     int param_count;
@@ -89,12 +98,9 @@ typedef struct {
     int ret_size_bytes;
     bool has_return_type;
     TypeInfo return_type;
-    bool *param_is_aggregate; // param_count entries, or NULL if param_count == 0
-    bool *param_has_type;
-    bool *param_is_move;
-    TypeInfo *param_types;
+    FunctionSigParam *params; // param_count entries, or NULL if param_count == 0
     // Non-NULL for a call through a typed function value. Its AST supplies
-    // the same parameter/return information as the cached arrays above.
+    // the same parameter/return information as the cached params above.
     const ASTNode *function_type;
 } FunctionSig;
 

@@ -100,8 +100,8 @@ FrontendSession
   └── shared by root and imported ParserContext instances
 
 Resolver
-  └── Queries ModuleGraph for exported symbols, mangled link names,
-      function signatures, variadics, and generic templates
+  └── Queries ModuleGraph for the exported symbols an import makes visible,
+      with their declarations and mangled link names
 ```
 
 - **Module Caching**: Paths are resolved relative to the importer and canonicalized via `realpath`. Each source file is lexed and parsed into syntax AST at most once per session.
@@ -110,7 +110,7 @@ Resolver
 - **Eliminated Phase Scans**:
   - `parser_import_generics.c`: Obtains exported generic templates directly from cached module ASTs.
   - `parser_dom_sig.c`: Obtains parameter names and variadics from parsed function declarations via the Resolver without token scanning.
-  - `codegen_toplevel.c`: Obtains exported function signatures and variadics from Resolver metadata instead of manual token scans.
+  - `codegen_toplevel.c`: Reads exported function signatures and variadics from the declarations of the imported module's symbols instead of manual token scans.
   - `semantic_symbols.c`: Decoupled from parser default context; receives imported package info explicitly through `SemanticContext`.
 
 ## Semantic

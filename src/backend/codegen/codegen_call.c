@@ -283,14 +283,14 @@ static int sig_arg_is_aggregate(CompilerContext *cc, const FunctionSig *sig, int
         const ASTNode *param_type = sig->function_type->function_type.param_types[i];
         return aggregate_type_size(cc, (ASTNode *)param_type) > 0;
     }
-    return sig->param_is_aggregate && sig->param_is_aggregate[i];
+    return sig->params && sig->params[i].is_aggregate;
 }
 
 static void clear_moved_call_args(CompilerContext *cc, ASTNode *node,
                                   const FunctionSig *sig, StringBuilder *sb) {
     if (!sig) return;
     for (int i = 0; i < node->call.arg_count && i < sig->param_count; i++) {
-        if (sig->param_is_move && sig->param_is_move[i] && sig_arg_is_aggregate(cc, sig, i))
+        if (sig->params && sig->params[i].is_move && sig_arg_is_aggregate(cc, sig, i))
             clear_moved_drop_binding(cc, node->call.args[i], sb);
     }
 }
