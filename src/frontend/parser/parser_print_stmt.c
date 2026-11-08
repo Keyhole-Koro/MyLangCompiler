@@ -41,6 +41,11 @@ int fprint_ast_stmt_node(FILE *out, ASTNode *node, int indent) {
         fprint_ast(out, node->while_stmt.cond, indent + 1);
         fprint_ast(out, node->while_stmt.body, indent + 1);
         return 1;
+    case AST_DO_WHILE:
+        fprint_indent(out, indent); fprintf(out, "DoWhile\n");
+        fprint_ast(out, node->do_while_stmt.body, indent + 1);
+        fprint_ast(out, node->do_while_stmt.cond, indent + 1);
+        return 1;
     case AST_FOR:
         fprint_indent(out, indent); fprintf(out, "For\n");
         if (node->for_stmt.init) {
