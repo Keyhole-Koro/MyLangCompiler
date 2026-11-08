@@ -698,7 +698,10 @@ static void lower_expr(ParserContext *context, ASTNode **slot, DomEmit *out) {
     switch (node->type) {
     case AST_BINARY:
         lower_expr(context, &node->binary.left, out);
-        lower_expr(context, &node->binary.right, out);
+        /* The right operand of && and || runs only when the left one does not
+         * decide: see lower_branch_blocks. */
+        if (node->binary.op != LAND && node->binary.op != LOR)
+            lower_expr(context, &node->binary.right, out);
         break;
     case AST_ASSIGN:
         lower_expr(context, &node->assign.left, out);
@@ -734,7 +737,7 @@ static void lower_expr(ParserContext *context, ASTNode **slot, DomEmit *out) {
         }
         break;
     case AST_SIZEOF:
-        lower_expr(context, &node->sizeof_expr.expr, out);
+        /* sizeof never evaluates its operand, so nothing in it is built. */
         break;
     default:
         break;
@@ -767,16 +770,11 @@ static void lower_stmt_exprs(ParserContext *context, ASTNode *stmt, DomEmit *out
     case AST_IF:
         lower_expr(context, &stmt->if_stmt.cond, out);
         break;
-    case AST_WHILE:
-        lower_expr(context, &stmt->while_stmt.cond, out);
-        break;
-    case AST_DO_WHILE:
-        lower_expr(context, &stmt->do_while_stmt.cond, out);
-        break;
+    /* A loop's condition runs once per iteration, and a `for` increment
+     * after each one, so neither is hoisted ahead of the loop: see
+     * lower_branch_blocks. A `for` init runs once. */
     case AST_FOR:
         lower_stmt_exprs(context, stmt->for_stmt.init, out);
-        lower_expr(context, &stmt->for_stmt.cond, out);
-        lower_stmt_exprs(context, stmt->for_stmt.inc, out);
         break;
     default:
         break;
@@ -882,11 +880,12 @@ static void lower_branch(ParserContext *context, ASTNode *branch) {
     if (branch && branch->type == AST_STMT_EXPR) lower_dom_block(context, branch->stmt_expr.block);
 }
 
-/* A `case` arm and a branch of `?:` run only when chosen, so markup in one
- * cannot be hoisted ahead of the whole statement. A branch written as a
- * statement expression is a block of its own and is lowered in place: in
- * `Err(e) -> ({ return <Alert text={e.describe()} />; })` or
- * `ok ? ({ yield (<Done />); }) : 0` the element is built only when that
+/* A `case` arm, a branch of `?:` and the right operand of `&&` or `||` run
+ * only when chosen, and a loop's condition and a `for` increment once per
+ * iteration, so markup in one cannot be hoisted ahead of the whole statement.
+ * A branch written as a statement expression is a block of its own and is
+ * lowered in place: in `Err(e) -> ({ return <Alert text={e.describe()} />; })`
+ * or `ok ? ({ yield (<Done />); }) : 0` the element is built only when that
  * branch runs. Markup that is itself a branch's value is left for
  * ensure_no_dom_elements to reject. Blocks, statement expressions and function
  * literals are lowered on their own, so the search stops at them. */
@@ -906,6 +905,19 @@ static void lower_branch_blocks(ASTNode **slot, void *data) {
     case AST_TERNARY:
         lower_branch(context, node->ternary.then_expr);
         lower_branch(context, node->ternary.else_expr);
+        break;
+    case AST_BINARY:
+        if (node->binary.op == LAND || node->binary.op == LOR) lower_branch(context, node->binary.right);
+        break;
+    case AST_WHILE:
+        lower_branch(context, node->while_stmt.cond);
+        break;
+    case AST_DO_WHILE:
+        lower_branch(context, node->do_while_stmt.cond);
+        break;
+    case AST_FOR:
+        lower_branch(context, node->for_stmt.cond);
+        lower_branch(context, node->for_stmt.inc);
         break;
     default:
         break;

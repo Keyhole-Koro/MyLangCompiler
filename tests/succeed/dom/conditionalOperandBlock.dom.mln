@@ -1,0 +1,48 @@
+// Markup in the right operand of && or ||, in a loop's condition or in a
+// `for` increment runs only when that part does, so a statement expression
+// there is lowered inside its own block. Such markup used to be hoisted ahead
+// of the statement and built exactly once, whether or not the part ran and
+// however often it did.
+i32 g_made = 0;
+
+void append_child(i32 parent, i32 child) { }
+i32 A(i32 v = 1) { g_made = g_made * 10 + v; return 7; }
+
+i32 both(i32 k) {
+    return k && ({ yield (<A v={2} />) > 0; });
+}
+
+i32 either(i32 k) {
+    return k || ({ yield (<A v={3} />) > 0; });
+}
+
+i32 checks(i32 limit) {
+    i32 n = 0;
+    while (({ i32 id = <A v={4} />; yield id > 0 && n < limit; })) n = n + 1;
+    return n;
+}
+
+i32 steps(i32 limit) {
+    i32 n = 0;
+    for (i32 i = 0; i < limit; ({ i = i + 1; yield (<A v={5} />); })) n = n + 1;
+    return n;
+}
+
+i32 repeats() {
+    i32 n = 0;
+    do { n = n + 1; } while (({ i32 id = <A v={6} />; yield n < 2; }));
+    return n;
+}
+
+i32 main() {
+    i32 a = both(0);    // nothing
+    i32 b = both(1);    // A(2)
+    i32 c = either(1);  // nothing
+    i32 d = either(0);  // A(3)
+    i32 e = checks(2);  // A(4) at each of three checks
+    i32 f = steps(0);   // nothing
+    i32 g = steps(2);   // A(5) after each of two iterations
+    i32 h = repeats();  // A(6) after each of two runs of the body
+    if (a != 0 || b != 1 || c != 1 || d != 1 || e != 2 || f != 0 || g != 2 || h != 2) return 1;
+    return g_made;      // 234445566
+}

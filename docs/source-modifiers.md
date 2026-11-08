@@ -128,7 +128,11 @@ the element is built only when that arm runs. An element that is itself an
 arm's value would be hoisted ahead of the whole `case` and built whichever arm
 runs, so it is an error. The branches of `?:` follow the same rule:
 `ok ? ({ yield (<Done />); }) : ({ yield (<Retry />); })` builds one element,
-and `ok ? (<Done />) : (<Retry />)` is an error.
+and `ok ? (<Done />) : (<Retry />)` is an error. So does the right operand of
+`&&` and `||`, and so do a loop's condition, which runs once per iteration, and
+a `for` increment: `while (({ i32 id = <Probe />; yield id > 0; }))` builds an
+element at every check. `sizeof` never evaluates its operand, so an element in
+it is an error.
 
 Because tags are function names, adding an element means adding a function to
 the imported package, and an event handler is simply a parameter (`onClick`

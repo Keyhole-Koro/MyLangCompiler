@@ -1,0 +1,8 @@
+// sizeof never evaluates its operand, so an element in it is rejected rather
+// than built for nothing: "a DOM element is only allowed as a value inside a
+// statement".
+import dom from "../../support/dom/dom.mln";
+
+i32 f() {
+    return sizeof(<Text text="a" x={1} y={2} />);
+}

@@ -1,0 +1,11 @@
+// A loop's condition runs once per iteration, so an element in it would be
+// built once, ahead of the loop, however often the condition ran. It is
+// rejected: "a DOM element is only allowed as a value inside a statement".
+// A condition written as a statement expression,
+// `while (({ i32 id = <Text .../>; yield id > n; }))`, is lowered.
+import dom from "../../support/dom/dom.mln";
+
+i32 f(i32 n) {
+    while ((<Text text="a" x={1} y={2} />) > n) n = n + 1;
+    return n;
+}
