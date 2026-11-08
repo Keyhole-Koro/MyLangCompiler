@@ -1,0 +1,10 @@
+// A variable is not a constant, so a global initializer cannot name one:
+// "invalid or non-constant global initializer (AST_IDENTIFIER)". An exported
+// variable is a defined symbol, which once made `copy` store the address of
+// `base` instead of failing.
+package counters;
+
+export i32 base = 5;
+export i32 copy = base;
+
+i32 main() { return copy; }

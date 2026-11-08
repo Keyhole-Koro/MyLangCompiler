@@ -127,6 +127,7 @@ nestedFunctionLiteral|6|succeed/function/nestedFunctionLiteral.mln
 globalInit|42|succeed/global/globalInit.mln
 testGlobalScalar|105|succeed/global/testGlobalScalar.mln
 globalUninit|83|succeed/global/globalUninit.mln
+globalConstantReference|77111111|succeed/global/constantReference.mln
 phase2_refBorrow|7|succeed/semantic/phase2_refBorrow.mln
 phase2_borrowWrite|9|succeed/semantic/phase2_borrowWrite.mln
 rawPointerWrite|9|succeed/unsafe/rawPointerWrite.unsafe.mln

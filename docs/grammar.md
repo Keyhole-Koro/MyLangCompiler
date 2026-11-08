@@ -297,6 +297,13 @@ Only a number literal counts as a constant condition.
 - `var_decl` -> `type IDENTIFIER ( [ ( NUMBER | const_parameter )? ] )* ( = ( expr | init_list ) )? ;`
 - `init_list` -> `{ expr ( , expr )* ,? }`
 
+A global's initializer is worked out when compiling: numbers, characters,
+operators, casts, `?:` and a newtype's constructor; a string literal where a
+pointer or `str` is stored; a function's name where a function value is stored;
+and the name of a `const` scalar global declared earlier in the same file,
+which stands for its value (`export const i32 CARET = ACCENT;`). Naming a
+variable, or a constant of another module, is an error.
+
 ### Types and Enumerations
 - `struct_decl` -> `struct IDENTIFIER? { var_decl* } IDENTIFIER? ;` | `struct IDENTIFIER generic_params { var_decl* } ;`
 - `enum_decl` -> `enum IDENTIFIER { IDENTIFIER ( = NUMBER )? ( , IDENTIFIER ( = NUMBER )? )* ,? } ;`

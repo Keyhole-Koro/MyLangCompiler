@@ -7,6 +7,7 @@ char *codegen_with_session(ASTNode *root, FrontendSession *session)
     CompilerContext *cc = &ctx;
     cc->session = session;
     ASTNode *block = cg_as_block(root);
+    cc->program = block;
     StringBuilder sb;
     sb_init(&sb);
 

@@ -1,0 +1,32 @@
+// A global initializer that names a constant stores the constant's value. An
+// exported constant is a defined symbol, which once made `CARET = ACCENT`
+// store the address of ACCENT instead. A function still stores its address.
+package palette;
+
+newtype Shade = i32;
+struct Pair { i32 first; fn() -> i32 pick; };
+
+export const i32 ACCENT = 0x3B82F6;
+export const i32 CARET = ACCENT;
+const i32 HALF = CARET / 2;
+export const u8 SMALL = 7;
+u8 small_copy = SMALL;
+export const Shade DARK = Shade(40);
+const Shade ALSO_DARK = DARK;
+i32 table[2] = { ACCENT, HALF };
+Pair pair = Pair { first: CARET, pick: seven };
+
+export i32 seven() { return 7; }
+fn() -> i32 pick = seven;
+
+i32 main() {
+    fn() -> i32 f = pick;
+    fn() -> i32 g = pair.pick;
+    i32 checks = (CARET == 0x3B82F6 ? 1 : 0)
+               + (HALF == 0x1DC17B ? 10 : 0)
+               + (small_copy == 7 ? 100 : 0)
+               + ((i32)ALSO_DARK == 40 ? 1000 : 0)
+               + (table[0] == ACCENT && table[1] == HALF ? 10000 : 0)
+               + (pair.first == ACCENT ? 100000 : 0);
+    return checks + f() * 1000000 + g() * 10000000;   // 77111111
+}

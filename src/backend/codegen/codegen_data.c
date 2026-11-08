@@ -17,10 +17,44 @@ void emit_zero_bytes(StringBuilder *sb, int count) {
     sb_append(sb, "\n");
 }
 
+/* A `const` scalar global this file declares. A global initializer that names
+ * one stores its value: `export const i32 CARET = ACCENT;` folds to ACCENT's
+ * number. NULL for anything else -- a variable, an array, a pointer, or a
+ * constant of another module -- so naming it stays an error. */
+static ASTNode *constant_global(CompilerContext *cc, const char *name) {
+    ASTNode *program = cg_as_block(cc->program);
+    for (int i = 0; program && name && i < program->block.count; i++) {
+        ASTNode *decl = cg_as_var_decl(program->block.stmts[i]);
+        if (!decl || !decl->var_decl.name || strcmp(decl->var_decl.name, name) != 0) continue;
+        ASTNode *type = decl->var_decl.var_type;
+        TypeInfo info = {0};
+        if (!decl->var_decl.init || decl->var_decl.is_extern || !type || type->type != AST_TYPE ||
+            type->type_node.pointer_level != 0 || !(type->type_node.type_modifiers & TYPEMOD_CONST) ||
+            aggregate_type_size(cc, type) > 0 || !typeinfo_from_type_ast(cc, type, &info) ||
+            typeinfo_total_size_bytes(cc, &info) > SLOT_SIZE)
+            return NULL;
+        return decl;
+    }
+    return NULL;
+}
+
+/* A function this file defines, whose address a global stores. An exported
+ * global is a defined symbol as well, but naming one means its value. */
+static int is_function_name(CompilerContext *cc, ASTNode *expr) {
+    return expr && expr->type == AST_IDENTIFIER && func_is_defined(cc, expr->identifier.name) &&
+           !find_global_info(cc, expr->identifier.name);
+}
+
 static long eval_const_expr(CompilerContext *cc, ASTNode *node) {
     if (!node) return 0;
     if (node->type == AST_NUMBER) {
         return strtol(node->number.value, NULL, 10);
+    }
+    if (node->type == AST_IDENTIFIER) {
+        /* Semantic analysis lets a global name only globals declared before
+         * it, so a chain of constants always ends. */
+        ASTNode *decl = constant_global(cc, node->identifier.name);
+        if (decl) return eval_const_expr(cc, decl->var_decl.init);
     }
     if (node->type == AST_CHAR_LITERAL) {
         return (unsigned char)(node->char_literal.value ? node->char_literal.value[0] : 0);
@@ -104,7 +138,7 @@ static void emit_word_operand(CompilerContext *cc, StringBuilder *sb, ASTNode *e
     if (expr && expr->type == AST_STRING_LITERAL) {
         sb_append(sb, "  .word %s\n", intern_string_literal_n(cc,
                   expr->string_literal.value, expr->string_literal.length));
-    } else if (expr && expr->type == AST_IDENTIFIER && func_is_defined(cc, expr->identifier.name)) {
+    } else if (is_function_name(cc, expr)) {
         sb_append(sb, "  .word %s\n", expr->identifier.name);
     } else {
         sb_append(sb, "  .word %ld\n", eval_const_expr(cc, expr));
@@ -185,8 +219,7 @@ void emit_global_init(CompilerContext *cc, StringBuilder *sb, ASTNode *init_expr
     // name holds that symbol's address: `char *s = "hi";`, `i32 f = handler;`.
     // Before .word existed this came out as a null pointer.
     if (expected_bytes == SLOT_SIZE &&
-        (init_expr->type == AST_STRING_LITERAL ||
-         (init_expr->type == AST_IDENTIFIER && func_is_defined(cc, init_expr->identifier.name)))) {
+        (init_expr->type == AST_STRING_LITERAL || is_function_name(cc, init_expr))) {
         emit_word_operand(cc, sb, init_expr);
         return;
     }

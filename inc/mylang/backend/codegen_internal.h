@@ -117,6 +117,9 @@ typedef struct {
 
 typedef struct {
     FrontendSession *session;
+    /* The file's top-level block, for a global initializer that names a
+     * constant declared in it (codegen_data.c). */
+    ASTNode *program;
     StructInfo *structs;
     int struct_count;
     TypedefInfo *typedefs;
