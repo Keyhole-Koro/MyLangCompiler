@@ -164,8 +164,8 @@ int find_var_offset(const char *name, char **params, int param_count,
     if (idx >= 0)
     {
         if (is_param) *is_param = 1;
-        if (idx < 3) return param_offset(idx);
-        return 8 + (idx - 3) * SLOT_SIZE;
+        if (idx < REG_ARG_COUNT) return param_offset(idx);
+        return 8 + (idx - REG_ARG_COUNT) * SLOT_SIZE;
     }
     idx = local_index_last(name, locals, local_count);
     if (idx >= 0)

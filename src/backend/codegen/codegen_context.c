@@ -66,7 +66,7 @@ int next_label(CompilerContext *cc) {
     return cc->label_counter++;
 }
 
-const char *arg_regs[] = {"r5", "r6", "r7"};
+const char *arg_regs[REG_ARG_COUNT] = {"r5", "r6", "r7"};
 
 int find_name(char **arr, int count, const char *name) {
     if (!name) return -1;
@@ -128,7 +128,7 @@ int cg_rest_stack_base(CompilerContext *cc, const char *name, int *out_rest_stac
     int fixed_count = 0;
     if (!cg_current_rest_info(cc, name, NULL, &fixed_count)) return 0;
     if (out_rest_stack_base) {
-        *out_rest_stack_base = 8 + ((fixed_count > 3) ? ((fixed_count - 3) * SLOT_SIZE) : 0);
+        *out_rest_stack_base = 8 + ((fixed_count > REG_ARG_COUNT) ? ((fixed_count - REG_ARG_COUNT) * SLOT_SIZE) : 0);
     }
     return 1;
 }

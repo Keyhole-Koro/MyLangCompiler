@@ -46,25 +46,11 @@ static void gen_mock_call_original_sret(CompilerContext *cc, ASTNode *node,
         exit(1);
     }
 
-    int stack_args = argc > 3 ? argc - 3 : 0;
-    if (stack_args > 0) {
-        sb_append(sb, "  ; push stack arguments (aggregate mock.call_original)\n");
-        sb_append(sb, "  addis sp, -%d\n", stack_args * SLOT_SIZE);
-        for (int i = 3; i < argc; i++) {
-            gen_expr(cc, node->call.args[i], sb, "r1", params, param_count, locals, local_count);
-            sb_append(sb, "  mov r2, sp\n  addis r2, %d\n  store r2, r1\n",
-                      (i - 3) * SLOT_SIZE);
-        }
-    }
-
-    int reg_argc = argc < 3 ? argc : 3;
-    for (int i = 0; i < reg_argc; i++) {
-        gen_expr(cc, node->call.args[i], sb, "r1", params, param_count, locals, local_count);
-        sb_append(sb, "  push r1\n");
-    }
-    for (int i = reg_argc - 1; i >= 0; i--) {
-        sb_append(sb, "  pop %s\n", arg_regs[i]);
-    }
+    // No signature: every argument is passed as its plain value.
+    int stack_bytes = emit_stack_args(cc, node, NULL, argc,
+                                      "push stack arguments (aggregate mock.call_original)",
+                                      sb, params, param_count, locals, local_count);
+    emit_reg_args(cc, node, NULL, sb, params, param_count, locals, local_count);
 
     // The context accessor is an ordinary call and may clobber the original
     // target's register arguments. Preserve them while resolving its dynamic
@@ -82,7 +68,7 @@ static void gen_mock_call_original_sret(CompilerContext *cc, ASTNode *node,
     sb_append(sb, "  mov r3, bp\n  addis r3, %d\n  load r4, r3\n", cc->sret_offset);
     sb_append(sb, "  movi lr, mock_sret_original_ret_%d\n  mov pc, r2\n", ret);
     sb_append(sb, "mock_sret_original_ret_%d:\n", ret);
-    if (stack_args > 0) sb_append(sb, "  addis sp, %d\n", stack_args * SLOT_SIZE);
+    if (stack_bytes > 0) sb_append(sb, "  addis sp, %d\n", stack_bytes);
     sb_append(sb, "  jmp mock_sret_original_done_%d\n", missing);
     sb_append(sb, "mock_sret_original_missing_%d:\n", missing);
     sb_append(sb, "  movi r5, %s\n  call assert_fail\n", reason);

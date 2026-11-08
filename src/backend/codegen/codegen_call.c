@@ -37,7 +37,7 @@ static void gen_builtin_rest_get(CompilerContext *cc, ASTNode *node, StringBuild
         exit(1);
     }
 
-    int rest_stack_base = 8 + ((fixed_count > 3) ? ((fixed_count - 3) * SLOT_SIZE) : 0);
+    int rest_stack_base = 8 + ((fixed_count > REG_ARG_COUNT) ? ((fixed_count - REG_ARG_COUNT) * SLOT_SIZE) : 0);
     gen_expr(cc, node->call.args[1], sb, "r1", params, param_count, locals, local_count);
     emit_scale_reg_const(cc, sb, "r1", SLOT_SIZE);
     sb_append(sb, "  mov r3, bp\n");
@@ -110,6 +110,87 @@ static int make_indirect_function_sig(CompilerContext *cc, const char *name,
     return 1;
 }
 
+// Stores r1 in the word at sp + offset; r2 is scratch.
+static void emit_store_r1_at_sp(StringBuilder *sb, int offset)
+{
+    sb_append(sb, "  mov r2, sp\n  addis r2, %d\n  store r2, r1\n", offset);
+}
+
+// The arguments that do not travel in arg_regs: those past the first
+// REG_ARG_COUNT, and the whole variadic tail (from fixed_count on), which is
+// always passed as plain words. They are evaluated left to right into the
+// area reserved here, the first at sp.
+int emit_stack_args(CompilerContext *cc, ASTNode *node, const FunctionSig *sig,
+                    int fixed_count, const char *comment, StringBuilder *sb,
+                    char **params, int param_count, char **locals, int local_count)
+{
+    int argc = node->call.arg_count;
+    int first = fixed_count < REG_ARG_COUNT ? fixed_count : REG_ARG_COUNT;
+    if (argc <= first) return 0;
+    int bytes = (argc - first) * SLOT_SIZE;
+    sb_append(sb, "  ; %s\n", comment);
+    sb_append(sb, "  addis sp, -%d\n", bytes);
+    for (int i = first; i < argc; i++) {
+        int is_aggregate = i < fixed_count && sig_arg_is_aggregate(cc, sig, i);
+        gen_arg_word(cc, node->call.args[i], sb, "r1", params, param_count,
+                     locals, local_count, is_aggregate, node->call.name, i);
+        emit_store_r1_at_sp(sb, (i - first) * SLOT_SIZE);
+    }
+    return bytes;
+}
+
+static int reg_arg_count(ASTNode *node)
+{
+    return node->call.arg_count < REG_ARG_COUNT ? node->call.arg_count : REG_ARG_COUNT;
+}
+
+// Evaluates the register arguments left to right, pushing each word, then
+// pops them into arg_regs: evaluating an argument may involve a nested call
+// that clobbers the argument registers, so earlier results must not be left
+// sitting in them. No argument may leave a temporary on the stack here -- it
+// would sit between the pushes and the pops -- so a call that passes an
+// aggregate call result uses emit_reg_args_into_slots instead.
+void emit_reg_args(CompilerContext *cc, ASTNode *node, const FunctionSig *sig, StringBuilder *sb,
+                   char **params, int param_count, char **locals, int local_count)
+{
+    int reg_argc = reg_arg_count(node);
+    for (int i = 0; i < reg_argc; i++) {
+        gen_arg_word(cc, node->call.args[i], sb, "r1", params, param_count,
+                     locals, local_count, sig_arg_is_aggregate(cc, sig, i),
+                     node->call.name, i);
+        sb_append(sb, "  push r1\n");
+    }
+    for (int i = reg_argc - 1; i >= 0; i--)
+        sb_append(sb, "  pop %s\n", arg_regs[i]);
+}
+
+// The register arguments of a call that passes an aggregate call result,
+// whose temporary stays on the stack until the call completes. One slot per
+// register argument is reserved first, each argument is stored past the
+// temporaries accumulated so far, and the slots are then loaded into
+// arg_regs. Returns the bytes this leaves on the stack (slots and
+// temporaries): whatever the caller pushed before is at sp plus that.
+static int emit_reg_args_into_slots(CompilerContext *cc, ASTNode *node, const FunctionSig *sig,
+                                    StringBuilder *sb, char **params, int param_count,
+                                    char **locals, int local_count)
+{
+    int reg_argc = reg_arg_count(node);
+    int slot_bytes = reg_argc * SLOT_SIZE;
+    int temp_bytes = 0;
+    sb_append(sb, "  addis sp, -%d\n", slot_bytes);
+    for (int i = 0; i < reg_argc; i++) {
+        temp_bytes += gen_arg_word(cc, node->call.args[i], sb, "r1", params, param_count,
+                                   locals, local_count, sig_arg_is_aggregate(cc, sig, i),
+                                   node->call.name, i);
+        emit_store_r1_at_sp(sb, temp_bytes + i * SLOT_SIZE);
+    }
+    for (int i = 0; i < reg_argc; i++) {
+        sb_append(sb, "  mov r2, sp\n  addis r2, %d\n  load %s, r2\n",
+                  temp_bytes + i * SLOT_SIZE, arg_regs[i]);
+    }
+    return temp_bytes + slot_bytes;
+}
+
 // Emit an indirect call: `callee(args)` where `callee` is a typed function
 // value. Its signature determines which arguments carry aggregate addresses.
 // Instead of `call <label>`, the pointer is loaded and jumped to via `mov pc,
@@ -120,7 +201,6 @@ static void gen_indirect_call(CompilerContext *cc, ASTNode *node, StringBuilder 
                               char **params, int param_count, char **locals, int local_count)
 {
     int argc = node->call.arg_count;
-    int stack_args = argc > 3 ? (argc - 3) : 0;
     int has_aggregate_result_arg = has_direct_aggregate_return_argument(cc, node, sig);
 
     if (sig && sig->is_variadic) {
@@ -128,7 +208,7 @@ static void gen_indirect_call(CompilerContext *cc, ASTNode *node, StringBuilder 
                 node->line, node->col);
         exit(1);
     }
-    if (has_aggregate_result_arg && argc > 3) {
+    if (has_aggregate_result_arg && argc > REG_ARG_COUNT) {
         fprintf(stderr,
                 "Codegen error: aggregate call results passed to an indirect aggregate parameter "
                 "require at most three arguments; bind the result to a variable first\n");
@@ -136,49 +216,25 @@ static void gen_indirect_call(CompilerContext *cc, ASTNode *node, StringBuilder 
     }
 
     if (has_aggregate_result_arg) {
-        int reg_argc = argc < 3 ? argc : 3;
-        int slot_bytes = reg_argc * SLOT_SIZE;
-        int aggregate_temp_bytes = 0;
         emit_load_var(cc, sb, node->call.name, "r1", params, param_count,
                       locals, local_count);
-        sb_append(sb, "  push r1\n  addis sp, -%d\n", slot_bytes);
-        for (int i = 0; i < reg_argc; i++) {
-            aggregate_temp_bytes += gen_arg_word(
-                cc, node->call.args[i], sb, "r1", params, param_count,
-                locals, local_count, sig_arg_is_aggregate(cc, sig, i),
-                node->call.name, i);
-            sb_append(sb, "  mov r2, sp\n  addis r2, %d\n  store r2, r1\n",
-                      aggregate_temp_bytes + i * SLOT_SIZE);
-        }
-        for (int i = 0; i < reg_argc; i++) {
-            sb_append(sb, "  mov r2, sp\n  addis r2, %d\n  load %s, r2\n",
-                      aggregate_temp_bytes + i * SLOT_SIZE, arg_regs[i]);
-        }
-        sb_append(sb, "  mov r2, sp\n  addis r2, %d\n  load r2, r2\n",
-                  aggregate_temp_bytes + slot_bytes);
+        sb_append(sb, "  push r1\n");
+        int arg_bytes = emit_reg_args_into_slots(cc, node, sig, sb, params, param_count,
+                                                 locals, local_count);
+        // The callee address pushed first sits just past them.
+        sb_append(sb, "  mov r2, sp\n  addis r2, %d\n  load r2, r2\n", arg_bytes);
         int ret = next_label(cc);
         sb_append(sb, "  movi lr, icall_ret_%d\n  mov pc, r2\n", ret);
         sb_append(sb, "icall_ret_%d:\n", ret);
         clear_moved_call_args(cc, node, sig, sb);
-        sb_append(sb, "  addis sp, %d\n",
-                  aggregate_temp_bytes + slot_bytes + SLOT_SIZE);
+        sb_append(sb, "  addis sp, %d\n", arg_bytes + SLOT_SIZE);
         if (strcmp(target_reg, "r1") != 0)
             sb_append(sb, "  mov %s, r1\n", target_reg);
         return;
     }
 
-    if (stack_args > 0) {
-        sb_append(sb, "  ; push stack arguments (indirect call)\n");
-        sb_append(sb, "  addis sp, -%d\n", stack_args * SLOT_SIZE);
-        for (int i = 3; i < argc; i++) {
-            gen_arg_word(cc, node->call.args[i], sb, "r1", params, param_count,
-                         locals, local_count, sig_arg_is_aggregate(cc, sig, i),
-                         node->call.name, i);
-            sb_append(sb, "  mov r2, sp\n");
-            sb_append(sb, "  addis r2, %d\n", (i - 3) * SLOT_SIZE);
-            sb_append(sb, "  store r2, r1\n");
-        }
-    }
+    int stack_bytes = emit_stack_args(cc, node, sig, argc, "push stack arguments (indirect call)",
+                                      sb, params, param_count, locals, local_count);
 
     // Evaluate the callee and register args, pushing each so a nested call in a
     // later arg cannot clobber an earlier result. Then pop them into place. The
@@ -188,17 +244,7 @@ static void gen_indirect_call(CompilerContext *cc, ASTNode *node, StringBuilder 
     sb_append(sb, "  ; evaluate indirect callee '%s'\n", node->call.name);
     emit_load_var(cc, sb, node->call.name, "r1", params, param_count, locals, local_count);
     sb_append(sb, "  push r1\n");
-
-    int reg_argc = argc < 3 ? argc : 3;
-    for (int i = 0; i < reg_argc; i++) {
-        gen_arg_word(cc, node->call.args[i], sb, "r1", params, param_count,
-                     locals, local_count, sig_arg_is_aggregate(cc, sig, i),
-                     node->call.name, i);
-        sb_append(sb, "  push r1\n");
-    }
-    for (int i = reg_argc - 1; i >= 0; i--) {
-        sb_append(sb, "  pop %s\n", arg_regs[i]);
-    }
+    emit_reg_args(cc, node, sig, sb, params, param_count, locals, local_count);
     sb_append(sb, "  pop r2\n"); // callee address (r2 is free once args are placed)
 
     int ret = next_label(cc);
@@ -208,9 +254,9 @@ static void gen_indirect_call(CompilerContext *cc, ASTNode *node, StringBuilder 
 
     clear_moved_call_args(cc, node, sig, sb);
 
-    if (stack_args > 0) {
+    if (stack_bytes > 0) {
         sb_append(sb, "  ; restore sp after indirect call\n");
-        sb_append(sb, "  addis sp, %d\n", stack_args * SLOT_SIZE);
+        sb_append(sb, "  addis sp, %d\n", stack_bytes);
     }
 
     if (strcmp(target_reg, "r1") != 0)
@@ -351,7 +397,7 @@ void gen_call(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char 
      * that wider form; diagnose it rather than misplacing an argument. */
     int has_direct_aggregate_arg = has_direct_aggregate_return_argument(cc, node, sig);
     if (has_direct_aggregate_arg &&
-        (argc > 3 || (sig && sig->is_variadic))) {
+        (argc > REG_ARG_COUNT || (sig && sig->is_variadic))) {
         fprintf(stderr,
                 "Codegen error: direct aggregate call results can only be passed to a non-variadic call with at most three arguments; bind it to a variable first\n");
         exit(1);
@@ -365,46 +411,24 @@ void gen_call(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char 
             exit(1);
         }
 
-        int fixed_stack_count = fixed > 3 ? (fixed - 3) : 0;
-        int rest_count = argc - fixed;
-        int stack_args = fixed_stack_count + rest_count;
-
         note_direct_call_import(cc, node->call.name);
 
-        if (stack_args > 0) {
-            sb_append(sb, "  ; push variadic stack arguments\n");
-            sb_append(sb, "  addis sp, -%d\n", stack_args * SLOT_SIZE);
+        // Rest arguments have no per-argument declared type -- they are
+        // the variadic tail, always passed as plain i32 values on the stack.
+        int stack_bytes = emit_stack_args(cc, node, sig, fixed, "push variadic stack arguments",
+                                          sb, params, param_count, locals, local_count);
 
-            for (int i = 3; i < fixed; i++) {
-                gen_arg_word(cc, node->call.args[i], sb, "r1", params, param_count, locals, local_count,
-                            sig_arg_is_aggregate(cc, sig, i), node->call.name, i);
-                sb_append(sb, "  mov r2, sp\n");
-                sb_append(sb, "  addis r2, %d\n", (i - 3) * SLOT_SIZE);
-                sb_append(sb, "  store r2, r1\n");
-            }
-
-            // Rest arguments have no per-argument declared type -- they are
-            // the variadic tail, always passed as plain i32 values.
-            for (int i = fixed; i < argc; i++) {
-                int offset = (fixed_stack_count + (i - fixed)) * SLOT_SIZE;
-                gen_expr(cc, node->call.args[i], sb, "r1", params, param_count, locals, local_count);
-                sb_append(sb, "  mov r2, sp\n");
-                sb_append(sb, "  addis r2, %d\n", offset);
-                sb_append(sb, "  store r2, r1\n");
-            }
-        }
-
-        for (int i = 0; i < fixed && i < 3; i++) {
+        for (int i = 0; i < fixed && i < REG_ARG_COUNT; i++) {
             gen_arg_word(cc, node->call.args[i], sb, arg_regs[i], params, param_count, locals, local_count,
                         sig_arg_is_aggregate(cc, sig, i), node->call.name, i);
         }
-        sb_append(sb, "  movi r4, %d\n", rest_count);
+        sb_append(sb, "  movi r4, %d\n", argc - fixed);
         sb_append(sb, "  call %s\n", direct_call_target(node->call.name));
         clear_moved_call_args(cc, node, sig, sb);
 
-        if (stack_args > 0) {
+        if (stack_bytes > 0) {
             sb_append(sb, "  ; restore sp after variadic call\n");
-            sb_append(sb, "  addis sp, %d\n", stack_args * SLOT_SIZE);
+            sb_append(sb, "  addis sp, %d\n", stack_bytes);
         }
 
         if (strcmp(target_reg, "r1") != 0)
@@ -413,7 +437,6 @@ void gen_call(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char 
     }
 
     note_direct_call_import(cc, node->call.name);
-    int stack_args = argc > 3 ? (argc - 3) : 0;
 
     /* A direct aggregate-returning argument leaves its temporary on the
      * stack until this call completes. If an earlier register argument was
@@ -423,79 +446,29 @@ void gen_call(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char 
      * this preserves left-to-right evaluation as well as the temporary's
      * lifetime. The guard above ensures this path has no stack arguments. */
     if (has_direct_aggregate_arg) {
-        int reg_argc = argc < 3 ? argc : 3;
-        int slot_bytes = reg_argc * SLOT_SIZE;
-        int aggregate_temp_bytes = 0;
         sb_append(sb, "  ; reserve register argument slots\n");
-        sb_append(sb, "  addis sp, -%d\n", slot_bytes);
-        for (int i = 0; i < reg_argc; i++) {
-            aggregate_temp_bytes += gen_arg_word(
-                cc, node->call.args[i], sb, "r1", params, param_count,
-                locals, local_count, sig_arg_is_aggregate(cc, sig, i),
-                node->call.name, i);
-            sb_append(sb, "  mov r2, sp\n");
-            sb_append(sb, "  addis r2, %d\n", aggregate_temp_bytes + i * SLOT_SIZE);
-            sb_append(sb, "  store r2, r1\n");
-        }
-        for (int i = 0; i < reg_argc; i++) {
-            sb_append(sb, "  mov r2, sp\n");
-            sb_append(sb, "  addis r2, %d\n", aggregate_temp_bytes + i * SLOT_SIZE);
-            sb_append(sb, "  load %s, r2\n", arg_regs[i]);
-        }
+        int arg_bytes = emit_reg_args_into_slots(cc, node, sig, sb, params, param_count,
+                                                 locals, local_count);
         sb_append(sb, "  call %s\n", direct_call_target(node->call.name));
         clear_moved_call_args(cc, node, sig, sb);
         sb_append(sb, "  ; release aggregate call arguments and register slots\n");
-        sb_append(sb, "  addis sp, %d\n", aggregate_temp_bytes + slot_bytes);
+        sb_append(sb, "  addis sp, %d\n", arg_bytes);
         if (strcmp(target_reg, "r1") != 0)
             sb_append(sb, "  mov %s, r1\n", target_reg);
         return;
     }
 
-    if (stack_args > 0)
-    {
-        sb_append(sb, "  ; push stack arguments\n");
-        sb_append(sb, "  addis sp, -%d\n", stack_args * SLOT_SIZE);
-        for (int i = 3; i < argc; i++)
-        {
-            gen_arg_word(cc, node->call.args[i], sb, "r1", params, param_count, locals, local_count,
-                        sig_arg_is_aggregate(cc, sig, i), node->call.name, i);
-            sb_append(sb, "  mov r2, sp\n");
-            sb_append(sb, "  addis r2, %d\n", (i - 3) * SLOT_SIZE);
-            sb_append(sb, "  store r2, r1\n");
-        }
-    }
-
-    // Evaluate register arguments left-to-right, pushing each result, then pop
-    // them into the argument registers just before the call. Evaluating an
-    // argument may involve a nested call that clobbers the argument registers,
-    // so earlier results must not be left sitting in those registers.
-    int reg_argc = argc < 3 ? argc : 3;
-    int aggregate_temp_bytes = 0;
-    for (int i = 0; i < reg_argc; i++)
-    {
-        aggregate_temp_bytes += gen_arg_word(cc, node->call.args[i], sb, "r1", params, param_count,
-                                             locals, local_count, sig_arg_is_aggregate(cc, sig, i),
-                                             node->call.name, i);
-        sb_append(sb, "  push r1\n");
-    }
-    for (int i = reg_argc - 1; i >= 0; i--)
-    {
-        sb_append(sb, "  pop %s\n", arg_regs[i]);
-    }
+    int stack_bytes = emit_stack_args(cc, node, sig, argc, "push stack arguments",
+                                      sb, params, param_count, locals, local_count);
+    emit_reg_args(cc, node, sig, sb, params, param_count, locals, local_count);
 
     sb_append(sb, "  call %s\n", direct_call_target(node->call.name));
     clear_moved_call_args(cc, node, sig, sb);
 
-    if (aggregate_temp_bytes > 0)
-    {
-        sb_append(sb, "  ; release aggregate call argument storage\n");
-        sb_append(sb, "  addis sp, %d\n", aggregate_temp_bytes);
-    }
-
-    if (stack_args > 0)
+    if (stack_bytes > 0)
     {
         sb_append(sb, "  ; restore sp after call\n");
-        sb_append(sb, "  addis sp, %d\n", stack_args * SLOT_SIZE);
+        sb_append(sb, "  addis sp, %d\n", stack_bytes);
     }
 
     if (strcmp(target_reg, "r1") != 0)
@@ -540,7 +513,7 @@ void gen_call_sret(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
             exit(1);
         }
         int has_aggregate_result_arg = has_direct_aggregate_return_argument(cc, node, sig);
-        if (has_aggregate_result_arg && node->call.arg_count > 3) {
+        if (has_aggregate_result_arg && node->call.arg_count > REG_ARG_COUNT) {
             fprintf(stderr,
                     "Codegen error: aggregate call results passed to an indirect aggregate parameter "
                     "require at most three arguments; bind the result to a variable first\n");
@@ -548,77 +521,45 @@ void gen_call_sret(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
         }
 
         int argc = node->call.arg_count;
-        int stack_args = argc > 3 ? argc - 3 : 0;
         if (has_aggregate_result_arg) {
-            int reg_argc = argc < 3 ? argc : 3;
-            int slot_bytes = reg_argc * SLOT_SIZE;
-            int aggregate_temp_bytes = 0;
             emit_load_var(cc, sb, node->call.name, "r1", params, param_count,
                           locals, local_count);
-            sb_append(sb, "  push r1\n  addis sp, -%d\n", slot_bytes);
-            for (int i = 0; i < reg_argc; i++) {
-                aggregate_temp_bytes += gen_arg_word(
-                    cc, node->call.args[i], sb, "r1", params, param_count,
-                    locals, local_count, sig_arg_is_aggregate(cc, sig, i),
-                    node->call.name, i);
-                sb_append(sb, "  mov r2, sp\n  addis r2, %d\n  store r2, r1\n",
-                          aggregate_temp_bytes + i * SLOT_SIZE);
-            }
-            for (int i = 0; i < reg_argc; i++) {
-                sb_append(sb, "  mov r2, sp\n  addis r2, %d\n  load %s, r2\n",
-                          aggregate_temp_bytes + i * SLOT_SIZE, arg_regs[i]);
-            }
-            sb_append(sb, "  mov r2, sp\n  addis r2, %d\n  load r2, r2\n",
-                      aggregate_temp_bytes + slot_bytes);
+            sb_append(sb, "  push r1\n");
+            int arg_bytes = emit_reg_args_into_slots(cc, node, sig, sb, params, param_count,
+                                                     locals, local_count);
+            // Past the slots and temporaries: the callee address pushed
+            // above, then the destination address the caller pushed.
+            sb_append(sb, "  mov r2, sp\n  addis r2, %d\n  load r2, r2\n", arg_bytes);
             sb_append(sb, "  mov r4, sp\n  addis r4, %d\n  load r4, r4\n",
-                      aggregate_temp_bytes + slot_bytes + SLOT_SIZE);
+                      arg_bytes + SLOT_SIZE);
             int ret = next_label(cc);
             sb_append(sb, "  movi lr, icall_sret_ret_%d\n  mov pc, r2\n", ret);
             sb_append(sb, "icall_sret_ret_%d:\n", ret);
             clear_moved_call_args(cc, node, sig, sb);
-            sb_append(sb, "  addis sp, %d\n",
-                      aggregate_temp_bytes + slot_bytes + 2 * SLOT_SIZE);
+            sb_append(sb, "  addis sp, %d\n", arg_bytes + 2 * SLOT_SIZE);
             return;
         }
-        if (stack_args > 0) {
-            sb_append(sb, "  ; push stack arguments (indirect sret call)\n");
-            sb_append(sb, "  addis sp, -%d\n", stack_args * SLOT_SIZE);
-            for (int i = 3; i < argc; i++) {
-                gen_arg_word(cc, node->call.args[i], sb, "r1", params,
-                             param_count, locals, local_count,
-                             sig_arg_is_aggregate(cc, sig, i),
-                             node->call.name, i);
-                sb_append(sb, "  mov r2, sp\n  addis r2, %d\n  store r2, r1\n",
-                          (i - 3) * SLOT_SIZE);
-            }
-        }
+        int stack_bytes = emit_stack_args(cc, node, sig, argc,
+                                          "push stack arguments (indirect sret call)",
+                                          sb, params, param_count, locals, local_count);
 
         emit_load_var(cc, sb, node->call.name, "r1", params, param_count,
                       locals, local_count);
         sb_append(sb, "  push r1\n");
-        int reg_argc = argc < 3 ? argc : 3;
-        for (int i = 0; i < reg_argc; i++) {
-            gen_arg_word(cc, node->call.args[i], sb, "r1", params,
-                         param_count, locals, local_count,
-                         sig_arg_is_aggregate(cc, sig, i),
-                         node->call.name, i);
-            sb_append(sb, "  push r1\n");
-        }
-        for (int i = reg_argc - 1; i >= 0; i--)
-            sb_append(sb, "  pop %s\n", arg_regs[i]);
+        emit_reg_args(cc, node, sig, sb, params, param_count, locals, local_count);
         sb_append(sb, "  pop r2\n");
 
         sb_append(sb, "  ; load hidden out-pointer for indirect by-value return\n");
         sb_append(sb, "  mov r4, sp\n");
-        if (stack_args > 0) sb_append(sb, "  addis r4, %d\n", stack_args * SLOT_SIZE);
+        if (stack_bytes > 0) sb_append(sb, "  addis r4, %d\n", stack_bytes);
         sb_append(sb, "  load r4, r4\n");
         int ret = next_label(cc);
         sb_append(sb, "  movi lr, icall_sret_ret_%d\n  mov pc, r2\n", ret);
         sb_append(sb, "icall_sret_ret_%d:\n", ret);
         clear_moved_call_args(cc, node, sig, sb);
-        if (stack_args > 0)
-            sb_append(sb, "  addis sp, %d\n", stack_args * SLOT_SIZE);
-        sb_append(sb, "  addis sp, 4\n");
+        if (stack_bytes > 0)
+            sb_append(sb, "  addis sp, %d\n", stack_bytes);
+        sb_append(sb, "  addis sp, %d\n", SLOT_SIZE);
         return;
     }
 
@@ -632,63 +573,26 @@ void gen_call_sret(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
      * slots first and address them, and the destination, past every
      * accumulated temporary -- the same layout gen_call uses. */
     if (has_direct_aggregate_return_argument(cc, node, sig)) {
-        if (argc > 3 || (sig && sig->is_variadic)) {
+        if (argc > REG_ARG_COUNT || (sig && sig->is_variadic)) {
             fprintf(stderr,
                     "Codegen error: direct aggregate call results can only be passed to a non-variadic call with at most three arguments; bind it to a variable first\n");
             exit(1);
         }
-        int slot_bytes = argc * SLOT_SIZE;
-        int aggregate_temp_bytes = 0;
         sb_append(sb, "  ; reserve register argument slots (sret call)\n");
-        sb_append(sb, "  addis sp, -%d\n", slot_bytes);
-        for (int i = 0; i < argc; i++) {
-            aggregate_temp_bytes += gen_arg_word(
-                cc, node->call.args[i], sb, "r1", params, param_count,
-                locals, local_count, sig_arg_is_aggregate(cc, sig, i),
-                node->call.name, i);
-            sb_append(sb, "  mov r2, sp\n  addis r2, %d\n  store r2, r1\n",
-                      aggregate_temp_bytes + i * SLOT_SIZE);
-        }
-        for (int i = 0; i < argc; i++) {
-            sb_append(sb, "  mov r2, sp\n  addis r2, %d\n  load %s, r2\n",
-                      aggregate_temp_bytes + i * SLOT_SIZE, arg_regs[i]);
-        }
+        int arg_bytes = emit_reg_args_into_slots(cc, node, sig, sb, params, param_count,
+                                                 locals, local_count);
         sb_append(sb, "  ; load hidden out-pointer for by-value return\n");
-        sb_append(sb, "  mov r4, sp\n  addis r4, %d\n  load r4, r4\n",
-                  aggregate_temp_bytes + slot_bytes);
+        sb_append(sb, "  mov r4, sp\n  addis r4, %d\n  load r4, r4\n", arg_bytes);
         sb_append(sb, "  call %s\n", direct_call_target(node->call.name));
         clear_moved_call_args(cc, node, sig, sb);
         sb_append(sb, "  ; release aggregate call arguments, slots, and destination\n");
-        sb_append(sb, "  addis sp, %d\n", aggregate_temp_bytes + slot_bytes + SLOT_SIZE);
+        sb_append(sb, "  addis sp, %d\n", arg_bytes + SLOT_SIZE);
         return;
     }
 
-    int stack_args = argc > 3 ? (argc - 3) : 0;
-    if (stack_args > 0)
-    {
-        sb_append(sb, "  ; push stack arguments (sret call)\n");
-        sb_append(sb, "  addis sp, -%d\n", stack_args * SLOT_SIZE);
-        for (int i = 3; i < argc; i++)
-        {
-            gen_arg_word(cc, node->call.args[i], sb, "r1", params, param_count, locals, local_count,
-                        sig_arg_is_aggregate(cc, sig, i), node->call.name, i);
-            sb_append(sb, "  mov r2, sp\n");
-            sb_append(sb, "  addis r2, %d\n", (i - 3) * SLOT_SIZE);
-            sb_append(sb, "  store r2, r1\n");
-        }
-    }
-
-    int reg_argc = argc < 3 ? argc : 3;
-    for (int i = 0; i < reg_argc; i++)
-    {
-        gen_arg_word(cc, node->call.args[i], sb, "r1", params, param_count, locals, local_count,
-                    sig_arg_is_aggregate(cc, sig, i), node->call.name, i);
-        sb_append(sb, "  push r1\n");
-    }
-    for (int i = reg_argc - 1; i >= 0; i--)
-    {
-        sb_append(sb, "  pop %s\n", arg_regs[i]);
-    }
+    int stack_bytes = emit_stack_args(cc, node, sig, argc, "push stack arguments (sret call)",
+                                      sb, params, param_count, locals, local_count);
+    emit_reg_args(cc, node, sig, sb, params, param_count, locals, local_count);
 
     // The destination address sits just past the stack-args reservation
     // (net zero from the register push/pop pairs above), so it is read at a
@@ -696,17 +600,17 @@ void gen_call_sret(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
     // would put it below the reservation this function is about to tear down.
     sb_append(sb, "  ; load hidden out-pointer for by-value return\n");
     sb_append(sb, "  mov r4, sp\n");
-    if (stack_args > 0) sb_append(sb, "  addis r4, %d\n", stack_args * SLOT_SIZE);
+    if (stack_bytes > 0) sb_append(sb, "  addis r4, %d\n", stack_bytes);
     sb_append(sb, "  load r4, r4\n");
 
     sb_append(sb, "  call %s\n", direct_call_target(node->call.name));
     clear_moved_call_args(cc, node, sig, sb);
 
-    if (stack_args > 0)
+    if (stack_bytes > 0)
     {
         sb_append(sb, "  ; restore sp after sret call\n");
-        sb_append(sb, "  addis sp, %d\n", stack_args * SLOT_SIZE);
+        sb_append(sb, "  addis sp, %d\n", stack_bytes);
     }
     // Drop the destination-address slot the caller pushed.
-    sb_append(sb, "  addis sp, 4\n");
+    sb_append(sb, "  addis sp, %d\n", SLOT_SIZE);
 }

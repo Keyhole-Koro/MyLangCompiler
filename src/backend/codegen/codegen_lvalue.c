@@ -24,7 +24,7 @@ void emit_load_var(CompilerContext *cc, StringBuilder *sb, const char *name, con
     int offset;
     if (idx >= 0)
     {
-        if (idx < 3)
+        if (idx < REG_ARG_COUNT)
         {
             // bp-4, bp-8, bp-12…
             offset = -(4 + idx * SLOT_SIZE);
@@ -36,7 +36,7 @@ void emit_load_var(CompilerContext *cc, StringBuilder *sb, const char *name, con
         else
         {
             // bp+N
-            offset = 8 + (idx - 3) * SLOT_SIZE;
+            offset = 8 + (idx - REG_ARG_COUNT) * SLOT_SIZE;
             sb_append(sb, "  \n; load param '%s' (arg%d, stack) into %s\n", name, idx + 1, target_reg);
             sb_append(sb, "  mov   r3, bp\n");
             sb_append(sb, "  addis r3, %d\n", offset);
@@ -108,7 +108,8 @@ void emit_addr_of_var(CompilerContext *cc, StringBuilder *sb, const char *name, 
         // back into this function, which would recurse forever instead of
         // ever reaching a param/local slot load.
         int idx = param_index(name, params, param_count);
-        int offset = idx < 3 ? param_offset(idx) : 8 + (idx - 3) * SLOT_SIZE;
+        int offset = idx < REG_ARG_COUNT ? param_offset(idx)
+                                         : 8 + (idx - REG_ARG_COUNT) * SLOT_SIZE;
         sb_append(sb, "  \n; load hidden pointer for by-value aggregate param '%s'\n", name);
         sb_append(sb, "  mov   r3, bp\n");
         sb_append(sb, "  addis r3, %d\n", offset);

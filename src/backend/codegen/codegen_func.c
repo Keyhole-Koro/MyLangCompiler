@@ -132,7 +132,7 @@ void gen_func(CompilerContext *cc, ASTNode *node, StringBuilder *sb)
     sb_append(sb, "  push bp\n");
     sb_append(sb, "  mov bp, sp\n  addis sp, -%d\n", frame_slots * SLOT_SIZE);
 
-    for (int i = 0; i < fixed_param_count && i < 3; i++) {
+    for (int i = 0; i < fixed_param_count && i < REG_ARG_COUNT; i++) {
         int param_width = scalar_var_width_bytes(cc, params[i]);
         sb_append(sb, "  ; store parameter '%s' from register %s\n", params[i], arg_regs[i]);
         sb_append(sb, "  mov   r3, bp\n");

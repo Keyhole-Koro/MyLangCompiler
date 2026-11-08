@@ -183,7 +183,12 @@ typedef struct {
 #define cg_data_sb        (cc->data_sb)
 #define cg_data_sb_inited (cc->data_sb_inited)
 
-extern const char *arg_regs[];
+/* The first REG_ARG_COUNT argument words of a call travel in arg_regs (of a
+ * variadic call, only fixed arguments do, and r4 holds the rest count); the
+ * others go in a stack area the caller reserves at sp, one SLOT_SIZE word
+ * each in argument order, which the callee finds at bp + 8 onwards. */
+#define REG_ARG_COUNT 3
+extern const char *arg_regs[REG_ARG_COUNT];
 
 static inline ASTNode *cg_as_block(ASTNode *node) {
     return (node && node->type == AST_BLOCK) ? node : NULL;
@@ -307,6 +312,17 @@ int gen_str_equality(CompilerContext *cc, ASTNode *left, ASTNode *right,
                      char **params, int param_count, char **locals, int local_count);
 void gen_call(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char *target_reg, char **params, int param_count, char **locals, int local_count);
 void gen_call_sret(CompilerContext *cc, ASTNode *node, StringBuilder *sb, char **params, int param_count, char **locals, int local_count);
+// Argument passing for a call `node` to a callee with signature `sig` (NULL:
+// every argument is a plain word). emit_stack_args reserves the stack area and
+// stores the arguments that do not go in registers, under a `; <comment>` line;
+// arguments from `fixed_count` on are a variadic tail. It returns the bytes to
+// release after the call. emit_reg_args then evaluates the register arguments
+// and puts them in arg_regs.
+int emit_stack_args(CompilerContext *cc, ASTNode *node, const FunctionSig *sig,
+                    int fixed_count, const char *comment, StringBuilder *sb,
+                    char **params, int param_count, char **locals, int local_count);
+void emit_reg_args(CompilerContext *cc, ASTNode *node, const FunctionSig *sig, StringBuilder *sb,
+                   char **params, int param_count, char **locals, int local_count);
 void gen_assign(CompilerContext *cc, ASTNode *node, StringBuilder *sb, char **params, int param_count, char **locals, int local_count, const char *target_reg);
 void gen_struct_literal_into_addr(CompilerContext *cc, ASTNode *literal,
                                   StringBuilder *sb, const char *dest_addr_reg,
