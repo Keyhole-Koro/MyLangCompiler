@@ -60,7 +60,7 @@ static void populate_function_sig_types(SemanticContext *ctx, SemanticFunctionSi
     for (int i = 0; i < SEMANTIC_MAX_FUNCTION_PARAMS; i++) {
         semantic_typeinfo_clear(&sig->param_types[i]);
         sig->param_names[i] = NULL;
-        sig->param_borrow_kinds[i] = REFKIND_NONE;
+        sig->param_borrow_kinds[i] = BORROWKIND_NONE;
         sig->param_is_move[i] = 0;
     }
 

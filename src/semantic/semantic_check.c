@@ -112,16 +112,16 @@ void semantic_check_binary_type(SemanticContext *ctx, ASTNode *node) {
         if ((node->binary.op == EQ || node->binary.op == NEQ) &&
             semantic_find_newtype(ctx, left.base_type) &&
             semantic_typeinfo_compatible(ctx, &left, &right)) return;
-        if ((semantic_typeinfo_is_integer_like_or_enum(ctx, &left) || left.pointer_level > 0 || left.borrow_kind != REFKIND_NONE) &&
-            (semantic_typeinfo_is_integer_like_or_enum(ctx, &right) || right.pointer_level > 0 || right.borrow_kind != REFKIND_NONE)) {
+        if ((semantic_typeinfo_is_integer_like_or_enum(ctx, &left) || left.pointer_level > 0 || left.borrow_kind != BORROWKIND_NONE) &&
+            (semantic_typeinfo_is_integer_like_or_enum(ctx, &right) || right.pointer_level > 0 || right.borrow_kind != BORROWKIND_NONE)) {
             return;
         }
     } else if (semantic_binary_is_arithmetic(node->binary.op)) {
         /* A pointer-like operand is a raw pointer (`*`), an array (decays to a
          * pointer), or a reference (`borrow`): all support pointer +/-
          * integer arithmetic. */
-        int left_ptrish = left.pointer_level > 0 || left.is_array || left.borrow_kind != REFKIND_NONE;
-        int right_ptrish = right.pointer_level > 0 || right.is_array || right.borrow_kind != REFKIND_NONE;
+        int left_ptrish = left.pointer_level > 0 || left.is_array || left.borrow_kind != BORROWKIND_NONE;
+        int right_ptrish = right.pointer_level > 0 || right.is_array || right.borrow_kind != BORROWKIND_NONE;
         if (semantic_typeinfo_is_integer_like_or_enum(ctx, &left) && semantic_typeinfo_is_integer_like_or_enum(ctx, &right)) return;
         if ((node->binary.op == ADD || node->binary.op == SUB) &&
             left_ptrish && semantic_typeinfo_is_integer_like_or_enum(ctx, &right)) return;
@@ -188,7 +188,7 @@ void semantic_check_condition_type(SemanticContext *ctx, ASTNode *cond) {
 
     if (!ctx || !cond) return;
     if (!semantic_infer_expr_type(ctx, cond, &info)) return;
-    if (semantic_typeinfo_is_integer_like_or_enum(ctx, &info) || info.pointer_level > 0 || info.borrow_kind != REFKIND_NONE) return;
+    if (semantic_typeinfo_is_integer_like_or_enum(ctx, &info) || info.pointer_level > 0 || info.borrow_kind != BORROWKIND_NONE) return;
 
     semantic_typeinfo_format(&info, type_buf, sizeof(type_buf));
     semantic_error_code_at(ctx, semantic_location_from_ast(cond),
@@ -423,7 +423,7 @@ void semantic_check_dereference(SemanticContext *ctx, ASTNode *node) {
     ASTNode *operand = node->type == AST_UNARY ? node->unary.operand : node->arrow_access.lhs;
     SemanticTypeInfo type;
     if (!operand || operand->type == AST_BINARY || !semantic_infer_expr_type(ctx, operand, &type)) return;
-    if (type.pointer_level > 0 || type.borrow_kind != REFKIND_NONE || type.is_array || type.is_function) return;
+    if (type.pointer_level > 0 || type.borrow_kind != BORROWKIND_NONE || type.is_array || type.is_function) return;
     char shown[128];
     semantic_typeinfo_format(&type, shown, sizeof(shown));
     semantic_error_code_at(ctx, semantic_location_from_ast(node), SEMCODE_INVALID_DEREFERENCE,

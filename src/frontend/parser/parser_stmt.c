@@ -84,7 +84,7 @@ static ASTNode *parse_for_in(ParserContext *context, Token **cur, Token *for_tok
     int outer_count = 0;
     ASTNode *iter_ref = iter;
     if (iter->type != AST_IDENTIFIER || strstr(iter->identifier.name, "::")) {
-        ASTNode *placeholder = new_type_node(new_identifier("__mlg_for_iter_type"), 0, 0, REFKIND_NONE);
+        ASTNode *placeholder = new_type_node(new_identifier("__mlg_for_iter_type"), 0, 0, BORROWKIND_NONE);
         ASTNode *decl = new_var_decl(placeholder, iter_name, iter);
         set_node_loc_from_tokens(decl, for_tok, NULL);
         outer[outer_count++] = decl;
@@ -93,7 +93,7 @@ static ASTNode *parse_for_in(ParserContext *context, Token **cur, Token *for_tok
 
     ASTNode **option_args = malloc(sizeof(ASTNode *));
     option_args[0] = ast_clone(item_type);
-    ASTNode *option_type = new_type_node(new_generic_type("Option", option_args, 1), 0, 0, REFKIND_NONE);
+    ASTNode *option_type = new_type_node(new_generic_type("Option", option_args, 1), 0, 0, BORROWKIND_NONE);
     ASTNode *next_call = new_call("next", NULL, 0);
     next_call->call.recv = iter_ref;
     set_node_loc_from_tokens(next_call, for_tok, NULL);

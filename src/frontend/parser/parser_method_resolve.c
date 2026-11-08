@@ -117,12 +117,12 @@ int infer_recv_shape(ParserContext *ctx, MethodScope *scope, ASTNode *expr, Recv
     case AST_NUMBER:
         out->base_name = "i32";
         out->pointer_level = 0;
-        out->borrow_kind = REFKIND_NONE;
+        out->borrow_kind = BORROWKIND_NONE;
         return 1;
     case AST_STRING_LITERAL:
         out->base_name = "str";
         out->pointer_level = 0;
-        out->borrow_kind = REFKIND_NONE;
+        out->borrow_kind = BORROWKIND_NONE;
         return 1;
     case AST_IDENTIFIER: {
         ASTNode *t = method_scope_lookup(scope, expr->identifier.name);
@@ -168,9 +168,9 @@ int infer_recv_shape(ParserContext *ctx, MethodScope *scope, ASTNode *expr, Recv
         if (expr->unary.op == ASTARISK) {
             RecvShape inner;
             if (!infer_recv_shape(ctx, scope, expr->unary.operand, &inner)) return 0;
-            if (inner.pointer_level == 0 && inner.borrow_kind != REFKIND_NONE) {
+            if (inner.pointer_level == 0 && inner.borrow_kind != BORROWKIND_NONE) {
                 *out = inner;
-                out->borrow_kind = REFKIND_NONE;
+                out->borrow_kind = BORROWKIND_NONE;
                 return 1;
             }
             if (inner.pointer_level <= 0) return 0;
@@ -191,7 +191,7 @@ int infer_recv_shape(ParserContext *ctx, MethodScope *scope, ASTNode *expr, Recv
         RecvShape inner;
         if (!infer_recv_shape(ctx, scope, inner_expr, &inner)) return 0;
         *out = inner;
-        out->borrow_kind = REFKIND_BORROW;
+        out->borrow_kind = BORROWKIND_BORROW;
         return 1;
     }
     default:
@@ -221,28 +221,28 @@ static void method_error(ParserContext *ctx, ASTNode *node, const char *fmt, ...
 static ASTNode *convert_receiver(ParserContext *ctx, ASTNode *call, ASTNode *recv,
                                  const RecvShape *actual, const RecvShape *expected) {
     if (actual->pointer_level == expected->pointer_level && actual->borrow_kind == expected->borrow_kind) {
-        return actual->borrow_kind != REFKIND_NONE ? new_borrow(recv) : recv;
+        return actual->borrow_kind != BORROWKIND_NONE ? new_borrow(recv) : recv;
     }
 
-    int actual_plain = actual->pointer_level == 0 && actual->borrow_kind == REFKIND_NONE;
-    int expected_plain_value = expected->pointer_level == 0 && expected->borrow_kind == REFKIND_NONE;
+    int actual_plain = actual->pointer_level == 0 && actual->borrow_kind == BORROWKIND_NONE;
+    int expected_plain_value = expected->pointer_level == 0 && expected->borrow_kind == BORROWKIND_NONE;
 
     if (actual_plain) {
-        if (expected->pointer_level == 0 && expected->borrow_kind == REFKIND_BORROW) return new_borrow(recv);
-        if (expected->pointer_level == 1 && expected->borrow_kind == REFKIND_NONE) return new_borrow(recv);
+        if (expected->pointer_level == 0 && expected->borrow_kind == BORROWKIND_BORROW) return new_borrow(recv);
+        if (expected->pointer_level == 1 && expected->borrow_kind == BORROWKIND_NONE) return new_borrow(recv);
     }
-    if (actual->pointer_level == 1 && actual->borrow_kind == REFKIND_NONE && expected_plain_value) {
+    if (actual->pointer_level == 1 && actual->borrow_kind == BORROWKIND_NONE && expected_plain_value) {
         return new_unary(ASTARISK, recv);
     }
     /* `p.push(x)` with `Vec<T> *p` against a `borrow Vec<T>` receiver: borrow
      * the pointee. Like any raw deref it is unchecked. */
-    if (actual->pointer_level == 1 && actual->borrow_kind == REFKIND_NONE &&
-        expected->pointer_level == 0 && expected->borrow_kind == REFKIND_BORROW) {
+    if (actual->pointer_level == 1 && actual->borrow_kind == BORROWKIND_NONE &&
+        expected->pointer_level == 0 && expected->borrow_kind == BORROWKIND_BORROW) {
         return new_borrow(new_unary(ASTARISK, recv));
     }
 
     /* A reading receiver reads what the borrow names. */
-    if (actual->pointer_level == 0 && actual->borrow_kind != REFKIND_NONE && expected_plain_value) {
+    if (actual->pointer_level == 0 && actual->borrow_kind != BORROWKIND_NONE && expected_plain_value) {
         return recv;
     }
 
@@ -279,13 +279,13 @@ static void resolve_method_call(ParserContext *ctx, MethodScope *scope, ASTNode 
                    recv->type == AST_ARROW_ACCESS ||
                    (recv->type == AST_UNARY && recv->unary.op == ASTARISK);
     ASTNode *temp_decl = NULL;
-    if (!is_place && actual.pointer_level == 0 && actual.borrow_kind == REFKIND_NONE &&
-        (expected.pointer_level > 0 || expected.borrow_kind != REFKIND_NONE)) {
+    if (!is_place && actual.pointer_level == 0 && actual.borrow_kind == BORROWKIND_NONE &&
+        (expected.pointer_level > 0 || expected.borrow_kind != BORROWKIND_NONE)) {
         /* `half(3).is_none()` borrows a value that has no storage: give it a
          * temporary first, `({ T __mlg_recv_N = half(3); is_none(&__mlg_recv_N) })`. */
         char temp[48];
         snprintf(temp, sizeof(temp), "__mlg_recv_%d", ctx->lowering.payload_case_counter++);
-        ASTNode *type = new_type_node(new_identifier((char *)actual.base_name), 0, TYPEMOD_NONE, REFKIND_NONE);
+        ASTNode *type = new_type_node(new_identifier((char *)actual.base_name), 0, TYPEMOD_NONE, BORROWKIND_NONE);
         temp_decl = new_var_decl(type, temp, recv);
         temp_decl->line = recv->line;
         temp_decl->col = recv->col;

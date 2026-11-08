@@ -66,7 +66,7 @@ static SemanticValueKind struct_value_kind(SemanticContext *ctx, const char *nam
 }
 
 static SemanticValueKind semantic_value_kind(SemanticContext *ctx, const SemanticTypeInfo *info, int depth) {
-    if (info->is_function || info->borrow_kind != REFKIND_NONE || info->pointer_level > 0) return VALUE_DATA;
+    if (info->is_function || info->borrow_kind != BORROWKIND_NONE || info->pointer_level > 0) return VALUE_DATA;
     const char *name = info->base_type;
     if (!name || depth > SEMANTIC_MAX_VALUE_NESTING) return VALUE_MOVED;
     /* `_` is the unit payload of `Result<_, E>`. */
@@ -99,7 +99,7 @@ int semantic_type_is_void(ASTNode *type_node) {
 }
 
 static int semantic_typeinfo_is_integer_like(const SemanticTypeInfo *info) {
-    if (!info || info->pointer_level > 0 || info->borrow_kind != REFKIND_NONE || info->is_array) return 0;
+    if (!info || info->pointer_level > 0 || info->borrow_kind != BORROWKIND_NONE || info->is_array) return 0;
     return strcmp(info->base_type, "bool") == 0 ||
            strcmp(info->base_type, "u8") == 0 ||
            strcmp(info->base_type, "u16") == 0 ||
@@ -112,7 +112,7 @@ static int semantic_typeinfo_is_integer_like(const SemanticTypeInfo *info) {
 
 int semantic_typeinfo_is_integer_like_or_enum(SemanticContext *ctx, const SemanticTypeInfo *info) {
     if (semantic_typeinfo_is_integer_like(info)) return 1;
-    if (!ctx || !info || info->pointer_level > 0 || info->borrow_kind != REFKIND_NONE || info->is_array) return 0;
+    if (!ctx || !info || info->pointer_level > 0 || info->borrow_kind != BORROWKIND_NONE || info->is_array) return 0;
     return semantic_enum_type_exists(ctx, info->base_type);
 }
 
@@ -211,7 +211,7 @@ void semantic_typeinfo_format(const SemanticTypeInfo *info, char *buf, size_t bu
     }
 
     used = 0;
-    if (info->borrow_kind == REFKIND_BORROW) {
+    if (info->borrow_kind == BORROWKIND_BORROW) {
         used += (size_t)snprintf(buf + used, buf_size - used, "borrow ");
     }
     if (used >= buf_size) return;
@@ -234,7 +234,7 @@ int semantic_typeinfo_same_base(const SemanticTypeInfo *a, const SemanticTypeInf
 
 static int semantic_typeinfo_is_code_address(const SemanticTypeInfo *info) {
     return info && info->base_type && strcmp(info->base_type, "CodeAddress") == 0 &&
-           info->borrow_kind == REFKIND_NONE && info->pointer_level == 0 && !info->is_array;
+           info->borrow_kind == BORROWKIND_NONE && info->pointer_level == 0 && !info->is_array;
 }
 
 int semantic_literal_to_legacy_c_string(const SemanticTypeInfo *expected,
@@ -284,20 +284,20 @@ int semantic_typeinfo_compatible(SemanticContext *ctx, const SemanticTypeInfo *e
     }
 
     if (semantic_typeinfo_same_base(expected, actual) &&
-        expected->borrow_kind == REFKIND_NONE &&
-        actual->borrow_kind == REFKIND_NONE) {
+        expected->borrow_kind == BORROWKIND_NONE &&
+        actual->borrow_kind == BORROWKIND_NONE) {
         if (expected->pointer_level == actual->pointer_level + 1 && actual->is_array) return 1;
         if (expected->is_array && expected->pointer_level == 0 && actual->pointer_level == 1) return 1;
     }
 
     if (semantic_typeinfo_same_base(expected, actual) &&
-        expected->pointer_level > 0 && actual->borrow_kind != REFKIND_NONE &&
+        expected->pointer_level > 0 && actual->borrow_kind != BORROWKIND_NONE &&
         expected->pointer_level == actual->pointer_level + 1) {
         return 1;
     }
 
     if (semantic_typeinfo_is_integer_like_or_enum(ctx, expected) &&
-        (actual->pointer_level > 0 || actual->borrow_kind != REFKIND_NONE) &&
+        (actual->pointer_level > 0 || actual->borrow_kind != BORROWKIND_NONE) &&
         !actual->is_array) {
         return 1;
     }
@@ -323,14 +323,14 @@ int semantic_call_arg_compatible(SemanticContext *ctx, const SemanticTypeInfo *e
     }
 
     if (semantic_typeinfo_same_base(expected, actual) &&
-        expected->borrow_kind == REFKIND_NONE &&
-        actual->borrow_kind == REFKIND_NONE) {
+        expected->borrow_kind == BORROWKIND_NONE &&
+        actual->borrow_kind == BORROWKIND_NONE) {
         if (expected->pointer_level == actual->pointer_level + 1 && actual->is_array) return 1;
         if (expected->is_array && expected->pointer_level == 0 && actual->pointer_level == 1) return 1;
     }
 
     if (semantic_typeinfo_same_base(expected, actual) &&
-        expected->pointer_level > 0 && actual->borrow_kind != REFKIND_NONE &&
+        expected->pointer_level > 0 && actual->borrow_kind != BORROWKIND_NONE &&
         expected->pointer_level == actual->pointer_level + 1) {
         return 1;
     }

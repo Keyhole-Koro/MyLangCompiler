@@ -173,7 +173,7 @@ static ASTNode *handler_value_type(ParserContext *context, const char *tag, int 
     params[2] = i32_type();
     return new_function_type(
         params, 3,
-        new_type_node(new_identifier("void"), 0, TYPEMOD_NONE, REFKIND_NONE),
+        new_type_node(new_identifier("void"), 0, TYPEMOD_NONE, BORROWKIND_NONE),
         false);
 }
 
@@ -231,8 +231,8 @@ static ASTNode *lower_handler_value(ParserContext *context, ASTNode *el, const D
             if (m) {
                 ASTNode *recv = m->fundef->fundef.params[0];
                 ASTNode *rt = recv && recv->type == AST_PARAM ? recv->param.type : NULL;
-                int by_pointer = rt && rt->type == AST_TYPE && rt->type_node.pointer_level == 1 && rt->type_node.borrow_kind == REFKIND_NONE;
-                int by_ref = rt && rt->type == AST_TYPE && rt->type_node.pointer_level == 0 && rt->type_node.borrow_kind != REFKIND_NONE;
+                int by_pointer = rt && rt->type == AST_TYPE && rt->type_node.pointer_level == 1 && rt->type_node.borrow_kind == BORROWKIND_NONE;
+                int by_ref = rt && rt->type == AST_TYPE && rt->type_node.pointer_level == 0 && rt->type_node.borrow_kind != BORROWKIND_NONE;
                 if (!by_pointer && !by_ref) {
                     dom_error(context, el, prop->line, prop->col,
                               "handler method '%s' must take its receiver by pointer or reference, `(%s *self)` or `(borrow %s self)`",
@@ -499,7 +499,7 @@ static ASTNode *dom_call(const char *name, ASTNode **args, int arg_count, const 
 }
 
 static ASTNode *i32_type(void) {
-    return new_type_node(new_identifier("i32"), 0, TYPEMOD_NONE, REFKIND_NONE);
+    return new_type_node(new_identifier("i32"), 0, TYPEMOD_NONE, BORROWKIND_NONE);
 }
 
 static int signature_returns_result(const DomSignature *sig) {
@@ -601,7 +601,7 @@ static char *emit_element(ParserContext *context, ASTNode *el, DomEmit *out) {
                 char text_var[32];
                 snprintf(text_var, sizeof(text_var), "__dom_text%d", context->lowering.dom_node_counter++);
                 emit_stmt(out, new_var_decl(
-                    new_type_node(new_identifier("str"), 0, TYPEMOD_NONE, REFKIND_NONE), text_var, value));
+                    new_type_node(new_identifier("str"), 0, TYPEMOD_NONE, BORROWKIND_NONE), text_var, value));
                 value = new_identifier(text_var);
             }
         }
@@ -800,7 +800,7 @@ static int is_view_method(ASTNode *fn) {
     ASTNode *receiver = fn->fundef.params[0];
     ASTNode *type = receiver && receiver->type == AST_PARAM ? receiver->param.type : NULL;
     if (!type || type->type != AST_TYPE || type->type_node.pointer_level ||
-        type->type_node.borrow_kind != REFKIND_NONE) return 0;
+        type->type_node.borrow_kind != BORROWKIND_NONE) return 0;
     int found = 0;
     find_element(&fn->fundef.body, &found);
     return found;

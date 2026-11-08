@@ -33,14 +33,14 @@ int semantic_in_unsafe_source(SemanticContext *ctx) {
 static int semantic_is_raw_pointer(SemanticContext *ctx, ASTNode *expr) {
     SemanticTypeInfo type;
     if (!semantic_infer_expr_type(ctx, expr, &type)) return 0;
-    return type.pointer_level > 0 && type.borrow_kind == REFKIND_NONE && !type.is_array &&
+    return type.pointer_level > 0 && type.borrow_kind == BORROWKIND_NONE && !type.is_array &&
            !type.is_function;
 }
 
 static int semantic_type_ast_is_raw_pointer(ASTNode *type_node) {
     SemanticTypeInfo type;
     if (!semantic_typeinfo_from_type_ast(type_node, &type)) return 0;
-    return type.pointer_level > 0 && type.borrow_kind == REFKIND_NONE && !type.is_array &&
+    return type.pointer_level > 0 && type.borrow_kind == BORROWKIND_NONE && !type.is_array &&
            !type.is_function;
 }
 

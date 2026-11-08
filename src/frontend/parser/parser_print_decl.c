@@ -32,7 +32,7 @@ static void fprint_borrow_kind(FILE *out, ASTNode *node, int indent) {
     fprint_indent(out, indent);
     fprintf(out, "refkind: ");
     switch (node->type_node.borrow_kind) {
-    case REFKIND_BORROW: fprintf(out, "borrow\n"); break;
+    case BORROWKIND_BORROW: fprintf(out, "borrow\n"); break;
     default: fprintf(out, "none\n"); break;
     }
 }

@@ -6,7 +6,7 @@ void mylang_type_clear(MylangType *type) {
     if (!type) return;
     *type = (MylangType){
         .base_type = "",
-        .borrow_kind = REFKIND_NONE,
+        .borrow_kind = BORROWKIND_NONE,
     };
 }
 

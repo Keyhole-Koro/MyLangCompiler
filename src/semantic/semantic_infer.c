@@ -60,9 +60,9 @@ static int semantic_infer_unary_type(SemanticContext *ctx, ASTNode *expr, Semant
         return 1;
     }
     if (expr->unary.op == ASTARISK) {
-        if (operand.borrow_kind != REFKIND_NONE) {
+        if (operand.borrow_kind != BORROWKIND_NONE) {
             *out = operand;
-            out->borrow_kind = REFKIND_NONE;
+            out->borrow_kind = BORROWKIND_NONE;
             return 1;
         }
         if (operand.pointer_level <= 0) return 0;
@@ -190,7 +190,7 @@ int semantic_infer_expr_type(SemanticContext *ctx, ASTNode *expr, SemanticTypeIn
         return semantic_infer_identifier_type(ctx, expr, out);
     case AST_BORROW:
         if (!semantic_infer_expr_type(ctx, expr->borrow.expr, out)) return 0;
-        out->borrow_kind = REFKIND_BORROW;
+        out->borrow_kind = BORROWKIND_BORROW;
         return 1;
     case AST_UNARY:
         return semantic_infer_unary_type(ctx, expr, out);

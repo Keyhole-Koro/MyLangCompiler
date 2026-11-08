@@ -50,7 +50,7 @@ static ASTNode *mock_callback_target_expr(ASTNode *call) {
 int semantic_mock_return_uses_hidden_buffer(SemanticContext *ctx,
                                             const SemanticTypeInfo *type) {
     if (!ctx || !type) return 0;
-    if (type->pointer_level > 0 || type->borrow_kind != REFKIND_NONE) return 0;
+    if (type->pointer_level > 0 || type->borrow_kind != BORROWKIND_NONE) return 0;
     if (type->is_array) return 1;
     // Payload enums are lowered to a struct before semantic/codegen, so the
     // struct table is also the authoritative answer for local Result<T, E>.

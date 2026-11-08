@@ -1008,7 +1008,7 @@ static ASTNode *argument_variant(VariantTable *table, ASTNode *call, int index, 
     if (written_as_variant && !variant)
         argument_error(table, call, index, argument,
                        "it is not a variant of the parameter's enum");
-    if (variant && (type->type_node.pointer_level || type->type_node.borrow_kind != REFKIND_NONE))
+    if (variant && (type->type_node.pointer_level || type->type_node.borrow_kind != BORROWKIND_NONE))
         argument_error(table, call, index, argument,
                        "a temporary has no place to lend; put it in a variable and pass &variable");
     return variant;

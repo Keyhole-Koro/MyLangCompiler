@@ -137,9 +137,9 @@ static void require_pointer_receiver(ParserContext *context, const ASTNode *fn, 
     ASTNode *recv = fn->fundef.param_count > 0 ? fn->fundef.params[0] : NULL;
     ASTNode *type = recv && recv->type == AST_PARAM ? recv->param.type : NULL;
     int by_pointer = type && type->type == AST_TYPE && type->type_node.pointer_level == 1 &&
-                     type->type_node.borrow_kind == REFKIND_NONE;
+                     type->type_node.borrow_kind == BORROWKIND_NONE;
     int by_ref = type && type->type == AST_TYPE && type->type_node.pointer_level == 0 &&
-                 type->type_node.borrow_kind != REFKIND_NONE;
+                 type->type_node.borrow_kind != BORROWKIND_NONE;
     if (!by_pointer && !by_ref) {
         annot_error(context, line, col,
                     "handler method '%s' must take its receiver by pointer or reference, `(%s *self)` or `(borrow %s self)`",
@@ -156,7 +156,7 @@ static void convert_trampoline_arguments(ParserContext *context, ASTNode *trampo
     for (int i = 0; i < call->call.arg_count; i++) {
         ASTNode *type = fn->fundef.params[i]->param.type;
         if (type && type->type == AST_TYPE &&
-            (type->type_node.pointer_level || type->type_node.borrow_kind != REFKIND_NONE))
+            (type->type_node.pointer_level || type->type_node.borrow_kind != BORROWKIND_NONE))
             annot_error(context, line, col,
                         "handler '%s' takes parameter %d by reference; a handler is passed two words",
                         method_short_name(fn), i + 1);

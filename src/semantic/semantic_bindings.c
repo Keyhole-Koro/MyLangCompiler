@@ -9,7 +9,7 @@ int semantic_location_is_known(SemanticLocation loc) {
 /* The value lives in this binding's own storage: not a borrow, not behind a
  * pointer. */
 int semantic_binding_owns_value(const SemanticBinding *binding) {
-    return binding->has_type && binding->type_info.borrow_kind == REFKIND_NONE &&
+    return binding->has_type && binding->type_info.borrow_kind == BORROWKIND_NONE &&
            binding->type_info.pointer_level == 0;
 }
 

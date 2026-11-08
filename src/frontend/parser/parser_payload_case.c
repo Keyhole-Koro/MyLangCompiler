@@ -331,7 +331,7 @@ VariantTag *case_result_variant(VariantTable *table, ASTNode *node) {
  * an arm's value is otherwise carried as a single word. */
 int is_aggregate_type(VariantTable *table, ASTNode *type) {
     const char *name = type_base_name(type);
-    if (!name || type->type_node.pointer_level || type->type_node.borrow_kind != REFKIND_NONE) return 0;
+    if (!name || type->type_node.pointer_level || type->type_node.borrow_kind != BORROWKIND_NONE) return 0;
     for (int i = 0; i < table->program->block.count; i++) {
         ASTNode *node = table->program->block.stmts[i];
         if (!node) continue;

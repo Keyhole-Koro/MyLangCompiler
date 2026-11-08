@@ -26,7 +26,7 @@ static int borrow_is_static_or_unchecked(SemanticContext *ctx, ASTNode *expr) {
                 operand = operand->binary.left;
             SemanticTypeInfo type;
             if (operand && semantic_infer_expr_type(ctx, operand, &type) &&
-                type.pointer_level > 0 && type.borrow_kind == REFKIND_NONE && !type.is_array)
+                type.pointer_level > 0 && type.borrow_kind == BORROWKIND_NONE && !type.is_array)
                 return 1;
             place = operand;
             break;
@@ -46,8 +46,8 @@ static int borrow_is_static_or_unchecked(SemanticContext *ctx, ASTNode *expr) {
  * borrow to a pointer parameter is left alone: a checked file cannot name one. */
 void semantic_check_borrow_kept_as_pointer(SemanticContext *ctx, const SemanticTypeInfo *expected,
                                            const SemanticTypeInfo *actual, ASTNode *at) {
-    if (actual->borrow_kind == REFKIND_NONE || actual->is_function ||
-        expected->borrow_kind != REFKIND_NONE || expected->is_array || expected->is_function)
+    if (actual->borrow_kind == BORROWKIND_NONE || actual->is_function ||
+        expected->borrow_kind != BORROWKIND_NONE || expected->is_array || expected->is_function)
         return;
     int to_pointer = expected->pointer_level > 0;
     if (!to_pointer && !semantic_typeinfo_is_integer_like_or_enum(ctx, expected)) return;
@@ -141,22 +141,22 @@ static void check_return_reference_escape(SemanticContext *ctx, ASTNode *expr) {
  * `Option<borrow T> o = v.at(0);` keeps `v` borrowed while `o` is in scope.
  */
 
-/* REFKIND_BORROW or REFKIND_NONE: the borrow a value of this type carries,
+/* BORROWKIND_BORROW or BORROWKIND_NONE: the borrow a value of this type carries,
  * directly or in a payload field. */
 static int typeinfo_borrow_kind_at(SemanticContext *ctx, const SemanticTypeInfo *info, int depth) {
-    if (!info || depth > 4) return REFKIND_NONE;
-    if (info->borrow_kind != REFKIND_NONE) return info->borrow_kind;
-    if (info->pointer_level > 0 || info->is_array || !info->base_type) return REFKIND_NONE;
+    if (!info || depth > 4) return BORROWKIND_NONE;
+    if (info->borrow_kind != BORROWKIND_NONE) return info->borrow_kind;
+    if (info->pointer_level > 0 || info->is_array || !info->base_type) return BORROWKIND_NONE;
     for (int i = 0; i < ctx->struct_layout_count; i++) {
         const SemanticStructLayout *layout = &ctx->struct_layouts[i];
         if (strcmp(layout->name, info->base_type) != 0) continue;
         for (int m = 0; m < layout->member_count; m++) {
-            if (typeinfo_borrow_kind_at(ctx, &layout->members[m].type, depth + 1) == REFKIND_BORROW)
-                return REFKIND_BORROW;
+            if (typeinfo_borrow_kind_at(ctx, &layout->members[m].type, depth + 1) == BORROWKIND_BORROW)
+                return BORROWKIND_BORROW;
         }
         break;
     }
-    return REFKIND_NONE;
+    return BORROWKIND_NONE;
 }
 
 static int typeinfo_borrow_kind(SemanticContext *ctx, const SemanticTypeInfo *info) {
@@ -165,15 +165,15 @@ static int typeinfo_borrow_kind(SemanticContext *ctx, const SemanticTypeInfo *in
 
 static int type_ast_borrow_kind(SemanticContext *ctx, ASTNode *type) {
     SemanticTypeInfo info;
-    if (!type || !semantic_typeinfo_from_type_ast(type, &info)) return REFKIND_NONE;
+    if (!type || !semantic_typeinfo_from_type_ast(type, &info)) return BORROWKIND_NONE;
     return typeinfo_borrow_kind(ctx, &info);
 }
 
 /* A parameter a returned borrow may come from: a borrow, a pointer, or a
  * value that itself carries a borrow (`Option<borrow T> self`). */
 static int typeinfo_is_borrow_source(SemanticContext *ctx, const SemanticTypeInfo *info) {
-    return info->borrow_kind != REFKIND_NONE || info->pointer_level > 0 ||
-           typeinfo_borrow_kind(ctx, info) != REFKIND_NONE;
+    return info->borrow_kind != BORROWKIND_NONE || info->pointer_level > 0 ||
+           typeinfo_borrow_kind(ctx, info) != BORROWKIND_NONE;
 }
 
 /* The parameter a function's returned borrow comes from, or NULL. */
@@ -248,10 +248,10 @@ static BorrowOrigin borrow_origin(SemanticContext *ctx, ASTNode *expr,
         if (root->borrow_origin_unknown) return BORROW_ORIGIN_UNKNOWN;
         /* A borrow local that holds nothing yet, such as a None. */
         if (!taken && !root->is_param && !root->is_global && root->has_type &&
-            typeinfo_borrow_kind(ctx, &root->type_info) != REFKIND_NONE)
+            typeinfo_borrow_kind(ctx, &root->type_info) != BORROWKIND_NONE)
             return BORROW_ORIGIN_NONE;
         *owner = root;
-        if (root->is_param && root->has_type && root->type_info.borrow_kind != REFKIND_NONE) {
+        if (root->is_param && root->has_type && root->type_info.borrow_kind != BORROWKIND_NONE) {
             *reborrow = 1;
             if (via) *via = root;
         }
@@ -260,7 +260,7 @@ static BorrowOrigin borrow_origin(SemanticContext *ctx, ASTNode *expr,
     case AST_CALL: {
         SemanticFunctionSig *sig = semantic_find_function_sig(ctx, expr->call.name);
         if (!sig || !sig->has_return_type) return BORROW_ORIGIN_UNKNOWN;
-        if (typeinfo_borrow_kind(ctx, &sig->return_type) == REFKIND_NONE) return BORROW_ORIGIN_NONE;
+        if (typeinfo_borrow_kind(ctx, &sig->return_type) == BORROWKIND_NONE) return BORROW_ORIGIN_NONE;
         if (!sig->has_param_types) return BORROW_ORIGIN_UNKNOWN;
         int count = sig->param_count < SEMANTIC_MAX_FUNCTION_PARAMS ? sig->param_count : SEMANTIC_MAX_FUNCTION_PARAMS;
         for (int i = 0; i < count; i++) {
@@ -305,7 +305,7 @@ static void hold_borrow(SemanticContext *ctx, SemanticBinding *binding, ASTNode 
     /* Taken through a raw pointer (`p->rows.at(i)`): the pointer does not
      * own what it points at, so there is no owner here to keep borrowed. */
     if (owner->has_type && owner->type_info.pointer_level > 0 &&
-        owner->type_info.borrow_kind == REFKIND_NONE)
+        owner->type_info.borrow_kind == BORROWKIND_NONE)
         return;
 
     SemanticLocation at = semantic_location_from_ast(expr);
@@ -334,7 +334,7 @@ void semantic_register_borrow_binding(SemanticContext *ctx, ASTNode *binding_nod
     ASTNode *var_decl = semantic_as_var_decl(binding_node);
     if (!ctx || !var_decl || !var_decl->var_decl.init) return;
     int kind = type_ast_borrow_kind(ctx, var_decl->var_decl.var_type);
-    if (kind == REFKIND_NONE) return;
+    if (kind == BORROWKIND_NONE) return;
     SemanticBinding *binding = semantic_find_binding(ctx, var_decl->var_decl.name);
     if (binding) hold_borrow(ctx, binding, var_decl->var_decl.init);
 }
@@ -348,7 +348,7 @@ void semantic_hold_payload_borrow(SemanticContext *ctx, ASTNode *assign) {
         !semantic_infer_expr_type(ctx, assign->assign.left, &target))
         return;
     int kind = typeinfo_borrow_kind(ctx, &target);
-    if (kind == REFKIND_NONE) return;
+    if (kind == BORROWKIND_NONE) return;
     semantic_release_borrow(ctx, binding);
     hold_borrow(ctx, binding, assign->assign.right);
 }
@@ -361,7 +361,7 @@ void semantic_check_returned_borrow(SemanticContext *ctx, ASTNode *return_node) 
     /* A lowered `return Some(&x)` returns a temporary with no location. */
     ASTNode *at = expr && expr->line ? expr : return_node;
     if (!fn || fn->type != AST_FUNDEF || !expr ||
-        type_ast_borrow_kind(ctx, fn->fundef.ret_type) == REFKIND_NONE) {
+        type_ast_borrow_kind(ctx, fn->fundef.ret_type) == BORROWKIND_NONE) {
         check_return_reference_escape(ctx, expr);
         return;
     }
@@ -425,7 +425,7 @@ void semantic_check_write_place(SemanticContext *ctx, ASTNode *place, WriteKind 
                 operand = operand->binary.left;
             SemanticTypeInfo type;
             if (!operand || !semantic_infer_expr_type(ctx, operand, &type) ||
-                (type.pointer_level > 0 && type.borrow_kind == REFKIND_NONE && !type.is_array))
+                (type.pointer_level > 0 && type.borrow_kind == BORROWKIND_NONE && !type.is_array))
                 return;
             place = operand;
         } else {
@@ -473,7 +473,7 @@ void semantic_check_write_place(SemanticContext *ctx, ASTNode *place, WriteKind 
 }
 
 static int typeinfo_holds_bytes_inline(SemanticContext *ctx, const SemanticTypeInfo *info, int depth) {
-    if (!info || depth > 4 || info->pointer_level > 0 || info->borrow_kind != REFKIND_NONE) return 0;
+    if (!info || depth > 4 || info->pointer_level > 0 || info->borrow_kind != BORROWKIND_NONE) return 0;
     if (info->is_array) return 1;
     if (!info->base_type) return 0;
     for (int i = 0; i < ctx->struct_layout_count; i++) {
@@ -507,7 +507,7 @@ int semantic_expr_views_local(SemanticContext *ctx, ASTNode *expr) {
     /* A view reaches into a value only where its bytes are held inline. */
     if (!typeinfo_holds_bytes_inline(ctx, &first_type, 0)) return 0;
     SemanticBinding *owner = semantic_borrow_target_binding(ctx, target);
-    if (!owner || owner->is_global || !owner->has_type || owner->type_info.borrow_kind != REFKIND_NONE)
+    if (!owner || owner->is_global || !owner->has_type || owner->type_info.borrow_kind != BORROWKIND_NONE)
         return 0;
     /* A parameter that is only read is the caller's value. */
     return !owner->is_param || owner->param_is_move || owner->param_is_written;

@@ -87,7 +87,7 @@ static void substitute(ASTNode **slot, void *user_data) {
             ASTNode *arg = ast_clone(sub->args[i]);
             if (arg->type == AST_NUMBER) {
                 if (node->type_node.pointer_level ||
-                    node->type_node.borrow_kind != REFKIND_NONE ||
+                    node->type_node.borrow_kind != BORROWKIND_NONE ||
                     node->type_node.type_modifiers != TYPEMOD_NONE)
                     generic_error(sub->parser_context, node,
                                   "integer generic argument cannot be used as a wrapped type");
@@ -97,7 +97,7 @@ static void substitute(ASTNode **slot, void *user_data) {
             }
             if (arg->type == AST_TYPE_FUNCTION) {
                 if (node->type_node.pointer_level ||
-                    node->type_node.borrow_kind != REFKIND_NONE ||
+                    node->type_node.borrow_kind != BORROWKIND_NONE ||
                     node->type_node.type_modifiers != TYPEMOD_NONE)
                     generic_error(sub->parser_context, node,
                                   "function type argument cannot be wrapped in a modifier, reference, or pointer");
@@ -109,13 +109,13 @@ static void substitute(ASTNode **slot, void *user_data) {
             }
             if (arg->type != AST_TYPE)
                 generic_error(sub->parser_context, node, "unsupported generic type argument");
-            if (arg->type_node.borrow_kind != REFKIND_NONE &&
-                (node->type_node.borrow_kind != REFKIND_NONE || node->type_node.pointer_level))
+            if (arg->type_node.borrow_kind != BORROWKIND_NONE &&
+                (node->type_node.borrow_kind != BORROWKIND_NONE || node->type_node.pointer_level))
                 generic_error(sub->parser_context, node,
                               "cannot wrap a reference type argument in another reference or pointer");
             arg->type_node.pointer_level += node->type_node.pointer_level;
             arg->type_node.type_modifiers |= node->type_node.type_modifiers;
-            if (node->type_node.borrow_kind != REFKIND_NONE)
+            if (node->type_node.borrow_kind != BORROWKIND_NONE)
                 arg->type_node.borrow_kind = node->type_node.borrow_kind;
             arg->line = node->line; arg->col = node->col;
             arg->end_line = node->end_line; arg->end_col = node->end_col;
@@ -135,7 +135,7 @@ static void substitute(ASTNode **slot, void *user_data) {
             ASTNode *arg = sub->args[i];
             if (!arg || arg->type != AST_TYPE || !arg->type_node.base_type ||
                 arg->type_node.base_type->type != AST_IDENTIFIER || arg->type_node.pointer_level ||
-                arg->type_node.borrow_kind != REFKIND_NONE)
+                arg->type_node.borrow_kind != BORROWKIND_NONE)
                 generic_error(sub->parser_context, node,
                               "'T::name(...)' needs T to be a plain named type");
             StringBuilder name;
@@ -326,7 +326,7 @@ static void rename_literal_type(ASTNode **slot, void *user_data) {
 }
 
 static ASTNode *named_type(const char *name) {
-    return new_type_node(new_identifier((char *)name), 0, TYPEMOD_NONE, REFKIND_NONE);
+    return new_type_node(new_identifier((char *)name), 0, TYPEMOD_NONE, BORROWKIND_NONE);
 }
 
 /* Binds an impl template's parameters by matching its type's arguments
@@ -341,7 +341,7 @@ static int match_impl_template(Instantiation *ctx, ImplDef *impl, ASTNode **args
         int param = -1;
         if (pattern && pattern->type == AST_TYPE && pattern->type_node.base_type &&
             pattern->type_node.base_type->type == AST_IDENTIFIER && !pattern->type_node.pointer_level &&
-            pattern->type_node.borrow_kind == REFKIND_NONE) {
+            pattern->type_node.borrow_kind == BORROWKIND_NONE) {
             for (int p = 0; p < impl->type_param_count; p++)
                 if (strcmp(pattern->type_node.base_type->identifier.name, impl->type_params[p]) == 0) param = p;
         }
@@ -727,7 +727,7 @@ static ASTNode *lower_payload_enum(ASTNode *node) {
     int member_count = node->enum_stmt.member_count;
     ASTNode **members = calloc((size_t)member_count + 1, sizeof(ASTNode *));
     members[0] = new_var_decl(new_type_node(new_identifier("i32"), 0,
-                                             TYPEMOD_NONE, REFKIND_NONE),
+                                             TYPEMOD_NONE, BORROWKIND_NONE),
                               "__tag", NULL);
     int field_count = 1;
     for (int i = 0; i < member_count; i++) {
@@ -859,7 +859,7 @@ static void order_struct(ParserContext *context, ASTNode *program, int index,
         while (type) {
             if (type->type == AST_TYPE_ARRAY) { type = type->type_array.element_type; continue; }
             if (type->type != AST_TYPE || type->type_node.pointer_level ||
-                type->type_node.borrow_kind != REFKIND_NONE) break;
+                type->type_node.borrow_kind != BORROWKIND_NONE) break;
             ASTNode *base = type->type_node.base_type;
             if (!base || base->type != AST_IDENTIFIER) break;
             ASTNode *alias = NULL;

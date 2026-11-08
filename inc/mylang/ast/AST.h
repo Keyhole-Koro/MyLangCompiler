@@ -53,8 +53,8 @@ typedef enum {
 } ASTNodeType;
 
 typedef enum {
-    REFKIND_NONE = 0,
-    REFKIND_BORROW,
+    BORROWKIND_NONE = 0,
+    BORROWKIND_BORROW,
 } BorrowKind;
 
 typedef enum {

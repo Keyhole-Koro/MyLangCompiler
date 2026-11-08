@@ -56,18 +56,18 @@ static const char *written_name(ASTNode *expr) {
 
 static int is_borrow(BorrowPlaces *L, ASTNode *expr) {
     RecvShape shape;
-    return infer_recv_shape(L->context, L->scope, expr, &shape) && shape.borrow_kind != REFKIND_NONE;
+    return infer_recv_shape(L->context, L->scope, expr, &shape) && shape.borrow_kind != BORROWKIND_NONE;
 }
 
 /* `borrow T *p`: the place holds a pointer, and using `p` as one reads it. */
 static int is_borrow_of_pointer(BorrowPlaces *L, ASTNode *expr) {
     RecvShape shape;
     return infer_recv_shape(L->context, L->scope, expr, &shape) &&
-           shape.borrow_kind != REFKIND_NONE && shape.pointer_level > 0;
+           shape.borrow_kind != BORROWKIND_NONE && shape.pointer_level > 0;
 }
 
 static int type_is_borrow(ASTNode *type) {
-    return type && type->type == AST_TYPE && type->type_node.borrow_kind != REFKIND_NONE &&
+    return type && type->type == AST_TYPE && type->type_node.borrow_kind != BORROWKIND_NONE &&
            type->type_node.pointer_level == 0;
 }
 

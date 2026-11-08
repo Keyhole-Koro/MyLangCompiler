@@ -207,7 +207,7 @@ static int call_takes_argument(const SemanticFunctionSig *callee, int i) {
 static int call_reads_argument(const SemanticFunctionSig *callee, int i) {
     return callee && callee->has_param_types && i < callee->fixed_param_count &&
            i < SEMANTIC_MAX_FUNCTION_PARAMS && !callee->param_is_move[i] &&
-           callee->param_types[i].borrow_kind == REFKIND_NONE &&
+           callee->param_types[i].borrow_kind == BORROWKIND_NONE &&
            callee->param_types[i].pointer_level == 0;
 }
 
@@ -297,7 +297,7 @@ void semantic_walk_expr(SemanticContext *ctx, ASTNode *node, ExprContext expr_ct
             ASTNode *arg = node->call.args[i];
             SemanticBinding *reference = arg && arg->type == AST_IDENTIFIER
                 ? semantic_find_binding(ctx, arg->identifier.name) : NULL;
-            if (reference && (!reference->has_type || reference->type_info.borrow_kind == REFKIND_NONE))
+            if (reference && (!reference->has_type || reference->type_info.borrow_kind == BORROWKIND_NONE))
                 reference = NULL;
             /* Passing a named borrow on reborrows it: a conflict is reported
              * below, as for `&x`. */
@@ -310,12 +310,12 @@ void semantic_walk_expr(SemanticContext *ctx, ASTNode *node, ExprContext expr_ct
             ASTNode *arg = node->call.args[i];
             SemanticBinding *reference = arg && arg->type == AST_IDENTIFIER
                 ? semantic_find_binding(ctx, arg->identifier.name) : NULL;
-            if (reference && (!reference->has_type || reference->type_info.borrow_kind == REFKIND_NONE))
+            if (reference && (!reference->has_type || reference->type_info.borrow_kind == BORROWKIND_NONE))
                 reference = NULL;
             /* An address handed to a raw pointer is no longer tracked (B9). */
             if (callee && callee->has_param_types && i < callee->fixed_param_count &&
                 i < SEMANTIC_MAX_FUNCTION_PARAMS && callee->param_types[i].pointer_level > 0 &&
-                callee->param_types[i].borrow_kind == REFKIND_NONE)
+                callee->param_types[i].borrow_kind == BORROWKIND_NONE)
                 continue;
             int lends = arg && arg->type == AST_BORROW;
             ASTNode *target = lends ? arg->borrow.expr : NULL;
@@ -323,7 +323,7 @@ void semantic_walk_expr(SemanticContext *ctx, ASTNode *node, ExprContext expr_ct
              * lent (rule B6) through this call too. */
             if (!target && arg && arg->type == AST_CALL && arg->call.arg_count > 0) {
                 SemanticTypeInfo returned;
-                if (semantic_infer_expr_type(ctx, arg, &returned) && returned.borrow_kind != REFKIND_NONE) {
+                if (semantic_infer_expr_type(ctx, arg, &returned) && returned.borrow_kind != BORROWKIND_NONE) {
                     ASTNode *first = arg->call.args[0];
                     target = first && first->type == AST_BORROW ? first->borrow.expr : first;
                     lends = 1;
@@ -338,7 +338,7 @@ void semantic_walk_expr(SemanticContext *ctx, ASTNode *node, ExprContext expr_ct
              * two uses of the same capability in one call conflict. */
             if (reference) {
                 owner = reference;
-                lends = reference->type_info.borrow_kind == REFKIND_BORROW;
+                lends = reference->type_info.borrow_kind == BORROWKIND_BORROW;
             }
             if (!owner) continue;
             if (owner->borrow_active || (lends && owner->read_in_place_arg_count)) {

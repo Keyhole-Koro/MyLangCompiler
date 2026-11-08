@@ -52,7 +52,7 @@ static ASTNode *parse_type_param_bounds(ParserContext *context, Token **cur) {
             base = new_identifier(name_tok->value);
         }
         set_node_loc_from_tokens(base, name_tok, NULL);
-        ASTNode *bound = new_type_node(base, 0, 0, REFKIND_NONE);
+        ASTNode *bound = new_type_node(base, 0, 0, BORROWKIND_NONE);
         set_node_loc_from_tokens(bound, name_tok, NULL);
         bounds = realloc(bounds, sizeof(ASTNode *) * (count + 1));
         bounds[count++] = bound;

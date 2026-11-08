@@ -54,7 +54,7 @@ static void lower_error(TraitLowering *L, ASTNode *at, const char *message, cons
 }
 
 static ASTNode *plain_type(const char *name) {
-    return new_type_node(new_identifier((char *)name), 0, 0, REFKIND_NONE);
+    return new_type_node(new_identifier((char *)name), 0, 0, BORROWKIND_NONE);
 }
 
 static const char *named_type(ASTNode *type) {
@@ -304,7 +304,7 @@ static void lower_equality(TraitLowering *L, ASTNode **slot) {
     if (node->binary.op != EQ && node->binary.op != NEQ) return;
     ASTNode *type = infer_type(L, node->binary.left);
     const char *name = named_type(type);
-    if (!name || type->type_node.pointer_level || type->type_node.borrow_kind != REFKIND_NONE ||
+    if (!name || type->type_node.pointer_level || type->type_node.borrow_kind != BORROWKIND_NONE ||
         !find_impl_for_name(L->context, "Eq", name)) {
         free_ast(type);
         return;

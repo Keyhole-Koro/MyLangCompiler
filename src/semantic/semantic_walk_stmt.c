@@ -317,7 +317,7 @@ void semantic_walk_stmt(SemanticContext *ctx, ASTNode *node) {
         if (node->typedef_stmt.is_newtype) {
             SemanticTypeInfo base;
             if (!semantic_typeinfo_from_type_ast(node->typedef_stmt.src_type, &base) ||
-                base.pointer_level != 0 || base.borrow_kind != REFKIND_NONE ||
+                base.pointer_level != 0 || base.borrow_kind != BORROWKIND_NONE ||
                 base.is_array || base.is_function ||
                 !semantic_is_builtin_type(base.base_type) ||
                 strcmp(base.base_type, "void") == 0 || strcmp(base.base_type, "str") == 0) {

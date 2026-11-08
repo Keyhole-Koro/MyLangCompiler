@@ -18,7 +18,7 @@ void set_localinfo_from_type(CompilerContext *cc, LocalInfo *info, ASTNode *type
     info->base_type = type.base_type;
     info->is_function = type.is_function;
     info->function_type = type.function_type;
-    info->pointer_level = type.pointer_level + (type.borrow_kind != REFKIND_NONE);
+    info->pointer_level = type.pointer_level + (type.borrow_kind != BORROWKIND_NONE);
     info->type_modifiers = type.type_modifiers;
     info->is_array = type.is_array;
     info->dims_count = type.dims_count;
@@ -29,7 +29,7 @@ void set_localinfo_from_type(CompilerContext *cc, LocalInfo *info, ASTNode *type
     ti.base_type = info->base_type;
     ti.pointer_level = info->pointer_level;
     ti.type_modifiers = info->type_modifiers;
-    ti.borrow_kind = REFKIND_NONE;
+    ti.borrow_kind = BORROWKIND_NONE;
     ti.is_array = info->is_array;
     ti.dims_count = info->dims_count;
     for (int i = 0; i < 8; i++) ti.dims[i] = info->dims[i];

@@ -301,7 +301,7 @@ static void find_write(ASTNode **slot, void *context) {
         break;
     case AST_VAR_DECL:
         found = node->var_decl.var_type && node->var_decl.var_type->type == AST_TYPE &&
-                node->var_decl.var_type->type_node.borrow_kind != REFKIND_NONE &&
+                node->var_decl.var_type->type_node.borrow_kind != BORROWKIND_NONE &&
                 lends_name(node->var_decl.init, search->name);
         break;
     default:
