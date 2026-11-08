@@ -159,19 +159,6 @@ the copy. A method that is not `export`ed is invisible to importers. The
 receiver of a call whose result is a chained receiver (`pkg.make().next()`)
 is typed from the imported declaration too.
 
-### `test` is reserved
-
-`test` is a keyword, which is what keeps a top-level test declaration
-(`test("name", { ... }, () => { ... });`, see MLT-002) separable from a method
-whose return type is itself a user type (`User (borrow Config c) build()`). Both
-would otherwise start `IDENTIFIER (`, and the LR(1) grammar the LSP builds from
-this specification has only one token of lookahead.
-
-It still reads as a plain name wherever a namespace is expected -- `package
-test;`, `import test from "..."`, `test.pass()` -- so no existing source needed
-to change. What it can no longer be is a variable, function, field, or type
-name.
-
 ### Default parameters
 
 - `param` -> `move? type IDENTIFIER ( [ NUMBER? ] )* ( = literal )?`

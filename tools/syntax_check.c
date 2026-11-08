@@ -806,7 +806,7 @@ static int fn_begins_type(Token **tokens, size_t token_count, size_t index) {
 }
 
 static int is_name(TokenKind kind) {
-    return kind == IDENTIFIER || kind == TEST || kind == FN;
+    return kind == IDENTIFIER || kind == FN;
 }
 
 static int is_case_pattern_token(TokenKind kind) {

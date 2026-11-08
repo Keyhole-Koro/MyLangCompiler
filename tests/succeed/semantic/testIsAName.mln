@@ -1,0 +1,17 @@
+// `test` is an ordinary name. It was a keyword while MyLangTester read a
+// top-level `test("name", { ... }, () => { ... });` declaration, and then
+// could not name an enum member.
+
+enum Stage { build, test, deploy }
+
+typedef struct { i32 test; } Probe;
+
+i32 run(i32 test) {
+    return test + 1;
+}
+
+i32 main() {
+    Probe probe;
+    probe.test = run(test);
+    return probe.test;
+}

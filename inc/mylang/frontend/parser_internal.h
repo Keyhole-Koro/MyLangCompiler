@@ -13,12 +13,12 @@
 
 typedef struct FunAlias FunAlias;
 
-/* `test` marks top-level tests, and `fn` introduces a function type when the
- * parser expects a type. Outside those positions they remain ordinary names.
- * Keeping these words contextual preserves useful identifiers such as a test
- * target called `fn` without making function types ambiguous. */
+/* `fn` introduces a function type when the parser expects a type. Anywhere
+ * else it remains an ordinary name. Keeping the word contextual preserves
+ * useful identifiers such as a test target called `fn` without making
+ * function types ambiguous. */
 static inline int token_is_name(const Token *tok) {
-    return tok && (tok->kind == IDENTIFIER || tok->kind == TEST || tok->kind == FN);
+    return tok && (tok->kind == IDENTIFIER || tok->kind == FN);
 }
 
 /* `from` is the `import ... from` keyword, but it is also the natural name of
