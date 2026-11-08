@@ -116,13 +116,12 @@ static ASTNode *call(void) {
     return n;
 }
 
-/* Two type parameters, `T: Eq` and `const N`. */
-static void type_params(char ***params, unsigned char **is_const, ASTNode ***bounds, int *count) {
-    *params = names(2, "T", "N");
-    *is_const = calloc(2, 1);
-    (*is_const)[1] = 1;
-    *bounds = nodes(2, block(1, nodes(1, named_type("Eq"))), NULL);
-    *count = 2;
+/* `<T: Eq, const N>` */
+static TypeParamList type_params(void) {
+    TypeParamList params = { names(2, "T", "N"), calloc(2, 1), NULL, 2 };
+    params.is_const[1] = 1;
+    params.bounds = nodes(2, block(1, nodes(1, named_type("Eq"))), NULL);
+    return params;
 }
 
 static ASTNode *string_literal(void) {
@@ -194,8 +193,7 @@ static ASTNode *function(void) {
     fn->fundef.link_name = "__mlg_m_0123456789abcdef_f";
     fn->fundef.recv_type_name = "Box";
     fn->fundef.origin_path = "lib.mln";
-    type_params(&fn->fundef.type_params, &fn->fundef.type_param_is_const,
-                &fn->fundef.type_param_bounds, &fn->fundef.type_param_count);
+    fn->fundef.type_params = type_params();
     fn->attrs = calloc(1, sizeof(Attribute));
     fn->attrs[0].name = "app";
     fn->attrs[0].args = calloc(1, sizeof(AttrArg));
@@ -216,8 +214,7 @@ static ASTNode *enumeration(void) {
     n->enum_stmt.members = nodes(1, member);
     n->enum_stmt.member_count = 1;
     n->enum_stmt.package = "pkg";
-    type_params(&n->enum_stmt.type_params, &n->enum_stmt.type_param_is_const,
-                &n->enum_stmt.type_param_bounds, &n->enum_stmt.type_param_count);
+    n->enum_stmt.type_params = type_params();
     return n;
 }
 
@@ -228,8 +225,7 @@ static ASTNode *structure(void) {
     n->struct_stmt.member_count = 1;
     n->struct_stmt.package = "pkg";
     n->struct_stmt.payload_enum = enumeration();
-    type_params(&n->struct_stmt.type_params, &n->struct_stmt.type_param_is_const,
-                &n->struct_stmt.type_param_bounds, &n->struct_stmt.type_param_count);
+    n->struct_stmt.type_params = type_params();
     return n;
 }
 

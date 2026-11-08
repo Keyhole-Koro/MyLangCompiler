@@ -141,6 +141,28 @@ static void clone_child(ASTNode **slot, void *unused) {
     *slot = ast_clone(*slot);
 }
 
+TypeParamList *ast_type_params(ASTNode *declaration) {
+    if (!declaration) return NULL;
+    switch (declaration->type) {
+    case AST_FUNDEF: return &declaration->fundef.type_params;
+    case AST_STRUCT: return &declaration->struct_stmt.type_params;
+    case AST_ENUM: return &declaration->enum_stmt.type_params;
+    default: return NULL;
+    }
+}
+
+TypeParamList type_params_clone(const TypeParamList *params) {
+    TypeParamList copy = *params;
+    copy.names = copy_array(params->names, sizeof(*params->names) * (size_t)params->count);
+    for (int i = 0; i < params->count; i++) copy.names[i] = copy_string(params->names[i]);
+    if (params->is_const) copy.is_const = copy_array(params->is_const, (size_t)params->count);
+    if (params->bounds) {
+        copy.bounds = calloc((size_t)params->count, sizeof(ASTNode *));
+        for (int i = 0; i < params->count; i++) copy.bounds[i] = ast_clone(params->bounds[i]);
+    }
+    return copy;
+}
+
 ASTNode *ast_clone(const ASTNode *src) {
     if (!src) return NULL;
     ASTNode *n = copy_array(src, sizeof(*src));
@@ -171,15 +193,7 @@ ASTNode *ast_clone(const ASTNode *src) {
         STR(fundef.name); STR(fundef.package); STR(fundef.link_name); STR(fundef.recv_type_name);
         STR(fundef.origin_path);
         ARRAY(fundef.params, fundef.param_count);
-        STRINGS(fundef.type_params, fundef.type_param_count);
-        if (src->fundef.type_param_is_const)
-            n->fundef.type_param_is_const = copy_array(src->fundef.type_param_is_const,
-                                                       (size_t)src->fundef.type_param_count);
-        if (src->fundef.type_param_bounds) {
-            n->fundef.type_param_bounds = calloc((size_t)src->fundef.type_param_count, sizeof(ASTNode *));
-            for (int i = 0; i < src->fundef.type_param_count; i++)
-                n->fundef.type_param_bounds[i] = ast_clone(src->fundef.type_param_bounds[i]);
-        }
+        n->fundef.type_params = type_params_clone(&src->fundef.type_params);
         break;
     case AST_PARAM: STR(param.name); break;
     case AST_CALL:
@@ -191,30 +205,14 @@ ASTNode *ast_clone(const ASTNode *src) {
     case AST_STRUCT:
         STR(struct_stmt.name); STR(struct_stmt.package); ARRAY(struct_stmt.members, struct_stmt.member_count);
         n->struct_stmt.payload_enum = ast_clone(src->struct_stmt.payload_enum);
-        STRINGS(struct_stmt.type_params, struct_stmt.type_param_count);
-        if (src->struct_stmt.type_param_is_const)
-            n->struct_stmt.type_param_is_const = copy_array(src->struct_stmt.type_param_is_const,
-                                                            (size_t)src->struct_stmt.type_param_count);
-        if (src->struct_stmt.type_param_bounds) {
-            n->struct_stmt.type_param_bounds = calloc((size_t)src->struct_stmt.type_param_count, sizeof(ASTNode *));
-            for (int i = 0; i < src->struct_stmt.type_param_count; i++)
-                n->struct_stmt.type_param_bounds[i] = ast_clone(src->struct_stmt.type_param_bounds[i]);
-        }
+        n->struct_stmt.type_params = type_params_clone(&src->struct_stmt.type_params);
         break;
     case AST_TYPEDEF_STRUCT:
         STR(typedef_struct.struct_name); STR(typedef_struct.typedef_name); STR(typedef_struct.package);
         ARRAY(typedef_struct.members, typedef_struct.member_count); break;
     case AST_ENUM:
         STR(enum_stmt.name); STR(enum_stmt.package); ARRAY(enum_stmt.members, enum_stmt.member_count);
-        STRINGS(enum_stmt.type_params, enum_stmt.type_param_count);
-        if (src->enum_stmt.type_param_is_const)
-            n->enum_stmt.type_param_is_const = copy_array(src->enum_stmt.type_param_is_const,
-                                                          (size_t)src->enum_stmt.type_param_count);
-        if (src->enum_stmt.type_param_bounds) {
-            n->enum_stmt.type_param_bounds = calloc((size_t)src->enum_stmt.type_param_count, sizeof(ASTNode *));
-            for (int i = 0; i < src->enum_stmt.type_param_count; i++)
-                n->enum_stmt.type_param_bounds[i] = ast_clone(src->enum_stmt.type_param_bounds[i]);
-        }
+        n->enum_stmt.type_params = type_params_clone(&src->enum_stmt.type_params);
         break;
     case AST_ENUM_MEMBER: STR(enum_member.name); break;
     case AST_CHAR_LITERAL: STR(char_literal.value); break;

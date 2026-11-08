@@ -132,13 +132,10 @@ ASTNode* parse_fundef(ParserContext *context, Token **cur) {
     Token *name_tok = *cur;
     char *name = name_tok->value;
     *cur = (*cur)->next;
-    char **type_params = NULL;
-    unsigned char *type_param_is_const = NULL;
-    ASTNode **type_param_bounds = NULL;
-    int type_param_count = 0;
+    TypeParamList type_params = {0};
     if ((*cur)->kind == LT) {
-        type_params = parse_type_params(context, cur, &type_param_count,
-                                        &type_param_is_const, 0, &type_param_bounds);
+        type_params.names = parse_type_params(context, cur, &type_params.count,
+                                              &type_params.is_const, 0, &type_params.bounds);
     }
     if (!expect(cur, L_PARENTHESES)) parse_error(context, "expected '(' after function name", *cur);
 
@@ -155,22 +152,16 @@ ASTNode* parse_fundef(ParserContext *context, Token **cur) {
         // For now, treat declarations as fundefs with no body
         ASTNode *fndef = new_fundef(ret_type, name, params, param_count, NULL, is_variadic);
         fndef->fundef.type_params = type_params;
-        fndef->fundef.type_param_is_const = type_param_is_const;
-        fndef->fundef.type_param_count = type_param_count;
-        fndef->fundef.type_param_bounds = type_param_bounds;
         set_node_loc_from_tokens(fndef, start, name_tok);
-        if (type_param_count == 0) add_function(context, fndef);
+        if (type_params.count == 0) add_function(context, fndef);
         return fndef;
     }
 
     ASTNode *body = parse_block(context, cur);
     ASTNode *fndef = new_fundef(ret_type, name, params, param_count, body, is_variadic);
     fndef->fundef.type_params = type_params;
-    fndef->fundef.type_param_is_const = type_param_is_const;
-    fndef->fundef.type_param_count = type_param_count;
-    fndef->fundef.type_param_bounds = type_param_bounds;
     set_node_loc_from_tokens(fndef, start, name_tok);
-    if (type_param_count == 0) add_function(context, fndef);
+    if (type_params.count == 0) add_function(context, fndef);
     return fndef;
 }
 
@@ -280,13 +271,11 @@ invalid:
 // frontend_pipeline.c's lower_program()).
 ASTNode *parse_method(ParserContext *context, Token **cur) {
     Token *start = *cur;
-    int type_param_count = 0;
-    char **type_params = receiver_bound_type_params(*cur, &type_param_count);
-    unsigned char *type_param_is_const = type_param_count > 0
-        ? calloc((size_t)type_param_count, sizeof(unsigned char)) : NULL;
-    ASTNode **type_param_bounds = NULL;
+    TypeParamList type_params = {0};
+    type_params.names = receiver_bound_type_params(*cur, &type_params.count);
+    if (type_params.count > 0) type_params.is_const = calloc((size_t)type_params.count, sizeof(unsigned char));
     int type_scope_mark = typename_scope_mark(context);
-    for (int i = 0; i < type_param_count; i++) add_typename(context, type_params[i]);
+    for (int i = 0; i < type_params.count; i++) add_typename(context, type_params.names[i]);
 
     ASTNode *ret_type = parse_type(context, cur);
 
@@ -305,9 +294,9 @@ ASTNode *parse_method(ParserContext *context, Token **cur) {
 
     if ((*cur)->kind == LT) {
         if (!generic_receiver) {
-            free(type_param_is_const);
-            type_params = parse_type_params(context, cur, &type_param_count,
-                                            &type_param_is_const, 0, &type_param_bounds);
+            free(type_params.is_const);
+            type_params.names = parse_type_params(context, cur, &type_params.count,
+                                                  &type_params.is_const, 0, &type_params.bounds);
         } else {
             /* A generic receiver already declares this method's parameters:
              *
@@ -321,16 +310,16 @@ ASTNode *parse_method(ParserContext *context, Token **cur) {
             ASTNode **bound_lists = NULL;
             char **bound_params = parse_type_params(context, cur, &bound_count,
                                                     &bound_is_const, 0, &bound_lists);
-            if (bound_count != type_param_count)
+            if (bound_count != type_params.count)
                 parse_error(context, "generic receiver method bounds must name every receiver type parameter", start);
-            for (int i = 0; i < type_param_count; i++) {
-                if (bound_is_const[i] || strcmp(bound_params[i], type_params[i]) != 0)
+            for (int i = 0; i < type_params.count; i++) {
+                if (bound_is_const[i] || strcmp(bound_params[i], type_params.names[i]) != 0)
                     parse_error(context, "generic receiver method bounds must match receiver type parameters", start);
                 free(bound_params[i]);
             }
             free(bound_params);
             free(bound_is_const);
-            type_param_bounds = bound_lists;
+            type_params.bounds = bound_lists;
         }
     }
     if (!expect(cur, L_PARENTHESES)) parse_error(context, "expected '(' after method name", *cur);
@@ -360,19 +349,16 @@ ASTNode *parse_method(ParserContext *context, Token **cur) {
 
     ASTNode *fndef = new_fundef(ret_type, mangled, params, param_count, body, is_variadic);
     fndef->fundef.type_params = type_params;
-    fndef->fundef.type_param_is_const = type_param_is_const;
-    fndef->fundef.type_param_count = type_param_count;
-    fndef->fundef.type_param_bounds = type_param_bounds;
     fndef->fundef.recv_type_name = strdup(recv_type);
     set_node_loc_from_tokens(fndef, start, name_tok);
     restore_typenames(context, type_scope_mark);
     if (generic_receiver) {
-        if (type_param_count == 0)
+        if (type_params.count == 0)
             parse_error(context, "generic receiver methods require receiver-bound type parameters", start);
         add_generic_method(context, recv_type, method_name, fndef);
         return NULL;
     }
-    if (type_param_count == 0) {
+    if (type_params.count == 0) {
         add_function(context, fndef);
         add_method(context, recv_type, method_name, mangled, fndef);
     }

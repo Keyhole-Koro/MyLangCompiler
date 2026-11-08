@@ -23,11 +23,12 @@ static void free_strings(char **strings, int count) {
     free(strings);
 }
 
-static void free_type_params(char **names, unsigned char *is_const, ASTNode **bounds, int count) {
-    free_strings(names, count);
-    free(is_const);
-    for (int i = 0; bounds && i < count; i++) free_ast(bounds[i]);
-    free(bounds);
+void type_params_clear(TypeParamList *params) {
+    free_strings(params->names, params->count);
+    free(params->is_const);
+    for (int i = 0; params->bounds && i < params->count; i++) free_ast(params->bounds[i]);
+    free(params->bounds);
+    *params = (TypeParamList){0};
 }
 
 /* The mirror of ast_clone (AST.c): the children go through ast_visit_children,
@@ -70,8 +71,7 @@ void free_ast(ASTNode *node) {
         free(node->fundef.recv_type_name);
         free(node->fundef.origin_path);
         free(node->fundef.params);
-        free_type_params(node->fundef.type_params, node->fundef.type_param_is_const,
-                         node->fundef.type_param_bounds, node->fundef.type_param_count);
+        type_params_clear(&node->fundef.type_params);
         break;
     case AST_PARAM: free(node->param.name); break;
     case AST_CALL:
@@ -90,8 +90,7 @@ void free_ast(ASTNode *node) {
         free(node->struct_stmt.package);
         free(node->struct_stmt.members);
         free_ast(node->struct_stmt.payload_enum);
-        free_type_params(node->struct_stmt.type_params, node->struct_stmt.type_param_is_const,
-                         node->struct_stmt.type_param_bounds, node->struct_stmt.type_param_count);
+        type_params_clear(&node->struct_stmt.type_params);
         break;
     case AST_TYPEDEF_STRUCT:
         free(node->typedef_struct.struct_name);
@@ -103,8 +102,7 @@ void free_ast(ASTNode *node) {
         free(node->enum_stmt.name);
         free(node->enum_stmt.package);
         free(node->enum_stmt.members);
-        free_type_params(node->enum_stmt.type_params, node->enum_stmt.type_param_is_const,
-                         node->enum_stmt.type_param_bounds, node->enum_stmt.type_param_count);
+        type_params_clear(&node->enum_stmt.type_params);
         break;
     case AST_ENUM_MEMBER: free(node->enum_member.name); break;
     case AST_CHAR_LITERAL: free(node->char_literal.value); break;

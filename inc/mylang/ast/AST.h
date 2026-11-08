@@ -105,6 +105,22 @@ typedef struct {
     int col;
 } Attribute;
 
+/* The parameters of a generic function, struct or enum: `<T: Eq, const N>`.
+ * Empty (all zero) for a declaration that is not generic, and for an instance
+ * once instantiation has substituted its arguments. */
+typedef struct {
+    char **names;
+    /* Parallel to names: non-zero means `const N`, whose argument is an
+     * integer constant rather than a type. */
+    unsigned char *is_const;
+    /* Parallel to names, or NULL when no parameter is bounded: `<T: Eq +
+     * From<S>>` stores an AST_BLOCK whose statements are the bound trait
+     * references (AST_TYPE), NULL for an unbounded parameter. Checked when the
+     * template is instantiated. */
+    ASTNode **bounds;
+    int count;
+} TypeParamList;
+
 struct ASTNode {
     ASTNodeType type;
     int line;
@@ -237,16 +253,7 @@ struct ASTNode {
              * make. `name` stays what this file calls it. */
             char *link_name;
             bool is_variadic;
-            char **type_params;
-            /* Parallel to type_params: non-zero means `const N`, whose
-             * argument is an integer constant rather than a type. */
-            unsigned char *type_param_is_const;
-            int type_param_count;
-            /* Parallel to type_params, or NULL when no parameter is bounded:
-             * `<T: Eq + From<S>>` stores an AST_BLOCK whose statements are
-             * the bound trait references (AST_TYPE), NULL for an unbounded
-             * parameter. Checked when the template is instantiated. */
-            ASTNode **type_param_bounds;
+            TypeParamList type_params;
             /* Non-NULL only for a method (`void (borrow User u) display()`):
              * the receiver's base type name. The receiver itself already
              * lives in params[0] by the time parsing finishes -- this field
@@ -323,13 +330,7 @@ struct ASTNode {
             char *name;
             ASTNode **members;
             int member_count;
-            char **type_params;
-            unsigned char *type_param_is_const;
-            int type_param_count;
-            /* Parallel to type_params, or NULL: `struct Set<T: Hash + Eq>`
-             * stores each parameter's bounds as fundef.type_param_bounds
-             * does. Checked when an instance is created. */
-            ASTNode **type_param_bounds;
+            TypeParamList type_params;
             int is_exported;
             char *package;
             /* A generic instantiation (`__mlg_s_...`) copied in from an
@@ -355,13 +356,7 @@ struct ASTNode {
             char *name;
             ASTNode **members;
             int member_count;
-            char **type_params;
-            unsigned char *type_param_is_const;
-            int type_param_count;
-            /* Parallel to type_params, or NULL: `struct Set<T: Hash + Eq>`
-             * stores each parameter's bounds as fundef.type_param_bounds
-             * does. Checked when an instance is created. */
-            ASTNode **type_param_bounds;
+            TypeParamList type_params;
             int is_exported;
             char *package;
             int has_payloads;
@@ -428,6 +423,9 @@ char *astType2str(ASTNodeType type);
 void ast_visit_children(ASTNode *node, void (*visit)(ASTNode **, void *), void *context);
 /* Deep copy: the result shares no owned strings, arrays, or children. */
 ASTNode *ast_clone(const ASTNode *node);
+/* The type parameters of a function, struct or enum; NULL for other nodes. */
+TypeParamList *ast_type_params(ASTNode *declaration);
+TypeParamList type_params_clone(const TypeParamList *params);
 /* The body assigns to `name`, steps it, or lends it or a part of it with `&` to
  * a call or a `borrow` local. In an unsafe source `&self.data[0]` elsewhere only
  * takes an address, as a view of the caller's value does. */

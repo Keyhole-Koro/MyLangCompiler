@@ -301,7 +301,7 @@ static ASTNode *parse_toplevel_decl(ParserContext *context, Token **cur) {
     if ((*cur)->kind == NEWTYPE) return parse_newtype(context, cur, want_export);
     if ((*cur)->kind == STRUCT) {
         ASTNode *declaration = parse_struct(context, cur);
-        if (declaration && declaration->type == AST_STRUCT && declaration->struct_stmt.type_param_count > 0) {
+        if (declaration && declaration->type == AST_STRUCT && declaration->struct_stmt.type_params.count > 0) {
             declaration->struct_stmt.is_exported = want_export;
             if (want_export) declaration->struct_stmt.package = strdup(context->module.current_package);
             add_generic_template(context, declaration);
@@ -322,7 +322,7 @@ static ASTNode *parse_toplevel_decl(ParserContext *context, Token **cur) {
     }
     if ((*cur)->kind == ENUM) {
         ASTNode *declaration = parse_enum(context, cur);
-        if (declaration && declaration->enum_stmt.type_param_count > 0) {
+        if (declaration && declaration->enum_stmt.type_params.count > 0) {
             declaration->enum_stmt.is_exported = want_export;
             if (want_export) declaration->enum_stmt.package = strdup(context->module.current_package);
             add_generic_template(context, declaration);
@@ -354,7 +354,7 @@ static ASTNode *parse_toplevel_decl(ParserContext *context, Token **cur) {
     }
     if (looks_like_generic_function(context, *cur)) {
         ASTNode *fn = parse_generic_fundef(context, cur);
-        if (fn && fn->fundef.type_param_count > 0) {
+        if (fn && fn->fundef.type_params.count > 0) {
             fn->fundef.is_exported = want_export;
             if (want_export) fn->fundef.package = strdup(context->module.current_package);
             add_generic_template(context, fn);

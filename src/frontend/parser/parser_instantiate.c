@@ -39,7 +39,7 @@ static void concrete_node(ASTNode **slot, void *user_data);
 static const char *instantiate(Instantiation *ctx, ASTNode *use, const char *name,
                                ASTNode **args, int count, int is_function);
 static void check_bounds(Instantiation *ctx, ASTNode *use, const char *name,
-                         char **type_params, ASTNode **bounds, ASTNode **args, int count);
+                         const TypeParamList *params, ASTNode **args, int count);
 
 static void append_instance(Instantiation *ctx, char *name, ASTNode *declaration) {
     ctx->instances = realloc(ctx->instances, sizeof(Instance) * (ctx->count + 1));
@@ -233,15 +233,15 @@ static void instantiate_receiver_methods(Instantiation *ctx, const char *templat
     for (int i = 0; i < generic_method_count(context); i++) {
         GenericMethodDef *entry = generic_method_at(context, i);
         if (strcmp(entry->receiver_template_name, template_name) != 0) continue;
-        if (entry->fundef->fundef.type_param_count != count)
+        if (entry->fundef->fundef.type_params.count != count)
             generic_error(context, entry->fundef,
                           "generic method receiver type argument count mismatch");
 
         /* Receiver-bound parameters are method parameters too.  Validate
          * their bounds when the receiver is specialized -- whether or not
          * the method is called -- before lowering its body. */
-        check_bounds(ctx, entry->fundef, entry->method_name, entry->fundef->fundef.type_params,
-                     entry->fundef->fundef.type_param_bounds, args, count);
+        check_bounds(ctx, entry->fundef, entry->method_name, &entry->fundef->fundef.type_params,
+                     args, count);
         if (!method_is_called(ctx, entry->method_name)) continue;
         if (find_method(context, concrete_type_name, entry->method_name)) continue;
 
@@ -261,21 +261,10 @@ static void instantiate_receiver_methods(Instantiation *ctx, const char *templat
             /* The receiver binds the method's own formal names.  They need
              * not spell the struct template's names the same way: a valid
              * `T (borrow Box<U> self) get()` is just as generic as `Box<T>`. */
-            context, entry->fundef->fundef.type_params, args, count,
+            context, entry->fundef->fundef.type_params.names, args, count,
         };
         substitute(&method, &sub);
-        for (int p = 0; p < method->fundef.type_param_count; p++)
-            free(method->fundef.type_params[p]);
-        free(method->fundef.type_params);
-        method->fundef.type_params = NULL;
-        free(method->fundef.type_param_is_const);
-        method->fundef.type_param_is_const = NULL;
-        if (method->fundef.type_param_bounds) {
-            for (int p = 0; p < count; p++) free_ast(method->fundef.type_param_bounds[p]);
-            free(method->fundef.type_param_bounds);
-            method->fundef.type_param_bounds = NULL;
-        }
-        method->fundef.type_param_count = 0;
+        type_params_clear(&method->fundef.type_params);
 
         free(method->fundef.name);
         method->fundef.name = strdup(mangled.buf);
@@ -296,11 +285,11 @@ static void instantiate_receiver_methods(Instantiation *ctx, const char *templat
  * bound, make the bound's type arguments concrete, and require an impl. The
  * template is a generic function, method, struct, or enum. */
 static void check_bounds(Instantiation *ctx, ASTNode *use, const char *name,
-                         char **type_params, ASTNode **bounds, ASTNode **args, int count) {
-    if (!bounds) return;
-    Substitution sub = {ctx->parser_context, type_params, args, count};
+                         const TypeParamList *params, ASTNode **args, int count) {
+    if (!params->bounds) return;
+    Substitution sub = {ctx->parser_context, params->names, args, count};
     for (int i = 0; i < count; i++) {
-        ASTNode *list = bounds[i];
+        ASTNode *list = params->bounds[i];
         if (!list) continue;
         for (int b = 0; b < list->block.count; b++) {
             ASTNode *bound = ast_clone(list->block.stmts[b]);
@@ -644,16 +633,13 @@ static const char *instantiate(Instantiation *ctx, ASTNode *use, const char *nam
     ASTNode *tpl = is_function ? find_generic_function_template(context, name) : find_generic_type_template(context, name);
     if (!tpl) generic_error(context, use, "generic declaration is not available in this module");
     int is_enum = !is_function && tpl->type == AST_ENUM;
-    int expected = is_function ? tpl->fundef.type_param_count :
-                   is_enum ? tpl->enum_stmt.type_param_count : tpl->struct_stmt.type_param_count;
-    if (count != expected) generic_error(context, use, "generic type argument count mismatch");
+    const TypeParamList *params = ast_type_params(tpl);
+    if (count != params->count) generic_error(context, use, "generic type argument count mismatch");
     if (is_function && !tpl->fundef.body)
         generic_error(context, use,
                       "generic function instantiation requires a definition in this module");
 
-    unsigned char *param_is_const = is_function ? tpl->fundef.type_param_is_const :
-                                    is_enum ? tpl->enum_stmt.type_param_is_const :
-                                              tpl->struct_stmt.type_param_is_const;
+    unsigned char *param_is_const = params->is_const;
     for (int i = 0; i < count; i++) {
         int numeric = args[i] && args[i]->type == AST_NUMBER;
         if (param_is_const && param_is_const[i] && !numeric)
@@ -668,12 +654,7 @@ static const char *instantiate(Instantiation *ctx, ASTNode *use, const char *nam
         }
     }
 
-    if (is_function)
-        check_bounds(ctx, use, name, tpl->fundef.type_params, tpl->fundef.type_param_bounds, args, count);
-    else if (is_enum)
-        check_bounds(ctx, use, name, tpl->enum_stmt.type_params, tpl->enum_stmt.type_param_bounds, args, count);
-    else
-        check_bounds(ctx, use, name, tpl->struct_stmt.type_params, tpl->struct_stmt.type_param_bounds, args, count);
+    check_bounds(ctx, use, name, params, args, count);
 
     StringBuilder key;
     sb_init(&key);
@@ -704,57 +685,21 @@ static const char *instantiate(Instantiation *ctx, ASTNode *use, const char *nam
                       "generic instantiation limit exceeded (possibly expanding recursion)");
 
     ASTNode *decl = ast_clone(tpl);
-    Substitution sub = {
-        context,
-        is_function ? tpl->fundef.type_params :
-        is_enum ? tpl->enum_stmt.type_params : tpl->struct_stmt.type_params,
-        args,
-        count,
-    };
+    Substitution sub = {context, params->names, args, count};
     substitute(&decl, &sub);
-    char **params = is_function ? decl->fundef.type_params :
-                    is_enum ? decl->enum_stmt.type_params : decl->struct_stmt.type_params;
-    for (int i = 0; i < count; i++) free(params[i]);
-    free(params);
+    type_params_clear(ast_type_params(decl));
     char *concrete_name = key.buf;
     if (is_function) {
         free(decl->fundef.name);
         decl->fundef.name = strdup(concrete_name);
-        decl->fundef.type_params = NULL;
-        free(decl->fundef.type_param_is_const);
-        decl->fundef.type_param_is_const = NULL;
-        if (decl->fundef.type_param_bounds) {
-            for (int i = 0; i < count; i++) free_ast(decl->fundef.type_param_bounds[i]);
-            free(decl->fundef.type_param_bounds);
-            decl->fundef.type_param_bounds = NULL;
-        }
-        decl->fundef.type_param_count = 0;
         decl->fundef.is_exported = 0;
     } else if (is_enum) {
         free(decl->enum_stmt.name);
         decl->enum_stmt.name = strdup(concrete_name);
-        decl->enum_stmt.type_params = NULL;
-        free(decl->enum_stmt.type_param_is_const);
-        decl->enum_stmt.type_param_is_const = NULL;
-        if (decl->enum_stmt.type_param_bounds) {
-            for (int i = 0; i < count; i++) free_ast(decl->enum_stmt.type_param_bounds[i]);
-            free(decl->enum_stmt.type_param_bounds);
-            decl->enum_stmt.type_param_bounds = NULL;
-        }
-        decl->enum_stmt.type_param_count = 0;
         decl->enum_stmt.is_exported = 0;
     } else {
         free(decl->struct_stmt.name);
         decl->struct_stmt.name = strdup(concrete_name);
-        decl->struct_stmt.type_params = NULL;
-        free(decl->struct_stmt.type_param_is_const);
-        decl->struct_stmt.type_param_is_const = NULL;
-        if (decl->struct_stmt.type_param_bounds) {
-            for (int i = 0; i < count; i++) free_ast(decl->struct_stmt.type_param_bounds[i]);
-            free(decl->struct_stmt.type_param_bounds);
-            decl->struct_stmt.type_param_bounds = NULL;
-        }
-        decl->struct_stmt.type_param_count = 0;
         decl->struct_stmt.is_exported = 0;
     }
     /* Publish before visiting the body to close same-type recursion. */

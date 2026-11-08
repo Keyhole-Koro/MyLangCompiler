@@ -120,15 +120,15 @@ static ASTNode *parse_identifier_primary(ParserContext *context, Token **cur) {
         after_args && after_args->kind == L_BRACE) {
         int type_arg_count = 0;
         ASTNode **type_args = parse_type_args(context, cur, &type_arg_count);
-        if (type_arg_count != generic_type->struct_stmt.type_param_count) {
+        if (type_arg_count != generic_type->struct_stmt.type_params.count) {
             char message[256];
             snprintf(
                 message,
                 sizeof(message),
                 "generic struct '%s' expects %d type argument%s but got %d",
                 name,
-                generic_type->struct_stmt.type_param_count,
-                generic_type->struct_stmt.type_param_count == 1 ? "" : "s",
+                generic_type->struct_stmt.type_params.count,
+                generic_type->struct_stmt.type_params.count == 1 ? "" : "s",
                 type_arg_count
             );
             parse_error_code(context,
@@ -185,15 +185,15 @@ static ASTNode *parse_identifier_primary(ParserContext *context, Token **cur) {
         if ((*cur)->kind != L_PARENTHESES)
             parse_error(context, "expected '(' after generic function arguments", *cur);
         if (is_generic_function &&
-            type_arg_count != generic_declaration->fundef.type_param_count) {
+            type_arg_count != generic_declaration->fundef.type_params.count) {
             char message[256];
             snprintf(
                 message,
                 sizeof(message),
                 "generic function '%s' expects %d type argument%s but got %d",
                 name,
-                generic_declaration->fundef.type_param_count,
-                generic_declaration->fundef.type_param_count == 1 ? "" : "s",
+                generic_declaration->fundef.type_params.count,
+                generic_declaration->fundef.type_params.count == 1 ? "" : "s",
                 type_arg_count
             );
             parse_error_code(context,

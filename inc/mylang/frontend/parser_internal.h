@@ -109,12 +109,15 @@ ASTNode *parse_fundef(ParserContext *context, Token **cur);
 ASTNode *parse_method(ParserContext *context, Token **cur);
 ASTNode *parse_generic_fundef(ParserContext *context, Token **cur);
 /* `out_bounds` receives the per-parameter bound lists (see
- * fundef.type_param_bounds), or NULL when nothing is bounded. Pass NULL to
+ * TypeParamList.bounds), or NULL when nothing is bounded. Pass NULL to
  * discard them. */
 char **parse_type_params(ParserContext *context, Token **cur, int *out_count,
                          unsigned char **out_is_const, int add_to_scope,
                          ASTNode ***out_bounds);
 ASTNode **parse_type_args(ParserContext *context, Token **cur, int *out_count);
+/* Frees the names, flags and bounds and leaves the list empty, as an instance
+ * is once its arguments are substituted (parser_free.c). */
+void type_params_clear(TypeParamList *params);
 void instantiate_generics(ParserContext *context, ASTNode *program);
 /* Rejects a borrow in a field, payload, global, array element or generic
  * argument (parser_borrow_positions.c). */

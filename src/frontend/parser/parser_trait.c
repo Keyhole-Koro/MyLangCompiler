@@ -923,7 +923,7 @@ ASTNode *parse_impl(ParserContext *context, Token **cur, int want_export) {
             Token *item_tok = *cur;
             ASTNode *fn = looks_like_method(context, *cur) ? parse_method(context, cur)
                                                            : parse_fundef(context, cur);
-            if (!fn || fn->type != AST_FUNDEF || fn->fundef.type_param_count > 0)
+            if (!fn || fn->type != AST_FUNDEF || fn->fundef.type_params.count > 0)
                 parse_error(context, "impl items must be non-generic methods or functions", item_tok);
             if (!fn->fundef.body) parse_error(context, "an impl item needs a body", item_tok);
             if (fn->fundef.recv_type_name && strcmp(fn->fundef.recv_type_name, item_self_name) != 0)
