@@ -251,13 +251,25 @@ ASTNode* parse_toplevel(ParserContext *context, Token **cur) {
             i++;
         }
     }
+    /* An import or a package line declares nothing an attribute could apply
+     * to. `@safe` vouches for the one declaration after it, so it cannot make
+     * an imported module's functions safe to call. */
+    Token *target = *cur;
+    while (target && (target->kind == EXPORT || target->kind == EXTERN)) target = target->next;
+    if (target && target->kind == IMPORT) {
+        parse_error(context, is_safe
+            ? "@safe cannot precede an import; mark the imported functions @safe where they are declared"
+            : "attributes may not precede an import", first);
+    }
+    if (target && target->kind == PACKAGE)
+        parse_error(context, "attributes may not precede a package line", first);
     int outer_safe = context->control.safe_decl;
     context->control.safe_decl = is_safe;
     ASTNode *decl = parse_toplevel_decl(context, cur);
     context->control.safe_decl = outer_safe;
     if (!decl) {
-        /* Package/import lines and generic templates come back NULL; none of
-         * them can carry an attribute today. */
+        /* A generic template comes back NULL, and only @safe may precede
+         * one. */
         if (is_safe && !is_noreturn && attr_count == 0) return NULL;
         parse_error(context, "attributes may only precede a function or method declaration", first);
     }

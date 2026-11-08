@@ -256,6 +256,10 @@ A value receiver is a move and is rejected.
 `@safe` and `@noreturn` belong to the language: they are not annotations and
 emit no row.
 
+No attribute may precede an `import` or `package` line. `@safe` vouches for
+the one declaration after it, so the functions of an imported `.unsafe.mln`
+module are marked `@safe` where they are declared.
+
 ### Functions that do not return
 
 `@noreturn` declares that a call of a function does not come back. The
