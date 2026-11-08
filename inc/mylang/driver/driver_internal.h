@@ -47,17 +47,11 @@ typedef struct {
     CompileStage stage;
 } DriverOptions;
 
+/* Directory mode: every .mln under opts->input_path compiles to the same
+   relative path under opts->output_path. */
 typedef struct {
-    const char *src_root;
+    const DriverOptions *opts;
     size_t src_root_len;
-    const char *out_root;
-    const char **excludes;
-    int exclude_count;
-    int include_masm;
-    int dump_tokens;
-    int dump_ast;
-    const char **aliases;
-    int alias_count;
     int compiled_count;
     int copied_count;
 } WalkCtx;
@@ -75,11 +69,8 @@ int mkdir_p(const char *path);
 void ensure_parent_dir(const char *file_path);
 int copy_file(const char *src, const char *dst);
 
-int compile_one(const char *input_path, const char *output_path,
-                int dump_tokens_to_stdout, int dump_ast_to_stdout,
-                const char **aliases, int alias_count,
-                const char *depfile_path, const char *symbols_path,
-                CompileStage stage);
+/* Compiles one source as `opts` asks; returns 0 on success and 1 on error. */
+int compile_one(const DriverOptions *opts, const char *input_path, const char *output_path);
 int write_symbol_file(const char *symbols_path, const char *input_path, ASTNode *root,
                       const char *assembly);
 int walk_dir(WalkCtx *ctx, const char *dir_path);

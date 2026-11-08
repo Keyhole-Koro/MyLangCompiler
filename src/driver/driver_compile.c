@@ -292,136 +292,154 @@ static int write_dependency_file(const char *depfile_path,
     return ok;
 }
 
-int compile_one(const char *input_path, const char *output_path,
-                int dump_tokens_to_stdout, int dump_ast_to_stdout,
-                const char **aliases, int alias_count,
-                const char *depfile_path, const char *symbols_path,
-                CompileStage stage) {
-    int writes_output = stage == COMPILE_TO_OUTPUT;
-    MyLangSourceSpecResult source = mylang_source_spec_parse(input_path);
+/* What one compilation holds. compile_one frees all of it, however far the
+ * steps below get. */
+typedef struct {
+    const DriverOptions *opts;
+    const char *input_path;
+    const char *output_path;
+    MyLangSourceSpec spec;
+    Token *tokens;
+    FrontendSession *session;
+    ASTNode *root;
+    char *output;
+} Compilation;
+
+static int writes_output(const Compilation *c) {
+    return c->opts->stage == COMPILE_TO_OUTPUT;
+}
+
+/* Reads the source profile from the filename and lexes the source. */
+static int load_source(Compilation *c) {
+    MyLangSourceSpecResult source = mylang_source_spec_parse(c->input_path);
     if (!source.ok) {
         fprintf(stderr, "Invalid MyLang source filename: %s\n", source.error);
-        return 1;
+        return 0;
+    }
+    c->spec = source.spec;
+
+    c->tokens = lexer_from_file(c->input_path);
+    if (!c->tokens) {
+        fprintf(stderr, "Failed to read input file (or included files): %s\n", c->input_path);
+        return 0;
     }
 
-    Token *tokens = lexer_from_file(input_path);
-    if (!tokens) {
-        fprintf(stderr, "Failed to read input file (or included files): %s\n", input_path);
-        return 1;
-    }
-
-    Token *dom_token = first_dom_token(tokens);
-    if (dom_token && source.spec.syntax != MYLANG_SYNTAX_DOM) {
+    Token *dom_token = first_dom_token(c->tokens);
+    if (dom_token && c->spec.syntax != MYLANG_SYNTAX_DOM) {
         fprintf(stderr,
                 "%s:%d:%d: DOM syntax requires a canonical .dom.mln filename\n",
-                input_path,
+                c->input_path,
                 dom_token->line,
                 dom_token->col);
-        free_tokens(tokens);
-        return 1;
+        return 0;
     }
 
-    if (writes_output) {
+    if (writes_output(c)) {
         printf("Source profile: syntax=%s, safety=%s\n",
-               mylang_syntax_profile_name(source.spec.syntax),
-               mylang_safety_profile_name(source.spec.safety));
+               mylang_syntax_profile_name(c->spec.syntax),
+               mylang_safety_profile_name(c->spec.safety));
     }
+    return 1;
+}
 
+/* Parses the source in a new frontend session and, unless only the parse
+ * was asked for, checks it. */
+static int run_frontend(Compilation *c) {
     parser_reset();
-    FrontendSession *session = frontend_session_create();
-    if (!session) {
+    c->session = frontend_session_create();
+    if (!c->session) {
         fprintf(stderr, "Failed to create frontend session.\n");
-        free_tokens(tokens);
-        return 1;
+        return 0;
     }
-    frontend_session_set_current(session);
-    if (!add_project_aliases(session, input_path)) {
-        destroy_compile_session(session);
-        free_tokens(tokens);
-        return 1;
+    frontend_session_set_current(c->session);
+    if (!add_project_aliases(c->session, c->input_path) ||
+        !configure_aliases(c->session, c->opts->aliases, c->opts->alias_count)) {
+        return 0;
     }
-    if (!configure_aliases(session, aliases, alias_count)) {
-        destroy_compile_session(session);
-        free_tokens(tokens);
-        return 1;
-    }
-    parser_set_filename(input_path);
-    semantic_set_filename(input_path);
-    semantic_set_safety_profile(semantic_profile_for_source(source.spec.safety));
+    parser_set_filename(c->input_path);
+    semantic_set_filename(c->input_path);
+    semantic_set_safety_profile(semantic_profile_for_source(c->spec.safety));
 
-    if (dump_tokens_to_stdout) dump_tokens(stdout, tokens);
+    if (c->opts->dump_tokens) dump_tokens(stdout, c->tokens);
     /* Keep stdout progress/debug output ordered before parser diagnostics on
        stderr when both streams are captured by a build runner. */
     fflush(stdout);
 
-    Token *cur = tokens;
-    ASTNode *root = parse_program(&cur);
+    Token *cur = c->tokens;
+    c->root = parse_program(&cur);
 
-    if (dump_ast_to_stdout) print_ast(root, 0);
-    if (writes_output) printf("AST parsing completed.\n");
+    if (c->opts->dump_ast) print_ast(c->root, 0);
+    if (writes_output(c)) printf("AST parsing completed.\n");
 
-    int success = stage == COMPILE_PARSE_ONLY || semantic_check_with_session(root, session);
-    if (!success && writes_output) fprintf(stderr, "Semantic analysis failed.\n");
-    if (!success || !writes_output) {
-        free_ast(root);
-        free_tokens(tokens);
-        destroy_compile_session(session);
-        return success ? 0 : 1;
+    if (c->opts->stage == COMPILE_PARSE_ONLY) return 1;
+    if (!semantic_check_with_session(c->root, c->session)) {
+        if (writes_output(c)) fprintf(stderr, "Semantic analysis failed.\n");
+        return 0;
     }
-    printf("Semantic analysis completed.\n");
+    if (writes_output(c)) printf("Semantic analysis completed.\n");
+    return 1;
+}
 
-    codegen_set_source_path(input_path);
-    char *output = codegen_with_session(root, session);
-    if (!output) {
+static void dump_tokens_sidecar(FILE *out, const Compilation *c) {
+    dump_tokens(out, c->tokens);
+}
+
+static void dump_ast_sidecar(FILE *out, const Compilation *c) {
+    fprint_ast(out, c->root, 0);
+}
+
+/* Writes `<output><suffix>` beside the assembly. A file that cannot be
+ * written is reported but does not fail the compile. */
+static void write_sidecar(const Compilation *c, const char *suffix, const char *what,
+                          void (*dump)(FILE *out, const Compilation *c)) {
+    char *path = build_sidecar_path(c->output_path, suffix);
+    if (!path) return;
+    FILE *file = fopen(path, "wb");
+    if (file) {
+        dump(file, c);
+        fclose(file);
+        printf("%s saved to %s\n", what, path);
+    } else {
+        /* perror()'s format, naming the file by its suffix. */
+        fprintf(stderr, "Failed to save %s: %s\n", suffix + 1, strerror(errno));
+    }
+    free(path);
+}
+
+/* Generates the assembly and writes it with the files that go beside it. */
+static int emit_output(Compilation *c) {
+    codegen_set_source_path(c->input_path);
+    c->output = codegen_with_session(c->root, c->session);
+    if (!c->output) {
         fprintf(stderr, "Code generation failed.\n");
-        free_ast(root);
-        free_tokens(tokens);
-        destroy_compile_session(session);
-        return 1;
+        return 0;
     }
 
-    if (!write_dependency_file(depfile_path, input_path, root, session) ||
-        !write_symbol_file(symbols_path, input_path, root, output)) {
-        free(output);
-        free_ast(root);
-        free_tokens(tokens);
-        destroy_compile_session(session);
-        return 1;
+    if (!write_dependency_file(c->opts->depfile_path, c->input_path, c->root, c->session) ||
+        !write_symbol_file(c->opts->symbols_path, c->input_path, c->root, c->output)) {
+        return 0;
     }
 
-    saveOutput(output_path, output);
-    printf("Code generation completed. Output saved to %s\n", output_path);
+    saveOutput(c->output_path, c->output);
+    printf("Code generation completed. Output saved to %s\n", c->output_path);
 
-    char *tokens_txt = build_sidecar_path(output_path, "_tokens.txt");
-    char *ast_txt = build_sidecar_path(output_path, "_ast.txt");
+    write_sidecar(c, "_tokens.txt", "Tokens", dump_tokens_sidecar);
+    write_sidecar(c, "_ast.txt", "AST", dump_ast_sidecar);
+    return 1;
+}
 
-    if (tokens_txt) {
-        FILE *tf = fopen(tokens_txt, "wb");
-        if (tf) {
-            dump_tokens(tf, tokens);
-            fclose(tf);
-            printf("Tokens saved to %s\n", tokens_txt);
-        } else {
-            perror("Failed to save tokens.txt");
-        }
-    }
+int compile_one(const DriverOptions *opts, const char *input_path, const char *output_path) {
+    Compilation c = {
+        .opts = opts,
+        .input_path = input_path,
+        .output_path = output_path,
+    };
+    int ok = load_source(&c) && run_frontend(&c) &&
+             (!writes_output(&c) || emit_output(&c));
 
-    if (ast_txt) {
-        FILE *af = fopen(ast_txt, "wb");
-        if (af) {
-            fprint_ast(af, root, 0);
-            fclose(af);
-            printf("AST saved to %s\n", ast_txt);
-        } else {
-            perror("Failed to save ast.txt");
-        }
-    }
-
-    free(tokens_txt);
-    free(ast_txt);
-    free(output);
-    free_ast(root);
-    free_tokens(tokens);
-    destroy_compile_session(session);
-    return 0;
+    free(c.output);
+    free_ast(c.root);
+    free_tokens(c.tokens);
+    if (c.session) destroy_compile_session(c.session);
+    return ok ? 0 : 1;
 }

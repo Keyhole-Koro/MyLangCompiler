@@ -20,17 +20,12 @@ static int run_directory_mode(const DriverOptions *opts) {
         }
     }
 
+    /* walk_dir compiles each file with these options as they are: the checks
+     * above have refused the check stages, --depfile and --emit-symbols,
+     * which only make sense for a single source. */
     WalkCtx ctx = {
-        .src_root = opts->input_path,
+        .opts = opts,
         .src_root_len = strlen(opts->input_path),
-        .out_root = opts->output_path,
-        .excludes = opts->excludes,
-        .exclude_count = opts->exclude_count,
-        .include_masm = opts->include_masm,
-        .dump_tokens = opts->dump_tokens,
-        .dump_ast = opts->dump_ast,
-        .aliases = opts->aliases,
-        .alias_count = opts->alias_count,
         .compiled_count = 0,
         .copied_count = 0,
     };
@@ -49,10 +44,7 @@ static int run_single_file_mode(const DriverOptions *opts) {
         fprintf(stderr, "Input path does not exist: %s\n", opts->input_path);
         return 1;
     }
-    return compile_one(opts->input_path, opts->output_path,
-                       opts->dump_tokens, opts->dump_ast,
-                       opts->aliases, opts->alias_count,
-                       opts->depfile_path, opts->symbols_path, opts->stage);
+    return compile_one(opts, opts->input_path, opts->output_path);
 }
 
 int main(int argc, char *argv[]) {

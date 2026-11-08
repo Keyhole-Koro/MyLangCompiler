@@ -23,7 +23,7 @@ int walk_dir(WalkCtx *ctx, const char *dir_path) {
         snprintf(relbuf, sizeof(relbuf), "%s", rel);
         normalize_slashes(relbuf);
 
-        if (should_exclude(relbuf, ctx->excludes, ctx->exclude_count)) {
+        if (should_exclude(relbuf, ctx->opts->excludes, ctx->opts->exclude_count)) {
             free(child_path);
             continue;
         }
@@ -40,7 +40,7 @@ int walk_dir(WalkCtx *ctx, const char *dir_path) {
 
         if (is_file && has_ext(child_path, ".mln")) {
             char *rel_out = replace_ext(relbuf, ".masm");
-            char *out_path = join_path(ctx->out_root, rel_out ? rel_out : relbuf);
+            char *out_path = join_path(ctx->opts->output_path, rel_out ? rel_out : relbuf);
             if (!out_path) {
                 free(rel_out);
                 free(child_path);
@@ -48,10 +48,7 @@ int walk_dir(WalkCtx *ctx, const char *dir_path) {
                 return 1;
             }
             ensure_parent_dir(out_path);
-            if (compile_one(child_path, out_path,
-                            ctx->dump_tokens, ctx->dump_ast,
-                            ctx->aliases, ctx->alias_count, NULL, NULL,
-                            COMPILE_TO_OUTPUT) != 0) {
+            if (compile_one(ctx->opts, child_path, out_path) != 0) {
                 fprintf(stderr, "Failed to compile %s\n", child_path);
                 free(rel_out);
                 free(out_path);
@@ -62,8 +59,8 @@ int walk_dir(WalkCtx *ctx, const char *dir_path) {
             ctx->compiled_count++;
             free(rel_out);
             free(out_path);
-        } else if (is_file && ctx->include_masm && has_ext(child_path, ".masm")) {
-            char *out_path = join_path(ctx->out_root, relbuf);
+        } else if (is_file && ctx->opts->include_masm && has_ext(child_path, ".masm")) {
+            char *out_path = join_path(ctx->opts->output_path, relbuf);
             if (!out_path) {
                 free(child_path);
                 closedir(dir);
