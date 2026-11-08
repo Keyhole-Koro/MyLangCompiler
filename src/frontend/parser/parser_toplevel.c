@@ -251,10 +251,10 @@ ASTNode* parse_toplevel(ParserContext *context, Token **cur) {
             i++;
         }
     }
-    int outer_safe = g_parsing_safe_decl;
-    g_parsing_safe_decl = is_safe;
+    int outer_safe = context->control.safe_decl;
+    context->control.safe_decl = is_safe;
     ASTNode *decl = parse_toplevel_decl(context, cur);
-    g_parsing_safe_decl = outer_safe;
+    context->control.safe_decl = outer_safe;
     if (!decl) {
         /* Package/import lines and generic templates come back NULL; none of
          * them can carry an attribute today. */

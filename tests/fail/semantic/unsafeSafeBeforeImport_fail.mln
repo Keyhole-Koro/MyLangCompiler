@@ -1,0 +1,6 @@
+// `@safe` vouches for the function declared after it, not for a module. Written
+// before an import, it once marked every function of the imported module safe,
+// so `poke` was in reach: "calling 'unsafe_lib_poke', which is not @safe".
+@safe
+import unsafe_lib from "../../support/unsafe_lib.mln";
+i32 main() { unsafe_lib.poke(4096, 1); return 0; }

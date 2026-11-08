@@ -430,6 +430,5 @@ TypeParamList type_params_clone(const TypeParamList *params);
  * a call or a `borrow` local. In an unsafe source `&self.data[0]` elsewhere only
  * takes an address, as a view of the caller's value does. */
 int ast_writes_name(ASTNode *body, const char *name);
-extern int g_parsing_safe_decl;
 
 #endif

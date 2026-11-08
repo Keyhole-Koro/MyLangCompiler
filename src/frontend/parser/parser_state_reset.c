@@ -178,5 +178,6 @@ void parser_context_reset(ParserContext *context) {
     context->control.stop_at_arrow = 0;
     context->control.generic_decl_depth = 0;
     context->control.current_generic_function_name = NULL;
+    context->control.safe_decl = 0;
     context->module.filename = NULL;
 }

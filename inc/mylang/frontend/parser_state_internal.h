@@ -145,6 +145,10 @@ typedef struct ParserControlState {
     int parsing_generated;
     const char *current_generic_function_name;
     int stop_at_arrow;
+    /* `@safe` precedes the top-level declaration being parsed: each function
+     * it declares, an impl's items included, is callable from a checked
+     * source (rule U4). */
+    int safe_decl;
 } ParserControlState;
 
 typedef struct ParserLoweringState {

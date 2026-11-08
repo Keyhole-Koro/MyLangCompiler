@@ -491,6 +491,7 @@ static ASTNode *parse_trait_item(ParserContext *context, Token **cur, Token **ou
     for (int i = 0; i < count; i++) params[at++] = rest[i];
     free(rest);
     ASTNode *item = new_fundef(ret_type, name_tok->value, params, total, NULL, is_variadic);
+    item->fundef.is_safe = context->control.safe_decl;
     if (recv) item->fundef.recv_type_name = strdup("Self");
     set_node_loc_from_tokens(item, start, name_tok);
     return item;
@@ -679,6 +680,7 @@ static ASTNode *synthesize_short_impl(ParserContext *context, TraitDef *trait, T
     stmts[0] = new_return(value);
     ASTNode *fn = new_fundef(subst_type(item->fundef.ret_type, sub), item->fundef.name, params,
                              item->fundef.param_count, new_block(stmts, 1), item->fundef.is_variadic);
+    fn->fundef.is_safe = context->control.safe_decl;
     set_node_loc_from_tokens(fn, at, NULL);
     return fn;
 }

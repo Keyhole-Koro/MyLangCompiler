@@ -152,6 +152,7 @@ ASTNode* parse_fundef(ParserContext *context, Token **cur) {
         // For now, treat declarations as fundefs with no body
         ASTNode *fndef = new_fundef(ret_type, name, params, param_count, NULL, is_variadic);
         fndef->fundef.type_params = type_params;
+        fndef->fundef.is_safe = context->control.safe_decl;
         set_node_loc_from_tokens(fndef, start, name_tok);
         if (type_params.count == 0) add_function(context, fndef);
         return fndef;
@@ -160,6 +161,7 @@ ASTNode* parse_fundef(ParserContext *context, Token **cur) {
     ASTNode *body = parse_block(context, cur);
     ASTNode *fndef = new_fundef(ret_type, name, params, param_count, body, is_variadic);
     fndef->fundef.type_params = type_params;
+    fndef->fundef.is_safe = context->control.safe_decl;
     set_node_loc_from_tokens(fndef, start, name_tok);
     if (type_params.count == 0) add_function(context, fndef);
     return fndef;
@@ -349,6 +351,7 @@ ASTNode *parse_method(ParserContext *context, Token **cur) {
 
     ASTNode *fndef = new_fundef(ret_type, mangled, params, param_count, body, is_variadic);
     fndef->fundef.type_params = type_params;
+    fndef->fundef.is_safe = context->control.safe_decl;
     fndef->fundef.recv_type_name = strdup(recv_type);
     set_node_loc_from_tokens(fndef, start, name_tok);
     restore_typenames(context, type_scope_mark);
