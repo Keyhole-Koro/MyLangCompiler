@@ -3,7 +3,7 @@ import { Text } from "@std/text/text.mln";
 
 i32 main() {
     Text<8> text;
-    text.init();
+    text.clear();
     if (text.capacity() != 7 || !text.is_empty()) { return 1; }
     if (!text.append("ab")) { return 2; }
     if (text.append("c\0d")) { return 3; }        // embedded NUL is rejected
