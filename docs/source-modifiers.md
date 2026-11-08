@@ -126,7 +126,9 @@ the arm's own block: write the arm as a statement expression,
 `Ok(v) -> ({ return <Label text={v} />; })` or `1 -> ({ yield (<A />); })`, and
 the element is built only when that arm runs. An element that is itself an
 arm's value would be hoisted ahead of the whole `case` and built whichever arm
-runs, so it is an error.
+runs, so it is an error. The branches of `?:` follow the same rule:
+`ok ? ({ yield (<Done />); }) : ({ yield (<Retry />); })` builds one element,
+and `ok ? (<Done />) : (<Retry />)` is an error.
 
 Because tags are function names, adding an element means adding a function to
 the imported package, and an event handler is simply a parameter (`onClick`

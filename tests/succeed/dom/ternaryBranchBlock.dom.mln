@@ -1,0 +1,32 @@
+// Markup in a branch of `?:` written as a statement expression is lowered
+// inside that branch's block, so an element is built only when its branch is
+// chosen. Both branches' elements used to be hoisted ahead of the statement
+// and built whatever the condition, and markup inside a statement-expression
+// branch was not lowered at all.
+i32 g_next = 1;
+i32 g_made = 0;
+
+void append_child(i32 parent, i32 child) { }
+i32 A(i32 v = 1) { g_made = g_made * 10 + v; g_next = g_next + 1; return g_next; }
+i32 B(i32 v = 2) { g_made = g_made * 10 + v; g_next = g_next + 1; return g_next; }
+
+i32 returned(i32 k) {
+    i32 id = k ? ({ return <A />; }) : 0;
+    return id;
+}
+
+i32 yielded(i32 k) {
+    return k == 1 ? ({ yield (<A v={4} />); })
+         : k == 2 ? ({ yield (<B v={5}><A v={6} /></B>); })
+         : 0;
+}
+
+i32 main() {
+    i32 a = returned(1);    // A(1): id 2
+    i32 none = returned(0); // nothing
+    i32 c = yielded(1);     // A(4): id 3
+    i32 d = yielded(2);     // B(5) holding A(6): ids 4 and 5
+    i32 e = yielded(9);     // nothing
+    // 1456 * 10000 + 2340 = 14562340
+    return g_made * 10000 + a * 1000 + c * 100 + d * 10 + none + e;
+}

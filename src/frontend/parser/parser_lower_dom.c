@@ -714,9 +714,8 @@ static void lower_expr(ParserContext *context, ASTNode **slot, DomEmit *out) {
         lower_expr(context, &node->cast.expr, out);
         break;
     case AST_TERNARY:
+        /* Only the condition always runs: see lower_branch_blocks. */
         lower_expr(context, &node->ternary.cond, out);
-        lower_expr(context, &node->ternary.then_expr, out);
-        lower_expr(context, &node->ternary.else_expr, out);
         break;
     case AST_CALL:
         for (int i = 0; i < node->call.arg_count; i++) {
@@ -879,18 +878,19 @@ static void lower_nested_blocks(ParserContext *context, ASTNode *stmt) {
     }
 }
 
-static void lower_case_arm(ParserContext *context, ASTNode *arm) {
-    if (arm && arm->type == AST_STMT_EXPR) lower_dom_block(context, arm->stmt_expr.block);
+static void lower_branch(ParserContext *context, ASTNode *branch) {
+    if (branch && branch->type == AST_STMT_EXPR) lower_dom_block(context, branch->stmt_expr.block);
 }
 
-/* A `case` arm runs only when it is chosen, so markup in one cannot be hoisted
- * ahead of the whole statement. An arm written as a statement expression is a
- * block of its own and is lowered in place: in
- * `Err(e) -> ({ return <Alert text={e.describe()} />; })` the element is built
- * only when that arm runs. Markup that is itself an arm's value is left for
+/* A `case` arm and a branch of `?:` run only when chosen, so markup in one
+ * cannot be hoisted ahead of the whole statement. A branch written as a
+ * statement expression is a block of its own and is lowered in place: in
+ * `Err(e) -> ({ return <Alert text={e.describe()} />; })` or
+ * `ok ? ({ yield (<Done />); }) : 0` the element is built only when that
+ * branch runs. Markup that is itself a branch's value is left for
  * ensure_no_dom_elements to reject. Blocks, statement expressions and function
  * literals are lowered on their own, so the search stops at them. */
-static void lower_case_arm_blocks(ASTNode **slot, void *data) {
+static void lower_branch_blocks(ASTNode **slot, void *data) {
     ParserContext *context = data;
     ASTNode *node = *slot;
     if (!node) return;
@@ -900,13 +900,17 @@ static void lower_case_arm_blocks(ASTNode **slot, void *data) {
     case AST_FUN_LITERAL:
         return;
     case AST_CASE:
-        for (int i = 0; i < node->case_expr.case_count; i++) lower_case_arm(context, node->case_expr.cases[i].expr);
-        lower_case_arm(context, node->case_expr.default_expr);
+        for (int i = 0; i < node->case_expr.case_count; i++) lower_branch(context, node->case_expr.cases[i].expr);
+        lower_branch(context, node->case_expr.default_expr);
+        break;
+    case AST_TERNARY:
+        lower_branch(context, node->ternary.then_expr);
+        lower_branch(context, node->ternary.else_expr);
         break;
     default:
         break;
     }
-    ast_visit_children(node, lower_case_arm_blocks, data);
+    ast_visit_children(node, lower_branch_blocks, data);
 }
 
 void lower_dom_block(ParserContext *context, ASTNode *block) {
@@ -928,7 +932,7 @@ void lower_dom_block(ParserContext *context, ASTNode *block) {
         free(emit.stmts);
 
         lower_nested_blocks(context, stmt);
-        lower_case_arm_blocks(&stmt, context);
+        lower_branch_blocks(&stmt, context);
 
         stmts = realloc(stmts, sizeof(ASTNode*) * (count + 1));
         stmts[count++] = stmt;

@@ -1,0 +1,9 @@
+// An element written as a branch of `?:` would be hoisted ahead of the whole
+// statement and built whichever branch is chosen, so it is rejected: "a DOM
+// element is only allowed as a value inside a statement". Written as a
+// statement expression, `k ? ({ yield (<Text .../>); }) : 0`, it is lowered.
+import dom from "../../support/dom/dom.mln";
+
+i32 f(i32 k) {
+    return k ? (<Text text="a" x={1} y={2} />) : 0;
+}
