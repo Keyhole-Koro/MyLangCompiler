@@ -151,10 +151,10 @@ It is grouped around the shape of the code being emitted.
 - `codegen_lvalue.c`: address/load/store helpers
 - `codegen_binop*.c`: binary operator emission split by logic/pointer/math behavior
 - `codegen_slots.c`: frame slot calculations
-- `codegen_locals.c`: local collection and stack lookups
+- `codegen_locals.c`: local collection (slot names and types, from one walk) and stack lookups
 - `codegen_scope_names.c`: gives locals redeclared in nested or sibling scopes function-unique names before emission
 - `codegen_func.c`: function prologue/body/epilogue emission
-- `codegen_type_*.c`: type inference, type collection, typedef/struct lookup
+- `codegen_type_*.c`: type inference, type AST conversion, typedef/struct lookup
 
 ## Internal Headers
 

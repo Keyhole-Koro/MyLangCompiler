@@ -19,10 +19,10 @@ This directory is split by emitted code shape and shared backend responsibilitie
 - `codegen_lvalue.c`: address/load/store helpers
 - `codegen_binop*.c`: binary operators split by logic, pointer, and math handling
 - `codegen_slots.c`: stack-slot math
-- `codegen_locals.c`: local collection and lookup
+- `codegen_locals.c`: local collection (slot names and types, from one walk) and lookup
 - `codegen_scope_names.c`: unique spellings for locals redeclared in another scope
 - `codegen_func.c`: function-level emission
-- `codegen_type_*.c`: type lookup, inference, and collection
+- `codegen_type_*.c`: type lookup and inference
 
 ## Notes
 
