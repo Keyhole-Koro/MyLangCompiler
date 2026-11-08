@@ -1,0 +1,59 @@
+# What `mytest --compiler` expects where a fixture's directory does not say it
+# all: succeed/, warn/ and generic_cases/ compile, fail/ is rejected, and
+# syntax_check/ and token/ parse. Fixtures are relative to this directory.
+#
+# error|fixture|text            rejected with the text in the output: by mlc in
+#                               generic_cases/, by the syntax checker in
+#                               syntax_check/ and token/
+# skip|fixture                  a parked example, kept in the tree but not run
+# profile|file name|text        mlc compiles a source of that name and reports
+#                               the text
+# profile-error|file name|text  mlc refuses a source of that name with the text
+#
+# A profile case compiles `i32 main() { return 0; }` unless a fourth field gives
+# the source.
+
+error|generic_cases/wrong_call_type.mln|argument type mismatch
+error|generic_cases/wrong_body_type.mln|return type mismatch
+error|generic_cases/wrong_call_arity.mln|error[E0101]
+error|generic_cases/prototype_only.mln|requires a definition in this module
+error|generic_cases/ordinary_type_arguments.mln|generic declaration is not available
+error|generic_cases/recursive_value.mln|infinite size
+error|generic_cases/recursive_value_array.mln|infinite size
+error|generic_cases/expanding_function.mln|instantiation limit exceeded
+error|generic_cases/expanding_type.mln|instantiation limit exceeded
+error|generic_cases/reference_wrapping.mln|cannot wrap a reference type argument
+error|generic_cases/reserved_symbol.mln|prefix is reserved
+
+error|syntax_check/missing_initializer_expression.mln|Expected expression before ';'.
+error|syntax_check/missing_if_condition.mln|Expected expression before ')'.
+error|syntax_check/ternary_without_else.mln|Expected expression before ';'.
+error|syntax_check/case_key_syntax_error.mln|Expected expression before '->'.
+error|token/tokens_present_on_error.mln|
+
+# Parked examples, not cases from the retired Python matrix: the compiler
+# accepts their current forms.
+skip|fail/semantic/payloadEnumNestedAmbiguous_fail.mln
+skip|fail/struct/byvalArgNonAddressable_fail.mln
+skip|fail/struct/byvalReturnNonAddressable_fail.mln
+
+profile|main.mln|syntax=core, safety=checked
+profile|main.unsafe.mln|syntax=core, safety=unsafe
+profile|page.dom.mln|syntax=dom, safety=checked
+profile|page.dom.unsafe.mln|syntax=dom, safety=unsafe
+profile|schema.contract.mln|syntax=core, safety=checked
+profile|schema.unsafe.contract.mln|syntax=core, safety=unsafe
+profile|serial.test.mln|syntax=core, safety=checked
+profile|serial.unsafe.test.mln|syntax=core, safety=unsafe
+profile|page.dom.test.mln|syntax=dom, safety=checked
+profile-error|page.mlx|expected a canonical .mln filename
+profile-error|page.web.mln|unknown source modifier 'web'
+profile-error|page.dom.dom.mln|duplicate source modifier 'dom'
+profile-error|page.unsafe.unsafe.mln|duplicate source modifier 'unsafe'
+profile-error|page.unsafe.dom.mln|must precede semantic policy modifiers
+profile-error|schema.contract.unsafe.mln|contract source modifier 'unsafe' must be last
+profile-error|page.safe.mln|unknown source modifier 'safe'
+profile-error|schema.contract.test.mln|contract source modifier 'test' must be last
+profile-error|page.test.dom.mln|test source modifier 'dom' must be last
+profile-error|page..mln|empty modifier
+profile-error|page.mln|DOM syntax requires a canonical .dom.mln filename|DomNode* build() { return <Window/>; }
