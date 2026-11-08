@@ -1,7 +1,4 @@
-#include "mylang/frontend/parser_internal.h"
-#include "mylang/frontend/parser_ast_internal.h"
-#include "mylang/frontend/module.h"
-#include "mylang/frontend/parser_trait_internal.h"
+#include "mylang/frontend/parser_payload_internal.h"
 #include "mylang/frontend/parser_annot_internal.h"
 
 /* Lowers payload enum *uses* onto the struct layout parser_instantiate.c gives
@@ -12,10 +9,14 @@
  *     struct Result_i32_char { i32 __tag; i32 Ok; char Err; }
  *
  * so a variant is a tag value plus one field named after it. That leaves two
- * surface forms to translate, and this file owns both:
+ * surface forms to translate:
  *
  *   Ok(5)           construction, only meaningful against a destination
  *   Ok(x) -> expr   a case arm, which binds the payload for the arm's body
+ *
+ * This file keeps the variant table and the walk, and builds constructions;
+ * parser_payload_case.c rewrites case arms, and parser_payload_try.c the case
+ * a `?` expands to.
  *
  * Construction has to be a statement rewrite rather than an expression one,
  * because the value being built is a struct and the backend cannot return one:
@@ -36,54 +37,17 @@
  * from `<i32, char>` or `<char, i32>`. The binding aliases the field rather
  * than copying it, which is what a read-only match wants anyway; because the
  * access is re-evaluated per occurrence, a matched target has to be something
- * cheap and repeatable to name, which is checked below.
+ * cheap and repeatable to name, which rewrite_payload_case checks.
  */
 
 /* Same shape as parser_instantiate.c's reporter: a node carries a position but
  * not a token, and parse_error wants one. */
-static void payload_error(ParserContext *context, ASTNode *node, const char *message) {
+void payload_error(ParserContext *context, ASTNode *node, const char *message) {
     Token location = {0};
     location.line = node ? node->line : 0;
     location.col = node ? node->col : 0;
     parse_error(context, message, &location);
 }
-
-typedef struct {
-    char *variant; /* variant name, and the payload field name when it has one */
-    long tag;
-    int has_payload;
-    int ambiguous; /* the same name at different tags in different enums */
-    const char *enum_name;
-} VariantTag;
-
-typedef struct {
-    VariantTag *items;
-    int count;
-    ParserContext *context;
-    ASTNode *program;
-    /* The enclosing function's declared return type, so `return Ok(5);` knows
-     * what to build -- NULL outside a function body (or one whose return type
-     * isn't itself a payload enum construction site). */
-    ASTNode *current_return_type;
-    ASTNode *current_function;
-    /* Freshens the `__mlg_ret_N` stand-in used for `return Ok(5);` below; the
-     * __mlg_ prefix is reserved for compiler-generated names (see
-     * parser_instantiate.c), so these can't collide with user identifiers. */
-    int temp_counter;
-    /* Declarations synthesized while lowering `case f() of { ... }`.  The
-     * enclosing block splices them directly before the statement containing
-     * the case, so the call is evaluated exactly once. */
-    ASTNode **pending_hoists;
-    int pending_hoist_count;
-    /* Where import_type_layout() puts the next layout: ahead of everything
-     * else, the way splice_imported_plain_types() does, and in order. */
-    int layout_count;
-    /* lower_payload_call_arguments() is walking: `items` is empty, and every
-     * construction left is a call argument. */
-    int lowering_arguments;
-} VariantTable;
-
-static void copy_display_name(char *out, size_t size, const char *name);
 
 static VariantTag *find_variant(VariantTable *table, const char *name) {
     if (!name) return NULL;
@@ -183,7 +147,7 @@ static VariantTag *variant_bare(VariantTable *table, ASTNode *node) {
 }
 
 /* Either spelling. */
-static VariantTag *variant_use(VariantTable *table, ASTNode *node) {
+VariantTag *variant_use(VariantTable *table, ASTNode *node) {
     VariantTag *variant = variant_call(table, node);
     return variant ? variant : variant_bare(table, node);
 }
@@ -195,7 +159,7 @@ static int is_qualified_variant_use(ASTNode *node) {
     return name && strstr(name, "::") != NULL;
 }
 
-static void check_unambiguous(VariantTable *table, VariantTag *variant, ASTNode *at) {
+void check_unambiguous(VariantTable *table, VariantTag *variant, ASTNode *at) {
     if (!variant->ambiguous || is_qualified_variant_use(at)) return;
     char message[256];
     snprintf(message, sizeof(message),
@@ -205,7 +169,7 @@ static void check_unambiguous(VariantTable *table, VariantTag *variant, ASTNode 
     payload_error(table->context, at, message);
 }
 
-static void check_single_payload(VariantTable *table, ASTNode *call) {
+void check_single_payload(VariantTable *table, ASTNode *call) {
     if (call->call.arg_count == 1) return;
     char message[256];
     snprintf(message, sizeof(message), "variant '%s' carries one payload, but %d were given",
@@ -230,7 +194,7 @@ static const char *display_enum_name(const char *name) {
 
 /* Compares only the template name, so `Result<i32, char>` reads as `Result`
  * while two different specializations still stay distinct as full names. */
-static void copy_display_name(char *out, size_t size, const char *name) {
+void copy_display_name(char *out, size_t size, const char *name) {
     const char *display = display_enum_name(name);
     size_t length = 0;
     while (display[length] && display[length] != '_' && length + 1 < size) length++;
@@ -241,7 +205,7 @@ static void copy_display_name(char *out, size_t size, const char *name) {
 /* The declared type of the thing being built names its enum, so a variant from
  * a different one can be caught here rather than becoming a store to a field
  * the layout does not have. */
-static void check_variant_belongs(VariantTable *table, ASTNode *type, VariantTag *variant,
+void check_variant_belongs(VariantTable *table, ASTNode *type, VariantTag *variant,
                                   ASTNode *at) {
     if (!type || type->type != AST_TYPE || !type->type_node.base_type ||
         type->type_node.base_type->type != AST_IDENTIFIER)
@@ -278,7 +242,7 @@ static void check_variant_belongs(VariantTable *table, ASTNode *type, VariantTag
     payload_error(table->context, at, message);
 }
 
-static char *tag_text(long tag) {
+char *tag_text(long tag) {
     char buf[32];
     snprintf(buf, sizeof(buf), "%ld", tag);
     return strdup(buf);
@@ -362,37 +326,10 @@ static void mark_payload_stores(ASTNode *statement, int fills_new_value) {
     }
 }
 
-typedef struct {
-    const char *name;
-    ASTNode *replacement;
-} Binding;
-
-/* Replace every occurrence of `name` with a copy of `replacement`, binding a
- * pattern variable to the field it destructures. */
-static void substitute_identifier(ASTNode **slot, void *user_data) {
-    ASTNode *node = *slot;
-    if (!node) return;
-    Binding *binding = user_data;
-    /* `_` binds nothing: in the arm it is still the unit value. */
-    if (node->type == AST_IDENTIFIER && node->identifier.name &&
-        strcmp(node->identifier.name, binding->name) == 0 &&
-        strcmp(binding->name, "_") != 0) {
-        ASTNode *copy = ast_clone(binding->replacement);
-        copy->line = node->line;
-        copy->col = node->col;
-        copy->end_line = node->end_line;
-        copy->end_col = node->end_col;
-        free_ast(node);
-        *slot = copy;
-        return;
-    }
-    ast_visit_children(node, substitute_identifier, user_data);
-}
-
 /* Naming the matched value again for each bound occurrence is only sound when
  * doing so is free of side effects and cheap. Identifiers and the accesses
  * built from them qualify; a call or an arithmetic expression does not. */
-static int is_repeatable_target(ASTNode *node) {
+int is_repeatable_target(ASTNode *node) {
     if (!node) return 0;
     switch (node->type) {
     case AST_IDENTIFIER:
@@ -418,13 +355,6 @@ static int is_repeatable_target(ASTNode *node) {
 
 static void rewrite_payload_node(ASTNode **slot, void *user_data);
 
-static const char *type_base_name(ASTNode *type) {
-    if (!type || type->type != AST_TYPE || !type->type_node.base_type ||
-        type->type_node.base_type->type != AST_IDENTIFIER)
-        return NULL;
-    return type->type_node.base_type->identifier.name;
-}
-
 static int program_has_type_layout(ASTNode *program, const char *name) {
     if (!program || program->type != AST_BLOCK || !name) return 0;
     for (int i = 0; i < program->block.count; i++) {
@@ -447,7 +377,7 @@ static int program_has_type_layout(ASTNode *program, const char *name) {
  * direct payload-enum case.  Its declaration normally arrives through a
  * source-level `Option<i32>`/`Result<...>` use; this is the implicit
  * counterpart for `case package.function() of { ... }`. */
-static void import_type_layout(VariantTable *table, Module *module, const char *name) {
+void import_type_layout(VariantTable *table, Module *module, const char *name) {
     if (!table || !module || !module->program || !name ||
         program_has_type_layout(table->program, name))
         return;
@@ -519,7 +449,7 @@ static ASTNode *imported_call_result_type(VariantTable *table, ASTNode *node,
     return NULL;
 }
 
-static ASTNode *call_result_type(VariantTable *table, ASTNode *node, Module **provider) {
+ASTNode *call_result_type(VariantTable *table, ASTNode *node, Module **provider) {
     if (!node || node->type != AST_CALL || !node->call.name) return NULL;
     if (provider) *provider = NULL;
     ASTNode *function = find_function(table->context, node->call.name);
@@ -535,7 +465,7 @@ static ASTNode *call_result_type(VariantTable *table, ASTNode *node, Module **pr
     return imported_call_result_type(table, node, provider);
 }
 
-static ASTNode *find_local_type(ASTNode *node, const char *name) {
+ASTNode *find_local_type(ASTNode *node, const char *name) {
     if (!node || !name) return NULL;
     if (node->type == AST_VAR_DECL && node->var_decl.name &&
         strcmp(node->var_decl.name, name) == 0)
@@ -563,443 +493,6 @@ static ASTNode *find_local_type(ASTNode *node, const char *name) {
     return NULL;
 }
 
-static ASTNode *try_source_type(VariantTable *table, ASTNode *target) {
-    if (target && target->type == AST_CALL && target->call.recv) {
-        /* `r.ok()?`: the method of the receiver's type (methods are resolved
-         * only after this pass). */
-        ASTNode *recv_type = try_source_type(table, target->call.recv);
-        const char *recv_name = type_base_name(recv_type);
-        const MethodDef *method = recv_name ? find_method(table->context, recv_name, target->call.name) : NULL;
-        return method ? method->fundef->fundef.ret_type : NULL;
-    }
-    ASTNode *type = call_result_type(table, target, NULL);
-    if (type) return type;
-    if (target && target->type == AST_IDENTIFIER && table->current_function) {
-        ASTNode *fn = table->current_function;
-        for (int i = 0; i < fn->fundef.param_count; i++) {
-            type = find_local_type(fn->fundef.params[i], target->identifier.name);
-            if (type) return type;
-        }
-        type = find_local_type(fn->fundef.body, target->identifier.name);
-        for (int i = 0; i < table->program->block.count && !type; i++) {
-            ASTNode *node = table->program->block.stmts[i];
-            if (node && node->type == AST_VAR_DECL &&
-                strcmp(node->var_decl.name, target->identifier.name) == 0)
-                type = node->var_decl.var_type;
-        }
-        return type;
-    }
-    return NULL;
-}
-
-static const char *skip_encoded_type_key(const char *segment) {
-    if (!segment || strncmp(segment, "_p", 2) != 0) return NULL;
-    const char *length_marker = strstr(segment, "_n");
-    if (!length_marker) return NULL;
-    char *end = NULL;
-    long length = strtol(length_marker + 2, &end, 10);
-    if (!end || *end != '_' || length < 0) return NULL;
-    const char *name = end + 1;
-    if (strlen(name) < (size_t)length) return NULL;
-    return name + length;
-}
-
-/* A concrete Result name ends in two length-prefixed type keys. Returning the
- * start of the second key lets `?` compare E without requiring enum E itself
- * to have a runtime-distinct representation. */
-static const char *result_error_type_key(ASTNode *type) {
-    const char *name = type_base_name(type);
-    if (!name || strncmp(name, "__mlg_s_6_Result", 16) != 0) return NULL;
-    const char *first = name + 16;
-    return skip_encoded_type_key(first);
-}
-
-/* `_p0_r0_m0_n8_SsdError` (one key of an instance name) back to a type. */
-static ASTNode *decode_type_key(const char *key) {
-    int pointer_level = 0, borrow_kind = 0, modifiers = 0;
-    size_t length = 0;
-    int consumed = 0;
-    if (sscanf(key, "_p%d_r%d_m%d_n%zu_%n", &pointer_level, &borrow_kind, &modifiers, &length,
-               &consumed) != 4 || consumed == 0 || strlen(key + consumed) < length)
-        return NULL;
-    char name[256];
-    if (length >= sizeof(name)) return NULL;
-    memcpy(name, key + consumed, length);
-    name[length] = '\0';
-    return new_type_node(new_identifier(name), pointer_level, modifiers, borrow_kind);
-}
-
-static int is_generated_try_case(ASTNode *node) {
-    if (!node || node->type != AST_CASE || node->case_expr.case_count != 2) return 0;
-    ASTNode *key = node->case_expr.cases[0].key;
-    if (!key || key->type != AST_CALL || key->call.arg_count != 1) return 0;
-    ASTNode *binding = key->call.args[0];
-    return binding && binding->type == AST_IDENTIFIER && binding->identifier.name &&
-           strncmp(binding->identifier.name, "__mlg_try_value_", 16) == 0;
-}
-
-static int is_option_type(ASTNode *type) {
-    const char *name = type_base_name(type);
-    return name && strncmp(name, "__mlg_s_6_Option", 16) == 0;
-}
-
-/* `opt?` in a function returning an Option: `Some(v)` gives v, `None`
- * returns None. The expansion was written for Result; re-key its arms. */
-static void lower_option_try(VariantTable *table, ASTNode *node) {
-    if (!is_option_type(table->current_return_type)) {
-        payload_error(table->context, node,
-                      "'?' on an Option can only be used in a function returning Option "
-                      "(match None explicitly, or turn it into a Result first)");
-    }
-    ASTNode *some = node->case_expr.cases[0].key;
-    free(some->call.name);
-    some->call.name = strdup("Some");
-    free_ast(node->case_expr.cases[1].key);
-    node->case_expr.cases[1].key = new_identifier("None");
-    free_ast(node->case_expr.cases[1].expr);
-    ASTNode **stmts = malloc(sizeof(ASTNode *));
-    stmts[0] = new_return(new_identifier("None"));
-    stmts[0]->line = node->line;
-    stmts[0]->col = node->col;
-    node->case_expr.cases[1].expr = new_stmt_expr(new_block(stmts, 1));
-}
-
-static void check_try_error_type(VariantTable *table, ASTNode *node) {
-    if (!is_generated_try_case(node) || !table->current_return_type) return;
-    ASTNode *source_type = try_source_type(table, node->case_expr.target);
-    if (is_option_type(source_type)) {
-        lower_option_try(table, node);
-        return;
-    }
-    const char *source_error = result_error_type_key(source_type);
-    const char *target_error = result_error_type_key(table->current_return_type);
-    if (!source_error)
-        payload_error(table->context, node,
-                      "'?' requires a Result value whose error can be propagated");
-    if (!target_error)
-        payload_error(table->context, node,
-                      "'?' can only be used in a function returning Result");
-    if (strcmp(source_error, target_error) == 0) return;
-
-    /* A different error type propagates through `impl From<Source> for
-     * Target`: the generated arm returns `Err(Target::from(error))`. */
-    ASTNode *source = decode_type_key(source_error);
-    ASTNode *target = decode_type_key(target_error);
-    ImplDef *impl = source && target ? find_impl(table->context, "From", &source, 1, target) : NULL;
-    if (!impl) {
-        char *source_name = source ? trait_type_display(source) : strdup("the source error");
-        char *target_name = target ? trait_type_display(target) : strdup("the function's error");
-        fprintf(stderr, "%s:%d:%d: error: '?' cannot convert %s into %s\n",
-                table->context->module.filename ? table->context->module.filename : "<input>",
-                node->line, node->col, source_name, target_name);
-        fprintf(stderr, "  note: add `impl From<%s> for %s`, or handle the error explicitly\n",
-                source_name, target_name);
-        exit(1);
-    }
-    /* The error return trace names the conversion on this hop. */
-    char *source_name = trait_type_display(source);
-    char *target_name = trait_type_display(target);
-    size_t note_len = strlen(source_name) + strlen(target_name) + 8;
-    char *note = malloc(note_len);
-    snprintf(note, note_len, "%s -> %s", source_name, target_name);
-    free(source_name);
-    free(target_name);
-    free_ast(source);
-    free_ast(target);
-
-    ASTNode *arm = node->case_expr.cases[1].expr;
-    ASTNode *ret = arm && arm->type == AST_STMT_EXPR ? arm->stmt_expr.block->block.stmts[0] : NULL;
-    ASTNode *err = ret && ret->type == AST_RETURN ? ret->ret.expr : NULL;
-    if (!err || err->type != AST_CALL || err->call.arg_count != 1)
-        payload_error(table->context, node, "internal error: unexpected '?' expansion");
-    free(ret->ret.trace_note);
-    ret->ret.trace_note = note;
-    ASTNode **args = malloc(sizeof(ASTNode *));
-    args[0] = err->call.args[0];
-    ASTNode *convert = new_call((char *)impl_item_mangled(impl, "from"), args, 1);
-    convert->line = node->line;
-    convert->col = node->col;
-    err->call.args[0] = convert;
-}
-
-/* `case r of { Ok(x) -> E; ... }` becomes `case r.__tag of { 0 -> E[x := r.Ok]; ... }`.
- * Arms that are not variant patterns are left alone, so a payload enum and a
- * plain integer case can be written the same way. */
-/* Every variant of `enum_name` that no arm names, so a match can say what it
- * left out rather than silently falling through to zero. */
-static void report_missing_arms(VariantTable *table, ASTNode *node, const char *enum_name,
-                                const long *covered, int covered_count) {
-    char missing[192];
-    size_t used = 0;
-    int count = 0;
-
-    for (int i = 0; i < table->count; i++) {
-        VariantTag *variant = &table->items[i];
-        if (!variant->enum_name || strcmp(variant->enum_name, enum_name) != 0) continue;
-        int seen = 0;
-        for (int c = 0; c < covered_count; c++)
-            if (covered[c] == variant->tag) { seen = 1; break; }
-        if (seen) continue;
-        int written = snprintf(missing + used, sizeof(missing) - used, "%s%s",
-                               count ? ", " : "", variant->variant);
-        if (written > 0 && used + (size_t)written < sizeof(missing)) used += (size_t)written;
-        count++;
-    }
-    if (!count) return;
-
-    char display[64];
-    copy_display_name(display, sizeof(display), enum_name);
-    char message[512];
-    snprintf(message, sizeof(message),
-             "this match does not cover %s of '%s': %s. Add %s, or a `_` arm",
-             count == 1 ? "one variant" : "every variant", display, missing,
-             count == 1 ? "an arm for it" : "arms for them");
-    payload_error(table->context, node, message);
-}
-
-static ASTNode *new_case_node(ASTNode *target) {
-    ASTNode *node = calloc(1, sizeof(ASTNode));
-    node->type = AST_CASE;
-    node->case_expr.target = target;
-    return node;
-}
-
-static void append_case_item(ASTNode *case_node, ASTNode *key, ASTNode *expr,
-                             int is_noop) {
-    int count = case_node->case_expr.case_count;
-    case_node->case_expr.cases = realloc(case_node->case_expr.cases,
-                                         sizeof(CaseItem) * (size_t)(count + 1));
-    case_node->case_expr.cases[count].key = key;
-    case_node->case_expr.cases[count].expr = expr;
-    case_node->case_expr.cases[count].is_noop = is_noop;
-    case_node->case_expr.case_count = count + 1;
-}
-
-/* A payload pattern can itself narrow the payload to another payload enum
- * variant (`Err(MmuError::AllocFailed)`) or to a numeric enum value already
- * substituted by the parser (`Err(SyscallError::BadFd)`). */
-static int is_nested_pattern(VariantTable *table, ASTNode *node) {
-    return variant_use(table, node) != NULL || (node && node->type == AST_NUMBER);
-}
-
-/* Fold multiple narrow payload patterns for one outer tag into an ordinary
- * nested case.  For example:
- *
- *   Err(AllocFailed) -> a; Err(UnalignedAddress(x)) -> b;
- *
- * becomes one `Err(__mlg_nest_N)` arm whose body matches that temporary.
- * The regular payload binding path below then substitutes the temporary with
- * the outer payload field, and normal case lowering recursively handles the
- * synthesized inner case. */
-static void merge_nested_patterns(VariantTable *table, ASTNode *node) {
-    int original_count = node->case_expr.case_count;
-    CaseItem *original = node->case_expr.cases;
-    CaseItem *out = NULL;
-    ASTNode **inner_cases = NULL;
-    int out_count = 0;
-
-    for (int i = 0; i < original_count; i++) {
-        ASTNode *key = original[i].key;
-        VariantTag *variant = variant_use(table, key);
-        ASTNode *bound = variant && variant->has_payload && key->type == AST_CALL &&
-                         key->call.arg_count == 1 ? key->call.args[0] : NULL;
-        int nested = bound && is_nested_pattern(table, bound);
-
-        int existing = -1;
-        if (variant && variant->has_payload) {
-            for (int j = 0; j < out_count; j++) {
-                if (variant_use(table, out[j].key) == variant) {
-                    existing = j;
-                    break;
-                }
-            }
-        }
-
-        if (existing >= 0 && (nested || inner_cases[existing])) {
-            if (!nested && inner_cases[existing]) {
-                /* A plain binding after narrow inner patterns is their
-                 * fallback: `Err(AllocFailed) -> A; Err(e) -> B;` becomes
-                 * `case payload of { AllocFailed -> A; _ -> B; }`.  Rewrite
-                 * the source binding to the generated inner-case target now;
-                 * the outer binding pass will subsequently replace that
-                 * target with the actual `Err` field access. */
-                if (!bound || bound->type != AST_IDENTIFIER)
-                    payload_error(table->context, key,
-                                  "a variant pattern binds its payload to a name");
-                if (inner_cases[existing]->case_expr.default_expr ||
-                    inner_cases[existing]->case_expr.default_is_noop)
-                    payload_error(table->context, key,
-                                  "a variant is matched more than once by a fallback binding");
-                Binding fallback = {bound->identifier.name,
-                                    inner_cases[existing]->case_expr.target};
-                if (!original[i].is_noop)
-                    substitute_identifier(&original[i].expr, &fallback);
-                inner_cases[existing]->case_expr.default_expr = original[i].expr;
-                inner_cases[existing]->case_expr.default_is_noop = original[i].is_noop;
-                free_ast(key);
-                continue;
-            }
-            if (!inner_cases[existing]) {
-                char message[256];
-                snprintf(message, sizeof(message),
-                         "'%s' is matched both as a plain binding and as a nested pattern; "
-                         "write the nested patterns before its fallback binding", variant->variant);
-                payload_error(table->context, key, message);
-            }
-            append_case_item(inner_cases[existing], bound, original[i].expr,
-                             original[i].is_noop);
-            key->call.args[0] = NULL;
-            free_ast(key);
-            continue;
-        }
-
-        if (!nested) {
-            out = realloc(out, sizeof(CaseItem) * (size_t)(out_count + 1));
-            inner_cases = realloc(inner_cases, sizeof(ASTNode *) * (size_t)(out_count + 1));
-            out[out_count] = original[i];
-            inner_cases[out_count++] = NULL;
-            continue;
-        }
-
-        char name[32];
-        snprintf(name, sizeof(name), "__mlg_nest_%d", table->temp_counter++);
-        ASTNode *inner = new_case_node(new_identifier(name));
-        inner->line = key->line;
-        inner->col = key->col;
-        inner->end_line = key->end_line;
-        inner->end_col = key->end_col;
-        append_case_item(inner, bound, original[i].expr, original[i].is_noop);
-        key->call.args[0] = new_identifier(name);
-
-        out = realloc(out, sizeof(CaseItem) * (size_t)(out_count + 1));
-        inner_cases = realloc(inner_cases, sizeof(ASTNode *) * (size_t)(out_count + 1));
-        out[out_count] = (CaseItem){key, inner, 0};
-        inner_cases[out_count++] = inner;
-    }
-
-    /* A narrow pattern that does not match goes to the match's own `_` arm. */
-    for (int i = 0; i < out_count; i++) {
-        ASTNode *inner = inner_cases[i];
-        if (!inner || inner->case_expr.default_expr || inner->case_expr.default_is_noop)
-            continue;
-        inner->case_expr.default_is_noop = node->case_expr.default_is_noop;
-        if (node->case_expr.default_expr)
-            inner->case_expr.default_expr = ast_clone(node->case_expr.default_expr);
-    }
-
-    free(original);
-    free(inner_cases);
-    node->case_expr.cases = out;
-    node->case_expr.case_count = out_count;
-}
-
-static void rewrite_payload_case(VariantTable *table, ASTNode *node) {
-    check_try_error_type(table, node);
-    merge_nested_patterns(table, node);
-
-    int patterns = 0;
-    for (int i = 0; i < node->case_expr.case_count; i++)
-        if (variant_use(table, node->case_expr.cases[i].key)) patterns++;
-    if (!patterns) return;
-
-    ASTNode *target = node->case_expr.target;
-    if (!is_repeatable_target(target)) {
-        Module *provider = NULL;
-        ASTNode *result_type = call_result_type(table, target, &provider);
-        if (!result_type && target && target->type == AST_CALL && target->call.recv)
-            result_type = try_source_type(table, target); /* `case r.ok() of` */
-        if (!result_type)
-            payload_error(table->context, target,
-                          "a payload enum can only be matched on a variable or a field of one, "
-                          "because each binding names the matched value again");
-
-        if (provider) {
-            const char *result_name = type_base_name(result_type);
-            if (result_name) import_type_layout(table, provider, result_name);
-        }
-
-        char name[32];
-        snprintf(name, sizeof(name), "__mlg_case_target_%d", table->temp_counter++);
-        ASTNode *declaration = new_var_decl(ast_clone(result_type), name, target);
-        table->pending_hoists = realloc(table->pending_hoists,
-                                        sizeof(ASTNode *) * (size_t)(table->pending_hoist_count + 1));
-        table->pending_hoists[table->pending_hoist_count++] = declaration;
-        target = new_identifier(name);
-        node->case_expr.target = target;
-    }
-
-    const char *enum_name = NULL;
-    long *covered = malloc(sizeof(long) * (size_t)node->case_expr.case_count);
-    int covered_count = 0;
-
-    for (int i = 0; i < node->case_expr.case_count; i++) {
-        ASTNode *key = node->case_expr.cases[i].key;
-        VariantTag *variant = variant_use(table, key);
-        if (!variant) continue;
-        check_unambiguous(table, variant, key);
-
-        /* Arms of one match belong to one enum. Mixing them would make the tag
-         * comparison meaningless, since tags only mean anything within the
-         * enum that assigned them. */
-        if (!enum_name) {
-            enum_name = variant->enum_name;
-        } else if (variant->enum_name && strcmp(enum_name, variant->enum_name) != 0) {
-            char first[64], second[64];
-            copy_display_name(first, sizeof(first), enum_name);
-            copy_display_name(second, sizeof(second), variant->enum_name);
-            char message[256];
-            snprintf(message, sizeof(message),
-                     "this match names variants of both '%s' and '%s'; a tag only means "
-                     "something within its own enum",
-                     first, second);
-            payload_error(table->context, key, message);
-        }
-
-        for (int c = 0; c < covered_count; c++) {
-            if (covered[c] != variant->tag) continue;
-            char message[256];
-            snprintf(message, sizeof(message), "'%s' is matched more than once",
-                     variant->variant);
-            payload_error(table->context, key, message);
-        }
-        covered[covered_count++] = variant->tag;
-
-        if (variant->has_payload) {
-            check_single_payload(table, key);
-            ASTNode *bound = key->call.args[0];
-            if (!bound || bound->type != AST_IDENTIFIER)
-                payload_error(table->context, key,
-                              "a variant pattern binds its payload to a name");
-
-            ASTNode *field = new_member_access(ast_clone(target), variant->variant);
-            Binding binding = {bound->identifier.name, field};
-            substitute_identifier(&node->case_expr.cases[i].expr, &binding);
-            free_ast(field);
-        }
-
-        char *text = tag_text(variant->tag);
-        ASTNode *tag = new_number(text);
-        free(text);
-        tag->line = key->line;
-        tag->col = key->col;
-        tag->end_line = key->end_line;
-        tag->end_col = key->end_col;
-        free_ast(key);
-        node->case_expr.cases[i].key = tag;
-    }
-
-    /* Without a `_` arm the case yields zero for an unmatched tag, which is a
-     * silently wrong answer rather than a missing one. Require the arms to
-     * account for every variant instead. */
-    if (!node->case_expr.default_expr && !node->case_expr.default_is_noop && enum_name) {
-        report_missing_arms(table, node, enum_name, covered, covered_count);
-        node->case_expr.is_exhaustive = 1;
-    }
-
-    free(covered);
-    node->case_expr.target = new_member_access(target, "__tag");
-}
-
 static void flush_pending_hoists(VariantTable *table, ASTNode ***out, int *count) {
     if (!table->pending_hoist_count) return;
     *out = realloc(*out, sizeof(ASTNode *) * (size_t)(*count + table->pending_hoist_count));
@@ -1008,144 +501,6 @@ static void flush_pending_hoists(VariantTable *table, ASTNode ***out, int *count
     free(table->pending_hoists);
     table->pending_hoists = NULL;
     table->pending_hoist_count = 0;
-}
-
-/* Find a construction used as a value of a case arm.  Pattern keys are
- * deliberately ignored: `case value of { Some(x) -> x; ... }` matches a
- * payload enum, but it does not itself produce one. */
-static VariantTag *case_result_variant(VariantTable *table, ASTNode *node) {
-    if (!node || node->type != AST_CASE) return NULL;
-    for (int i = 0; i < node->case_expr.case_count; i++) {
-        ASTNode *expr = node->case_expr.cases[i].expr;
-        VariantTag *variant = variant_use(table, expr);
-        if (variant) return variant;
-        variant = case_result_variant(table, expr);
-        if (variant) return variant;
-    }
-    VariantTag *variant = variant_use(table, node->case_expr.default_expr);
-    if (variant) return variant;
-    return case_result_variant(table, node->case_expr.default_expr);
-}
-
-/* A struct, or a payload enum (still an AST_ENUM until this pass finishes),
- * held by value: a case producing one must store into its destination, since
- * an arm's value is otherwise carried as a single word. */
-static int is_aggregate_type(VariantTable *table, ASTNode *type) {
-    const char *name = type_base_name(type);
-    if (!name || type->type_node.pointer_level || type->type_node.borrow_kind != REFKIND_NONE) return 0;
-    for (int i = 0; i < table->program->block.count; i++) {
-        ASTNode *node = table->program->block.stmts[i];
-        if (!node) continue;
-        if (node->type == AST_STRUCT && node->struct_stmt.name &&
-            strcmp(node->struct_stmt.name, name) == 0)
-            return 1;
-        if (node->type == AST_TYPEDEF_STRUCT && node->typedef_struct.typedef_name &&
-            strcmp(node->typedef_struct.typedef_name, name) == 0)
-            return 1;
-        if (node->type == AST_ENUM && node->enum_stmt.has_payloads && node->enum_stmt.name &&
-            strcmp(node->enum_stmt.name, name) == 0)
-            return 1;
-    }
-    return 0;
-}
-
-/* `({ ...; return x; })`, `({ break; })`: an arm that leaves instead of
- * producing a value has nothing to store. */
-static int arm_diverges(ASTNode *expr) {
-    if (!expr || expr->type != AST_STMT_EXPR || !expr->stmt_expr.block ||
-        expr->stmt_expr.block->type != AST_BLOCK || expr->stmt_expr.block->block.count == 0)
-        return 0;
-    ASTNode *last = expr->stmt_expr.block->block.stmts[expr->stmt_expr.block->block.count - 1];
-    return last && (last->type == AST_RETURN || last->type == AST_BREAK || last->type == AST_CONTINUE);
-}
-
-static ASTNode *case_result_store(ASTNode *dest, ASTNode *value) {
-    ASTNode **statements = malloc(sizeof(ASTNode *) * 2);
-    statements[0] = new_expr_stmt(new_assign(ast_clone(dest), value));
-    /* The surrounding case is evaluated only for its stores.  Give every arm
-     * the same harmless scalar result so ordinary case codegen can still be
-     * used; the aggregate itself lives in `dest`. */
-    statements[1] = new_yield(new_number("0"));
-    return new_stmt_expr(new_block(statements, 2));
-}
-
-/* Turn an aggregate-valued case into destination-passing form.  For example,
- *
- *   Result r = case x of { 0 -> Ok(1); _ -> Err(2); };
- *
- * becomes a bare declaration followed by a scalar case whose arms assign
- * directly into r.  Nested cases use the same destination. */
-static void lower_case_result_into(VariantTable *table, ASTNode *node, ASTNode *dest,
-                                   ASTNode *expected_type, const char *expected_enum) {
-    if (!node || node->type != AST_CASE) return;
-
-    for (int i = 0; i < node->case_expr.case_count; i++) {
-        CaseItem *arm = &node->case_expr.cases[i];
-        if (arm->is_noop || !arm->expr)
-            payload_error(table->context, arm->key,
-                          "an aggregate-valued case arm must produce a value");
-
-        if (arm->expr->type == AST_CASE) {
-            lower_case_result_into(table, arm->expr, dest, expected_type, expected_enum);
-            continue;
-        }
-        if (arm_diverges(arm->expr)) continue;
-
-        VariantTag *variant = variant_use(table, arm->expr);
-        if (variant) {
-            check_unambiguous(table, variant, arm->expr);
-            if (expected_type) check_variant_belongs(table, expected_type, variant, arm->expr);
-            if (expected_enum && variant->enum_name &&
-                strcmp(expected_enum, variant->enum_name) != 0) {
-                char first[64], second[64], message[256];
-                copy_display_name(first, sizeof(first), expected_enum);
-                copy_display_name(second, sizeof(second), variant->enum_name);
-                snprintf(message, sizeof(message),
-                         "this case produces variants of both '%s' and '%s'",
-                         first, second);
-                payload_error(table->context, arm->expr, message);
-            }
-        }
-        arm->expr = case_result_store(dest, arm->expr);
-    }
-
-    if (node->case_expr.default_is_noop)
-        payload_error(table->context, node,
-                      "an aggregate-valued case default must produce a value");
-    if (node->case_expr.default_expr) {
-        ASTNode *expr = node->case_expr.default_expr;
-        if (expr->type == AST_CASE) {
-            lower_case_result_into(table, expr, dest, expected_type, expected_enum);
-        } else if (!arm_diverges(expr)) {
-            VariantTag *variant = variant_use(table, expr);
-            if (variant) {
-                check_unambiguous(table, variant, expr);
-                if (expected_type) check_variant_belongs(table, expected_type, variant, expr);
-                if (expected_enum && variant->enum_name &&
-                    strcmp(expected_enum, variant->enum_name) != 0) {
-                    char first[64], second[64], message[256];
-                    copy_display_name(first, sizeof(first), expected_enum);
-                    copy_display_name(second, sizeof(second), variant->enum_name);
-                    snprintf(message, sizeof(message),
-                             "this case produces variants of both '%s' and '%s'",
-                             first, second);
-                    payload_error(table->context, expr, message);
-                }
-            }
-            node->case_expr.default_expr = case_result_store(dest, expr);
-        }
-    }
-}
-
-/* `x = case ...;` where x is a local or parameter of aggregate type. */
-static int assigned_aggregate(VariantTable *table, ASTNode *lhs) {
-    if (!lhs || lhs->type != AST_IDENTIFIER || !table->current_function) return 0;
-    ASTNode *fn = table->current_function;
-    ASTNode *type = NULL;
-    for (int i = 0; i < fn->fundef.param_count && !type; i++)
-        type = find_local_type(fn->fundef.params[i], lhs->identifier.name);
-    if (!type) type = find_local_type(fn->fundef.body, lhs->identifier.name);
-    return type && is_aggregate_type(table, type);
 }
 
 /* Statements are rewritten as a list because a construction expands into two

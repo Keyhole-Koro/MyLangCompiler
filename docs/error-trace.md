@@ -61,7 +61,8 @@ returns to user space into the guest log.
 | --- | --- | --- |
 | parse | `parser_stmt.c` | marks `return Err(...)` as an origin |
 | parse | `parser_expr_postfix.c` | marks the return of a `?` expansion as a hop |
-| lower | `parser_payload_enum.c` | names the From conversion; keeps the marks when a return is rebuilt |
+| lower | `parser_payload_try.c` | names the From conversion |
+| lower | `parser_payload_enum.c` | keeps the marks when a return is rebuilt |
 | codegen | `codegen_stmt.c` | `emit_error_trace_note` when the flag is on |
 | driver | `driver_compile.c` | adds the trace module to the manifest |
 

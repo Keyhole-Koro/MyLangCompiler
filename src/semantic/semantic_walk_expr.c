@@ -158,7 +158,7 @@ static int case_key_matches(SemanticContext *ctx, ASTNode *key, long value) {
 /* A match on a plain enum without a `_` arm must name every member: an
  * unmatched value would otherwise yield zero, a silently wrong answer.
  * Payload enums get the same check when their arms are lowered
- * (parser_payload_enum.c). */
+ * (parser_payload_case.c). */
 static void check_enum_case_coverage(SemanticContext *ctx, ASTNode *node) {
     if (node->case_expr.default_expr || node->case_expr.default_is_noop) return;
     SemanticTypeInfo type;

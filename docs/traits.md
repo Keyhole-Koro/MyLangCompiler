@@ -265,6 +265,6 @@ compatibility, with warning W0002; new code writes `impl Drop`.
 | import | `parser_trait.c` | traits named by an import; exported impls whose type is visible, with item prototypes (`resolve_imported_impls`) |
 | instantiate | `parser_instantiate.c` | bound checks (functions, methods, structs, enums), `T::name` in templates, concrete impl types, impl templates applied to each matching instance |
 | lower | `parser_trait_lower.c` | `Type::name(...)`, `==` via Eq, for-in iterator types |
-| lower | `parser_payload_enum.c` | `?` through From |
+| lower | `parser_payload_try.c` | `?` through From |
 
 Semantic analysis and codegen see only ordinary functions and calls.

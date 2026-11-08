@@ -62,6 +62,8 @@ The main groups are:
 - `parser_lower*.c`: function literal lowering
 - `parser_trait.c`: `trait`/`impl` declarations, impl records, and their import ([Traits](traits.md))
 - `parser_trait_lower.c`: trait-backed lowering (`Type::name(...)`, `==` via Eq, for-in iterators)
+- `parser_payload_*.c`: payload enum uses lowered onto their tagged structs -- the variant
+  table, the walk and constructions (`_enum`), `case` arms (`_case`) and `?` (`_try`)
 - `parser_check.c`: parser-side validation after lowering
 - `parser_print*.c`: AST printing helpers
 - `parser_free.c`: AST cleanup
