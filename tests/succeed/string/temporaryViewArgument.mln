@@ -1,0 +1,23 @@
+// A view into a call's result, passed straight to another call:
+// `digits(n.to_string().as_str())`, the way the kernel's printf prints %d.
+// The Text that to_string returns stays on the stack until `digits` has
+// returned. It used to be released as soon as as_str returned, so `digits`
+// read its own frame where the digits had been.
+import { Text } from "@std/text/text.mln";
+import str from "@std/text/str.mln";
+
+i32 digits(str s) {
+    // A frame of its own, over where the Text was released to.
+    i32 scratch[8];
+    i32 i = 0;
+    while (i < 8) { scratch[i] = 0x7F7F7F7F; i++; }
+    i32 sum = 0;
+    i = 0;
+    while (i < s.length) { sum = sum * 10 + (s.byte(i) - '0'); i++; }
+    return sum + scratch[7] - 0x7F7F7F7F;
+}
+
+i32 main() {
+    i32 n = 4210;
+    return digits(n.to_string().as_str());
+}

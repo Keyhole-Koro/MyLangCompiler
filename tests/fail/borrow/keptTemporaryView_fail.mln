@@ -1,0 +1,11 @@
+// `n.to_string()` makes a Text nobody named: it ends with the statement, and a
+// str viewing it cannot be kept past that. Passing the view straight to a
+// call is fine; naming the Text first is how to keep it.
+import { Text } from "@std/text/text.mln";
+import str from "@std/text/str.mln";
+
+i32 main() {
+    i32 n = 4210;
+    str s = n.to_string().as_str();
+    return s.length;
+}

@@ -513,6 +513,30 @@ int semantic_expr_views_local(SemanticContext *ctx, ASTNode *expr) {
     return !owner->is_param || owner->param_is_move || owner->param_is_written;
 }
 
+/* `n.to_string().as_str()` is a view of a value nobody named: it lasts until
+ * the end of the statement. Passing it on to a call is fine -- the call
+ * returns within the statement -- but kept in a variable it would outlive
+ * the bytes it reads. */
+int semantic_expr_views_temporary(SemanticContext *ctx, ASTNode *expr) {
+    if (!expr || expr->type != AST_CALL || expr->call.arg_count == 0) return 0;
+    SemanticTypeInfo type;
+    if (!semantic_infer_expr_type(ctx, expr, &type) || !type.base_type ||
+        strcmp(type.base_type, "str") != 0 || type.pointer_level != 0) return 0;
+    ASTNode *first = expr->call.args[0];
+    ASTNode *target = first && first->type == AST_BORROW ? first->borrow.expr : first;
+    SemanticTypeInfo first_type;
+    if (!target || !semantic_infer_expr_type(ctx, target, &first_type)) return 0;
+    if (first_type.base_type && strcmp(first_type.base_type, "str") == 0)
+        return semantic_expr_views_temporary(ctx, target);
+    return target->type == AST_CALL && typeinfo_holds_bytes_inline(ctx, &first_type, 0);
+}
+
+void semantic_check_kept_view(SemanticContext *ctx, ASTNode *value, ASTNode *where) {
+    if (!semantic_expr_views_temporary(ctx, value)) return;
+    semantic_error_at(ctx, semantic_location_from_ast(where),
+                      "this str views a value that ends with this statement; give that value a name first");
+}
+
 void semantic_check_returned_str(SemanticContext *ctx, ASTNode *node) {
     if (semantic_in_unsafe_source(ctx) || !semantic_expr_views_local(ctx, node->ret.expr)) return;
     semantic_error_at(ctx, semantic_location_from_ast(node),

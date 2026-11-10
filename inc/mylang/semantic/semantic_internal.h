@@ -302,6 +302,8 @@ void semantic_hold_payload_borrow(SemanticContext *ctx, ASTNode *assign);
 void semantic_check_returned_borrow(SemanticContext *ctx, ASTNode *return_node);
 void semantic_check_write_place(SemanticContext *ctx, ASTNode *place, WriteKind kind);
 int semantic_expr_views_local(SemanticContext *ctx, ASTNode *expr);
+int semantic_expr_views_temporary(SemanticContext *ctx, ASTNode *expr);
+void semantic_check_kept_view(SemanticContext *ctx, ASTNode *value, ASTNode *where);
 void semantic_check_returned_str(SemanticContext *ctx, ASTNode *node);
 
 /* semantic_unsafe.c */

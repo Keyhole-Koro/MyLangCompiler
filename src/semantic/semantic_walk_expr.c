@@ -255,6 +255,7 @@ void semantic_walk_expr(SemanticContext *ctx, ASTNode *node, ExprContext expr_ct
         semantic_walk_expr(ctx, node->assign.left, EXPRCTX_WRITE);
         semantic_check_write_place(ctx, node->assign.left, WRITE_ASSIGN);
         semantic_check_assignment_type(ctx, node);
+        semantic_check_kept_view(ctx, node->assign.right, node);
         semantic_revive_binding_if_identifier(ctx, node->assign.left);
         if (node->assign.is_construction) semantic_hold_payload_borrow(ctx, node);
         break;

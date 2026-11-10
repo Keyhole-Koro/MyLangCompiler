@@ -178,6 +178,7 @@ void semantic_walk_stmt(SemanticContext *ctx, ASTNode *node) {
         if (node->var_decl.init) {
             semantic_walk_expr(ctx, node->var_decl.init, EXPRCTX_MOVE);
             semantic_check_initializer_type(ctx, node);
+            semantic_check_kept_view(ctx, node->var_decl.init, node);
         }
         is_copy = semantic_type_is_copy(ctx, node->var_decl.var_type);
         semantic_declare_binding(ctx, node->var_decl.name, node->var_decl.var_type, is_copy, 0, semantic_location_from_ast(node));

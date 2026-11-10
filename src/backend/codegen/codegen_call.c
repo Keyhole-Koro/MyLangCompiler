@@ -81,6 +81,9 @@ static int has_direct_aggregate_return_argument(CompilerContext *cc, ASTNode *no
                                                  const FunctionSig *sig);
 static void clear_moved_call_args(CompilerContext *cc, ASTNode *node,
                                   const FunctionSig *sig, StringBuilder *sb);
+static int gen_call_sret_keeping(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
+                                 char **params, int param_count, char **locals, int local_count,
+                                 bool keep_temporaries);
 static int gen_arg_word(CompilerContext *cc, ASTNode *arg, StringBuilder *sb,
                         const char *target_reg, char **params, int param_count,
                         char **locals, int local_count, int is_aggregate,
@@ -294,10 +297,15 @@ static int gen_arg_word(CompilerContext *cc, ASTNode *arg, StringBuilder *sb, co
         sb_append(sb, "  addis sp, -%d\n", temp_bytes);
         sb_append(sb, "  mov r1, sp\n");
         sb_append(sb, "  push r1\n");
-        gen_call_sret(cc, arg, sb, params, param_count, locals, local_count);
-        if (strcmp(target_reg, "sp") != 0)
+        /* The result may be a view into the call's own temporaries -- `as_str`
+         * of `x.to_string()` -- so they stay until this call completes too,
+         * below the result: it is that many bytes up. */
+        int kept = gen_call_sret_keeping(cc, arg, sb, params, param_count, locals, local_count, true);
+        if (strcmp(target_reg, "sp") != 0) {
             sb_append(sb, "  mov %s, sp\n", target_reg);
-        return temp_bytes;
+            if (kept > 0) sb_append(sb, "  addis %s, %d\n", target_reg, kept);
+        }
+        return temp_bytes + kept;
     }
     if (!is_addressable_expr(arg)) {
         fprintf(stderr,
@@ -496,6 +504,19 @@ void gen_call(CompilerContext *cc, ASTNode *node, StringBuilder *sb, const char 
 void gen_call_sret(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
                    char **params, int param_count, char **locals, int local_count)
 {
+    gen_call_sret_keeping(cc, node, sb, params, param_count, locals, local_count, false);
+}
+
+/* gen_call_sret. With keep_temporaries, a call whose own arguments left
+ * temporaries on the stack (aggregate call results) leaves them there, with
+ * its argument slots and the destination address, and returns how many
+ * bytes that is: the call it is an argument of releases them when it
+ * completes, since this call's result may be a view into one of them.
+ * Otherwise, and for a call with no such temporaries, it returns 0. */
+static int gen_call_sret_keeping(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
+                                 char **params, int param_count, char **locals, int local_count,
+                                 bool keep_temporaries)
+{
     if (is_codegen_builtin(node->call.name)) {
         fprintf(stderr,
                 "Codegen error: builtin '%s' cannot return a struct or array by value\n",
@@ -542,8 +563,9 @@ void gen_call_sret(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
             sb_append(sb, "  movi lr, icall_sret_ret_%d\n  mov pc, r2\n", ret);
             sb_append(sb, "icall_sret_ret_%d:\n", ret);
             clear_moved_call_args(cc, node, sig, sb);
+            if (keep_temporaries) return arg_bytes + 2 * SLOT_SIZE;
             sb_append(sb, "  addis sp, %d\n", arg_bytes + 2 * SLOT_SIZE);
-            return;
+            return 0;
         }
         int stack_bytes = emit_stack_args(cc, node, sig, argc,
                                           "push stack arguments (indirect sret call)",
@@ -566,7 +588,7 @@ void gen_call_sret(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
         if (stack_bytes > 0)
             sb_append(sb, "  addis sp, %d\n", stack_bytes);
         sb_append(sb, "  addis sp, %d\n", SLOT_SIZE);
-        return;
+        return 0;
     }
 
     const FunctionSig *sig = find_func_sig(cc, node->call.name);
@@ -591,9 +613,13 @@ void gen_call_sret(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
         sb_append(sb, "  mov r4, sp\n  addis r4, %d\n  load r4, r4\n", arg_bytes);
         sb_append(sb, "  call %s\n", direct_call_target(node->call.name));
         clear_moved_call_args(cc, node, sig, sb);
+        if (keep_temporaries) {
+            sb_append(sb, "  ; keep aggregate call arguments for the enclosing call\n");
+            return arg_bytes + SLOT_SIZE;
+        }
         sb_append(sb, "  ; release aggregate call arguments, slots, and destination\n");
         sb_append(sb, "  addis sp, %d\n", arg_bytes + SLOT_SIZE);
-        return;
+        return 0;
     }
 
     int stack_bytes = emit_stack_args(cc, node, sig, argc, "push stack arguments (sret call)",
@@ -619,4 +645,5 @@ void gen_call_sret(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
     }
     // Drop the destination-address slot the caller pushed.
     sb_append(sb, "  addis sp, %d\n", SLOT_SIZE);
+    return 0;
 }
