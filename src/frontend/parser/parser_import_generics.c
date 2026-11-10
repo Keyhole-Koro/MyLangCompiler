@@ -436,6 +436,17 @@ static void import_type_methods(ParserContext *context, Module *mod, const char 
     }
 }
 
+/* The named type a field or payload is of: an array's element type
+ * (`Inner items[4]` is an Inner, and so is `Inner grid[2][3]`), or the type
+ * itself. NULL for a function type, or a builtin spelled another way. */
+static const char *named_field_type(ASTNode *type) {
+    while (type && type->type == AST_TYPE_ARRAY) type = type->type_array.element_type;
+    if (!type || type->type != AST_TYPE || !type->type_node.base_type ||
+        type->type_node.base_type->type != AST_IDENTIFIER)
+        return NULL;
+    return type->type_node.base_type->identifier.name;
+}
+
 /* An imported type's fields may be of types this unit never named: another
  * struct of the same module (`AnnotationRow *cur` in Annotations), or a
  * generic instantiation the module already lowered to its `__mlg_s_...`
@@ -462,11 +473,8 @@ static void import_member_types(ParserContext *context, Module *mod, ASTNode *de
          * enum (and every Result carrying it). */
         for (int i = 0; i < decl->enum_stmt.member_count; i++) {
             ASTNode *m = decl->enum_stmt.members[i];
-            ASTNode *type = m && m->type == AST_ENUM_MEMBER ? m->enum_member.payload_type : NULL;
-            if (!type || type->type != AST_TYPE || !type->type_node.base_type ||
-                type->type_node.base_type->type != AST_IDENTIFIER)
-                continue;
-            import_plain_dependency(context, mod, type->type_node.base_type->identifier.name);
+            const char *name = named_field_type(m && m->type == AST_ENUM_MEMBER ? m->enum_member.payload_type : NULL);
+            if (name) import_plain_dependency(context, mod, name);
         }
         return;
     } else {
@@ -474,13 +482,9 @@ static void import_member_types(ParserContext *context, Module *mod, ASTNode *de
     }
     for (int i = 0; i < member_count; i++) {
         ASTNode *m = members[i];
-        if (!m || m->type != AST_VAR_DECL || !m->var_decl.var_type) continue;
-        ASTNode *type = m->var_decl.var_type;
-        if (type->type != AST_TYPE || !type->type_node.base_type ||
-            type->type_node.base_type->type != AST_IDENTIFIER)
-            continue;
-        import_plain_dependency(context, mod,
-                                type->type_node.base_type->identifier.name);
+        if (!m || m->type != AST_VAR_DECL) continue;
+        const char *name = named_field_type(m->var_decl.var_type);
+        if (name) import_plain_dependency(context, mod, name);
     }
 }
 

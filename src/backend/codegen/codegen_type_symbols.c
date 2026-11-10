@@ -72,6 +72,16 @@ int typeinfo_elem_size_bytes(CompilerContext *cc, const TypeInfo *info) {
     if (primitive_size != SLOT_SIZE) return primitive_size;
     const StructInfo *si = find_struct(cc, info->base_type);
     if (si && si->size_bytes > 0) return si->size_bytes;
+    /* A value of a named type nobody declared here would be sized as a word
+     * and overrun whatever follows it. A pointer's target only matters to
+     * pointer arithmetic, and `fn` and `_` (the empty payload) are words. */
+    if (info->pointer_level == 0 && !find_typedef(cc, info->base_type) &&
+        !mylang_type_is_builtin(info->base_type) &&
+        strcmp(info->base_type, "fn") != 0 && strcmp(info->base_type, "_") != 0) {
+        fprintf(stderr, "Codegen error: the layout of '%s' is not known in %s; import the type\n",
+                info->base_type, codegen_current_source_path());
+        exit(1);
+    }
     return SLOT_SIZE;
 }
 

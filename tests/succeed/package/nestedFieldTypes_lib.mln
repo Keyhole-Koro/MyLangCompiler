@@ -1,0 +1,21 @@
+package nested_lib;
+
+// A struct whose fields are of other structs this module declares: as an
+// array, and as a plain field.
+export struct Inner {
+    i32 a;
+    i32 b;
+    i32 c;
+};
+
+export struct Pair {
+    i32 left;
+    i32 right;
+};
+
+export struct Outer {
+    i32 n;
+    Inner items[4];
+    Pair pair;
+    i32 tail;
+};

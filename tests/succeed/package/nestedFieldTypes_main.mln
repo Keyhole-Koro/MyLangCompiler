@@ -1,0 +1,12 @@
+import { Outer } from "nestedFieldTypes_lib.mln";
+
+// Only Outer is imported, yet its layout needs Inner and Pair: an array of
+// three-word Inners and a two-word Pair, 4 + 48 + 8 + 4 = 64 bytes. Sized as
+// words they made Outer 16 bytes, and `tail` landed inside the array.
+i32 main() {
+    Outer o = Outer {};
+    o.items[3].c = 5;
+    o.pair.right = 6;
+    o.tail = 7;
+    return sizeof(Outer) * 1000 + o.items[3].c * 100 + o.pair.right * 10 + o.tail;
+}
