@@ -428,6 +428,21 @@ static int emit_output(Compilation *c) {
     return 1;
 }
 
+/* `--check` runs the code generator too and drops what it makes: some
+ * mistakes only it finds, such as a struct passed by value from something
+ * that is not a variable. */
+static int check_codegen(Compilation *c) {
+    if (c->opts->stage != COMPILE_CHECK) return 1;
+    codegen_set_source_path(c->input_path);
+    char *assembly = codegen_with_session(c->root, c->session);
+    if (!assembly) {
+        fprintf(stderr, "Code generation failed.\n");
+        return 0;
+    }
+    free(assembly);
+    return 1;
+}
+
 int compile_one(const DriverOptions *opts, const char *input_path, const char *output_path) {
     Compilation c = {
         .opts = opts,
@@ -435,7 +450,7 @@ int compile_one(const DriverOptions *opts, const char *input_path, const char *o
         .output_path = output_path,
     };
     int ok = load_source(&c) && run_frontend(&c) &&
-             (!writes_output(&c) || emit_output(&c));
+             (writes_output(&c) ? emit_output(&c) : check_codegen(&c));
 
     free(c.output);
     free_ast(c.root);

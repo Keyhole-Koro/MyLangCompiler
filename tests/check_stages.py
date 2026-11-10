@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""`mlc --check` and `--parse-only` report errors, print nothing else and write nothing."""
+"""`mlc --check` and `--parse-only` report errors, print nothing else and write nothing.
+`--check` runs the code generator too, for the errors only it finds."""
 
 import subprocess
 import tempfile
@@ -12,6 +13,12 @@ SOURCES = {
     "clean.mln": "i32 main() { return 0; }\n",
     "semantic.mln": "i32 main() { return nope; }\n",
     "syntax.mln": "i32 main( {\n}\n",
+    # Only the code generator refuses this: a struct passed by value has to
+    # come from a variable, a field or a dereference.
+    "codegen.mln": "struct Pair { i32 a; i32 b; };\n"
+                   "Pair make() { return Pair { a: 1, b: 2 }; }\n"
+                   "i32 take(Pair p) { return p.a; }\n"
+                   "i32 main() { bool c = true; return take(c ? make() : make()); }\n",
 }
 
 # source -> what each flag returns and the diagnostic it prints.
@@ -22,6 +29,8 @@ EXPECTED = {
     ("--parse-only", "semantic.mln"): (0, None),
     ("--check", "syntax.mln"): (1, "syntax.mln:1:"),
     ("--parse-only", "syntax.mln"): (1, "syntax.mln:1:"),
+    ("--check", "codegen.mln"): (1, "bind it to one first"),
+    ("--parse-only", "codegen.mln"): (0, None),
 }
 
 

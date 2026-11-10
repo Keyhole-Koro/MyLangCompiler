@@ -213,10 +213,13 @@ beside the generated assembly for later inspection. Use `--dump-tokens` or
 
 ### Checking a source
 
-`mlc --check <input.mln>` runs the parser and the semantic checks and stops, and
+`mlc --check <input.mln>` runs the parser, the semantic checks and the code
+generator, and drops what the code generator makes: some mistakes only it finds,
+such as a struct passed by value from something that is not a variable.
 `mlc --parse-only <input.mln>` stops after the parser. Neither writes a file or
-prints anything but diagnostics, and both return 1 on an error. The parser stops
-at its first error in a file; the semantic checks report all of theirs.
+prints anything but diagnostics, and both return 1 on an error. The parser and
+the code generator stop at their first error in a file; the semantic checks
+report all of theirs.
 
 `make check` runs `--check` on every source in the repository. `make lsp-check`
 uses `--parse-only` to tell an editor's false alarm from a real syntax error.
