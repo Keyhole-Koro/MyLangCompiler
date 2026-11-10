@@ -1,0 +1,21 @@
+// A u16 field read on the right of a comparison lands in the register that
+// holds its own address. Its high byte used to overwrite that address, and the
+// low byte was read from (high << 8) + 1: 296 read back as 0x100 or more.
+struct Row {
+    i32 id;
+    u16 x;
+    u16 y;
+};
+
+i32 main() {
+    Row r = Row { id: 1, x: 336, y: 296 };
+    i32 hits = 0;
+    i32 px = 400;
+    i32 py = 312;
+    if (px >= r.x) { hits = hits + 1; }
+    if (py >= r.y) { hits = hits + 10; }
+    if (py < r.y + 64) { hits = hits + 100; }
+    r.y = 0x1234;
+    if (r.y == 0x1234) { hits = hits + 1000; }
+    return hits;
+}

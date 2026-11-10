@@ -31,6 +31,7 @@ callBorrowLifetime|6|succeed/semantic/callBorrowLifetime.mln
 ternaryAggregate|74742|succeed/semantic/ternaryAggregate.mln
 temporaryViewArgument|4210|succeed/string/temporaryViewArgument.mln,../../MyStdLib/text/text.unsafe.mln,../../MyStdLib/text/str.unsafe.mln,../../MyStdLib/text/ascii.mln,../../MyStdLib/text/bytes.unsafe.mln,../../MyStdLib/core/int32.mln
 samePrivateName|3344|succeed/package/samePrivateName_main.mln,succeed/package/samePrivateName_a.mln,succeed/package/samePrivateName_b.mln
+u16FieldCompare|1111|succeed/data/u16FieldCompare.mln
 nestedFieldTypes|64567|succeed/package/nestedFieldTypes_main.mln,succeed/package/nestedFieldTypes_lib.mln
 smallAndLiteralReturn|23|succeed/struct/byval/smallAndLiteralReturn.mln
 genericInstantiation|45|succeed/generic/instantiation.unsafe.mln

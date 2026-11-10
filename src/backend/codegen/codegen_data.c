@@ -354,17 +354,30 @@ void emit_load_from_addr(StringBuilder *sb, const char *target_reg, const char *
     emit_load_width_from_addr(sb, target_reg, addr_reg, is_byte ? 1 : SLOT_SIZE);
 }
 
+/* A scratch register that is neither `a` nor `b`. */
+static const char *u16_scratch(const char *a, const char *b) {
+    static const char *const candidates[] = { "r4", "r5", "r6" };
+    for (int i = 0; i < 3; i++) {
+        if (strcmp(candidates[i], a) != 0 && strcmp(candidates[i], b) != 0) return candidates[i];
+    }
+    return "r6";
+}
+
 void emit_load_width_from_addr(StringBuilder *sb, const char *target_reg, const char *addr_reg, int width_bytes) {
     if (width_bytes == 1) {
         sb_append(sb, "  loadb %s, %s\n", target_reg, addr_reg);
     } else if (width_bytes == 2) {
-        const char *scratch = (strcmp(target_reg, "r4") == 0) ? "r5" : "r4";
+        /* Big-endian. The low byte goes to a scratch register first and the
+         * high byte is read last, because the target may be the address
+         * register itself (`loadb r3, r3`): reading the high byte first wrote
+         * over the address, and the low byte came from (high << 8) + 1. */
+        const char *scratch = u16_scratch(target_reg, addr_reg);
         sb_append(sb, "  ; load u16 from %s into %s\n", addr_reg, target_reg);
-        sb_append(sb, "  loadb %s, %s\n", target_reg, addr_reg);
-        for (int i = 0; i < 8; i++) sb_append(sb, "  shl %s\n", target_reg);
         sb_append(sb, "  addis %s, 1\n", addr_reg);
         sb_append(sb, "  loadb %s, %s\n", scratch, addr_reg);
         sb_append(sb, "  addis %s, -1\n", addr_reg);
+        sb_append(sb, "  loadb %s, %s\n", target_reg, addr_reg);
+        for (int i = 0; i < 8; i++) sb_append(sb, "  shl %s\n", target_reg);
         sb_append(sb, "  or %s, %s\n", target_reg, scratch);
     } else {
         sb_append(sb, "  load %s, %s\n", target_reg, addr_reg);
@@ -379,7 +392,7 @@ void emit_store_width_to_addr(StringBuilder *sb, const char *addr_reg, const cha
     if (width_bytes == 1) {
         sb_append(sb, "  storeb %s, %s\n", addr_reg, value_reg);
     } else if (width_bytes == 2) {
-        const char *scratch = (strcmp(value_reg, "r4") == 0) ? "r5" : "r4";
+        const char *scratch = u16_scratch(value_reg, addr_reg);
         sb_append(sb, "  ; store u16 from %s to %s\n", value_reg, addr_reg);
         sb_append(sb, "  mov %s, %s\n", scratch, value_reg);
         for (int i = 0; i < 8; i++) sb_append(sb, "  shr %s\n", scratch);
