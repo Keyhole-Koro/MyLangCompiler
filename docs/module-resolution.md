@@ -134,6 +134,11 @@ part of the design.
 - Non-exported declarations and generic templates remain invisible to
   importers. Importing a private function or global of a package by name is an
   error; a file that declares no package links by plain names.
+- A private function is written out as `.shared name`, not `export name`. Its
+  object refers to it by a label private to the object, so two modules may each
+  have a `ready`. MyLinker still lets another object name it -- the harness
+  MyLangTester generates calls a test function, a mock calls the original --
+  while one object alone defines or shares the name (`SYMBOL_SHARED`).
 
 ### What a generic reaches of its own module
 

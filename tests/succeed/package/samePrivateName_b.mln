@@ -1,0 +1,8 @@
+package same_b;
+
+i32 helper() { return 4; }
+
+export i32 value() {
+    fn() -> i32 f = helper;
+    return helper() * 10 + f();
+}

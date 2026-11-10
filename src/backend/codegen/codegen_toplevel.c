@@ -342,6 +342,20 @@ void emit_codegen_functions(CompilerContext *cc, ASTNode *root, StringBuilder *s
     }
 }
 
+/* Whether `name` is a function this unit defines without exporting it. Its
+ * label stays private to this object, so two modules may each have a
+ * `ready`; `.shared` still lets a test harness or a mock name it while no
+ * other object shares the name (MyLinker's SYMBOL_SHARED). */
+static bool func_is_module_private(CompilerContext *cc, const char *name) {
+    ASTNode *block = cc ? cc->program : NULL;
+    for (int i = 0; block && i < block->block.count; i++) {
+        ASTNode *fn = cg_as_fundef(block->block.stmts[i]);
+        if (fn && fn->fundef.body && fn->fundef.name && strcmp(fn->fundef.name, name) == 0)
+            return !fn->fundef.is_exported;
+    }
+    return false;
+}
+
 char *prepend_codegen_imports(CompilerContext *cc, StringBuilder *body) {
     StringBuilder final_sb;
     sb_init(&final_sb);
@@ -361,7 +375,8 @@ char *prepend_codegen_imports(CompilerContext *cc, StringBuilder *body) {
             const char *name = cc->defined_funcs[i];
             if (is_entry_name(name) || func_is_object_local(cc, name)) continue;
             if (strncmp(name, "__mlg_", 6) == 0 && strncmp(name, "__mlg_m_", 8) != 0) continue;
-            sb_append(&final_sb, "export %s\n", name);
+            if (func_is_module_private(cc, name)) sb_append(&final_sb, ".shared %s\n", name);
+            else sb_append(&final_sb, "export %s\n", name);
         }
         sb_append(&final_sb, "\n");
     }

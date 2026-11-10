@@ -1,0 +1,8 @@
+import same_a from "samePrivateName_a.mln";
+import same_b from "samePrivateName_b.mln";
+
+// Two modules each have a private `helper`. They used to be exported under that
+// one name, and the link failed with a duplicate symbol.
+i32 main() {
+    return same_a.value() * 100 + same_b.value();
+}

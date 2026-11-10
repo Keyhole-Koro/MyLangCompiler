@@ -1,0 +1,10 @@
+package same_a;
+
+// A private function with the same name as one in samePrivateName_b.mln: each
+// module's own, by call and by address.
+i32 helper() { return 3; }
+
+export i32 value() {
+    fn() -> i32 f = helper;
+    return helper() * 10 + f();
+}
