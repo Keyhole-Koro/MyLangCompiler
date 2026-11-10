@@ -1,3 +1,4 @@
+#include "mylang/frontend/parser_ast_internal.h"
 #include "mylang/backend/codegen_internal.h"
 
 // Size in bytes of a struct or array being assigned as a whole, or 0 when the
@@ -107,6 +108,23 @@ void gen_assign(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
     if (lvalue_is_const(cc, node->assign.left)) {
         fprintf(stderr, "Codegen error: assignment to const lvalue is not allowed\n");
         exit(1);
+    }
+    if (node->assign.right->type == AST_TERNARY &&
+        aggregate_assign_size(cc, node->assign.left) > SLOT_SIZE) {
+        /* `x = c ? a : b;` of a struct: each side assigns x, so no side's
+         * value has to pass through the one register a ternary yields. Only
+         * one side runs, so x is evaluated once. */
+        ASTNode *choice = node->assign.right;
+        ASTNode **then_stmts = malloc(sizeof(ASTNode *));
+        then_stmts[0] = new_expr_stmt(new_assign(ast_clone(node->assign.left), choice->ternary.then_expr));
+        ASTNode **else_stmts = malloc(sizeof(ASTNode *));
+        else_stmts[0] = new_expr_stmt(new_assign(ast_clone(node->assign.left), choice->ternary.else_expr));
+        choice->ternary.then_expr = new_stmt_expr(new_block(then_stmts, 1));
+        choice->ternary.else_expr = new_stmt_expr(new_block(else_stmts, 1));
+        gen_expr(cc, choice, sb, "r1", params, param_count, locals, local_count);
+        if (target_reg)
+            gen_lvalue_addr(cc, node->assign.left, sb, target_reg, params, param_count, locals, local_count);
+        return;
     }
     bool construction = node->assign.fills_new_value;
     bool through_borrow = node->assign.left->type == AST_UNARY &&

@@ -28,6 +28,7 @@ ternaryMoveIsolation|14|succeed/semantic/ternaryMoveIsolation.mln
 automaticDrop|1166|succeed/semantic/automaticDrop.mln
 ownedString|70|succeed/string/ownedString.unsafe.mln,../../MyStdLib/memory/allocator.mln,../../MyStdLib/text/string.unsafe.mln
 callBorrowLifetime|6|succeed/semantic/callBorrowLifetime.mln
+ternaryAggregate|74742|succeed/semantic/ternaryAggregate.mln
 nestedFieldTypes|64567|succeed/package/nestedFieldTypes_main.mln,succeed/package/nestedFieldTypes_lib.mln
 smallAndLiteralReturn|23|succeed/struct/byval/smallAndLiteralReturn.mln
 genericInstantiation|45|succeed/generic/instantiation.unsafe.mln

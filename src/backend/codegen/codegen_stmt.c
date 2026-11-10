@@ -438,6 +438,14 @@ static void gen_stmt_labeled(CompilerContext *cc, ASTNode *node, StringBuilder *
                 sb_append(sb, "  push r1\n");
                 gen_call_sret(cc, node->var_decl.init, sb, params, param_count, locals, local_count);
             } else if (aggregate_type_size(cc, vtype) > SLOT_SIZE &&
+                       node->var_decl.init->type == AST_TERNARY) {
+                /* `T y = c ? a : b;`: each side assigns y, as a case's arms
+                 * do. A struct does not fit the register a ternary yields. */
+                ASTNode *choice = node->var_decl.init;
+                choice->ternary.then_expr = assigning_arm(node->var_decl.name, choice->ternary.then_expr);
+                choice->ternary.else_expr = assigning_arm(node->var_decl.name, choice->ternary.else_expr);
+                gen_expr(cc, choice, sb, "r1", params, param_count, locals, local_count);
+            } else if (aggregate_type_size(cc, vtype) > SLOT_SIZE &&
                        node->var_decl.init->type == AST_CASE) {
                 /* `T y = case x of { a -> e; ... };`: each arm assigns y, so
                  * no arm's value has to pass through a register. */
@@ -523,6 +531,14 @@ static void gen_stmt_labeled(CompilerContext *cc, ASTNode *node, StringBuilder *
     case AST_RETURN:
         // A bare `return;` has no expression; only evaluate one when present.
         if (node->ret.expr && cc->sret_active) {
+            if (node->ret.expr->type == AST_TERNARY) {
+                /* `return c ? a : b;` of an aggregate: each side returns. */
+                ASTNode *choice = node->ret.expr;
+                choice->ternary.then_expr = returning_arm(choice->ternary.then_expr);
+                choice->ternary.else_expr = returning_arm(choice->ternary.else_expr);
+                gen_expr(cc, choice, sb, "r1", params, param_count, locals, local_count);
+                break;
+            }
             if (node->ret.expr->type == AST_CASE) {
                 /* `return case x of { a -> e; ... };` of an aggregate: each
                  * arm returns its own value through the hidden pointer, so

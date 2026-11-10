@@ -1,0 +1,26 @@
+// A conditional whose value is a struct: a str here, two words. Each side is
+// written straight into its destination -- a declaration, an assignment, a
+// return -- since the register a conditional yields holds only one word.
+
+str pick(bool first, str a, str b) {
+    return first ? a : b;
+}
+
+str named(i32 n) {
+    return n == 1 ? "one" : "many";
+}
+
+i32 main() {
+    i32 n = 2;
+    str unit = n == 1 ? " thing" : " things";   // declaration, literals
+    str word = n > 0 ? named(n) : "none";       // a call on one side
+    str other = "";
+    other = n == 2 ? unit : word;               // assignment, variables
+    str last = pick(false, "ab", "cdef");       // return
+    str nested = n == 1 ? "a" : n == 2 ? "bb" : "ccc";
+    // 7 + 4 + 7 + 4 + 2: each length right, and the bytes with it.
+    bool ok = unit == " things" && word == "many" && other == " things" &&
+              last == "cdef" && nested == "bb";
+    return unit.length * 10000 + word.length * 1000 + other.length * 100 +
+           last.length * 10 + nested.length + (ok ? 0 : 500000);
+}
