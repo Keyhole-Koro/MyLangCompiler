@@ -1,0 +1,64 @@
+// A product is the same at run time as in a constant, modulo 2^32: whatever
+// the signs, however large, and with a literal factor or none.
+const i32 FOLDED = (0 - 1234) * 5678;
+const i32 FOLDED_WRAP = 65536 * 65537;
+
+i32 g_failed = 0;
+
+void expect(i32 got, i32 want) {
+    if (got != want) { g_failed = g_failed + 1; }
+}
+
+i32 main() {
+    i32 zero = 0;
+    i32 one = 1;
+    i32 three = 3;
+    i32 seven = 7;
+    i32 width = 2048;
+    i32 row = 917;
+    i32 minus_three = 0 - three;
+    i32 minus_seven = 0 - seven;
+
+    expect(three * seven, 21);
+    expect(minus_three * seven, 0 - 21);
+    expect(three * minus_seven, 0 - 21);
+    expect(minus_three * minus_seven, 21);
+    expect(seven * zero, 0);
+    expect(zero * seven, 0);
+    expect(minus_seven * zero, 0);
+    expect(one * minus_seven, minus_seven);
+    expect(row * width, 1878016);
+    expect(width * row, 1878016);
+
+    // Large and wrapping products.
+    i32 big = 65536;
+    i32 big_plus = 65537;
+    expect(big * big_plus, FOLDED_WRAP);
+    i32 a = 0 - 1234;
+    i32 b = 5678;
+    expect(a * b, FOLDED);
+    i32 max = 2147483647;
+    expect(max * max, 1);
+    i32 min = 0 - 2147483647 - 1;
+    expect(min * one, min);
+    expect(one * min, min);
+    expect(seven * min, min);
+    expect(min * min, 0);
+    expect(min * minus_three, min);
+
+    // Literal factors, on either side, power of two or not.
+    expect(row * 3, 2751);
+    expect(3 * row, 2751);
+    expect(row * 1000, 917000);
+    expect(1000 * row, 917000);
+    expect(row * 2048, 1878016);
+    expect(minus_seven * 60, 0 - 420);
+    expect(60 * minus_seven, 0 - 420);
+    expect(minus_seven * 1, minus_seven);
+
+    // The stack is left as it was, inside a larger expression.
+    expect(1 + row * width + seven * three * 2, 1878059);
+
+    if (g_failed != 0) { return g_failed; }
+    return 77;
+}

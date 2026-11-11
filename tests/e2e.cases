@@ -6,6 +6,7 @@ modelNewtypeIndex|63|succeed/model/newtypeIndex.mln,succeed/model/badges.model.m
 caseAggregateInit|634|succeed/semantic/caseAggregateInit.mln
 divisionLarge|40|succeed/expr/divisionLarge.mln
 divisionSigned|77|succeed/expr/divisionSigned.mln
+multiplySigned|77|succeed/expr/multiplySigned.mln
 nestedPatternFallback|255|succeed/enum/nestedPatternFallback.mln
 optionZeroIsNone|7|succeed/semantic/optionZeroIsNone.mln,../../MyStdLib/core/option.mln
 tryRunsWhereWritten|32|succeed/semantic/tryRunsWhereWritten.mln,../../MyStdLib/core/result.mln,../../MyStdLib/core/option.mln

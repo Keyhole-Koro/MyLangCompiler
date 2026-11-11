@@ -1,13 +1,5 @@
 #include "mylang/backend/codegen_internal.h"
 
-// If `n` is a power of two (> 0), return its log2 exponent, else -1.
-static int pow2_shift(long n) {
-    if (n <= 0) return -1;
-    int s = 0;
-    while ((n & 1) == 0) { n >>= 1; s++; }
-    return (n == 1) ? s : -1;
-}
-
 // If `node` is an integer literal, store its value in *out and return 1.
 static int literal_value(ASTNode *node, long *out) {
     if (node && node->type == AST_NUMBER) {
@@ -99,34 +91,33 @@ int gen_math_binop(CompilerContext *cc, ASTNode *node, StringBuilder *sb) {
         sb_append(sb, "  mov r1, r2\n");
         return 1;
     case ASTARISK: {
-        // Fast path: multiplying by a power-of-two literal is a left shift.
-        // The target has no multiply instruction, so the generic loop below
-        // runs `min(operands)` times — e.g. `row * 1024` would loop 1024x per
-        // pixel row. Operands are pre-loaded left->r2, right->r1; if one side
-        // is a constant 2^k, shift the other operand's register instead.
+        // The target has no multiply instruction. Operands are pre-loaded
+        // left->r2, right->r1. A positive literal factor becomes shifts and
+        // adds (emit_scale_reg_const), with no loop at all.
         long lit;
-        int shift;
-        if (literal_value(node->binary.right, &lit) && (shift = pow2_shift(lit)) >= 0) {
-            sb_append(sb, "\n; multiply r2 * %ld (<< %d)\n", lit, shift);
-            for (int i = 0; i < shift; i++) sb_append(sb, "  shl r2\n");
+        if (literal_value(node->binary.right, &lit) && lit > 0) {
+            sb_append(sb, "\n; multiply r2 * %ld\n", lit);
+            emit_scale_reg_const(cc, sb, "r2", lit);
             sb_append(sb, "  mov r1, r2\n");
             return 1;
         }
-        if (literal_value(node->binary.left, &lit) && (shift = pow2_shift(lit)) >= 0) {
-            sb_append(sb, "\n; multiply %ld * r1 (<< %d)\n", lit, shift);
-            for (int i = 0; i < shift; i++) sb_append(sb, "  shl r1\n");
+        if (literal_value(node->binary.left, &lit) && lit > 0) {
+            sb_append(sb, "\n; multiply %ld * r1\n", lit);
+            emit_scale_reg_const(cc, sb, "r1", lit);
             return 1;
         }
-        // Repeated-add multiply: r4 += r2, `count` (r5) times. The count must
-        // be non-negative or the decrement loop never reaches 0, so if r1 is
-        // negative we negate both the count and the addend: (-a)*b == a*(-b).
+        // Shift-and-add: for each bit of the count (r5), lowest first, add the
+        // addend (r2) when the bit is set, then double the addend. It runs once
+        // per bit of the count, at most 32 times, where repeated addition ran
+        // `count` times (`y * 2048` was 2048 rounds). The product is the same
+        // modulo 2^32, overflow included. A negative count is negated with the
+        // addend, (-a)*b == a*(-b); -2147483648 stays negative, and as `shr`
+        // is logical it still runs out after 32 bits.
         sb_append(sb, "\n; multiply r2 * r1\n");
         codegen_cost_begin(sb, "arith");
         sb_append(sb, "  movi r4, 0      ; r4 = result\n");
         sb_append(sb, "  mov r5, r1     ; r5 = count\n");
         int lbl_mul = next_label(cc);
-        // If the count (r5) is negative the decrement loop would never reach 0,
-        // so negate both count and addend first: (-a)*b == a*(-b).
         sb_append(sb, "  cmp r5, 0\n");
         sb_append(sb, "  jl b_mul_neg_%d\n", lbl_mul);
         sb_append(sb, "  jmp b_mul_loop_%d\n", lbl_mul);
@@ -140,8 +131,15 @@ int gen_math_binop(CompilerContext *cc, ASTNode *node, StringBuilder *sb) {
         sb_append(sb, "b_mul_loop_%d:\n", lbl_mul);
         sb_append(sb, "  cmp r5, 0\n");
         sb_append(sb, "  jz b_mul_end_%d\n", lbl_mul);
+        sb_append(sb, "  mov r6, r5\n");
+        sb_append(sb, "  shr r6\n");
+        sb_append(sb, "  shl r6         ; r6 = count without its low bit\n");
+        sb_append(sb, "  cmp r6, r5\n");
+        sb_append(sb, "  jz b_mul_skip_%d\n", lbl_mul);
         sb_append(sb, "  add r4, r2\n");
-        sb_append(sb, "  addis r5, -1\n");
+        sb_append(sb, "b_mul_skip_%d:\n", lbl_mul);
+        sb_append(sb, "  shl r2\n");
+        sb_append(sb, "  shr r5\n");
         sb_append(sb, "  jmp b_mul_loop_%d\n", lbl_mul);
         sb_append(sb, "b_mul_end_%d:\n", lbl_mul);
         sb_append(sb, "  mov r1, r4\n");
