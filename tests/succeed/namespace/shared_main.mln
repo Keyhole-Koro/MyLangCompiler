@@ -1,0 +1,11 @@
+// Two files of namespace `shared` imported under its name merge: `shared.a`
+// is whichever file exports `a`. Importing one of them twice is harmless.
+import shared from "shared_core.mln";
+import shared from "shared_list.mln";
+import shared from "./shared_core.mln";
+
+i32 main() {
+    // create() = 1 + 5 = 6; list_select(3) = 3 + 2 + 7 + 6 = 18
+    return shared.create() * 10000 + shared.list_select(3) * 100 +
+           shared.second<i32>(0, shared.LIMIT);
+}

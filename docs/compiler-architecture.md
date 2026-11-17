@@ -55,7 +55,7 @@ The main groups are:
 - `parser_instantiate.c`: monomorphization before semantic checking
 - `parser_import_generics.c`: isolated loading of named imported generic templates
 - `parser_stmt.c`: statement parsing
-- `parser_toplevel.c`: package/import/export and whole-program parsing
+- `parser_toplevel.c`: namespace/import/export and whole-program parsing
 - `parser_expr_*.c`: expression parsing split by precedence/shape
 - `parser_ast_*.c`: AST node construction helpers
 - `parser_rewrite*.c`: export name rewrite passes
@@ -67,14 +67,14 @@ The main groups are:
 - `parser_check.c`: parser-side validation after lowering
 - `parser_print*.c`: AST printing helpers
 - `parser_free.c`: AST cleanup
-- `parser_state_*.c`: parser-global tables and reset/package management
+- `parser_state_*.c`: parser-global tables and reset/namespace management
 
 ### Parser State
 
 Parser state is still global, but it is now grouped more clearly:
 
 - `parser_state_tables.c`: function/type/struct tables
-- `parser_state_package.c`: package/export/import bookkeeping
+- `parser_state_package.c`: namespace/export/import bookkeeping, merged namespace imports
 - `parser_state_reset.c`: parser reset and filename lifecycle
 
 The state declarations live in `inc/mylang/frontend/parser_state_internal.h`.

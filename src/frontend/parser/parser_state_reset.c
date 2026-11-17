@@ -148,6 +148,14 @@ void parser_context_reset(ParserContext *context) {
         context->module.imported_package_count = 0;
     }
 
+    for (int i = 0; i < context->module.namespace_import_count; i++) {
+        free(context->module.namespace_imports[i].binding);
+        free(context->module.namespace_imports[i].path);
+    }
+    free(context->module.namespace_imports);
+    context->module.namespace_imports = NULL;
+    context->module.namespace_import_count = 0;
+
     if (context->lowering.hoisted_functions) {
         free(context->lowering.hoisted_functions);
         context->lowering.hoisted_functions = NULL;
@@ -171,6 +179,7 @@ void parser_context_reset(ParserContext *context) {
     }
     context->module.current_package = (char *)g_default_package;
     context->module.current_package_heap = 0;
+    context->module.namespace_declared = 0;
 
     context->token_head = NULL;
     context->session = NULL;

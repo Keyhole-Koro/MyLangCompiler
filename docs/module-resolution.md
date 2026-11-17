@@ -119,11 +119,25 @@ part of the design.
 ## Import and visibility semantics
 
 - `import { foo } from "x.mln";` exposes only the named exported symbol.
-- `import foo from "x.mln";` is a package import when the target declares
-  `package foo;`; otherwise it is a single-symbol import.
-- A package import exposes exported symbols as `foo.bar()` and preserves the
-  existing package-qualified link-name convention.
-- `import foo;` remains the path-less linker/package import form.
+- `namespace foo;` declares a file's namespace; `package foo;` is its legacy
+  spelling. `Module.package_name` holds it. A namespace is one identifier, and
+  a file declares at most one.
+- `import foo from "x.mln";` is a namespace import when the target declares
+  `namespace foo;`; otherwise it is a single-symbol import.
+- A namespace import exposes exported symbols as `foo.bar()` and preserves the
+  existing namespace-qualified link-name convention (`foo_bar`).
+- Several files may declare one namespace. An importer that takes more than one
+  of them under the namespace's name merges them: each import node brings its
+  own file's signatures, and `foo.bar` resolves to the one link name `foo_bar`
+  that whichever file exports `bar` defines. The parser records each namespace
+  import (`NamespaceImport`: name, path, module) and rejects a second file that
+  exports a function, global or generic function the first already exports,
+  naming both files (`add_namespace_import`). Once its own exports are known, a
+  file of the namespace is held to the same rule against the files of its
+  namespace it imports (`check_own_namespace_exports`). `foo.bar<T>()` asks the
+  files imported under `foo` for the template before any other loaded file of
+  the namespace.
+- `import foo;` remains the path-less linker/namespace import form.
 - An exported method travels with its exported receiver type; importing the
   type provides the method prototype needed for resolution.
 - An exported global travels with its declared scalar/array type and type
@@ -132,13 +146,19 @@ part of the design.
   read-only in the importing translation unit and byte-width globals retain
   their load width.
 - Non-exported declarations and generic templates remain invisible to
-  importers. Importing a private function or global of a package by name is an
-  error; a file that declares no package links by plain names.
+  importers. Importing a private function or global of a namespace by name is
+  an error; a file that declares no namespace links by plain names. Privacy is
+  per file, not per namespace.
 - A private function is written out as `.shared name`, not `export name`. Its
   object refers to it by a label private to the object, so two modules may each
   have a `ready`. MyLinker still lets another object name it -- the harness
   MyLangTester generates calls a test function, a mock calls the original --
   while one object alone defines or shares the name (`SYMBOL_SHARED`).
+- A private global is not exported at all: the assembler tags its label with
+  the file's stem (`count-[dom:4]`). So two files of one namespace, each with
+  a private `helper` and `count`, link into one program. MyLinker's `.map`
+  keeps one entry per name, so of two private functions called `helper` only
+  the first is listed there.
 
 ### What a generic reaches of its own module
 
@@ -255,6 +275,8 @@ The module-resolution test set must cover:
 - repeated imports and equivalent relative paths sharing one module;
 - import cycles terminating without infinite recursion;
 - package names, export visibility, and mangled link names;
+- a namespace shared by several files: merged imports, the error for a name
+  two of them export, and private names that stay per file;
 - symbol-list imports hiding unspecified symbols;
 - exported and non-exported generic templates;
 - DOM signatures using AST parameter metadata;

@@ -1,0 +1,4 @@
+// A namespace is one name; namespaces do not nest.
+namespace os.ui;
+
+i32 main() { return 0; }

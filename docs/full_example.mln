@@ -1,7 +1,7 @@
 // MyLang Comprehensive Example
 // This file demonstrates most of the grammar and features of the language.
 
-package examples;
+namespace examples;
 
 // 1. Imports
 import { Option } from "@std/core/option.mln";

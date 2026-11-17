@@ -6,18 +6,18 @@
 #include "mylang/frontend/parser_trait_internal.h"
 #include <limits.h>
 
-/* Returns 1 if the .mln file at `rel_path` declares `package <pkg>;` at its top.
- * Used to let `import pkg from "path"` act as a package import (enabling
- * `pkg.func()` qualified calls) when the target file is that package's source. */
-static int import_path_declares_package(ParserContext *context, const char *rel_path,
-                                        const char *pkg) {
-    if (!rel_path || !pkg || !module_loader_is_mylang_source(rel_path)) return 0;
+/* The module at `rel_path` when it declares `namespace <ns>;` (or the legacy
+ * `package <ns>;`), else NULL. `import ns from "path"` is then a namespace
+ * import, enabling `ns.func()` qualified calls. */
+static Module *import_path_declares_namespace(ParserContext *context, const char *rel_path,
+                                              const char *ns) {
+    if (!rel_path || !ns || !module_loader_is_mylang_source(rel_path)) return NULL;
     FrontendSession *session = context->session;
-    if (!session || !session->loader) return 0;
+    if (!session || !session->loader) return NULL;
 
     Module *mod = module_loader_load(session->loader, context->module.filename, rel_path);
-    if (!mod || !mod->package_name) return 0;
-    return strcmp(mod->package_name, pkg) == 0;
+    if (!mod || !mod->package_name) return NULL;
+    return strcmp(mod->package_name, ns) == 0 ? mod : NULL;
 }
 
 static int module_declares(const Module *module, const char *name) {
@@ -29,7 +29,7 @@ static int module_declares(const Module *module, const char *name) {
     return 0;
 }
 
-/* A function or global a package does not export. A file with no package is
+/* A function or global a namespace does not export. A file with no namespace is
  * plain C-like linkage, whose names are there for any import to take, and
  * mytest reaches the tests of a `.test.mln` file by name. */
 static int module_keeps_private(const Module *module, const char *name) {
@@ -50,9 +50,9 @@ static int module_keeps_private(const Module *module, const char *name) {
     return found;
 }
 
-/* `import X from "f.mln";` imports the package when f.mln declares
- * `package X;` and otherwise the symbol X. A name that is neither -- an
- * attempt to give the package another name -- would silently import nothing
+/* `import X from "f.mln";` imports the namespace when f.mln declares
+ * `namespace X;` and otherwise the symbol X. A name that is neither -- an
+ * attempt to give the namespace another name -- would silently import nothing
  * and leave every `X.f()` unresolved, so it is rejected here. */
 static void check_imported_names(ParserContext *context, Module *module, const char *path,
                                  char **symbols, int count, Token *at) {
@@ -65,7 +65,7 @@ static void check_imported_names(ParserContext *context, Module *module, const c
         if (module_declares(module, symbols[i])) continue;
         if (module->package_name && count == 1) {
             snprintf(message, sizeof(message),
-                     "'%s' declares package '%s' and nothing named '%s'; a package is imported "
+                     "'%s' declares namespace '%s' and nothing named '%s'; a namespace is imported "
                      "by its own name: import %s from \"%s\";",
                      path, module->package_name, symbols[i], module->package_name, path);
         } else {
@@ -125,15 +125,24 @@ ASTNode *parse_import(ParserContext *context, Token **cur) {
         *cur = (*cur)->next;
         if (!expect(cur, SEMICOLON)) parse_error(context, "expected ';'", *cur);
 
-        /* If the target file declares `package <ident>;`, treat this as a
-         * package import: register the namespace so `ident.func()` qualified
+        /* If the target file declares `namespace <ident>;`, treat this as a
+         * namespace import: register the namespace so `ident.func()` qualified
          * calls rewrite to `ident_func`, while still emitting an import node so
-         * codegen scans the file for (variadic-aware) exported signatures. */
-        if (import_path_declares_package(context, path, ident)) {
-            context->module.imported_packages = realloc(context->module.imported_packages, sizeof(char*) * (context->module.imported_package_count + 1));
-            context->module.imported_packages[context->module.imported_package_count++] = ident;
-            if (context->is_root_module) {
-                frontend_session_add_root_imported_package(context->session, ident);
+         * codegen scans the file for (variadic-aware) exported signatures.
+         * Every file of a namespace exports under that one prefix, so a second
+         * file imported under the same name merges with the first; each
+         * import node brings its own file's signatures. */
+        Module *namespace_module = import_path_declares_namespace(context, path, ident);
+        if (namespace_module) {
+            add_namespace_import(context, ident, path, namespace_module, import_tok);
+            if (is_imported_package(context, ident)) {
+                free(ident);
+            } else {
+                context->module.imported_packages = realloc(context->module.imported_packages, sizeof(char*) * (context->module.imported_package_count + 1));
+                context->module.imported_packages[context->module.imported_package_count++] = ident;
+                if (context->is_root_module) {
+                    frontend_session_add_root_imported_package(context->session, ident);
+                }
             }
             char **symbols = NULL;
             return make_import_node_with_templates(context, path, symbols, 0, import_tok);
@@ -251,7 +260,7 @@ ASTNode* parse_toplevel(ParserContext *context, Token **cur) {
             i++;
         }
     }
-    /* An import or a package line declares nothing an attribute could apply
+    /* An import or a namespace line declares nothing an attribute could apply
      * to. `@safe` vouches for the one declaration after it, so it cannot make
      * an imported module's functions safe to call. */
     Token *target = *cur;
@@ -261,8 +270,8 @@ ASTNode* parse_toplevel(ParserContext *context, Token **cur) {
             ? "@safe cannot precede an import; mark the imported functions @safe where they are declared"
             : "attributes may not precede an import", first);
     }
-    if (target && target->kind == PACKAGE)
-        parse_error(context, "attributes may not precede a package line", first);
+    if (target && (target->kind == NAMESPACE || target->kind == PACKAGE))
+        parse_error(context, "attributes may not precede a namespace line", first);
     int outer_safe = context->control.safe_decl;
     context->control.safe_decl = is_safe;
     ASTNode *decl = parse_toplevel_decl(context, cur);
@@ -286,12 +295,22 @@ ASTNode* parse_toplevel(ParserContext *context, Token **cur) {
 
 
 static ASTNode *parse_toplevel_decl(ParserContext *context, Token **cur) {
-    if ((*cur)->kind == PACKAGE) {
+    /* `namespace foo;` names the file's namespace: the qualifier an importer
+     * writes (`foo.f()`) and the prefix of the link names it exports
+     * (`foo_f`). Several files may declare one namespace. `package` is its
+     * legacy spelling. */
+    if ((*cur)->kind == NAMESPACE || (*cur)->kind == PACKAGE) {
+        Token *line = *cur;
         *cur = (*cur)->next;
-        if (!token_is_name(*cur)) parse_error(context, "expected package name", *cur);
+        if (!token_is_name(*cur)) parse_error(context, "expected a namespace name", *cur);
+        if (context->module.namespace_declared)
+            parse_error(context, "a file declares one namespace", line);
         set_current_package(context, (*cur)->value);
+        context->module.namespace_declared = 1;
         *cur = (*cur)->next;
-        if (!expect(cur, SEMICOLON)) parse_error(context, "expected ';' after package name", *cur);
+        if ((*cur)->kind == DOT)
+            parse_error(context, "a namespace is a single name; namespaces do not nest", *cur);
+        if (!expect(cur, SEMICOLON)) parse_error(context, "expected ';' after the namespace name", *cur);
         return NULL;
     }
 
@@ -451,6 +470,7 @@ ASTNode *parse_program_syntax(ParserContext *context, Token **cur) {
         nodes[count++] = node;
     }
     resolve_imported_impls(context);
+    check_own_namespace_exports(context);
     ASTNode *program = new_block(nodes, count);
     publish_private_names_of_generics(context, program);
     return program;

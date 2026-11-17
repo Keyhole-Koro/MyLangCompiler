@@ -1,0 +1,6 @@
+// Both files export `value` in namespace `clash`, so `clash.value` could be
+// either. The error names both files.
+import clash from "../../succeed/namespace/clash_a.mln";
+import clash from "../../succeed/namespace/clash_b.mln";
+
+i32 main() { return clash.only_a(); }

@@ -8,7 +8,7 @@ A program consists of a sequence of top-level declarations and definitions.
 - `program` -> `toplevel*`
 - `toplevel` -> 
     - `attribute* ( fundef | struct_decl )` (see "Attributes and annotations")
-    - `package_decl`
+    - `namespace_decl`
     - `import_stmt`
     - `export_decl`
     - `extern_decl`
@@ -20,19 +20,49 @@ A program consists of a sequence of top-level declarations and definitions.
     - `trait_decl`, `impl_decl` (see [Traits](traits.md))
 
 ## 2. Modules and Imports
-MyLang uses a package-based module system.
+A source file may declare the namespace its exports belong to.
 
-- `package_decl` -> `package IDENTIFIER ;`
+- `namespace_decl` -> `namespace IDENTIFIER ;`
+  (`package IDENTIFIER ;` is the legacy spelling and means the same)
 - `import_stmt` -> 
-    - `import IDENTIFIER ;` (Import entire package)
-    - `import IDENTIFIER from STRING_LITERAL ;` (Import specific symbol from a file)
+    - `import IDENTIFIER ;` (Import a namespace by name, without a path)
+    - `import IDENTIFIER from STRING_LITERAL ;` (Import a file's namespace, or one symbol of it)
     - `import { IDENTIFIER ( , IDENTIFIER )* } from STRING_LITERAL ;` (Import multiple symbols)
 
-`import X from "f.mln";` imports the package when `f.mln` declares
-`package X;`, and otherwise the symbol `X` that `f.mln` declares. A package
-cannot be imported under another name: a name that is neither the package nor
-a declared symbol is an error that suggests the package's own name. Every name
+A namespace is one name: namespaces do not nest (`namespace os.ui;` is an
+error), and a file declares at most one. The namespace is the qualifier an
+importer writes and the prefix of the link names the file exports:
+`export i32 select()` in a file of `namespace dom;` is called as `dom.select()`
+and links as `dom_select`. A file without a namespace exports plain names.
+Privacy is per file: what a file does not export, no other file can name, even
+one of the same namespace.
+
+Several files may declare the same namespace and be linked into one program.
+Their exports share the namespace's prefix, so two of them exporting the same
+name are defined twice at link time. Names they do not export never meet: a
+private function is written as `.shared` and a private global is a label of its
+own object, so each file may have its own `helper`.
+
+`import X from "f.mln";` imports the namespace when `f.mln` declares
+`namespace X;`, and otherwise the symbol `X` that `f.mln` declares. A namespace
+cannot be imported under another name: a name that is neither the namespace nor
+a declared symbol is an error that suggests the namespace's own name. Every name
 in `import { ... }` must likewise be declared by the imported file.
+
+Importing several files of one namespace under its name merges them:
+
+```mln
+import dom from "dom.mln";       // namespace dom; exports create
+import dom from "dom_list.mln";  // namespace dom; exports list_select
+
+i32 main() { return dom.create() + dom.list_select(0); }
+```
+
+`dom.a` is whichever of the files exports `a` -- a function, a global or a
+generic function. When two of them both export `a`, the import of the second
+is an error that names both files. A file of the namespace that imports another
+file of it may likewise not export a name that file exports. Importing one file
+twice is harmless.
 - `export_decl` -> `export ( fundef | var_decl | typedef_stmt | struct_decl | enum_decl )`
 - `extern_decl` -> `extern ( fundef | var_decl )`
 
@@ -243,7 +273,7 @@ A value receiver is a move and is rejected.
 `@safe` and `@noreturn` belong to the language: they are not annotations and
 emit no row.
 
-No attribute may precede an `import` or `package` line. `@safe` vouches for
+No attribute may precede an `import` or `namespace` line. `@safe` vouches for
 the one declaration after it, so the functions of an imported `.unsafe.mln`
 module are marked `@safe` where they are declared.
 

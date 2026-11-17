@@ -1,0 +1,5 @@
+// A file declares one namespace.
+namespace first;
+namespace second;
+
+i32 main() { return 0; }

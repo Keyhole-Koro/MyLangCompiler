@@ -1,0 +1,14 @@
+package shared;
+
+// `package` is the legacy spelling of `namespace`: this file joins the
+// namespace of shared_core.mln. It imports that file under the namespace's own
+// name and calls into it like any importer.
+import shared from "shared_core.mln";
+
+i32 helper() { return 2; }
+i32 count = 7;
+
+export i32 list_select(i32 x) {
+    fn() -> i32 f = helper;
+    return x + f() + count + shared.create();
+}

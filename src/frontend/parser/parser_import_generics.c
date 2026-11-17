@@ -348,25 +348,41 @@ void load_imported_generic_templates(ParserContext *context, ASTNode *import_nod
     }
 }
 
-/* `pkg.name<T>()`: a package import names nothing, so the template comes at its
- * first call. Taking a package's templates at the import would count every
- * method they call as called here, and each instance would emit those methods. */
+static int load_generic_function_of(ParserContext *context, Module *module, const char *name) {
+    for (int i = 0; module && i < module->generic_template_count; i++) {
+        ASTNode *template = module->generic_templates[i];
+        const char *candidate = template_name(template);
+        if (template->type != AST_FUNDEF || !template_is_exported(template) ||
+            !candidate || strcmp(candidate, name) != 0) continue;
+        GenericImportClosure closure = {context, module};
+        import_generic_template_closure(&closure, template);
+        return 1;
+    }
+    return 0;
+}
+
+/* `pkg.name<T>()`: a namespace import names nothing, so the template comes at
+ * its first call. Taking a namespace's templates at the import would count
+ * every method they call as called here, and each instance would emit those
+ * methods. The files imported under `pkg` are asked first, as several files
+ * may share a namespace; a path-less `import pkg;` has none, and any loaded
+ * file of the namespace answers. */
 int load_package_generic_function(ParserContext *context, const char *package, const char *name) {
     if (find_generic_function_template(context, name)) return 1;
+    int imported_by_path = 0;
+    for (int i = 0; i < context->module.namespace_import_count; i++) {
+        NamespaceImport *import = &context->module.namespace_imports[i];
+        if (strcmp(import->binding, package) != 0) continue;
+        imported_by_path = 1;
+        if (load_generic_function_of(context, import->module, name)) return 1;
+    }
+    if (imported_by_path) return 0;
     FrontendSession *session = context->session;
     if (!session || !session->graph) return 0;
     for (int m = 0; m < session->graph->module_count; m++) {
         Module *module = session->graph->modules[m];
         if (!module || !module->package_name || strcmp(module->package_name, package) != 0) continue;
-        for (int i = 0; i < module->generic_template_count; i++) {
-            ASTNode *template = module->generic_templates[i];
-            const char *candidate = template_name(template);
-            if (template->type != AST_FUNDEF || !template_is_exported(template) ||
-                !candidate || strcmp(candidate, name) != 0) continue;
-            GenericImportClosure closure = {context, module};
-            import_generic_template_closure(&closure, template);
-            return 1;
-        }
+        if (load_generic_function_of(context, module, name)) return 1;
     }
     return 0;
 }

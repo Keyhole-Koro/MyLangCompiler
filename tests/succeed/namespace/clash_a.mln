@@ -1,0 +1,6 @@
+namespace clash;
+
+// clash_a.mln and clash_b.mln both export `value` in namespace `clash`. Either
+// compiles alone; fail/namespace/ambiguousImport_fail.mln imports both.
+export i32 value() { return 1; }
+export i32 only_a() { return 2; }

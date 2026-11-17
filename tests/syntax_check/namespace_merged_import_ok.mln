@@ -1,0 +1,6 @@
+namespace dom;
+
+import dom from "dom_list.mln";
+import dom from "dom_render.mln";
+
+export i32 select(i32 index) { return dom.list_select(index) + dom.render(); }

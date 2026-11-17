@@ -29,6 +29,7 @@ error|syntax_check/missing_initializer_expression.mln|Expected expression before
 error|syntax_check/missing_if_condition.mln|Expected expression before ')'.
 error|syntax_check/ternary_without_else.mln|Expected expression before ';'.
 error|syntax_check/case_key_syntax_error.mln|Expected expression before '->'.
+error|syntax_check/namespace_nested.mln|Expected: ;
 error|token/tokens_present_on_error.mln|
 
 # Parked examples, not cases from the retired Python matrix: the compiler

@@ -109,6 +109,7 @@ static const char *expected_label(const char *token) {
         {"IMPORT", "import"},
         {"EXPORT", "export"},
         {"PACKAGE", "package"},
+        {"NAMESPACE", "namespace"},
         {"FROM", "from"},
         {"REST", "rest"},
         {"EQ", "=="},

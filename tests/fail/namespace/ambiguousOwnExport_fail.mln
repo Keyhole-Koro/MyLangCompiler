@@ -1,0 +1,7 @@
+// A file of namespace `clash` that imports another file of it shares the
+// names that file exports. Both export `value`.
+namespace clash;
+
+import clash from "../../succeed/namespace/clash_b.mln";
+
+export i32 value() { return 4; }

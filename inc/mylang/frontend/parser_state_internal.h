@@ -129,13 +129,30 @@ typedef struct ParserSymbolState {
     int pending_impl_count;
 } ParserSymbolState;
 
+/* `import ns from "f.mln";` where f.mln declares `namespace ns;`. Several
+ * files may declare one namespace, and an importer that takes more than one of
+ * them under the same name sees them as one: `ns.a` is whichever file exports
+ * `a`. */
+typedef struct NamespaceImport {
+    char *binding;         /* owned */
+    char *path;            /* owned: the path as the import spells it */
+    struct Module *module; /* borrowed from the session's module graph */
+    Token *at;             /* borrowed: the import, while the file is parsed */
+} NamespaceImport;
+
 typedef struct ParserModuleState {
+    /* The file's namespace (`namespace foo;`, or the legacy `package foo;`),
+     * or g_default_package when it declares none. */
     char *current_package;
     int current_package_heap;
+    /* The namespace line has been read; a file declares one. */
+    int namespace_declared;
     ExportEntry *exports;
     int export_count;
     char **imported_packages;
     int imported_package_count;
+    NamespaceImport *namespace_imports;
+    int namespace_import_count;
     const char *filename;
 } ParserModuleState;
 
@@ -219,6 +236,9 @@ void parser_set_filename(const char *name);
 void add_export(ParserContext *context, const char *orig, const char *mangled);
 const char *find_export_mangled(ParserContext *context, const char *orig);
 int is_imported_package(ParserContext *context, const char *name);
+void add_namespace_import(ParserContext *context, const char *binding, const char *path,
+                          struct Module *module, Token *at);
+void check_own_namespace_exports(ParserContext *context);
 char *mangle(const char *pkg, const char *name);
 
 #endif

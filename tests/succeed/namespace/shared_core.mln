@@ -1,0 +1,13 @@
+namespace shared;
+
+// One of two files of namespace `shared` (shared_list.mln is the other). Each
+// has a private `helper` and a private `count`: they belong to their own file,
+// and the two files link into one program.
+i32 helper() { return 1; }
+i32 count = 5;
+
+export i32 LIMIT = 40;
+
+export i32 create() { return helper() + count; }
+
+export T second<T>(T a, T b) { return b; }
