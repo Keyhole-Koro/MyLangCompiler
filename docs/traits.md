@@ -247,8 +247,8 @@ compatibility, with warning W0002; new code writes `impl Drop`.
 
 - dynamic dispatch (`dyn Trait`). It was implemented and removed again
   (2026-10-12): every use so far was served as well by passing what the
-  trait computes (`e.describe()`) or by a function pointer. Its design is in
-  MyComputer's `issues/completed/MLC-021_traits-and-try-conversion.md`.
+  trait computes (`e.describe()`) or by a function pointer. Its design was in
+  MyComputer's MLC-021 ticket, which is now only in that repository's history.
 - associated types
 - `a[i]` for user types (an `Index` trait). Without a panic, an index out of
   range could only be ignored; checked lookups return an Option instead

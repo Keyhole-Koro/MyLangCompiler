@@ -4,7 +4,7 @@ typedef struct {
 } Box;
 
 /* A drop() makes Box an owned value, which moves instead of copying
- * (rule V2 of docs/design/mylang-memory-model.md). */
+ * (rule V2 of docs/design/mylang-values.md). */
 impl Drop for Box { void (borrow Self self) drop() { } }
 
 i32 main() {
