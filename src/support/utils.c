@@ -94,16 +94,17 @@ static void ensure_parent_dir(const char *file_path) {
     mkdir_p(tmp);
 }
 
-void saveOutput(const char *filePath, const char *content) {
+int saveOutput(const char *filePath, const char *content) {
     ensure_parent_dir(filePath);
 
     FILE *f = fopen(filePath, "wb");
     if (!f) {
         perror("Failed to open output file");
-        return;
+        return 0;
     }
-    if (content) {
-        fputs(content, f);
-    }
-    fclose(f);
+    int ok = !content || fputs(content, f) != EOF;
+    // A full disk often shows only when the buffer is flushed on close.
+    if (fclose(f) != 0) ok = 0;
+    if (!ok) perror("Failed to write output file");
+    return ok;
 }
