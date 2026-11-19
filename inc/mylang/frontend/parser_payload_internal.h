@@ -69,10 +69,8 @@ ASTNode *find_local_type(ASTNode *node, const char *name);
 /* parser_payload_case.c */
 void rewrite_payload_case(VariantTable *table, ASTNode *node);
 VariantTag *case_result_variant(VariantTable *table, ASTNode *node);
-int is_aggregate_type(VariantTable *table, ASTNode *type);
 void lower_case_result_into(VariantTable *table, ASTNode *node, ASTNode *dest,
                             ASTNode *expected_type, const char *expected_enum);
-int assigned_aggregate(VariantTable *table, ASTNode *lhs);
 
 /* parser_payload_try.c */
 ASTNode *try_source_type(VariantTable *table, ASTNode *target);

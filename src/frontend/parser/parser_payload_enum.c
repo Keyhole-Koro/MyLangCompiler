@@ -531,11 +531,12 @@ static void rewrite_payload_block(VariantTable *table, ASTNode *block) {
         /* A carrying constructor may be the direct result of a case arm.  The
          * case itself needs the same concrete destination as a direct
          * constructor, so recognize these sites before the ordinary
-         * construction cases below. */
+         * construction cases below. A case whose arms are values already
+         * goes to codegen, which has each arm store a struct into its place
+         * (gen_selection_into). */
         if (stmt && stmt->type == AST_VAR_DECL &&
             stmt->var_decl.init && stmt->var_decl.init->type == AST_CASE &&
-            (case_result_variant(table, stmt->var_decl.init) ||
-             is_aggregate_type(table, stmt->var_decl.var_type))) {
+            case_result_variant(table, stmt->var_decl.init)) {
             case_value = stmt->var_decl.init;
             stmt->var_decl.init = NULL;
             dest = new_identifier(stmt->var_decl.name);
@@ -544,15 +545,13 @@ static void rewrite_payload_block(VariantTable *table, ASTNode *block) {
                    stmt->expr_stmt.expr->type == AST_ASSIGN &&
                    stmt->expr_stmt.expr->assign.right &&
                    stmt->expr_stmt.expr->assign.right->type == AST_CASE &&
-                   (case_result_variant(table, stmt->expr_stmt.expr->assign.right) ||
-                    assigned_aggregate(table, stmt->expr_stmt.expr->assign.left))) {
+                   case_result_variant(table, stmt->expr_stmt.expr->assign.right)) {
             case_value = stmt->expr_stmt.expr->assign.right;
             stmt->expr_stmt.expr->assign.right = NULL;
             dest = ast_clone(stmt->expr_stmt.expr->assign.left);
         } else if (stmt && stmt->type == AST_RETURN && stmt->ret.expr &&
                    stmt->ret.expr->type == AST_CASE && table->current_return_type &&
-                   (case_result_variant(table, stmt->ret.expr) ||
-                    is_aggregate_type(table, table->current_return_type))) {
+                   case_result_variant(table, stmt->ret.expr)) {
             is_return = 1;
             case_value = stmt->ret.expr;
             stmt->ret.expr = NULL;

@@ -343,12 +343,6 @@ static void emit_zero_local(CompilerContext *cc, ASTNode *decl, StringBuilder *s
     sb_append(sb, "  jnz b_L_zero_%d\n", label);
 }
 
-static ASTNode *assigning_arm_to(const char *name, ASTNode *arm) {
-    ASTNode dest = { .type = AST_IDENTIFIER };
-    dest.identifier.name = (char *)name;
-    return assigning_arm(&dest, arm);
-}
-
 static ASTNode *returning_arm(ASTNode *arm);
 
 static ASTNode *return_yielded(const void *unused, ASTNode *value) {
@@ -448,28 +442,13 @@ static void gen_stmt_labeled(CompilerContext *cc, ASTNode *node, StringBuilder *
                 emit_addr_of_var(cc, sb, node->var_decl.name, "r1", params, param_count, locals, local_count);
                 sb_append(sb, "  push r1\n");
                 gen_call_sret(cc, node->var_decl.init, sb, params, param_count, locals, local_count);
-            } else if (aggregate_type_size(cc, vtype) > SLOT_SIZE &&
-                       node->var_decl.init->type == AST_TERNARY) {
-                /* `T y = c ? a : b;`: each side assigns y, as a case's arms
-                 * do. A struct does not fit the register a ternary yields. */
-                ASTNode *choice = node->var_decl.init;
-                choice->ternary.then_expr = assigning_arm_to(node->var_decl.name, choice->ternary.then_expr);
-                choice->ternary.else_expr = assigning_arm_to(node->var_decl.name, choice->ternary.else_expr);
-                gen_expr(cc, choice, sb, "r1", params, param_count, locals, local_count);
-            } else if (aggregate_type_size(cc, vtype) > SLOT_SIZE &&
-                       node->var_decl.init->type == AST_CASE) {
-                /* `T y = case x of { a -> e; ... };`: each arm assigns y, so
-                 * no arm's value has to pass through a register. */
-                ASTNode *selection = node->var_decl.init;
-                for (int i = 0; i < selection->case_expr.case_count; i++) {
-                    if (!selection->case_expr.cases[i].is_noop)
-                        selection->case_expr.cases[i].expr =
-                            assigning_arm_to(node->var_decl.name, selection->case_expr.cases[i].expr);
-                }
-                if (selection->case_expr.default_expr)
-                    selection->case_expr.default_expr =
-                        assigning_arm_to(node->var_decl.name, selection->case_expr.default_expr);
-                gen_expr(cc, selection, sb, "r1", params, param_count, locals, local_count);
+            } else if (aggregate_type_size(cc, vtype) > 0 && is_selection(node->var_decl.init)) {
+                /* `T y = case x of { ... };` or `T y = c ? a : b;`: each arm
+                 * assigns y, as an assignment's do. */
+                ASTNode dest = { .type = AST_IDENTIFIER };
+                dest.identifier.name = node->var_decl.name;
+                gen_selection_into(cc, &dest, node->var_decl.init, sb,
+                                   params, param_count, locals, local_count);
             } else if (aggregate_type_size(cc, vtype) > 0 &&
                        is_addressable_expr(node->var_decl.init)) {
                 /* Every size goes through memory: evaluating an array yields
@@ -542,27 +521,12 @@ static void gen_stmt_labeled(CompilerContext *cc, ASTNode *node, StringBuilder *
     case AST_RETURN:
         // A bare `return;` has no expression; only evaluate one when present.
         if (node->ret.expr && cc->sret_active) {
-            if (node->ret.expr->type == AST_TERNARY) {
-                /* `return c ? a : b;` of an aggregate: each side returns. */
-                ASTNode *choice = node->ret.expr;
-                choice->ternary.then_expr = returning_arm(choice->ternary.then_expr);
-                choice->ternary.else_expr = returning_arm(choice->ternary.else_expr);
-                gen_expr(cc, choice, sb, "r1", params, param_count, locals, local_count);
-                break;
-            }
-            if (node->ret.expr->type == AST_CASE) {
-                /* `return case x of { a -> e; ... };` of an aggregate: each
-                 * arm returns its own value through the hidden pointer, so
-                 * no arm's value has to pass through a register. */
-                ASTNode *selection = node->ret.expr;
-                for (int i = 0; i < selection->case_expr.case_count; i++) {
-                    if (!selection->case_expr.cases[i].is_noop)
-                        selection->case_expr.cases[i].expr =
-                            returning_arm(selection->case_expr.cases[i].expr);
-                }
-                if (selection->case_expr.default_expr)
-                    selection->case_expr.default_expr = returning_arm(selection->case_expr.default_expr);
-                gen_expr(cc, selection, sb, "r1", params, param_count, locals, local_count);
+            if (is_selection(node->ret.expr)) {
+                /* `return case x of { ... };` or `return c ? a : b;` of an
+                 * aggregate: each arm returns its own value through the
+                 * hidden pointer, so none has to pass through a register. */
+                map_selection_arms(node->ret.expr, return_yielded, NULL);
+                gen_expr(cc, node->ret.expr, sb, "r1", params, param_count, locals, local_count);
                 break;
             }
             if (node->ret.expr->type == AST_STRING_LITERAL &&

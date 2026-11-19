@@ -113,11 +113,43 @@ void map_stmt_expr_yields(ASTNode *stmt_expr, ASTNode *(*map)(const void *data, 
     ast_visit_children(stmt_expr, map_yields, &yields);
 }
 
+static ASTNode *assigning_arm(const ASTNode *dest, ASTNode *arm);
+
 static ASTNode *assign_yielded(const void *dest, ASTNode *value) {
     return assigning_arm(dest, value);
 }
 
-ASTNode *assigning_arm(const ASTNode *dest, ASTNode *arm) {
+int is_selection(const ASTNode *expr) {
+    return expr && (expr->type == AST_TERNARY || expr->type == AST_CASE);
+}
+
+void map_selection_arms(ASTNode *selection, ASTNode *(*map)(const void *data, ASTNode *arm),
+                        const void *data) {
+    if (selection->type == AST_TERNARY) {
+        selection->ternary.then_expr = map(data, selection->ternary.then_expr);
+        selection->ternary.else_expr = map(data, selection->ternary.else_expr);
+        return;
+    }
+    for (int i = 0; i < selection->case_expr.case_count; i++) {
+        CaseItem *arm = &selection->case_expr.cases[i];
+        if (!arm->is_noop) arm->expr = map(data, arm->expr);
+    }
+    if (selection->case_expr.default_expr)
+        selection->case_expr.default_expr = map(data, selection->case_expr.default_expr);
+}
+
+void gen_selection_into(CompilerContext *cc, const ASTNode *dest, ASTNode *selection,
+                        StringBuilder *sb, char **params, int param_count,
+                        char **locals, int local_count) {
+    map_selection_arms(selection, assign_yielded, dest);
+    gen_expr(cc, selection, sb, "r1", params, param_count, locals, local_count);
+}
+
+/* An arm of a case or conditional whose value belongs in `dest`, made to
+ * assign it there: `({ dest = arm; })`, or a statement expression's yields
+ * made to. `dest` is cloned for each use. The selection then yields nothing
+ * anyone reads, so an aggregate never passes through its register. */
+static ASTNode *assigning_arm(const ASTNode *dest, ASTNode *arm) {
     if (!arm) return arm;
     if (arm->type == AST_STMT_EXPR) {
         /* `({ ...; yield v; })` assigns v where it yields it. An arm that
@@ -149,28 +181,10 @@ void gen_assign(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
         fprintf(stderr, "Codegen error: assignment to const lvalue is not allowed\n");
         exit(1);
     }
-    if ((node->assign.right->type == AST_TERNARY || node->assign.right->type == AST_CASE) &&
-        aggregate_assign_size(cc, node->assign.left) > 0) {
-        /* `x = c ? a : b;` or `x = case k of { ... };` of a struct, a str or
-         * an array: each arm assigns x, so no arm's value has to pass through
-         * the one register a selection yields. Only one arm runs, so x is
-         * evaluated once. The frontend already did this for a local of a
-         * struct type the file declares (lower_case_result_into); this covers
-         * the rest: str, globals, fields and elements. */
-        ASTNode *selection = node->assign.right;
-        if (selection->type == AST_TERNARY) {
-            selection->ternary.then_expr = assigning_arm(node->assign.left, selection->ternary.then_expr);
-            selection->ternary.else_expr = assigning_arm(node->assign.left, selection->ternary.else_expr);
-        } else {
-            for (int i = 0; i < selection->case_expr.case_count; i++) {
-                CaseItem *arm = &selection->case_expr.cases[i];
-                if (!arm->is_noop) arm->expr = assigning_arm(node->assign.left, arm->expr);
-            }
-            if (selection->case_expr.default_expr)
-                selection->case_expr.default_expr =
-                    assigning_arm(node->assign.left, selection->case_expr.default_expr);
-        }
-        gen_expr(cc, selection, sb, "r1", params, param_count, locals, local_count);
+    if (is_selection(node->assign.right) && aggregate_assign_size(cc, node->assign.left) > 0) {
+        /* Only one arm runs, so x is evaluated once. */
+        gen_selection_into(cc, node->assign.left, node->assign.right, sb,
+                           params, param_count, locals, local_count);
         if (target_reg)
             gen_lvalue_addr(cc, node->assign.left, sb, target_reg, params, param_count, locals, local_count);
         return;

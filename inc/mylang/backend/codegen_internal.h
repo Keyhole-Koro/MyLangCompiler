@@ -326,15 +326,22 @@ int emit_stack_args(CompilerContext *cc, ASTNode *node, const FunctionSig *sig,
 void emit_reg_args(CompilerContext *cc, ASTNode *node, const FunctionSig *sig, int fixed_count,
                    StringBuilder *sb, char **params, int param_count, char **locals, int local_count);
 void gen_assign(CompilerContext *cc, ASTNode *node, StringBuilder *sb, char **params, int param_count, char **locals, int local_count, const char *target_reg);
-/* An arm of a case or conditional whose value belongs in `dest`, made to
- * assign it there: `({ dest = arm; })`, or a statement expression's yields
- * made to. `dest` is cloned for each use. The selection then yields nothing
- * anyone reads, so an aggregate never passes through its register. */
-ASTNode *assigning_arm(const ASTNode *dest, ASTNode *arm);
 /* Replaces the value of each `yield` that belongs to `stmt_expr` (not to a
  * statement expression nested in it) with map(data, value). */
 void map_stmt_expr_yields(ASTNode *stmt_expr, ASTNode *(*map)(const void *data, ASTNode *value),
                           const void *data);
+/* Whether `expr` is a case or a conditional: an expression that selects an arm. */
+int is_selection(const ASTNode *expr);
+/* Replaces each arm of a case or a conditional with map(data, arm). A no-op
+ * arm has no value and stays. */
+void map_selection_arms(ASTNode *selection, ASTNode *(*map)(const void *data, ASTNode *arm),
+                        const void *data);
+/* `dest = selection;` of a struct, a str or an array, for an assignment and a
+ * declaration alike: each arm assigns dest, so no arm's value has to pass
+ * through the one register a selection yields. */
+void gen_selection_into(CompilerContext *cc, const ASTNode *dest, ASTNode *selection,
+                        StringBuilder *sb, char **params, int param_count,
+                        char **locals, int local_count);
 void gen_struct_literal_into_addr(CompilerContext *cc, ASTNode *literal,
                                   StringBuilder *sb, const char *dest_addr_reg,
                                   char **params, int param_count,

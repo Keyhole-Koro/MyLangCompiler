@@ -326,28 +326,6 @@ VariantTag *case_result_variant(VariantTable *table, ASTNode *node) {
     return case_result_variant(table, node->case_expr.default_expr);
 }
 
-/* A struct, or a payload enum (still an AST_ENUM until this pass finishes),
- * held by value: a case producing one must store into its destination, since
- * an arm's value is otherwise carried as a single word. */
-int is_aggregate_type(VariantTable *table, ASTNode *type) {
-    const char *name = type_base_name(type);
-    if (!name || type->type_node.pointer_level || type->type_node.borrow_kind != BORROWKIND_NONE) return 0;
-    for (int i = 0; i < table->program->block.count; i++) {
-        ASTNode *node = table->program->block.stmts[i];
-        if (!node) continue;
-        if (node->type == AST_STRUCT && node->struct_stmt.name &&
-            strcmp(node->struct_stmt.name, name) == 0)
-            return 1;
-        if (node->type == AST_TYPEDEF_STRUCT && node->typedef_struct.typedef_name &&
-            strcmp(node->typedef_struct.typedef_name, name) == 0)
-            return 1;
-        if (node->type == AST_ENUM && node->enum_stmt.has_payloads && node->enum_stmt.name &&
-            strcmp(node->enum_stmt.name, name) == 0)
-            return 1;
-    }
-    return 0;
-}
-
 /* `({ ...; return x; })`, `({ break; })`: an arm that leaves instead of
  * producing a value has nothing to store. */
 static int arm_diverges(ASTNode *expr) {
@@ -434,15 +412,4 @@ void lower_case_result_into(VariantTable *table, ASTNode *node, ASTNode *dest,
             node->case_expr.default_expr = case_result_store(dest, expr);
         }
     }
-}
-
-/* `x = case ...;` where x is a local or parameter of aggregate type. */
-int assigned_aggregate(VariantTable *table, ASTNode *lhs) {
-    if (!lhs || lhs->type != AST_IDENTIFIER || !table->current_function) return 0;
-    ASTNode *fn = table->current_function;
-    ASTNode *type = NULL;
-    for (int i = 0; i < fn->fundef.param_count && !type; i++)
-        type = find_local_type(fn->fundef.params[i], lhs->identifier.name);
-    if (!type) type = find_local_type(fn->fundef.body, lhs->identifier.name);
-    return type && is_aggregate_type(table, type);
 }
