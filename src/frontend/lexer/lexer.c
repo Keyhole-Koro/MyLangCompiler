@@ -325,8 +325,12 @@ int isCharLiteral(char *ptr, char *buffer) {
     char c;
     int consumed = 1;
 
+    // A source ending in ' or '\ has no character left: stop at the NUL
+    // instead of stepping over it and reading past the input.
+    if (*ptr == '\0') return 0;
     if (*ptr == '\\') {
         ptr++; consumed++;
+        if (*ptr == '\0') return 0;
         switch (*ptr) {
             case 'n': c = '\n'; break;
             case 't': c = '\t'; break;
