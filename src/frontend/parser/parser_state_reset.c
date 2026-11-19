@@ -139,6 +139,14 @@ void parser_context_reset(ParserContext *context) {
         context->module.export_count = 0;
     }
 
+    for (int i = 0; i < context->module.import_rename_count; i++) {
+        free(context->module.import_renames[i].orig);
+        free(context->module.import_renames[i].mangled);
+    }
+    free(context->module.import_renames);
+    context->module.import_renames = NULL;
+    context->module.import_rename_count = 0;
+
     if (context->module.imported_packages) {
         for (int i = 0; i < context->module.imported_package_count; i++) {
             free(context->module.imported_packages[i]);

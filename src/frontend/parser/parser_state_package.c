@@ -23,6 +23,23 @@ const char *find_export_mangled(ParserContext *context, const char *orig) {
     return NULL;
 }
 
+void add_import_rename(ParserContext *context, const char *orig, const char *link_name) {
+    if (find_import_rename(context, orig)) return;
+    context->module.import_renames = realloc(context->module.import_renames,
+        sizeof(ExportEntry) * (context->module.import_rename_count + 1));
+    ExportEntry *entry = &context->module.import_renames[context->module.import_rename_count++];
+    entry->orig = strdup(orig);
+    entry->mangled = strdup(link_name);
+}
+
+const char *find_import_rename(ParserContext *context, const char *orig) {
+    for (int i = 0; i < context->module.import_rename_count; i++) {
+        if (strcmp(context->module.import_renames[i].orig, orig) == 0)
+            return context->module.import_renames[i].mangled;
+    }
+    return NULL;
+}
+
 int is_imported_package(ParserContext *context, const char *name) {
     for (int i = 0; i < context->module.imported_package_count; i++) {
         if (strcmp(context->module.imported_packages[i], name) == 0) return 1;

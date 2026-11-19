@@ -75,6 +75,20 @@ static void check_imported_names(ParserContext *context, Module *module, const c
     }
 }
 
+/* A function or global a file exports links by its link name, `ns_name`
+ * (`main_name` in a file without a namespace). `import { name }` lets this
+ * file write `name`, which the rewrite pass turns into the link name, as
+ * `ns.name` is turned into it while parsing. */
+static void note_import_renames(ParserContext *context, Module *module, char **symbols, int count) {
+    for (int i = 0; i < count; i++) {
+        ModuleSymbol *symbol = module_find_exported_symbol(module, symbols[i]);
+        if (!symbol || (symbol->kind != SYMBOL_FUNCTION && symbol->kind != SYMBOL_GLOBAL) ||
+            !symbol->link_name || strcmp(symbol->link_name, symbols[i]) == 0)
+            continue;
+        add_import_rename(context, symbols[i], symbol->link_name);
+    }
+}
+
 static ASTNode *make_import_node_with_templates(ParserContext *context, char *path,
                                                 char **symbols, int count, Token *at) {
     ASTNode *node = new_import_stmt(path, symbols, count);
@@ -90,7 +104,10 @@ static ASTNode *make_import_node_with_templates(ParserContext *context, char *pa
     }
     /* A module still loading is part of an import cycle; its symbols are not
      * collected yet. */
-    if (module->state == MODULE_LOADED) check_imported_names(context, module, path, symbols, count, at);
+    if (module->state == MODULE_LOADED) {
+        check_imported_names(context, module, path, symbols, count, at);
+        note_import_renames(context, module, symbols, count);
+    }
     /* Traits first: they take their own names out of the import list, and
      * an `@alias/...` import marks every listed name foreign before the type
      * loaders below remove the names they handle. */

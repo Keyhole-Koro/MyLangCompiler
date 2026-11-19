@@ -1,0 +1,7 @@
+// A const taken by name stays read-only.
+import { STEP } from "../../succeed/package/namedExports_lib.mln";
+
+i32 main() {
+    STEP = 4;
+    return STEP;
+}

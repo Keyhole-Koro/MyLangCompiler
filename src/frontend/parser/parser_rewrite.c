@@ -1,7 +1,9 @@
 #include "mylang/frontend/parser_rewrite_internal.h"
 
 /* Rewrites parsed AST names into their exported/mangled form while preserving
- * local scope bindings so later semantic/codegen passes see canonical names. */
+ * local scope bindings so later semantic/codegen passes see canonical names:
+ * the file's own exports, and the exported functions and globals an
+ * `import { name }` takes from another file. */
 
 typedef struct {
     ParserContext *context;
@@ -16,7 +18,9 @@ static void rewrite_child(ASTNode **slot, void *data) {
 
 static const char *exported_name(ParserContext *context, char **scope, int scope_count,
                                  const char *name) {
-    return rewrite_scope_contains(scope, scope_count, name) ? NULL : find_export_mangled(context, name);
+    if (rewrite_scope_contains(scope, scope_count, name)) return NULL;
+    const char *own = find_export_mangled(context, name);
+    return own ? own : find_import_rename(context, name);
 }
 
 void rewrite_node(ParserContext *context, ASTNode *node, char **scope, int scope_count) {

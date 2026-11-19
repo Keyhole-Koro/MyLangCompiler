@@ -1,0 +1,9 @@
+namespace named;
+
+// Exports that importer files take by name: `import { base } from ...` lets
+// them write `base`, which links as `named_base`.
+export i32 base = 10;
+export const i32 STEP = 3;
+export i32 add(i32 x, i32 y = 5) { return x + y; }
+export i32 apply(fn(i32) -> i32 f, i32 v) { return f(v); }
+export i32 inc(i32 x) { return x + 1; }

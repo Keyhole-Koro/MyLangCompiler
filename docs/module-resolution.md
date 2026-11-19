@@ -141,10 +141,15 @@ part of the design.
 - An exported method travels with its exported receiver type; importing the
   type provides the method prototype needed for resolution.
 - An exported global travels with its declared scalar/array type and type
-  modifiers. Package imports expose its link name (`pkg_VALUE` internally),
-  while symbol imports expose the requested source name. `const` remains
-  read-only in the importing translation unit and byte-width globals retain
-  their load width.
+  modifiers. Its uses carry its link name (`pkg_VALUE` internally) under either
+  import form. `const` remains read-only in the importing translation unit and
+  byte-width globals retain their load width.
+- A symbol import of an exported function or global lets the file write the
+  source name: the parser records the pair (`import_renames`) and the rewrite
+  pass that gives the file's own exports their link names renames these uses
+  too, outside the scopes that declare the name themselves. Semantic analysis,
+  default arguments and codegen then see the link name, as for `pkg.name`. A
+  name a module still loading (an import cycle) exports is not renamed.
 - Non-exported declarations and generic templates remain invisible to
   importers. Importing a private function or global of a namespace by name is
   an error; a file that declares no namespace links by plain names. Privacy is

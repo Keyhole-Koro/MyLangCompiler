@@ -1,0 +1,5 @@
+// No namespace: exports link as `main_<name>`, and a function that is not
+// exported links by its plain name.
+export i32 plain(i32 x) { return x + 100; }
+export i32 plain_global = 7;
+i32 shared_fn(i32 x) { return x + 1000; }

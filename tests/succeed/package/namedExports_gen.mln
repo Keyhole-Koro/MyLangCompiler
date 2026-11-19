@@ -1,0 +1,9 @@
+namespace pickers;
+import { add, base } from "namedExports_lib.mln";
+
+// The body is compiled where the importer instantiates it, so its uses of
+// what it imports by name must already carry the link names.
+export T pick<T>(T a, T b) {
+    if (add(base, 0) > 5) { return a; }
+    return b;
+}

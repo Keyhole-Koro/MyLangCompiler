@@ -387,10 +387,11 @@ void lower_annotations(ParserContext *context, ASTNode *program) {
 
 // --- default arguments ------------------------------------------------------------
 
-/* The declaration a call by (post-rewrite) name resolves to: a function in
- * this file, else an exported function of an imported module -- reached as
- * `pkg_name` through a package import or by bare name through a symbol-list
- * import. NULL when unknown (an indirect call through a variable, say). */
+/* The declaration a call by name resolves to: a function in this file, else
+ * an exported function of an imported module -- reached by its link name
+ * (`pkg_name`) through a package import, and through a symbol-list import by
+ * its own name until the rewrite pass turns that into the link name too.
+ * NULL when unknown (an indirect call through a variable, say). */
 ASTNode *callee_declaration(ParserContext *context, ASTNode *program, const char *name) {
     ASTNode *local = find_function(context, name);
     if (local && local->type == AST_FUNDEF) return local;
@@ -404,13 +405,9 @@ ASTNode *callee_declaration(ParserContext *context, ASTNode *program, const char
         Module *mod = module_loader_load(session->loader, context->module.filename, node->import_stmt.path);
         if (!mod || mod->state != MODULE_LOADED) continue;
 
-        const char *bare = name;
-        if (node->import_stmt.symbol_count == 0 && mod->package_name) {
-            size_t plen = strlen(mod->package_name);
-            if (strncmp(name, mod->package_name, plen) != 0 || name[plen] != '_') continue;
-            bare = name + plen + 1;
-        }
-        ModuleSymbol *sym = resolver_lookup_import_symbol(node, mod, bare);
+        ModuleSymbol *sym = resolver_lookup_import_link_name(node, mod, name);
+        if (!sym && node->import_stmt.symbol_count != 0)
+            sym = resolver_lookup_import_symbol(node, mod, name);
         if (sym && sym->kind == SYMBOL_FUNCTION && sym->declaration &&
             sym->declaration->type == AST_FUNDEF) {
             return sym->declaration;

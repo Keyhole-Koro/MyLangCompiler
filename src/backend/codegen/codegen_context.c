@@ -1,4 +1,6 @@
 #include "mylang/backend/codegen_internal.h"
+#include "mylang/frontend/module.h"
+#include "mylang/frontend/resolver.h"
 
 static const char *g_entry_name = "main";
 static const char *g_source_path = NULL;
@@ -164,6 +166,21 @@ void note_import_func(CompilerContext *cc, const char *name) {
     cc->imports[cc->import_count++] = strdup(name);
 }
 
+/* A function or global a MyLang file exports is linked by its link name,
+ * which the calls and loads of it import; the name the import list spells is
+ * never used. The other names are linked as spelled: an assembly file's
+ * labels, and what a file without a namespace shares without exporting. */
+static int exported_by_mylang_import(CompilerContext *cc, ASTNode *import, const char *name) {
+    if (!import->import_stmt.path || !module_loader_is_mylang_source(import->import_stmt.path) ||
+        !cc->session || !cc->session->loader)
+        return 0;
+    Module *mod = module_loader_load(cc->session->loader, codegen_current_source_path(),
+                                     import->import_stmt.path);
+    if (!mod || mod->state != MODULE_LOADED) return 0;
+    ModuleSymbol *sym = resolver_lookup_import_symbol(import, mod, name);
+    return sym && (sym->kind == SYMBOL_FUNCTION || sym->kind == SYMBOL_GLOBAL);
+}
+
 void collect_imports_from_toplevel(CompilerContext *cc, ASTNode *root) {
     ASTNode *block = cg_as_block(root);
     if (!cc || !block) return;
@@ -171,6 +188,7 @@ void collect_imports_from_toplevel(CompilerContext *cc, ASTNode *root) {
         ASTNode *n = block->block.stmts[i];
         if (n->type == AST_IMPORT && n->import_stmt.symbol_count > 0) {
             for (int k = 0; k < n->import_stmt.symbol_count; k++) {
+                if (exported_by_mylang_import(cc, n, n->import_stmt.symbols[k])) continue;
                 note_import_func(cc, n->import_stmt.symbols[k]);
             }
         }

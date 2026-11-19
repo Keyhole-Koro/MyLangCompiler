@@ -24,6 +24,14 @@ ModuleSymbol *resolver_lookup_import_symbol(const ASTNode *import_node, const Mo
                                             const char *symbol_name);
 
 /*
+ * The exported symbol `import_node` makes visible whose link name is
+ * `link_name`, or NULL. Uses of a function or global the import brings in
+ * carry its link name once the parser has rewritten them.
+ */
+ModuleSymbol *resolver_lookup_import_link_name(const ASTNode *import_node, const Module *target_module,
+                                               const char *link_name);
+
+/*
  * Fills a DomSignature struct from a parsed function definition ASTNode.
  * Allocates param_names and call_name in out (caller frees with dom_signature_free).
  */

@@ -1,0 +1,20 @@
+import { base, STEP, add, apply, inc } from "namedExports_lib.mln";
+import { plain, plain_global, shared_fn } from "namedExports_plain.mln";
+import { pick } from "namedExports_gen.mln";
+import named from "namedExports_lib.mln";
+
+i32 shadow() {
+    i32 base = 1;        // a local named like an import is the local
+    return base;
+}
+
+i32 main() {
+    base = base + STEP;                 // 13
+    i32 a = add(base);                  // the default argument: 18
+    i32 b = apply(inc, 4);              // a function as a value: 5
+    i32 c = plain(1) + plain_global;    // 108
+    i32 d = shared_fn(0);               // 1000
+    i32 e = pick<i32>(1, 2);            // 1
+    i32 f = named.base;                 // the same global: 13
+    return a + b * 100 + c * 1000 + d + e * 10 + f * 100000 + shadow() * 10000000;
+}

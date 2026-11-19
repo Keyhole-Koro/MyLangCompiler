@@ -208,13 +208,15 @@ static void append_import_sigs_from_source(CompilerContext *cc, ASTNode *node) {
             ModuleSymbol *sym = resolver_lookup_import_symbol(node, mod, req_name);
             if (!sym) continue;
 
+            /* The parser renamed the file's uses of an exported function or
+             * global to its link name, as it does `ns.name`. */
             if (sym->kind == SYMBOL_GLOBAL) {
-                append_imported_global_info(cc, sym->source_name, sym->declaration);
+                append_imported_global_info(cc, sym->link_name, sym->declaration);
                 continue;
             }
 
             if (sym->kind == SYMBOL_FUNCTION) {
-                append_func_sig(cc, sym->source_name, sym->declaration);
+                append_func_sig(cc, sym->link_name, sym->declaration);
                 continue;
             }
 

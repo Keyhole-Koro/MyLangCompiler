@@ -38,6 +38,17 @@ ModuleSymbol *resolver_lookup_import_symbol(const ASTNode *import_node, const Mo
     return module_find_exported_symbol(target_module, symbol_name);
 }
 
+ModuleSymbol *resolver_lookup_import_link_name(const ASTNode *import_node, const Module *target_module,
+                                               const char *link_name) {
+    if (!import_node || import_node->type != AST_IMPORT || !target_module || !link_name) return NULL;
+    for (int i = 0; i < target_module->symbol_count; i++) {
+        ModuleSymbol *sym = &target_module->symbols[i];
+        if (!sym->link_name || strcmp(sym->link_name, link_name) != 0) continue;
+        if (resolver_lookup_import_symbol(import_node, target_module, sym->source_name) == sym) return sym;
+    }
+    return NULL;
+}
+
 void resolver_fill_dom_signature(const ASTNode *fundef_node, const char *call_name, DomSignature *out) {
     if (!fundef_node || fundef_node->type != AST_FUNDEF || !out) return;
 

@@ -33,9 +33,11 @@ A namespace is one name: namespaces do not nest (`namespace os.ui;` is an
 error), and a file declares at most one. The namespace is the qualifier an
 importer writes and the prefix of the link names the file exports:
 `export i32 select()` in a file of `namespace dom;` is called as `dom.select()`
-and links as `dom_select`. A file without a namespace exports plain names.
-Privacy is per file: what a file does not export, no other file can name, even
-one of the same namespace.
+and links as `dom_select`. A file without a namespace exports under `main`
+(`main_select`), and its functions that it does not export link by their plain
+names, which any file may import. In a file with a namespace, privacy is per
+file: what a file does not export, no other file can name, even one of the same
+namespace.
 
 Several files may declare the same namespace and be linked into one program.
 Their exports share the namespace's prefix, so two of them exporting the same
@@ -47,7 +49,10 @@ own object, so each file may have its own `helper`.
 `namespace X;`, and otherwise the symbol `X` that `f.mln` declares. A namespace
 cannot be imported under another name: a name that is neither the namespace nor
 a declared symbol is an error that suggests the namespace's own name. Every name
-in `import { ... }` must likewise be declared by the imported file.
+in `import { ... }` must likewise be declared by the imported file. A function
+or global taken by name is written by its name and linked by the exporter's
+link name: after `import { select } from "dom.mln";`, `select()` calls
+`dom_select`, as `dom.select()` does.
 
 Importing several files of one namespace under its name merges them:
 

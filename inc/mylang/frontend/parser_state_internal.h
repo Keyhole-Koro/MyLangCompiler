@@ -149,6 +149,12 @@ typedef struct ParserModuleState {
     int namespace_declared;
     ExportEntry *exports;
     int export_count;
+    /* What `import { name } from "f.mln";` takes of the functions and globals
+     * f.mln exports. The file writes `name`, the object links f.mln's link
+     * name (`ns_name`), so the rewrite pass renames one to the other, as it
+     * does the file's own exports: orig is the name, mangled the link name. */
+    ExportEntry *import_renames;
+    int import_rename_count;
     char **imported_packages;
     int imported_package_count;
     NamespaceImport *namespace_imports;
@@ -235,6 +241,8 @@ void parser_reset(void);
 void parser_set_filename(const char *name);
 void add_export(ParserContext *context, const char *orig, const char *mangled);
 const char *find_export_mangled(ParserContext *context, const char *orig);
+void add_import_rename(ParserContext *context, const char *orig, const char *link_name);
+const char *find_import_rename(ParserContext *context, const char *orig);
 int is_imported_package(ParserContext *context, const char *name);
 void add_namespace_import(ParserContext *context, const char *binding, const char *path,
                           struct Module *module, Token *at);

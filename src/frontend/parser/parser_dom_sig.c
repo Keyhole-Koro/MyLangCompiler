@@ -50,13 +50,9 @@ int dom_signature_lookup(ParserContext *context, ASTNode *program,
         ModuleSymbol *sym = resolver_lookup_import_symbol(node, mod, tag);
         if (!sym || sym->kind != SYMBOL_FUNCTION || !sym->declaration) continue;
 
-        if (node->import_stmt.symbol_count == 0 && mod->package_name) {
-            char call_name[256];
-            snprintf(call_name, sizeof(call_name), "%s_%s", mod->package_name, tag);
-            resolver_fill_dom_signature(sym->declaration, call_name, out);
-        } else {
-            resolver_fill_dom_signature(sym->declaration, tag, out);
-        }
+        /* An exported function is called by its link name (`ns_tag`),
+         * whichever form of import brought it in. */
+        resolver_fill_dom_signature(sym->declaration, sym->link_name ? sym->link_name : tag, out);
         return 1;
     }
 

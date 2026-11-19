@@ -185,11 +185,12 @@ void semantic_collect_function_sigs(SemanticContext *ctx, ASTNode *node) {
                               node->fundef.params,
                               node);
         break;
-    case AST_IMPORT:
+    case AST_IMPORT: {
+        Module *mod = NULL;
         if (node->import_stmt.path && module_loader_is_mylang_source(node->import_stmt.path)) {
             FrontendSession *session = ctx->session;
             if (session && session->loader) {
-                Module *mod = module_loader_load(session->loader, ctx->filename, node->import_stmt.path);
+                mod = module_loader_load(session->loader, ctx->filename, node->import_stmt.path);
                 if (mod) {
                     const char *pkg = resolver_import_package_name(node, mod);
                     if (pkg) {
@@ -222,6 +223,12 @@ void semantic_collect_function_sigs(SemanticContext *ctx, ASTNode *node) {
             }
         }
         for (int i = 0; i < node->import_stmt.symbol_count; i++) {
+            /* An exported function or global was registered above under the
+             * link name the parser renamed its uses to. */
+            ModuleSymbol *exported = mod && mod->state == MODULE_LOADED
+                ? resolver_lookup_import_symbol(node, mod, node->import_stmt.symbols[i]) : NULL;
+            if (exported && (exported->kind == SYMBOL_FUNCTION || exported->kind == SYMBOL_GLOBAL))
+                continue;
             register_function_sig(ctx,
                                   node->import_stmt.symbols[i],
                                   -1,
@@ -238,6 +245,7 @@ void semantic_collect_function_sigs(SemanticContext *ctx, ASTNode *node) {
             }
         }
         break;
+    }
     default:
         break;
     }
@@ -380,11 +388,11 @@ void semantic_collect_imported_globals(SemanticContext *ctx, ASTNode *node) {
             !resolver_lookup_import_symbol(node, mod, sym->source_name)) {
             continue;
         }
-        const char *visible_name = node->import_stmt.symbol_count == 0
-            ? sym->link_name : sym->source_name;
+        /* Uses of the global carry its link name: `ns.g` was turned into it
+         * while parsing, and `import { g }` has its `g` renamed to it. */
         ASTNode *decl = sym->declaration;
         int is_copy = semantic_type_is_copy(ctx, decl->var_decl.var_type);
-        semantic_declare_binding(ctx, visible_name, decl->var_decl.var_type, is_copy, 0,
+        semantic_declare_binding(ctx, sym->link_name, decl->var_decl.var_type, is_copy, 0,
                         semantic_location_from_ast(node));
     }
 }
