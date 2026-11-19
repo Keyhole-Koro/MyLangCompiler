@@ -40,6 +40,7 @@ test-component: mlc syntax-check
 	python3 tests/check_ast_free.py
 	python3 tests/check_safe_scope.py
 	python3 tests/check_namespaces.py
+	python3 tests/check_syntax_stdio.py
 	python3 tests/check_serve.py
 
 test-e2e: mlc

@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 #include "mylang/frontend/lexer.h"
 #include "mylang/frontend/model_expand.h"
@@ -1249,6 +1250,9 @@ static int run_stdio(const SyntaxGrammar *grammar, SyntaxTable *table, const int
             char *end = NULL;
             unsigned long length = strtoul(size, &end, 10);
             if (end == size) return 1;
+            // strtoul wraps a negative size and saturates a huge one; either
+            // made length + 1 wrap to 0, and fread then wrote past malloc(0).
+            if (size[strspn(size, " \t\v\f")] == '-' || length >= SIZE_MAX) return 1;
 
             char *source = malloc(length + 1);
             if (!source) return 1;
