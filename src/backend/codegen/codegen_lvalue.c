@@ -202,6 +202,15 @@ void gen_lvalue_addr(CompilerContext *cc, ASTNode *node, StringBuilder *sb, cons
         gen_expr(cc, node->arrow_access.lhs, sb, target_reg, params, param_count, locals, local_count);
         sb_append(sb, "  addis %s, %d\n", target_reg, mi->offset);
         break; }
+    case AST_CALL:
+        /* `make().field` of a struct a call returns: the result has no
+         * storage to take an address in, and emitting nothing read whatever
+         * the register held. */
+        fprintf(stderr,
+                "Codegen error at %d:%d: a member of the struct a call returns cannot be "
+                "read in place yet; put the result in a local first\n",
+                node->line, node->col);
+        exit(1);
     default:
         sb_append(sb, "  ; unsupported lvalue kind: %s\n", astType2str(node->type));
     }

@@ -12,6 +12,7 @@ nestedPatternFallback|255|succeed/enum/nestedPatternFallback.mln
 optionZeroIsNone|7|succeed/semantic/optionZeroIsNone.mln,../../MyStdLib/core/option.mln
 tryRunsWhereWritten|32|succeed/semantic/tryRunsWhereWritten.mln,../../MyStdLib/core/result.mln,../../MyStdLib/core/option.mln
 defaultHook|75|succeed/function/defaultHook.mln,../../MyStdLib/core/result.mln
+manyArgsAggregateResults|63|succeed/function/manyArgsAggregateResults.mln
 paramWriteCopy|93212|succeed/semantic/paramWriteCopy.mln
 moveParam|10110102|succeed/semantic/moveParam.mln
 scaledIndex|7475|succeed/array/scaledIndex.mln

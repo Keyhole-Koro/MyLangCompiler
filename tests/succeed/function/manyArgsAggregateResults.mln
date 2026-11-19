@@ -1,0 +1,37 @@
+// A struct a call returns may be passed straight to a call of any number of
+// arguments, in a register or a stack position, to a variadic function and
+// through a function value; its temporary lives until the outer call returns.
+struct P { i32 x; i32 y; };
+struct Q { i32 a; i32 b; i32 c; };
+
+P make(i32 v) { return P { x: v, y: v * 2 }; }
+Q makeq(i32 v) { return Q { a: v, b: v + 1, c: v + 2 }; }
+
+// six arguments, aggregates in register and stack positions
+i32 six(P p, i32 a, i32 b, Q q, i32 c, P r) {
+    return p.x + p.y * 10 + a * 100 + b * 1000 + q.a + q.b + q.c + c * 10000 + r.y * 100000;
+}
+
+// an aggregate result of a call with many arguments, passed on again
+P combine(i32 a, i32 b, i32 c, P p, Q q) {
+    return P { x: a + b + c + p.x, y: q.c };
+}
+
+i32 count(i32 n, rest r) { return n + __rest_len(r) * 10 + __rest_get(r, 0) + __rest_get(r, 1); }
+i32 vtake(P p, i32 n, rest r) { return p.x + p.y + n + __rest_len(r) * 100 + __rest_get(r, 2); }
+
+i32 main() {
+    i32 s1 = six(make(1), 2, 3, makeq(4), 5, make(6));
+    // 1 + 2*10 + 2*100 + 3*1000 + (4+5+6) + 5*10000 + 12*100000 = 1253236
+    P seven = make(7);
+    Q one = makeq(1);
+    P c = combine(1, 2, 3, make(seven.y), makeq(one.c));
+    // make(7).y = 14 -> p.x = 14; makeq(1).c = 3 -> q.c = 5: c = { 20, 5 }
+    i32 s2 = six(combine(1, 1, 1, make(1), makeq(1)), 0, 0, makeq(0), 0, combine(0, 0, 0, make(0), makeq(7)));
+    // combine(...) = { 4, 3 }: 4 + 30 + (0+1+2) + 9*100000 = 900037
+    fn(P, i32, i32, Q, i32, P) -> i32 f = six;
+    i32 s3 = f(make(1), 2, 3, makeq(4), 5, make(6));
+    i32 s4 = vtake(make(2), 3, 7, 8, 9);
+    // 2 + 4 + 3 + 3*100 + 9 = 318
+    return (s1 == 1253236) + (c.x == 20) * 2 + (c.y == 5) * 4 + (s2 == 900037) * 8 + (s3 == 1253236) * 16 + (s4 == 318) * 32;
+}

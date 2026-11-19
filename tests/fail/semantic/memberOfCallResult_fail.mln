@@ -1,0 +1,8 @@
+// A member of the struct a call returns is read from a local for now.
+struct Pair { i32 a; i32 b; };
+
+Pair make() { return Pair { a: 1, b: 2 }; }
+
+i32 main() {
+    return make().b;
+}
