@@ -1,0 +1,5 @@
+i32 main() {
+    char *s = "a\\";
+    char *t = "\\\"b";
+    return s[1] + t[1];
+}

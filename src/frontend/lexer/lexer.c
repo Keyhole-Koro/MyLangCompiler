@@ -309,7 +309,12 @@ bool isIdentifier(char *ptr, char *buffer) {
 bool isStringLiteral(char *ptr, char *buffer) {
     if (*ptr != '"') return false;
     char *start = ptr++;
-    while (*ptr && (*ptr != '"' || *(ptr - 1) == '\\')) ptr++;
+    // Step over each escape as a pair, so the quote after "\\" closes the
+    // literal instead of reading as escaped.
+    while (*ptr && *ptr != '"') {
+        if (*ptr == '\\' && ptr[1]) ptr++;
+        ptr++;
+    }
     if (*ptr != '"') return false;
     ptr++;
     size_t len = ptr - start;
