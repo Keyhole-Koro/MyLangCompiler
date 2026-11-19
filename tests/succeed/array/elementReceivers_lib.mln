@@ -1,0 +1,12 @@
+namespace recvlib;
+
+export struct Counter { i32 n; };
+export i32 (Counter self) get() { return self.n; }
+
+export Counter g_single;
+export Counter g_counters[3];
+
+export void bump() {
+    g_single.n = g_single.n + 4;
+    g_counters[2].n = 6;
+}

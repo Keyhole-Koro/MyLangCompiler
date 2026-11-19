@@ -14,6 +14,7 @@ defaultHook|75|succeed/function/defaultHook.mln,../../MyStdLib/core/result.mln
 paramWriteCopy|93212|succeed/semantic/paramWriteCopy.mln
 moveParam|10110102|succeed/semantic/moveParam.mln
 scaledIndex|7475|succeed/array/scaledIndex.mln
+arrayElementReceivers|46432357|succeed/array/elementReceivers.mln,succeed/array/elementReceivers_lib.mln
 arrayOfPointers|75|succeed/array/pointerElements.unsafe.mln
 libraryContainers|0|succeed/library/libraryContainers.unsafe.mln,../../MyStdLib/collections/vec.unsafe.mln,../../MyStdLib/memory/arena.unsafe.mln,../../MyStdLib/memory/slice.unsafe.mln,../../MyStdLib/core/option.mln,../../MyStdLib/format/mbin.mln,../../MyStdLib/text/str.unsafe.mln,../../MyStdLib/text/bytes.unsafe.mln,../../MyStdLib/text/ascii.mln,../../MyStdLib/core/int32.mln
 blobCapacity|12|succeed/library/blobCapacity.unsafe.mln,../../MyStdLib/memory/blob.unsafe.mln,../../MyStdLib/memory/allocator.mln,../../MyStdLib/core/option.mln,../../MyStdLib/core/result.mln,../../MyStdLib/text/str.unsafe.mln,../../MyStdLib/text/bytes.unsafe.mln,../../MyStdLib/text/ascii.mln,../../MyStdLib/core/int32.mln

@@ -2,6 +2,8 @@
 #include "mylang/frontend/parser_method_internal.h"
 #include "mylang/frontend/parser_ast_internal.h"
 #include "mylang/frontend/parser_annot_internal.h"
+#include "mylang/frontend/module.h"
+#include "mylang/frontend/resolver.h"
 #include <stdarg.h>
 
 /* Resolves `recv.method(args)` / `recv->method(args)` calls left by the
@@ -111,6 +113,41 @@ static void resolve_mock_facade_method(ASTNode *call, const char *mangled) {
     call->call.recv = NULL;
 }
 
+static ASTNode *subscripted_array(ParserContext *ctx, MethodScope *scope, ASTNode *sum);
+
+/* The declared type of a place whose type is written out: a variable, a
+ * field, or an element of an array that is one of those. It is what an
+ * array has instead of a receiver shape. */
+static ASTNode *place_type(ParserContext *ctx, MethodScope *scope, ASTNode *expr) {
+    if (!expr) return NULL;
+    switch (expr->type) {
+    case AST_IDENTIFIER:
+        return method_scope_lookup(scope, expr->identifier.name);
+    case AST_MEMBER_ACCESS:
+    case AST_ARROW_ACCESS: {
+        ASTNode *lhs = expr->type == AST_MEMBER_ACCESS ? expr->member_access.lhs : expr->arrow_access.lhs;
+        const char *member = expr->type == AST_MEMBER_ACCESS ? expr->member_access.member : expr->arrow_access.member;
+        RecvShape owner;
+        if (!infer_recv_shape(ctx, scope, lhs, &owner)) return NULL;
+        return find_member_type(ctx, owner.base_name, member);
+    }
+    case AST_UNARY: {
+        ASTNode *array = expr->unary.op == ASTARISK ? subscripted_array(ctx, scope, expr->unary.operand) : NULL;
+        return array ? array->type_array.element_type : NULL;
+    }
+    default:
+        return NULL;
+    }
+}
+
+/* `items[i]` is `*(items + i)`. When `items` is declared an array, this is
+ * its type, whose element the `*` reads: `args[i].text.len()`. */
+static ASTNode *subscripted_array(ParserContext *ctx, MethodScope *scope, ASTNode *sum) {
+    if (!sum || sum->type != AST_BINARY || !sum->binary.subscript || sum->binary.op != ADD) return NULL;
+    ASTNode *type = place_type(ctx, scope, sum->binary.left);
+    return type && type->type == AST_TYPE_ARRAY ? type : NULL;
+}
+
 int infer_recv_shape(ParserContext *ctx, MethodScope *scope, ASTNode *expr, RecvShape *out) {
     if (!expr) return 0;
     switch (expr->type) {
@@ -166,6 +203,8 @@ int infer_recv_shape(ParserContext *ctx, MethodScope *scope, ASTNode *expr, Recv
     }
     case AST_UNARY:
         if (expr->unary.op == ASTARISK) {
+            ASTNode *array = subscripted_array(ctx, scope, expr->unary.operand);
+            if (array) return shape_from_type_ast(array->type_array.element_type, out);
             RecvShape inner;
             if (!infer_recv_shape(ctx, scope, expr->unary.operand, &inner)) return 0;
             if (inner.pointer_level == 0 && inner.borrow_kind != BORROWKIND_NONE) {
@@ -262,6 +301,19 @@ static void resolve_method_call(ParserContext *ctx, MethodScope *scope, ASTNode 
     }
     RecvShape actual;
     if (!infer_recv_shape(ctx, scope, call->call.recv, &actual)) {
+        ASTNode *recv = call->call.recv;
+        /* `ns.f()` without `import ns from ...` reads as a method of a
+         * variable `ns`. */
+        ASTNode *declared = place_type(ctx, scope, recv);
+        if (declared && declared->type == AST_TYPE_ARRAY)
+            method_error(ctx, call, "an array has no methods: call '%s' on an element, as in a[i].%s()",
+                         call->call.name, call->call.name);
+        if (recv->type == AST_IDENTIFIER && !method_scope_lookup(scope, recv->identifier.name))
+            method_error(ctx, call,
+                         "'%s' is neither a variable here nor an imported namespace, so '%s.%s()' "
+                         "calls nothing; import the namespace (import %s from \"...\";) or declare '%s'",
+                         recv->identifier.name, recv->identifier.name, call->call.name,
+                         recv->identifier.name, recv->identifier.name);
         method_error(ctx, call, "cannot determine the type of this method call's receiver");
     }
     const MethodDef *m = find_method(ctx, actual.base_name, call->call.name);
@@ -400,12 +452,19 @@ static void resolve_calls_node(ParserContext *context, MethodScope *scope, ASTNo
         resolve_calls_node(context, scope, node->do_while_stmt.cond);
         resolve_calls_node(context, scope, node->do_while_stmt.body);
         break;
-    case AST_FOR:
-        resolve_calls_node(context, scope, node->for_stmt.init);
-        resolve_calls_node(context, scope, node->for_stmt.cond);
-        resolve_calls_node(context, scope, node->for_stmt.inc);
-        resolve_calls_node(context, scope, node->for_stmt.body);
+    case AST_FOR: {
+        /* What the init declares is in scope for the rest of the loop. */
+        MethodScope loop = method_scope_clone(scope);
+        ASTNode *init = node->for_stmt.init;
+        resolve_calls_node(context, &loop, init);
+        if (init && init->type == AST_VAR_DECL)
+            method_scope_push(&loop, init->var_decl.name, init->var_decl.var_type);
+        resolve_calls_node(context, &loop, node->for_stmt.cond);
+        resolve_calls_node(context, &loop, node->for_stmt.inc);
+        resolve_calls_node(context, &loop, node->for_stmt.body);
+        method_scope_free(&loop);
         break;
+    }
     case AST_RETURN:
         resolve_calls_node(context, scope, node->ret.expr);
         break;
@@ -488,11 +547,37 @@ void method_shapes_begin(ParserContext *context, ASTNode *program) {
     register_structs(context, program);
 }
 
+/* The globals the file's imports bring in, by the names its code uses at
+ * this point: `ns.g` became the link name `ns_g` while parsing, and a `g`
+ * taken by name is renamed only after this pass. */
+static void push_imported_globals(ParserContext *context, ASTNode *program, MethodScope *scope) {
+    FrontendSession *session = context->session;
+    if (!session || !session->loader) return;
+    for (int i = 0; i < program->block.count; i++) {
+        ASTNode *import = program->block.stmts[i];
+        if (!import || import->type != AST_IMPORT || !import->import_stmt.path ||
+            !module_loader_is_mylang_source(import->import_stmt.path))
+            continue;
+        Module *mod = module_loader_load(session->loader, context->module.filename, import->import_stmt.path);
+        if (!mod || mod->state != MODULE_LOADED) continue;
+        for (int s = 0; s < mod->symbol_count; s++) {
+            ModuleSymbol *sym = &mod->symbols[s];
+            if (sym->kind != SYMBOL_GLOBAL || !sym->declaration || sym->declaration->type != AST_VAR_DECL ||
+                resolver_lookup_import_symbol(import, mod, sym->source_name) != sym)
+                continue;
+            const char *name = import->import_stmt.symbol_count == 0 ? sym->link_name : sym->source_name;
+            method_scope_push(scope, name, sym->declaration->var_decl.var_type);
+        }
+    }
+}
+
 void resolve_method_calls(ParserContext *context, ASTNode *program) {
     if (!program || program->type != AST_BLOCK) return;
     method_shapes_begin(context, program);
 
+    /* The file's own globals come last, so they win a lookup. */
     MethodScope global = {0};
+    push_imported_globals(context, program, &global);
     for (int i = 0; i < program->block.count; i++) {
         ASTNode *stmt = program->block.stmts[i];
         if (stmt && stmt->type == AST_VAR_DECL) {

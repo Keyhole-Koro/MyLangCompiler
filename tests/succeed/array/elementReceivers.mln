@@ -1,0 +1,36 @@
+// A method's receiver may be an element of an array -- a global, a local or
+// a field -- a variable the for loop declares, or a global an import brings.
+import { Counter, g_single, g_counters, bump } from "elementReceivers_lib.mln";
+import recvlib from "elementReceivers_lib.mln";
+
+struct Name { i32 len; };
+i32 (Name self) size() { return self.len; }
+
+struct Arg { i32 pid; Name text; };
+struct Table { Name names[3]; };
+
+Arg g_args[4];
+Table g_table;
+
+i32 main() {
+    g_args[2].text.len = 7;
+    i32 slot = 2;
+    i32 a = g_args[slot].text.size();       // 7: an element of a global array
+    Arg local[2];
+    local[1].text.len = 5;
+    i32 b = local[1].text.size();           // 5: of a local array
+    g_table.names[1].len = 3;
+    i32 c = g_table.names[1].size();        // 3: of an array field
+    Name names[2];
+    names[0].len = 2;
+    i32 d = names[0].size();                // 2: the element itself
+    i32 e = 0;
+    for (Name n = names[0]; e < 1; e++) {
+        e = e + n.size();                   // 3 after the loop's e++
+    }
+    bump();
+    i32 f = g_single.get();                 // 4: a global taken by name
+    i32 g = g_counters[2].get();            // 6: an element of one
+    i32 h = recvlib.g_single.get();         // 4: through the namespace
+    return a + b * 10 + c * 100 + d * 1000 + e * 10000 + f * 100000 + g * 1000000 + h * 10000000;
+}

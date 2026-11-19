@@ -1,0 +1,4 @@
+// `ns.f()` without `import ns from ...` names nothing.
+i32 main() {
+    return missing.make();
+}

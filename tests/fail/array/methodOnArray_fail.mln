@@ -1,0 +1,9 @@
+// An array has no methods; its elements may.
+struct Name { i32 len; };
+i32 (Name self) size() { return self.len; }
+
+Name g_names[2];
+
+i32 main() {
+    return g_names.size();
+}
