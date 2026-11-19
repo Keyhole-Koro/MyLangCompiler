@@ -37,7 +37,7 @@ static ASTNode *mock_rule_target_expr(ASTNode *call, const char *rule_name) {
         when->call.arg_count < 1) return NULL;
     factory = when->call.args[0];
     if (!factory || factory->type != AST_CALL || !factory->call.name ||
-        (strcmp(factory->call.name, "mock_target") != 0 &&
+        (strcmp(factory->call.name, "mock_of") != 0 &&
          strcmp(factory->call.name, "mock_spy") != 0) ||
         factory->call.arg_count != 1) return NULL;
     return unwrap_mock_target_cast(factory->call.args[0]);

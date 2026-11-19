@@ -150,7 +150,7 @@ static ASTNode *parse_identifier_primary(ParserContext *context, Token **cur) {
         int type_arg_count = 0;
         ASTNode **type_args = parse_type_args(context, cur, &type_arg_count);
         if (!expect(cur, COLONCOLON)) parse_error(context, "expected '::'", *cur);
-        if (!token_is_member_name(*cur)) parse_error(context, "expected identifier after '::'", *cur);
+        if (!token_is_name(*cur)) parse_error(context, "expected identifier after '::'", *cur);
         char qualified[256];
         snprintf(qualified, sizeof(qualified), "%s::%s", name, (*cur)->value);
         *cur = (*cur)->next;

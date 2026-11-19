@@ -128,7 +128,7 @@ ASTNode** parse_param_list(ParserContext *context, Token **cur, int *out_count, 
 ASTNode* parse_fundef(ParserContext *context, Token **cur) {
     Token *start = *cur;
     ASTNode *ret_type = parse_type(context, cur);
-    if (!token_is_member_name(*cur)) parse_error(context, "expected function name", *cur);
+    if (!token_is_name(*cur)) parse_error(context, "expected function name", *cur);
     Token *name_tok = *cur;
     char *name = name_tok->value;
     *cur = (*cur)->next;
@@ -237,7 +237,7 @@ static char **receiver_bound_type_params(Token *cur, int *out_count) {
     t = t->next;
     if (!t || t->kind != R_PARENTHESES) goto invalid;
     t = t->next;
-    if (!t || !token_is_member_name(t)) goto invalid;
+    if (!t || !token_is_name(t)) goto invalid;
     t = t->next;
     /* Bounds for receiver-bound parameters repeat the parameter list after
      * the method name.  Only skip it here; parse_method validates it. */
@@ -289,7 +289,7 @@ ASTNode *parse_method(ParserContext *context, Token **cur) {
     if (!recv_type) parse_error(context, "method receiver must name a type", start);
     int generic_receiver = recv->param.type->type_node.base_type->type == AST_TYPE_GENERIC;
 
-    if (!token_is_member_name(*cur)) parse_error(context, "expected method name", *cur);
+    if (!token_is_name(*cur)) parse_error(context, "expected method name", *cur);
     Token *name_tok = *cur;
     char *method_name = name_tok->value;
     *cur = (*cur)->next;

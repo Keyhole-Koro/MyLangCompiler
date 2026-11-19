@@ -81,7 +81,7 @@ static const char *mock_facade_method(const ASTNode *receiver, const char *metho
     if (!receiver || receiver->type != AST_CALL || !method) return NULL;
     const char *callee = receiver->call.name;
     if (!callee) return NULL;
-    if ((strcmp(callee, "mock_target") == 0 || strcmp(callee, "mock_spy") == 0) &&
+    if ((strcmp(callee, "mock_of") == 0 || strcmp(callee, "mock_spy") == 0) &&
         strcmp(method, "when") == 0) return "TargetMock__when";
     if ((strcmp(callee, "TargetMock__when") == 0 ||
          strcmp(callee, "TargetRule__ret") == 0 ||

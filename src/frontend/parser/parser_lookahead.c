@@ -131,7 +131,7 @@ int looks_like_method(ParserContext *context, Token *cur) {
     }
     if (depth != 0) return 0;
 
-    if (!token_is_member_name(t)) return 0;
+    if (!token_is_name(t)) return 0;
     t = t->next;
     /* A generic receiver may repeat its receiver-bound parameters here to
      * attach trait bounds: `Box<T>::put<T: Eq>(...)`. */

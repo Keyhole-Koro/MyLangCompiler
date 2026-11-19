@@ -458,7 +458,7 @@ static ASTNode *parse_trait_item(ParserContext *context, Token **cur, Token **ou
         if (!recv_name || strcmp(recv_name, "Self") != 0)
             parse_error(context, "a trait method's receiver must be Self", start);
     }
-    if (!token_is_member_name(*cur)) parse_error(context, "expected trait item name", *cur);
+    if (!token_is_name(*cur)) parse_error(context, "expected trait item name", *cur);
     Token *name_tok = *cur;
     *cur = (*cur)->next;
     if ((*cur)->kind == LT) parse_error(context, "generic trait items are not supported yet", *cur);

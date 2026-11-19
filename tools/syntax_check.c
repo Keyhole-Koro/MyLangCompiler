@@ -822,17 +822,16 @@ static int is_contextual_word(TokenKind kind) {
 /* Whether the contextual word at `index` stays its own terminal: where it is
  * the keyword -- `from "path"` of an import, `of {` of a case, `rest r` of a
  * variadic parameter and a bare `rest` among a function type's parameters,
- * `namespace n;` at the top level -- and `from` or `of` after `.` or `::`,
- * where the grammar has rules of their own that name the From trait's
- * function and the mock facade's `of`. Anywhere else it is a name.
- * `fn_type_parens` says whether the innermost open parenthesis is a function
- * type's parameter list. */
+ * `namespace n;` at the top level -- and `from` after `::`, where the grammar
+ * tells the From trait's function (`Level::from(3)`) from an enum's member.
+ * Anywhere else it is a name. `fn_type_parens` says whether the innermost
+ * open parenthesis is a function type's parameter list. */
 static int contextual_word_keeps_kind(Token **tokens, size_t token_count, size_t index,
                                       int brace_depth, int fn_type_parens) {
     TokenKind kind = tokens[index]->kind;
     TokenKind next = index + 1 < token_count ? tokens[index + 1]->kind : EOT;
     TokenKind before = index > 0 ? tokens[index - 1]->kind : EOT;
-    if ((kind == FROM || kind == OF) && (before == DOT || before == COLONCOLON)) return 1;
+    if (kind == FROM && before == COLONCOLON) return 1;
     switch (kind) {
     case FROM:
         return next == STRING_LITERAL;
@@ -1115,12 +1114,19 @@ static int check_tokens(
             if (!first) printf(",");
             first = 0;
             const char *role = (ti < source_count) ? syntax_label_name(table, source_roles[ti]) : NULL;
+            /* A word read as a name (`fn`, `from`, `rest` ... outside their
+             * constructs) is reported as one, so the server treats it as it
+             * treats any other name. */
+            const char *kind = tokenkind2str(t->kind);
+            if (ti < source_count && t->kind != IDENTIFIER && is_name(t->kind) &&
+                rewrites.terminals[ti] == token_map[IDENTIFIER])
+                kind = "IDENTIFIER";
             if (role)
                 printf("[%d,%d,%d,\"%s\",\"%s\"]",
-                       t->line - 1, t->col - 1, t->length, tokenkind2str(t->kind), role);
+                       t->line - 1, t->col - 1, t->length, kind, role);
             else
                 printf("[%d,%d,%d,\"%s\"]",
-                       t->line - 1, t->col - 1, t->length, tokenkind2str(t->kind));
+                       t->line - 1, t->col - 1, t->length, kind);
         }
     }
     printf("],\"symbols\":[");

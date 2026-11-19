@@ -93,17 +93,9 @@ ASTNode *parse_postfix(ParserContext *context, Token **cur) {
             node = new_unary(POST_DEC, node);
         } else if ((*cur)->kind == DOT) {
             *cur = (*cur)->next;
-            // `of` remains a keyword for `case ... of`, but is also the
-            // natural package-member spelling for the mock facade. Keep this
-            // narrowly scoped to `mock.of(...)`; other keyword members stay
-            // rejected so the grammar does not become ambiguous.
-            int is_mock_of = node->type == AST_IDENTIFIER &&
-                             is_imported_package(context, node->identifier.name) &&
-                             strcmp(node->identifier.name, "mock") == 0 &&
-                             (*cur)->kind == OF;
-            if (!token_is_member_name(*cur) && !is_mock_of)
+            if (!token_is_name(*cur))
                 parse_error(context, "expected identifier after '.'", *cur);
-            char *member_name = is_mock_of ? "target" : (*cur)->value;
+            char *member_name = (*cur)->value;
             *cur = (*cur)->next;
             if (node->type == AST_IDENTIFIER && is_imported_package(context, node->identifier.name)) {
                 if ((*cur)->kind == LT &&
@@ -127,7 +119,7 @@ ASTNode *parse_postfix(ParserContext *context, Token **cur) {
             int line = node->line;
             int col = node->col;
             *cur = (*cur)->next;
-            if (!token_is_member_name(*cur))
+            if (!token_is_name(*cur))
                 parse_error(context, "expected identifier after '::'", *cur);
 
             Token *member_tok = *cur;

@@ -36,11 +36,6 @@ static inline int token_is_name(const Token *tok) {
     }
 }
 
-/* A member, method or associated function name: the same names, `from` among
- * them for the conversion function of the `From` trait. */
-static inline int token_is_member_name(const Token *tok) {
-    return token_is_name(tok);
-}
 
 static inline void set_node_loc_from_tokens(ASTNode *node, Token *primary, Token *fallback) {
     Token *tok = primary ? primary : fallback;
