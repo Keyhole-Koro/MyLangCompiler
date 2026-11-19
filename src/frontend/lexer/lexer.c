@@ -210,8 +210,13 @@ bool isCommentBlock(char *ptr, char *buffer) {
     return true;
 }
 
+/* Both tables are tried at the start of every token, so an entry whose first
+ * character differs is passed over before its length is measured: the lexer
+ * spent a quarter of a kernel build measuring and comparing entries that
+ * could not match. */
 bool isOperator(char *ptr, TokenKind *tk, char *buffer) {
     for (long unsigned int i = 0; i < sizeof(operators)/sizeof(operators[0]); i++) {
+        if (operators[i].str[0] != ptr[0]) continue;
         size_t len = strlen(operators[i].str);
         if (strncmp(ptr, operators[i].str, len) == 0) {
             strcpy(buffer, operators[i].str);
@@ -224,6 +229,7 @@ bool isOperator(char *ptr, TokenKind *tk, char *buffer) {
 
 bool isReservedWord(char *ptr, TokenKind *tk, char *buffer) {
     for (long unsigned int i = 0; i < sizeof(reservedWords)/sizeof(reservedWords[0]); i++) {
+        if (reservedWords[i].str[0] != ptr[0]) continue;
         size_t len = strlen(reservedWords[i].str);
         if (strncmp(ptr, reservedWords[i].str, len) == 0 &&
             !isalnum(ptr[len]) && ptr[len] != '_') {
