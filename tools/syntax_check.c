@@ -32,6 +32,8 @@ static const char *default_grammar_path =
     "../MySyntaxEngine/tests/fixtures/grammars/mylang_lsp.grammar";
 static const char *default_table_cache_path = "mylang-syntax-check.table";
 
+static int is_name(TokenKind kind);
+
 static void free_tokens(Token *token) {
     while (token) {
         Token *next = token->next;
@@ -442,7 +444,7 @@ static size_t named_struct_literal_end(Token **tokens, size_t token_count, Angle
     size_t i = brace + 1;
     if (tokens[i]->kind == R_BRACE) return i;
     while (i < token_count) {
-        if (tokens[i]->kind != IDENTIFIER || i + 1 >= token_count ||
+        if (!is_name(tokens[i]->kind) || i + 1 >= token_count ||
             tokens[i + 1]->kind != COLON)
             return token_count;
         if (source_roles && property_role) source_roles[i] = property_role;
@@ -807,7 +809,44 @@ static int fn_begins_type(Token **tokens, size_t token_count, size_t index) {
 }
 
 static int is_name(TokenKind kind) {
-    return kind == IDENTIFIER || kind == FN;
+    return kind == IDENTIFIER || kind == FN || kind == FROM || kind == OF || kind == REST ||
+           kind == NAMESPACE || kind == PACKAGE;
+}
+
+/* The words the compiler reads as keywords only where one construct puts them
+ * (token_is_name in parser_internal.h), and as names everywhere else. */
+static int is_contextual_word(TokenKind kind) {
+    return kind == FROM || kind == OF || kind == REST || kind == NAMESPACE || kind == PACKAGE;
+}
+
+/* Whether the contextual word at `index` stays its own terminal: where it is
+ * the keyword -- `from "path"` of an import, `of {` of a case, `rest r` of a
+ * variadic parameter and a bare `rest` among a function type's parameters,
+ * `namespace n;` at the top level -- and `from` or `of` after `.` or `::`,
+ * where the grammar has rules of their own that name the From trait's
+ * function and the mock facade's `of`. Anywhere else it is a name.
+ * `fn_type_parens` says whether the innermost open parenthesis is a function
+ * type's parameter list. */
+static int contextual_word_keeps_kind(Token **tokens, size_t token_count, size_t index,
+                                      int brace_depth, int fn_type_parens) {
+    TokenKind kind = tokens[index]->kind;
+    TokenKind next = index + 1 < token_count ? tokens[index + 1]->kind : EOT;
+    TokenKind before = index > 0 ? tokens[index - 1]->kind : EOT;
+    if ((kind == FROM || kind == OF) && (before == DOT || before == COLONCOLON)) return 1;
+    switch (kind) {
+    case FROM:
+        return next == STRING_LITERAL;
+    case OF:
+        return next == L_BRACE;
+    case REST:
+        return is_name(next) || (fn_type_parens && (next == COMMA || next == R_PARENTHESES));
+    case NAMESPACE:
+    case PACKAGE:
+        return brace_depth == 0 && is_name(next) && index + 2 < token_count &&
+               tokens[index + 2]->kind == SEMICOLON;
+    default:
+        return 1;
+    }
 }
 
 static int is_case_pattern_token(TokenKind kind) {
@@ -869,8 +908,17 @@ static CaseKeyMark *classify_case_keys(Token **tokens, size_t token_count,
 static int *classify_terminals(const SyntaxGrammar *grammar, const int *token_map,
                                Token **tokens, size_t token_count) {
     int *terminals = calloc(token_count ? token_count : 1, sizeof(int));
-    if (!terminals) return NULL;
+    /* Per open parenthesis, whether it opens a function type's parameters. */
+    char *fn_type_parens = calloc(token_count ? token_count : 1, 1);
+    if (!terminals || !fn_type_parens) {
+        free(terminals);
+        free(fn_type_parens);
+        return NULL;
+    }
     int ternary = syntax_terminal_id(grammar, "TERNARY");
+    int brace_depth = 0;
+    size_t paren_depth = 0;
+    int next_paren_is_fn_type = 0;
     for (size_t i = 0; i < token_count; i++) {
         TokenKind kind = tokens[i]->kind;
         terminals[i] = token_map[kind];
@@ -878,7 +926,21 @@ static int *classify_terminals(const SyntaxGrammar *grammar, const int *token_ma
             terminals[i] = ternary;
         else if (kind == FN && !fn_begins_type(tokens, token_count, i))
             terminals[i] = token_map[IDENTIFIER];
+        else if (is_contextual_word(kind) &&
+                 !contextual_word_keeps_kind(tokens, token_count, i, brace_depth,
+                                             paren_depth > 0 && fn_type_parens[paren_depth - 1]))
+            terminals[i] = token_map[IDENTIFIER];
+
+        if (kind == L_BRACE) brace_depth++;
+        else if (kind == R_BRACE && brace_depth > 0) brace_depth--;
+        else if (kind == L_PARENTHESES) {
+            fn_type_parens[paren_depth++] = (char)next_paren_is_fn_type;
+        } else if (kind == R_PARENTHESES && paren_depth > 0) {
+            paren_depth--;
+        }
+        next_paren_is_fn_type = kind == FN && fn_begins_type(tokens, token_count, i);
     }
+    free(fn_type_parens);
     return terminals;
 }
 

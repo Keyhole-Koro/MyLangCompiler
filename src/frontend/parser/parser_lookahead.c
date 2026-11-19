@@ -71,7 +71,7 @@ ASTNode *parse_expr_until_arrow(ParserContext *context, Token **cur) {
 // `for (T x in iter)`: a type, the loop variable, then the contextual `in`.
 int looks_like_for_in(ParserContext *context, Token *cur) {
     Token *t = skip_type_tokens(context, cur);
-    return t && t->kind == IDENTIFIER && t->next && t->next->kind == IDENTIFIER &&
+    return t && token_is_name(t) && t->next && t->next->kind == IDENTIFIER &&
            t->next->value && strcmp(t->next->value, "in") == 0;
 }
 
@@ -238,7 +238,7 @@ int looks_like_fun_literal(ParserContext *context, Token *cur) {
     while (1) {
         if (t && t->kind == REST) {
             t = t->next;
-            if (t && t->kind == IDENTIFIER) t = t->next;
+            if (t && token_is_name(t)) t = t->next;
             if (t && t->kind == R_PARENTHESES) {
                 t = t->next;
                 return token_starts_fun_literal_body(t);
@@ -250,7 +250,7 @@ int looks_like_fun_literal(ParserContext *context, Token *cur) {
         if (!t || !is_type(context, t->kind, t)) return 0;
         t = t->next; // base type
         while (t && t->kind == ASTARISK) t = t->next;
-        if (!t || t->kind != IDENTIFIER) return 0;
+        if (!t || !token_is_name(t)) return 0;
         t = t->next;
         // optional array suffixes
         while (t && t->kind == L_BRACKET) {

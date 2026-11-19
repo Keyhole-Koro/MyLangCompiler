@@ -13,19 +13,33 @@
 
 typedef struct FunAlias FunAlias;
 
-/* `fn` introduces a function type when the parser expects a type. Anywhere
- * else it remains an ordinary name. Keeping the word contextual preserves
- * useful identifiers such as a test target called `fn` without making
- * function types ambiguous. */
+/* Some words are keywords only where one construct puts them, and ordinary
+ * names everywhere else: `fn` introduces a function type where a type is
+ * expected, `from` follows an import's names, `of` a case's target, `rest`
+ * begins a variadic parameter, and `namespace` (or the legacy `package`)
+ * begins a file's first line. Each of those places checks for its word
+ * before it looks for a name, so a variable, field, parameter or function
+ * may be called `from`, `of`, `rest`, `namespace`, `package` or `fn`. */
 static inline int token_is_name(const Token *tok) {
-    return tok && (tok->kind == IDENTIFIER || tok->kind == FN);
+    if (!tok) return 0;
+    switch (tok->kind) {
+    case IDENTIFIER:
+    case FN:
+    case FROM:
+    case OF:
+    case REST:
+    case NAMESPACE:
+    case PACKAGE:
+        return 1;
+    default:
+        return 0;
+    }
 }
 
-/* `from` is the `import ... from` keyword, but it is also the natural name of
- * the conversion function of the `From` trait. It is accepted as a name
- * wherever a member, method, or associated function is spelled. */
+/* A member, method or associated function name: the same names, `from` among
+ * them for the conversion function of the `From` trait. */
 static inline int token_is_member_name(const Token *tok) {
-    return token_is_name(tok) || (tok && tok->kind == FROM);
+    return token_is_name(tok);
 }
 
 static inline void set_node_loc_from_tokens(ASTNode *node, Token *primary, Token *fallback) {
