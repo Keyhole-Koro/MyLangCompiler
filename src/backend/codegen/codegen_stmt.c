@@ -343,16 +343,27 @@ static void emit_zero_local(CompilerContext *cc, ASTNode *decl, StringBuilder *s
     sb_append(sb, "  jnz b_L_zero_%d\n", label);
 }
 
-static ASTNode *assigning_arm(const char *name, ASTNode *arm) {
-    if (!arm || arm->type == AST_STMT_EXPR) return arm;
-    ASTNode **stmts = malloc(sizeof(ASTNode *));
-    stmts[0] = new_expr_stmt(new_assign(new_identifier((char *)name), arm));
-    return new_stmt_expr(new_block(stmts, 1));
+static ASTNode *assigning_arm_to(const char *name, ASTNode *arm) {
+    ASTNode dest = { .type = AST_IDENTIFIER };
+    dest.identifier.name = (char *)name;
+    return assigning_arm(&dest, arm);
 }
 
-/* An arm that already leaves (`({ return x; })`) stays as written. */
+static ASTNode *returning_arm(ASTNode *arm);
+
+static ASTNode *return_yielded(const void *unused, ASTNode *value) {
+    (void)unused;
+    return returning_arm(value);
+}
+
+/* `({ ...; yield v; })` returns v where it yields it; an arm that already
+ * leaves (`({ return x; })`) has nothing to yield. */
 static ASTNode *returning_arm(ASTNode *arm) {
-    if (!arm || arm->type == AST_STMT_EXPR) return arm;
+    if (!arm) return arm;
+    if (arm->type == AST_STMT_EXPR) {
+        map_stmt_expr_yields(arm, return_yielded, NULL);
+        return arm;
+    }
     ASTNode **stmts = malloc(sizeof(ASTNode *));
     stmts[0] = new_return(arm);
     return new_stmt_expr(new_block(stmts, 1));
@@ -442,8 +453,8 @@ static void gen_stmt_labeled(CompilerContext *cc, ASTNode *node, StringBuilder *
                 /* `T y = c ? a : b;`: each side assigns y, as a case's arms
                  * do. A struct does not fit the register a ternary yields. */
                 ASTNode *choice = node->var_decl.init;
-                choice->ternary.then_expr = assigning_arm(node->var_decl.name, choice->ternary.then_expr);
-                choice->ternary.else_expr = assigning_arm(node->var_decl.name, choice->ternary.else_expr);
+                choice->ternary.then_expr = assigning_arm_to(node->var_decl.name, choice->ternary.then_expr);
+                choice->ternary.else_expr = assigning_arm_to(node->var_decl.name, choice->ternary.else_expr);
                 gen_expr(cc, choice, sb, "r1", params, param_count, locals, local_count);
             } else if (aggregate_type_size(cc, vtype) > SLOT_SIZE &&
                        node->var_decl.init->type == AST_CASE) {
@@ -453,11 +464,11 @@ static void gen_stmt_labeled(CompilerContext *cc, ASTNode *node, StringBuilder *
                 for (int i = 0; i < selection->case_expr.case_count; i++) {
                     if (!selection->case_expr.cases[i].is_noop)
                         selection->case_expr.cases[i].expr =
-                            assigning_arm(node->var_decl.name, selection->case_expr.cases[i].expr);
+                            assigning_arm_to(node->var_decl.name, selection->case_expr.cases[i].expr);
                 }
                 if (selection->case_expr.default_expr)
                     selection->case_expr.default_expr =
-                        assigning_arm(node->var_decl.name, selection->case_expr.default_expr);
+                        assigning_arm_to(node->var_decl.name, selection->case_expr.default_expr);
                 gen_expr(cc, selection, sb, "r1", params, param_count, locals, local_count);
             } else if (aggregate_type_size(cc, vtype) > 0 &&
                        is_addressable_expr(node->var_decl.init)) {

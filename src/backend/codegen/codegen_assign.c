@@ -90,6 +90,46 @@ static void gen_assign_through_temp(CompilerContext *cc, ASTNode *node, int byte
     sb_append(sb, "  addis sp, %d\n", reserved + SLOT_SIZE);
 }
 
+typedef struct {
+    ASTNode *(*map)(const void *data, ASTNode *value);
+    const void *data;
+} YieldMap;
+
+static void map_yields(ASTNode **slot, void *context) {
+    ASTNode *node = slot ? *slot : NULL;
+    /* A nested statement expression's yields are its own. */
+    if (!node || node->type == AST_STMT_EXPR || node->type == AST_FUN_LITERAL) return;
+    YieldMap *yields = context;
+    if (node->type == AST_YIELD) {
+        if (node->yield_stmt.expr) node->yield_stmt.expr = yields->map(yields->data, node->yield_stmt.expr);
+        return;
+    }
+    ast_visit_children(node, map_yields, context);
+}
+
+void map_stmt_expr_yields(ASTNode *stmt_expr, ASTNode *(*map)(const void *data, ASTNode *value),
+                          const void *data) {
+    YieldMap yields = { map, data };
+    ast_visit_children(stmt_expr, map_yields, &yields);
+}
+
+static ASTNode *assign_yielded(const void *dest, ASTNode *value) {
+    return assigning_arm(dest, value);
+}
+
+ASTNode *assigning_arm(const ASTNode *dest, ASTNode *arm) {
+    if (!arm) return arm;
+    if (arm->type == AST_STMT_EXPR) {
+        /* `({ ...; yield v; })` assigns v where it yields it. An arm that
+         * leaves instead (`({ return y; })`) yields nothing to assign. */
+        map_stmt_expr_yields(arm, assign_yielded, dest);
+        return arm;
+    }
+    ASTNode **stmts = malloc(sizeof(ASTNode *));
+    stmts[0] = new_expr_stmt(new_assign(ast_clone(dest), arm));
+    return new_stmt_expr(new_block(stmts, 1));
+}
+
 static void finish_drop_assignment(CompilerContext *cc, DropBinding *dest,
                                    DropBinding *source, StringBuilder *sb) {
     if (!dest) return;
@@ -109,19 +149,28 @@ void gen_assign(CompilerContext *cc, ASTNode *node, StringBuilder *sb,
         fprintf(stderr, "Codegen error: assignment to const lvalue is not allowed\n");
         exit(1);
     }
-    if (node->assign.right->type == AST_TERNARY &&
-        aggregate_assign_size(cc, node->assign.left) > SLOT_SIZE) {
-        /* `x = c ? a : b;` of a struct: each side assigns x, so no side's
-         * value has to pass through the one register a ternary yields. Only
-         * one side runs, so x is evaluated once. */
-        ASTNode *choice = node->assign.right;
-        ASTNode **then_stmts = malloc(sizeof(ASTNode *));
-        then_stmts[0] = new_expr_stmt(new_assign(ast_clone(node->assign.left), choice->ternary.then_expr));
-        ASTNode **else_stmts = malloc(sizeof(ASTNode *));
-        else_stmts[0] = new_expr_stmt(new_assign(ast_clone(node->assign.left), choice->ternary.else_expr));
-        choice->ternary.then_expr = new_stmt_expr(new_block(then_stmts, 1));
-        choice->ternary.else_expr = new_stmt_expr(new_block(else_stmts, 1));
-        gen_expr(cc, choice, sb, "r1", params, param_count, locals, local_count);
+    if ((node->assign.right->type == AST_TERNARY || node->assign.right->type == AST_CASE) &&
+        aggregate_assign_size(cc, node->assign.left) > 0) {
+        /* `x = c ? a : b;` or `x = case k of { ... };` of a struct, a str or
+         * an array: each arm assigns x, so no arm's value has to pass through
+         * the one register a selection yields. Only one arm runs, so x is
+         * evaluated once. The frontend already did this for a local of a
+         * struct type the file declares (lower_case_result_into); this covers
+         * the rest: str, globals, fields and elements. */
+        ASTNode *selection = node->assign.right;
+        if (selection->type == AST_TERNARY) {
+            selection->ternary.then_expr = assigning_arm(node->assign.left, selection->ternary.then_expr);
+            selection->ternary.else_expr = assigning_arm(node->assign.left, selection->ternary.else_expr);
+        } else {
+            for (int i = 0; i < selection->case_expr.case_count; i++) {
+                CaseItem *arm = &selection->case_expr.cases[i];
+                if (!arm->is_noop) arm->expr = assigning_arm(node->assign.left, arm->expr);
+            }
+            if (selection->case_expr.default_expr)
+                selection->case_expr.default_expr =
+                    assigning_arm(node->assign.left, selection->case_expr.default_expr);
+        }
+        gen_expr(cc, selection, sb, "r1", params, param_count, locals, local_count);
         if (target_reg)
             gen_lvalue_addr(cc, node->assign.left, sb, target_reg, params, param_count, locals, local_count);
         return;
