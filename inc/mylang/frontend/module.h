@@ -101,6 +101,9 @@ typedef struct Module {
     int symbol_count;
     int symbol_capacity;
     ModuleLoadState state;
+    /* Kept by module_cache.c for the units after this one; a ModuleGraph that
+     * holds it does not own it. */
+    int cached;
 } Module;
 
 /*
@@ -108,7 +111,8 @@ typedef struct Module {
  *
  * Ownership:
  * - modules: owned array of Module pointers.
- * - ModuleGraph owns all Module instances and their syntax ASTs.
+ * - ModuleGraph owns all Module instances and their syntax ASTs, except a
+ *   module the module cache keeps (Module.cached).
  */
 typedef struct ModuleGraph {
     Module **modules;
@@ -159,11 +163,22 @@ struct FrontendSession {
     int is_implicit;
 };
 
+/* Whether a lookup across the graph may see what module publishes. A module
+ * still loading has published nothing yet -- its symbols and payload enums
+ * are filled in as its load ends -- unless the module cache is replaying a
+ * kept one, which holds them already and must keep them out of sight until
+ * that point all the same. */
+static inline int module_is_published(const Module *module) {
+    return module && module->state != MODULE_LOADING;
+}
+
 /* ModuleGraph lifecycle */
 ModuleGraph *module_graph_create(void);
 void module_graph_destroy(ModuleGraph *graph);
 Module *module_graph_find(ModuleGraph *graph, const char *canonical_path);
 Module *module_graph_add(ModuleGraph *graph, const char *canonical_path);
+/* Appends a module the graph does not own (Module.cached). */
+int module_graph_add_existing(ModuleGraph *graph, Module *module);
 
 /* ModuleSymbol queries */
 ModuleSymbol *module_find_exported_symbol(const Module *module, const char *source_name);
@@ -181,6 +196,30 @@ int module_loader_resolve_import_path(ModuleLoader *loader,
                                       size_t out_size);
 int module_loader_add_alias(ModuleLoader *loader, const char *name, const char *target);
 Module *module_loader_load(ModuleLoader *loader, const char *importer_path, const char *rel_path);
+Module *module_loader_load_canonical(ModuleLoader *loader, const char *canonical);
+
+/* Module cache (module_cache.c): a process that compiles several units keeps
+ * the modules one unit loads for the next. Off unless enabled. */
+typedef enum ModuleLookupKind {
+    /* The module one of whose symbols has this link name (import_private_name). */
+    MODULE_LOOKUP_LINK_NAME,
+    /* The module exporting a payload enum of this name (preserved_payload_enum). */
+    MODULE_LOOKUP_PAYLOAD_ENUM,
+} ModuleLookupKind;
+
+void module_cache_enable(void);
+/* Whether a kept module could not be given to the unit just compiled, which
+ * then has to be compiled again by a fresh process. Clears it. */
+int module_cache_take_conflict(void);
+/* The kept module for canonical, entered into the loader's graph, or NULL. */
+Module *module_cache_load(ModuleLoader *loader, const char *canonical);
+/* What the loader and the parser tell the cache about the load in progress. */
+void module_cache_begin_load(void);
+void module_cache_end_load(ModuleLoader *loader, Module *module);
+void module_cache_note_load(const char *canonical, Module *existing);
+void module_cache_note_loaded(const char *canonical, Module *module);
+void module_cache_note_lookup(ModuleLookupKind lookup, const char *key, Module *found);
+void module_cache_note_unrecorded_lookup(void);
 
 /* FrontendSession lifecycle */
 FrontendSession *frontend_session_create(void);

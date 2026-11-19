@@ -106,7 +106,7 @@ Resolver
       with their declarations and mangled link names
 ```
 
-- **Module Caching**: Paths are resolved relative to the importer and canonicalized via `realpath`. Each source file is lexed and parsed into syntax AST at most once per session.
+- **Module Caching**: Paths are resolved relative to the importer and canonicalized via `realpath`. Each source file is lexed and parsed into syntax AST at most once per session, and a serving process (`mlc --serve`, below) keeps it for later sessions.
 - **Cycle Safety**: In-progress imports are marked `MODULE_LOADING` to prevent infinite recursion during circular imports.
 - **Ownership**: The `ModuleGraph` owns all `Module` instances, their syntax ASTs, and symbol tables. Pointers inside `ModuleSymbol` (such as `declaration`) borrow AST nodes owned by `Module->program` or `Module->generic_templates`.
 - **Eliminated Phase Scans**:
@@ -223,6 +223,38 @@ report all of theirs.
 
 `make check` runs `--check` on every source in the repository. `make lsp-check`
 uses `--parse-only` to tell an editor's false alarm from a real syntax error.
+
+### Serving several units
+
+`mlc --serve` compiles a unit for each line of stdin, which holds the arguments
+a single-file compile takes, separated by tabs. It first prints a line of
+`\x1e` and `serving`; after each unit, whatever the compile printed (stderr is
+joined to stdout) and a line of `\x1e` and the unit's status: 0 compiled,
+1 failed, 2 compile the unit again in a process of its own. Most compile
+errors end the process, as they end a single compile. The build
+(`qa/runners/build_toolchain.py`) runs one server per job.
+
+A unit loads every module it imports, transitively, and that is most of what a
+compile costs. A serving process keeps each module it loads for the units after
+it (`src/frontend/module/module_cache.c`), as long as handing it over gives the
+next unit the module it would have loaded itself:
+
+- A load is recorded as the events it went through, in order: the modules it
+  loaded and the two lookups that search every module in the session graph
+  (`import_private_name`, `preserved_payload_enum`) with the module each found.
+  Handing the module over replays them, loading the same imports at the same
+  points; a lookup that finds another module now is a conflict (status 2).
+- A module is not kept if its load failed, met a module still loading (an
+  import cycle), was given a module that was not kept, or searched the graph
+  for a package (`load_package_generic_function`).
+- Those lookups skip a module still loading (`module_is_published`): it has
+  published nothing yet, and a kept one being replayed must not show what it
+  holds before its load would have ended.
+- The kept module stays out of every session's teardown (`Module.cached`),
+  and `codegen_reset_unit` clears what code generation counted across units.
+
+`tests/check_serve.py` compiles every fixture alone and through one server, in
+two orders, and requires the same status and the same files.
 
 ### Symbol files
 

@@ -71,7 +71,7 @@ void module_graph_destroy(ModuleGraph *graph) {
     if (!graph) return;
     if (graph->modules) {
         for (int i = 0; i < graph->module_count; i++) {
-            module_destroy(graph->modules[i]);
+            if (!graph->modules[i]->cached) module_destroy(graph->modules[i]);
         }
         free(graph->modules);
         graph->modules = NULL;
@@ -92,19 +92,32 @@ Module *module_graph_find(ModuleGraph *graph, const char *canonical_path) {
     return NULL;
 }
 
+static int reserve_module_slot(ModuleGraph *graph) {
+    if (graph->module_count >= graph->module_capacity) {
+        int new_cap = graph->module_capacity == 0 ? 8 : graph->module_capacity * 2;
+        Module **new_modules = realloc(graph->modules, sizeof(Module *) * new_cap);
+        if (!new_modules) return 0;
+        graph->modules = new_modules;
+        graph->module_capacity = new_cap;
+    }
+    return 1;
+}
+
+int module_graph_add_existing(ModuleGraph *graph, Module *module) {
+    if (!graph || !module || module_graph_find(graph, module->canonical_path) ||
+        !reserve_module_slot(graph))
+        return 0;
+    graph->modules[graph->module_count++] = module;
+    return 1;
+}
+
 Module *module_graph_add(ModuleGraph *graph, const char *canonical_path) {
     if (!graph || !canonical_path) return NULL;
 
     Module *existing = module_graph_find(graph, canonical_path);
     if (existing) return existing;
 
-    if (graph->module_count >= graph->module_capacity) {
-        int new_cap = graph->module_capacity == 0 ? 8 : graph->module_capacity * 2;
-        Module **new_modules = realloc(graph->modules, sizeof(Module *) * new_cap);
-        if (!new_modules) return NULL;
-        graph->modules = new_modules;
-        graph->module_capacity = new_cap;
-    }
+    if (!reserve_module_slot(graph)) return NULL;
 
     Module *mod = calloc(1, sizeof(Module));
     if (!mod) return NULL;

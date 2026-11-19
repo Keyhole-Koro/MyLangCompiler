@@ -6,6 +6,7 @@ void driver_print_usage(const char *prog) {
             "  %s [options] <input.mln> <output.masm>\n"
             "  %s [options] <input_dir> <output_dir>\n"
             "  %s --check | --parse-only [options] <input.mln>\n"
+            "  %s --serve        Compile a unit per line of stdin (tab-separated arguments)\n"
             "\n"
             "Options:\n"
             "  --check           Report the errors in one source and write nothing\n"
@@ -22,7 +23,7 @@ void driver_print_usage(const char *prog) {
             "  --Werror          Treat semantic warnings as errors\n"
             "  --error-trace     Record Err origins and ? hops for @std/debug/error_trace.mln\n"
             "  --line-info       Emit source positions and cost regions for the line table\n",
-            prog, prog, prog);
+            prog, prog, prog, prog);
 }
 
 void driver_options_dispose(DriverOptions *opts) {

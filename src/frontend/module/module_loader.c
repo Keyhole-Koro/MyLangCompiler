@@ -306,22 +306,37 @@ Module *module_loader_load(ModuleLoader *loader, const char *importer_path, cons
                 rel_path, importer_path ? importer_path : "(none)");
         return NULL;
     }
+    return module_loader_load_canonical(loader, canonical);
+}
 
+static void parse_module(ModuleLoader *loader, Module *module, const char *canonical);
+
+Module *module_loader_load_canonical(ModuleLoader *loader, const char *canonical) {
+    /* Cycle detection: a module still MODULE_LOADING is returned as it is, to
+     * avoid infinite recursion. */
     Module *existing = module_graph_find(loader->graph, canonical);
-    if (existing) {
-        /* Cycle detection: if MODULE_LOADING, return it directly to avoid infinite recursion */
-        return existing;
+    module_cache_note_load(canonical, existing);
+    Module *module = existing ? existing : module_cache_load(loader, canonical);
+    if (!module) {
+        module = module_graph_add(loader->graph, canonical);
+        if (module) {
+            module->state = MODULE_LOADING;
+            module_cache_begin_load();
+            parse_module(loader, module, canonical);
+            module_cache_end_load(loader, module);
+        }
     }
+    module_cache_note_loaded(canonical, module);
+    return module;
+}
 
-    Module *module = module_graph_add(loader->graph, canonical);
-    if (!module) return NULL;
-    module->state = MODULE_LOADING;
-
+/* Lexes and parses one module, leaving it MODULE_LOADED or MODULE_FAILED. */
+static void parse_module(ModuleLoader *loader, Module *module, const char *canonical) {
     Token *tokens = lexer_from_file(canonical);
     if (!tokens) {
         fprintf(stderr, "module_loader: failed to read source file: %s\n", canonical);
         module->state = MODULE_FAILED;
-        return module;
+        return;
     }
 
     ParserContext ctx;
@@ -336,7 +351,7 @@ Module *module_loader_load(ModuleLoader *loader, const char *importer_path, cons
         free_local_tokens(tokens);
         parser_context_reset(&ctx);
         module->state = MODULE_FAILED;
-        return module;
+        return;
     }
 
     /* The main compilation unit runs instantiate_generics() (as part of
@@ -446,5 +461,4 @@ Module *module_loader_load(ModuleLoader *loader, const char *importer_path, cons
     parser_context_reset(&ctx);
 
     module->state = MODULE_LOADED;
-    return module;
 }

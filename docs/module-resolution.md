@@ -237,6 +237,10 @@ Do not reconstruct them by lexing imported source again.
 Receive package-import and resolved-symbol information explicitly instead of
 reading a parser singleton or default parser context.
 
+A process that serves several units (`mlc --serve`) also keeps loaded modules
+across sessions; see "Serving several units" in compiler-architecture.md. A
+kept module is borrowed by each session's graph, which does not free it.
+
 ## Session lifecycle
 
 The intended pipeline is:

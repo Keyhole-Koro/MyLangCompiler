@@ -186,9 +186,11 @@ static void import_private_name(ParserContext *context, const char *name) {
     }
     for (int m = 0; m < session->graph->module_count; m++) {
         Module *owner = session->graph->modules[m];
+        if (!module_is_published(owner)) continue;
         for (int s = 0; s < owner->symbol_count; s++) {
             ModuleSymbol *symbol = &owner->symbols[s];
             if (!symbol->link_name || strcmp(symbol->link_name, name) != 0) continue;
+            module_cache_note_lookup(MODULE_LOOKUP_LINK_NAME, name, owner);
             ASTNode *declaration = symbol->declaration;
             if (symbol->kind == SYMBOL_FUNCTION) {
                 for (int k = 0; k < declaration->fundef.param_count; k++)
@@ -204,6 +206,7 @@ static void import_private_name(ParserContext *context, const char *name) {
             return;
         }
     }
+    module_cache_note_lookup(MODULE_LOOKUP_LINK_NAME, name, NULL);
 }
 
 static void import_private_names(ASTNode **slot, void *user_data) {
@@ -379,9 +382,13 @@ int load_package_generic_function(ParserContext *context, const char *package, c
     if (imported_by_path) return 0;
     FrontendSession *session = context->session;
     if (!session || !session->graph) return 0;
+    /* What this finds depends on every module loaded so far, which the module
+     * cache does not record: a module that gets here is not kept. */
+    module_cache_note_unrecorded_lookup();
     for (int m = 0; m < session->graph->module_count; m++) {
         Module *module = session->graph->modules[m];
-        if (!module || !module->package_name || strcmp(module->package_name, package) != 0) continue;
+        if (!module_is_published(module) || !module->package_name ||
+            strcmp(module->package_name, package) != 0) continue;
         if (load_generic_function_of(context, module, name)) return 1;
     }
     return 0;
@@ -513,13 +520,17 @@ static ASTNode *preserved_payload_enum(ParserContext *context, const char *name)
     if (!session || !session->graph) return NULL;
     for (int m = 0; m < session->graph->module_count; m++) {
         Module *module = session->graph->modules[m];
-        for (int i = 0; module && i < module->exported_payload_enum_count; i++) {
+        if (!module_is_published(module)) continue;
+        for (int i = 0; i < module->exported_payload_enum_count; i++) {
             ASTNode *candidate = module->exported_payload_enums[i];
             if (candidate && candidate->type == AST_ENUM && candidate->enum_stmt.name &&
-                strcmp(candidate->enum_stmt.name, name) == 0)
+                strcmp(candidate->enum_stmt.name, name) == 0) {
+                module_cache_note_lookup(MODULE_LOOKUP_PAYLOAD_ENUM, name, module);
                 return candidate;
+            }
         }
     }
+    module_cache_note_lookup(MODULE_LOOKUP_PAYLOAD_ENUM, name, NULL);
     return NULL;
 }
 
