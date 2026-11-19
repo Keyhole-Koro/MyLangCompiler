@@ -449,6 +449,7 @@ int compile_one(const DriverOptions *opts, const char *input_path, const char *o
         .input_path = input_path,
         .output_path = output_path,
     };
+    codegen_reset_unit();
     int ok = load_source(&c) && run_frontend(&c) &&
              (writes_output(&c) ? emit_output(&c) : check_codegen(&c));
 

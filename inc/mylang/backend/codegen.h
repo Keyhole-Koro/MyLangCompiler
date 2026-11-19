@@ -20,6 +20,9 @@ void codegen_set_error_trace(int enabled);
 /* Whether the last codegen run emitted a trace call, so the module must be
  * linked: the driver lists it as a dependency. */
 int codegen_error_trace_used(void);
+/* Forgets what the last unit's code generation counted, so a process that
+ * compiles several units writes each as it would alone. */
+void codegen_reset_unit(void);
 /* `--line-info`: emit `.func`, `.loc` and `.cost` for the line table. */
 void codegen_set_line_info(int enabled);
 // Redirect direct calls while preserving bare function values. Each entry is

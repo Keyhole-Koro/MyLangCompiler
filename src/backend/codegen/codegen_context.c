@@ -37,6 +37,11 @@ int codegen_error_trace_used(void) {
     return g_error_trace_used;
 }
 
+void codegen_reset_unit(void) {
+    g_error_trace_used = 0;
+    aggregate_loop_label_reset();
+}
+
 void codegen_set_call_redirects(const char **redirects, int count) {
     g_call_redirects = redirects;
     g_call_redirect_count = count;

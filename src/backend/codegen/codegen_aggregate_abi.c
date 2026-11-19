@@ -76,9 +76,14 @@ int call_return_aggregate_size(CompilerContext *cc, ASTNode *node) {
  * code at every assignment and loading those bytes costs more than the loop. */
 #define AGGREGATE_UNROLL_BYTES 32
 
+static int g_next_loop_label = 0;
+
 int aggregate_loop_label(void) {
-    static int next = 0;
-    return next++;
+    return g_next_loop_label++;
+}
+
+void aggregate_loop_label_reset(void) {
+    g_next_loop_label = 0;
 }
 
 /* A scratch register that holds neither address. */
