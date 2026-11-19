@@ -1,0 +1,49 @@
+// Twenty nested elements: each one holds a lexer mode, which once overran a
+// fixed stack of 16 and broke the tags once elements nested sixteen deep.
+i32 Window(str title) { return 1; }
+void append_child(i32 parent, i32 child) { }
+
+i32 view() {
+    return <Window title="t">
+        <Window title="t">
+            <Window title="t">
+                <Window title="t">
+                    <Window title="t">
+                        <Window title="t">
+                            <Window title="t">
+                                <Window title="t">
+                                    <Window title="t">
+                                        <Window title="t">
+                                            <Window title="t">
+                                                <Window title="t">
+                                                    <Window title="t">
+                                                        <Window title="t">
+                                                            <Window title="t">
+                                                                <Window title="t">
+                                                                    <Window title="t">
+                                                                        <Window title="t">
+                                                                            <Window title="t">
+                                                                                <Window title="t">
+                                                                                </Window>
+                                                                            </Window>
+                                                                        </Window>
+                                                                    </Window>
+                                                                </Window>
+                                                            </Window>
+                                                        </Window>
+                                                    </Window>
+                                                </Window>
+                                            </Window>
+                                        </Window>
+                                    </Window>
+                                </Window>
+                            </Window>
+                        </Window>
+                    </Window>
+                </Window>
+            </Window>
+        </Window>
+    </Window>;
+}
+
+i32 main() { return view(); }
