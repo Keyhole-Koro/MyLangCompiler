@@ -1,4 +1,4 @@
-package boxes;
+namespace boxes;
 
 import { Eq } from "@std/core/cmp.mln";
 

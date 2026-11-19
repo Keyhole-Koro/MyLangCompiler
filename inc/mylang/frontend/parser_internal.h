@@ -16,10 +16,10 @@ typedef struct FunAlias FunAlias;
 /* Some words are keywords only where one construct puts them, and ordinary
  * names everywhere else: `fn` introduces a function type where a type is
  * expected, `from` follows an import's names, `of` a case's target, `rest`
- * begins a variadic parameter, and `namespace` (or the legacy `package`)
- * begins a file's first line. Each of those places checks for its word
- * before it looks for a name, so a variable, field, parameter or function
- * may be called `from`, `of`, `rest`, `namespace`, `package` or `fn`. */
+ * begins a variadic parameter, and `namespace` begins a file's namespace
+ * line. Each of those places checks for its word before it looks for a name,
+ * so a variable, field, parameter or function may be called `from`, `of`,
+ * `rest`, `namespace` or `fn`. */
 static inline int token_is_name(const Token *tok) {
     if (!tok) return 0;
     switch (tok->kind) {
@@ -29,7 +29,6 @@ static inline int token_is_name(const Token *tok) {
     case OF:
     case REST:
     case NAMESPACE:
-    case PACKAGE:
         return 1;
     default:
         return 0;

@@ -1,8 +1,7 @@
-package shared;
+namespace shared;
 
-// `package` is the legacy spelling of `namespace`: this file joins the
-// namespace of shared_core.mln. It imports that file under the namespace's own
-// name and calls into it like any importer.
+// This file joins the namespace of shared_core.mln. It imports that file
+// under the namespace's own name and calls into it like any importer.
 import shared from "shared_core.mln";
 
 i32 helper() { return 2; }

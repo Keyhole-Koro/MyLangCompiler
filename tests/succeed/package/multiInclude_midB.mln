@@ -1,4 +1,4 @@
-package midB;
+namespace midB;
 import shared;
 import midA;
 

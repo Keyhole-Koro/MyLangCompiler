@@ -19,19 +19,18 @@ A program consists of a sequence of top-level declarations and definitions.
     - `var_decl`
     - `trait_decl`, `impl_decl` (see [Traits](traits.md))
 
-Six words are keywords only where one construct puts them: `fn` where a type
+Five words are keywords only where one construct puts them: `fn` where a type
 is expected (`fn(i32) -> void`), `from` after an import's names, `of` after a
 case's target, `rest` at the start of a variadic parameter (and as the last of
-a function type's parameters), and `namespace` and `package` at the start of the
-namespace line. Anywhere else each is an ordinary name, so a variable, field,
-parameter, method or function may be called `from`, `of`, `rest`, `namespace`,
-`package` or `fn`: `case of of { ... }` selects on a variable `of`.
+a function type's parameters), and `namespace` at the start of the namespace
+line. Anywhere else each is an ordinary name, so a variable, field, parameter,
+method or function may be called `from`, `of`, `rest`, `namespace` or `fn`:
+`case of of { ... }` selects on a variable `of`.
 
 ## 2. Modules and Imports
 A source file may declare the namespace its exports belong to.
 
 - `namespace_decl` -> `namespace IDENTIFIER ;`
-  (`package IDENTIFIER ;` is the legacy spelling and means the same)
 - `import_stmt` -> 
     - `import IDENTIFIER ;` (Import a namespace by name, without a path)
     - `import IDENTIFIER from STRING_LITERAL ;` (Import a file's namespace, or one symbol of it)

@@ -1,4 +1,4 @@
-package p;
+namespace p;
 // An annotation is a prototype: a function with a body is not usable as one.
 i32 twice(i32 x) { return x * 2; }
 @twice

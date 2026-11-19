@@ -1,4 +1,4 @@
-package badges;
+namespace badges;
 
 export newtype Badge = i32;
 export newtype Crew = i32;

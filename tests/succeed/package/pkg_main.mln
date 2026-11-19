@@ -1,4 +1,4 @@
-package main;
+namespace main;
 import math;
 
 i32 main() {

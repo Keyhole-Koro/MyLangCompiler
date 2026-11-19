@@ -1,4 +1,4 @@
-package lib;
+namespace lib;
 
 // Library half of the cross-module payload-enum-return regression test (see
 // cross_module_result_main.mln). A module loaded only for cross-file symbol

@@ -82,7 +82,6 @@ typedef enum {
     SIZEOF,   // sizeof
     IMPORT,   // import
     EXPORT,   // export
-    PACKAGE,  // package: the legacy spelling of `namespace`
     NAMESPACE, // namespace
     FROM,     // from
     REST,     // rest

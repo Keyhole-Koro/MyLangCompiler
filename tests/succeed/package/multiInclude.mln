@@ -1,4 +1,4 @@
-package main;
+namespace main;
 import part1;
 import part2;
 

@@ -71,7 +71,7 @@ StringTokenKindMap reservedWords[] = {
     {"yield", YIELD}, {"defer", DEFER},
     {"of", OF}, {"_", UNDERSCORE},
     {"typedef", TYPEDEF}, {"newtype", NEWTYPE}, {"struct", STRUCT}, {"union", UNION}, {"enum", ENUM}, {"fn", FN},
-    {"import", IMPORT}, {"from", FROM}, {"export", EXPORT}, {"package", PACKAGE}, {"namespace", NAMESPACE}, {"rest", REST},
+    {"import", IMPORT}, {"from", FROM}, {"export", EXPORT}, {"namespace", NAMESPACE}, {"rest", REST},
     {"trait", TRAIT}, {"impl", IMPL}
 };
 
@@ -165,7 +165,6 @@ char *tokenkind2str(TokenKind kind) {
         case TRAIT: return "TRAIT";
         case IMPL: return "IMPL";
         case EXPORT: return "EXPORT";
-        case PACKAGE: return "PACKAGE";
         case NAMESPACE: return "NAMESPACE";
 
         case NUMBER: return "NUMBER";

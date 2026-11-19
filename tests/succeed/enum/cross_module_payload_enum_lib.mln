@@ -1,4 +1,4 @@
-package lib;
+namespace lib;
 
 import { Result } from "@std/core/result.mln";
 

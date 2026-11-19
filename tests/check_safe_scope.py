@@ -16,7 +16,7 @@ from pathlib import Path
 
 repo = Path(__file__).resolve().parents[1]
 
-LIBRARY = """package rawlib;
+LIBRARY = """namespace rawlib;
 
 export i32 raw() {
     i32 *p = (i32 *)4096;

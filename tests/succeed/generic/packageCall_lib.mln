@@ -1,4 +1,4 @@
-package shapes;
+namespace shapes;
 
 export struct Square { i32 side; };
 

@@ -119,9 +119,8 @@ part of the design.
 ## Import and visibility semantics
 
 - `import { foo } from "x.mln";` exposes only the named exported symbol.
-- `namespace foo;` declares a file's namespace; `package foo;` is its legacy
-  spelling. `Module.package_name` holds it. A namespace is one identifier, and
-  a file declares at most one.
+- `namespace foo;` declares a file's namespace. `Module.package_name` holds it.
+  A namespace is one identifier, and a file declares at most one.
 - `import foo from "x.mln";` is a namespace import when the target declares
   `namespace foo;`; otherwise it is a single-symbol import.
 - A namespace import exposes exported symbols as `foo.bar()` and preserves the

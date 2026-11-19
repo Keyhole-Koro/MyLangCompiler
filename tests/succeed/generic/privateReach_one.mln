@@ -1,4 +1,4 @@
-package one;
+namespace one;
 
 i32 g_seen = 0;
 

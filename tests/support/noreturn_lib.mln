@@ -1,4 +1,4 @@
-package noreturn_lib;
+namespace noreturn_lib;
 
 @noreturn
 export void stop() {

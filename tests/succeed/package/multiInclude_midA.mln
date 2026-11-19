@@ -1,4 +1,4 @@
-package midA;
+namespace midA;
 import shared;
 
 export i32 midA(i32 x) {

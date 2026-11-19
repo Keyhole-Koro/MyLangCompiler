@@ -1,4 +1,4 @@
-package lib;
+namespace lib;
 
 // A type and its methods, defined here, used from another package.
 export struct Counter {

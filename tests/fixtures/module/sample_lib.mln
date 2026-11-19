@@ -1,4 +1,4 @@
-package sample_lib;
+namespace sample_lib;
 
 export i32 exported_add(i32 x, i32 y) {
     return x + y;

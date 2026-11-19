@@ -1,4 +1,4 @@
-package main;
+namespace main;
 import midB;
 
 i32 main() {

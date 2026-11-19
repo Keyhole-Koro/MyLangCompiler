@@ -11,7 +11,7 @@ from pathlib import Path
 
 repo = Path(__file__).resolve().parents[1]
 
-LIBRARY = """package lib;
+LIBRARY = """namespace lib;
 
 import { Eq } from "@std/core/cmp.mln";
 

@@ -1,4 +1,4 @@
-package lookups;
+namespace lookups;
 
 import { Option } from "@std/core/option.mln";
 

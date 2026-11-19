@@ -1,6 +1,6 @@
 // Positional calls fill trailing `= literal` defaults, for local, exported
 // and package-imported functions alike.
-package defaults;
+namespace defaults;
 import lib from "../../support/app/lib.mln";
 i32 local_add(i32 a, i32 b = 10) { return a + b; }
 export i32 exported_add(i32 a, i32 b = 20) { return a + b; }

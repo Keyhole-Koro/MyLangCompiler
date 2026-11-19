@@ -1,6 +1,6 @@
 // Element vocabulary for the @app cases: defaults on every geometry
 // parameter, handler slots recorded so a case can call them back.
-package dom;
+namespace dom;
 i32 g_last_owner = 0;
 fn(i32 owner, i32 id, i32 arg) -> void g_last_click = 0;
 i32 g_last_id = 0;

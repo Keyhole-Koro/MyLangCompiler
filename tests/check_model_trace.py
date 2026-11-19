@@ -85,7 +85,7 @@ def check_valid(process):
 
 def check_errors(process):
     source = (
-        "package p;\n"
+        "namespace p;\n"
         "entity A max 4 {\n"
         "    i32 x;\n"
         "    ;\n"

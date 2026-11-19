@@ -1,4 +1,4 @@
-package annotations;
+namespace annotations;
 // Annotation declarations for the @app cases: name and argument shape only.
 // The compiler records uses in a table; nothing ever calls these.
 // Declarations only: name and argument shape. Never called.

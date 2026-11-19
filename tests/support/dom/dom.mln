@@ -2,7 +2,7 @@
 // tests/succeed/dom. A tag resolves to the function of the same name and its
 // properties to that function's parameters, so these signatures are what the
 // cases are checked against.
-package dom;
+namespace dom;
 
 export void append_child(i32 p, i32 c) { }
 

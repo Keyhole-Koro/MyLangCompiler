@@ -1,4 +1,4 @@
-package p;
+namespace p;
 import { timer } from "../../support/app/annotations.mln";
 struct Thing { i32 v; };
 @timer(100, 200)

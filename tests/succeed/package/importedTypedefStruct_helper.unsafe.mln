@@ -1,4 +1,4 @@
-package helper;
+namespace helper;
 
 export typedef struct {
     u16 x;

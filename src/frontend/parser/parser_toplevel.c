@@ -6,9 +6,9 @@
 #include "mylang/frontend/parser_trait_internal.h"
 #include <limits.h>
 
-/* The module at `rel_path` when it declares `namespace <ns>;` (or the legacy
- * `package <ns>;`), else NULL. `import ns from "path"` is then a namespace
- * import, enabling `ns.func()` qualified calls. */
+/* The module at `rel_path` when it declares `namespace <ns>;`, else NULL.
+ * `import ns from "path"` is then a namespace import, enabling `ns.func()`
+ * qualified calls. */
 static Module *import_path_declares_namespace(ParserContext *context, const char *rel_path,
                                               const char *ns) {
     if (!rel_path || !ns || !module_loader_is_mylang_source(rel_path)) return NULL;
@@ -287,7 +287,7 @@ ASTNode* parse_toplevel(ParserContext *context, Token **cur) {
             ? "@safe cannot precede an import; mark the imported functions @safe where they are declared"
             : "attributes may not precede an import", first);
     }
-    if (target && (target->kind == NAMESPACE || target->kind == PACKAGE))
+    if (target && target->kind == NAMESPACE)
         parse_error(context, "attributes may not precede a namespace line", first);
     int outer_safe = context->control.safe_decl;
     context->control.safe_decl = is_safe;
@@ -314,9 +314,8 @@ ASTNode* parse_toplevel(ParserContext *context, Token **cur) {
 static ASTNode *parse_toplevel_decl(ParserContext *context, Token **cur) {
     /* `namespace foo;` names the file's namespace: the qualifier an importer
      * writes (`foo.f()`) and the prefix of the link names it exports
-     * (`foo_f`). Several files may declare one namespace. `package` is its
-     * legacy spelling. */
-    if ((*cur)->kind == NAMESPACE || (*cur)->kind == PACKAGE) {
+     * (`foo_f`). Several files may declare one namespace. */
+    if ((*cur)->kind == NAMESPACE) {
         Token *line = *cur;
         *cur = (*cur)->next;
         if (!token_is_name(*cur)) parse_error(context, "expected a namespace name", *cur);

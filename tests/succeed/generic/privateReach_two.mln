@@ -1,4 +1,4 @@
-package two;
+namespace two;
 
 i32 g_seen = 0;
 i32 g_table[3] = { 7, 8, 9 };

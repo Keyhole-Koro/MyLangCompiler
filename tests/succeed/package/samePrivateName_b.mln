@@ -1,4 +1,4 @@
-package same_b;
+namespace same_b;
 
 i32 helper() { return 4; }
 

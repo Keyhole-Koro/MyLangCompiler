@@ -1,4 +1,4 @@
-package dupboxes;
+namespace dupboxes;
 import { Eq } from "@std/core/cmp.mln";
 export struct Box<T> { T value; };
 export impl<T: Eq> Eq for Box<T> {

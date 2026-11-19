@@ -1,4 +1,4 @@
-package shapes;
+namespace shapes;
 
 export trait Describe {
     i32 (Self *self) id();

@@ -110,7 +110,6 @@ static const char *expected_label(const char *token) {
         {"SIZEOF", "sizeof"},
         {"IMPORT", "import"},
         {"EXPORT", "export"},
-        {"PACKAGE", "package"},
         {"NAMESPACE", "namespace"},
         {"FROM", "from"},
         {"REST", "rest"},
@@ -810,13 +809,13 @@ static int fn_begins_type(Token **tokens, size_t token_count, size_t index) {
 
 static int is_name(TokenKind kind) {
     return kind == IDENTIFIER || kind == FN || kind == FROM || kind == OF || kind == REST ||
-           kind == NAMESPACE || kind == PACKAGE;
+           kind == NAMESPACE;
 }
 
 /* The words the compiler reads as keywords only where one construct puts them
  * (token_is_name in parser_internal.h), and as names everywhere else. */
 static int is_contextual_word(TokenKind kind) {
-    return kind == FROM || kind == OF || kind == REST || kind == NAMESPACE || kind == PACKAGE;
+    return kind == FROM || kind == OF || kind == REST || kind == NAMESPACE;
 }
 
 /* Whether the contextual word at `index` stays its own terminal: where it is
@@ -840,7 +839,6 @@ static int contextual_word_keeps_kind(Token **tokens, size_t token_count, size_t
     case REST:
         return is_name(next) || (fn_type_parens && (next == COMMA || next == R_PARENTHESES));
     case NAMESPACE:
-    case PACKAGE:
         return brace_depth == 0 && is_name(next) && index + 2 < token_count &&
                tokens[index + 2]->kind == SEMICOLON;
     default:

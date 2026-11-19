@@ -1,4 +1,4 @@
-package holders;
+namespace holders;
 
 import { Eq } from "@std/core/cmp.mln";
 

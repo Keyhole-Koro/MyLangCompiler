@@ -1,7 +1,7 @@
 // A global initializer that names a constant stores the constant's value. An
 // exported constant is a defined symbol, which once made `CARET = ACCENT`
 // store the address of ACCENT instead. A function still stores its address.
-package palette;
+namespace palette;
 
 newtype Shade = i32;
 struct Pair { i32 first; fn() -> i32 pick; };

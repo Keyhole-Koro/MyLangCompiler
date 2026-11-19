@@ -1,5 +1,5 @@
 // A value receiver is a move; a handler needs an address underneath.
-package p;
+namespace p;
 import { app } from "../../support/app/annotations.mln";
 struct Thing { i32 v; };
 @app

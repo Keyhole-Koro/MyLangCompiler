@@ -1,4 +1,4 @@
-package library;
+namespace library;
 
 import { Option } from "@std/core/option.mln";
 

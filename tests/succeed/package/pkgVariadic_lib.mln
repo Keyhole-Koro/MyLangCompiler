@@ -1,4 +1,4 @@
-package vlib;
+namespace vlib;
 
 // Sums all variadic arguments. Exercises the rest-arg calling convention
 // across a package boundary (`import vlib from "..."` + `vlib.sum(...)`).

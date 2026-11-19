@@ -1,4 +1,4 @@
-package more;
+namespace more;
 
 entity Team   max 8  { i32 score; }
 entity Player max 16 { i32 number; i32 badge; }

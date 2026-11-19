@@ -1,4 +1,4 @@
-package nested_lib;
+namespace nested_lib;
 
 // A struct whose fields are of other structs this module declares: as an
 // array, and as a plain field.
