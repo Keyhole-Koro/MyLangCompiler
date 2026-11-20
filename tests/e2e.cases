@@ -73,6 +73,7 @@ simpleWhile|15|succeed/control/simpleWhile.mln
 complexWhile|16|succeed/control/complexWhile.mln
 simpleChar|72|succeed/expr/simpleChar.unsafe.mln
 stringEscape|10|succeed/expr/stringEscape.unsafe.mln
+stringEscapedBackslash|126|succeed/expr/stringEscapedBackslash.unsafe.mln
 stringView|47|succeed/expr/stringView.unsafe.mln,../../MyStdLib/text/str.unsafe.mln,../../MyStdLib/core/option.mln,../../MyStdLib/text/ascii.mln,../../MyStdLib/text/bytes.unsafe.mln,../../MyStdLib/core/int32.mln
 textFormatting|73|succeed/expr/stringBuilder.mln,../../MyStdLib/text/str.unsafe.mln,../../MyStdLib/core/option.mln,../../MyStdLib/text/text.unsafe.mln,../../MyStdLib/text/ascii.mln,../../MyStdLib/text/bytes.unsafe.mln,../../MyStdLib/core/int32.mln
 intWidth32|20|succeed/expr/intWidth32.mln

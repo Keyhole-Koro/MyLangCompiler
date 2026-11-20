@@ -420,7 +420,7 @@ static int emit_output(Compilation *c) {
         return 0;
     }
 
-    saveOutput(c->output_path, c->output);
+    if (!saveOutput(c->output_path, c->output)) return 0;
     printf("Code generation completed. Output saved to %s\n", c->output_path);
 
     write_sidecar(c, "_tokens.txt", "Tokens", dump_tokens_sidecar);

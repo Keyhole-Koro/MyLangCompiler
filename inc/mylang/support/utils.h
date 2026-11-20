@@ -9,6 +9,8 @@
 char *readSampleInput(const char *filePath);
 
 // Saves content to filePath, creating parent directories as needed.
-void saveOutput(const char *filePath, const char *content);
+// Returns 1 on success and 0, after reporting why, when the file could not
+// be written.
+int saveOutput(const char *filePath, const char *content);
 
 #endif

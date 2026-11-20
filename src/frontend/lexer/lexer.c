@@ -309,7 +309,12 @@ bool isIdentifier(char *ptr, char *buffer) {
 bool isStringLiteral(char *ptr, char *buffer) {
     if (*ptr != '"') return false;
     char *start = ptr++;
-    while (*ptr && (*ptr != '"' || *(ptr - 1) == '\\')) ptr++;
+    // Step over each escape as a pair, so the quote after "\\" closes the
+    // literal instead of reading as escaped.
+    while (*ptr && *ptr != '"') {
+        if (*ptr == '\\' && ptr[1]) ptr++;
+        ptr++;
+    }
     if (*ptr != '"') return false;
     ptr++;
     size_t len = ptr - start;
@@ -325,8 +330,12 @@ int isCharLiteral(char *ptr, char *buffer) {
     char c;
     int consumed = 1;
 
+    // A source ending in ' or '\ has no character left: stop at the NUL
+    // instead of stepping over it and reading past the input.
+    if (*ptr == '\0') return 0;
     if (*ptr == '\\') {
         ptr++; consumed++;
+        if (*ptr == '\0') return 0;
         switch (*ptr) {
             case 'n': c = '\n'; break;
             case 't': c = '\t'; break;
@@ -354,6 +363,9 @@ LexerContext *lexer_context_create(char *input) {
     ctx->ptr = input;
     ctx->line = 1;
     ctx->col = 1;
+    ctx->mode_capacity = 16;
+    ctx->mode_stack = malloc(sizeof(LexerMode) * (size_t)ctx->mode_capacity);
+    if (!ctx->mode_stack) { fputs("out of memory in the lexer\n", stderr); exit(1); }
     ctx->mode_stack[0] = MODE_DEFAULT;
     ctx->depth = 1;
     // Left uninitialized this read as "still inside a DOM element" after the
@@ -366,8 +378,22 @@ LexerContext *lexer_context_create(char *input) {
 }
 
 void lexer_context_destroy(LexerContext *ctx) {
+    free(ctx->mode_stack);
     free(ctx->token_text);
     free(ctx);
+}
+
+// Each nested DOM element holds a few modes, so the stack grows with the
+// nesting instead of overrunning a fixed size.
+static void lexer_push_mode(LexerContext *ctx, LexerMode mode) {
+    if (ctx->depth == ctx->mode_capacity) {
+        int capacity = ctx->mode_capacity * 2;
+        LexerMode *grown = realloc(ctx->mode_stack, sizeof(LexerMode) * (size_t)capacity);
+        if (!grown) { fputs("out of memory in the lexer\n", stderr); exit(1); }
+        ctx->mode_stack = grown;
+        ctx->mode_capacity = capacity;
+    }
+    ctx->mode_stack[ctx->depth++] = mode;
 }
 
 Token *lexer_next_token(LexerContext *ctx) {
@@ -403,7 +429,7 @@ Token *lexer_next_token(LexerContext *ctx) {
                     // The element's own TEXT mode ends here: replace it with
                     // the closing tag, whose '>' then pops back to the parent.
                     ctx->depth--;
-                    ctx->mode_stack[ctx->depth++] = MODE_MLX_CLOSE_TAG;
+                    lexer_push_mode(ctx, MODE_MLX_CLOSE_TAG);
                     ctx->mlx_tag_depth--;
                     ctx->last_token_kind = MLX_CLOSE_TAG_OPEN;
                     return t;
@@ -411,7 +437,7 @@ Token *lexer_next_token(LexerContext *ctx) {
                     Token *t = createTokenSingle(MLX_TAG_OPEN, "<", ctx->line, ctx->col, 1);
                     advance_pos(ctx->ptr, 1, &ctx->line, &ctx->col);
                     ctx->ptr += 1;
-                    ctx->mode_stack[ctx->depth++] = MODE_MLX_TAG;
+                    lexer_push_mode(ctx, MODE_MLX_TAG);
                     ctx->mlx_tag_depth++; // push MODE_MLX_TAG
                     ctx->last_token_kind = MLX_TAG_OPEN;
                     return t;
@@ -420,7 +446,7 @@ Token *lexer_next_token(LexerContext *ctx) {
                 Token *t = createTokenSingle(L_BRACE, "{", ctx->line, ctx->col, 1);
                 advance_pos(ctx->ptr, 1, &ctx->line, &ctx->col);
                 ctx->ptr += 1;
-                ctx->mode_stack[ctx->depth++] = MODE_DEFAULT;
+                lexer_push_mode(ctx, MODE_DEFAULT);
                 ctx->last_token_kind = L_BRACE;
                 return t;
             }
@@ -466,7 +492,7 @@ Token *lexer_next_token(LexerContext *ctx) {
                 advance_pos(ctx->ptr, 1, &ctx->line, &ctx->col);
                 ctx->ptr += 1;
                 ctx->depth--;
-                if (ctx->mlx_tag_depth > 0) ctx->mode_stack[ctx->depth++] = MODE_MLX_TEXT;
+                if (ctx->mlx_tag_depth > 0) lexer_push_mode(ctx, MODE_MLX_TEXT);
                 else ctx->mode_stack[ctx->depth - 1] = MODE_DEFAULT;
                 ctx->last_token_kind = MLX_TAG_CLOSE;
                 return t;
@@ -475,7 +501,7 @@ Token *lexer_next_token(LexerContext *ctx) {
                 Token *t = createTokenSingle(L_BRACE, "{", ctx->line, ctx->col, 1);
                 advance_pos(ctx->ptr, 1, &ctx->line, &ctx->col);
                 ctx->ptr += 1;
-                ctx->mode_stack[ctx->depth++] = MODE_DEFAULT;
+                lexer_push_mode(ctx, MODE_DEFAULT);
                 ctx->last_token_kind = L_BRACE;
                 return t;
             }
@@ -514,7 +540,7 @@ Token *lexer_next_token(LexerContext *ctx) {
         if (isOperator(ctx->ptr, &kind, buffer)) {
             if (kind == LT && (ctx->last_token_kind == RETURN || ctx->last_token_kind == ASSIGN || ctx->last_token_kind == L_PARENTHESES || ctx->last_token_kind == FAT_ARROW || ctx->last_token_kind == COLON)) {
                 kind = MLX_TAG_OPEN;
-                ctx->mode_stack[ctx->depth++] = MODE_MLX_TAG;
+                lexer_push_mode(ctx, MODE_MLX_TAG);
                     ctx->mlx_tag_depth++;
             }
             int tok_line = ctx->line, tok_col = ctx->col;
