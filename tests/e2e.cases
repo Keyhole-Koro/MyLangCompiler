@@ -205,3 +205,5 @@ moveThenLeave|321|succeed/semantic/moveThenLeave.mln
 dataStructsCopy|6|succeed/semantic/dataStructsCopy.mln,../../MyStdLib/core/option.mln
 arraysCopy|1213457|succeed/semantic/arraysCopy.mln,../../MyStdLib/core/result.mln
 fieldNamedLikeFunction|40237|succeed/function/fieldNamedLikeFunction.mln
+structArray2D|5791|succeed/array/structArray2D.mln
+fieldArray2D|5739|succeed/array/fieldArray2D.mln

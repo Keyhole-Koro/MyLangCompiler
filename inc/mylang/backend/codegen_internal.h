@@ -27,6 +27,8 @@ typedef struct {
     int pointer_level;
     int is_array;
     int array_length;
+    int dims[8];        // an array field's dimensions, as LocalInfo's
+    int dims_count;
 } MemberInfo;
 
 typedef struct {

@@ -1,0 +1,14 @@
+// A struct field that is a two-dimensional array: s.m[i] is a row of four,
+// so s.m[i][j] steps by rows, and the field after it is left alone.
+struct S {
+    i32 m[3][4];
+    i32 after;
+};
+S s;
+i32 main() {
+    s.after = 9;
+    s.m[1][2] = 5;
+    s.m[2][3] = 7;
+    s.m[0][3] = 3;
+    return s.m[1][2] * 1000 + s.m[2][3] * 100 + s.m[0][3] * 10 + s.after;
+}

@@ -67,6 +67,8 @@ static void fill_member_info(CompilerContext *cc, ASTNode *mem, MemberInfo *out,
     out->pointer_level = tmp.pointer_level;
     out->is_array = tmp.is_array;
     out->array_length = tmp.array_length;
+    out->dims_count = tmp.dims_count;
+    for (int i = 0; i < 8; i++) out->dims[i] = tmp.dims[i];
     out->size_bytes = typeinfo_elem_size_bytes(cc, &(TypeInfo){
         .base_type = tmp.base_type,
         .pointer_level = tmp.pointer_level,

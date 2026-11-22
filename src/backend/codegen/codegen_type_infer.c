@@ -98,10 +98,32 @@ static int infer_member_type(CompilerContext *cc, ASTNode *lhs_expr, const char 
     out->base_type = mi->base_type ? mi->base_type : "";
     out->pointer_level = mi->pointer_level;
     out->type_modifiers = lhs.type_modifiers;
+    /* is_array marks an array field, whose address gen_array_member_decay
+     * takes instead of loading it. It decays to a pointer to its first
+     * element, which for T m[a][b] is a T[b]: keeping no dimensions stepped
+     * s.m[i] by one T instead of a row. */
     out->is_array = mi->is_array;
-    if (mi->is_array) out->pointer_level += 1;
     out->dims_count = 0;
+    if (mi->is_array) {
+        out->pointer_level += 1;
+        for (int i = 1; i < mi->dims_count && i < 8; i++) out->dims[i - 1] = mi->dims[i];
+        out->dims_count = mi->dims_count > 0 ? mi->dims_count - 1 : 0;
+    }
     return 1;
+}
+
+/* An array value plus an index points at an element: for T[a][b], a T[b].
+ * The first dimension goes and the pointer gains a level, as an array
+ * identifier decays in infer_identifier_type. */
+static void decay_array_value(TypeInfo *type) {
+    for (int i = 1; i < type->dims_count; i++) type->dims[i - 1] = type->dims[i];
+    type->dims_count--;
+    type->is_array = type->dims_count > 0;
+    type->pointer_level++;
+}
+
+static int is_array_value(const TypeInfo *type) {
+    return type->pointer_level == 0 && type->dims_count > 0;
 }
 
 static int infer_binary_type(CompilerContext *cc, ASTNode *expr, TypeInfo *out) {
@@ -111,6 +133,17 @@ static int infer_binary_type(CompilerContext *cc, ASTNode *expr, TypeInfo *out) 
     if (expr->binary.op == ADD || expr->binary.op == SUB) {
         if (lhs.pointer_level > 0 && rhs.pointer_level == 0) { *out = lhs; return 1; }
         if (expr->binary.op == ADD && rhs.pointer_level > 0 && lhs.pointer_level == 0) { *out = rhs; return 1; }
+        /* The row of a two-dimensional array, `*(grid + i)`, indexed again. */
+        if (is_array_value(&lhs) && rhs.pointer_level == 0 && rhs.dims_count == 0) {
+            *out = lhs;
+            decay_array_value(out);
+            return 1;
+        }
+        if (expr->binary.op == ADD && is_array_value(&rhs) && lhs.pointer_level == 0 && lhs.dims_count == 0) {
+            *out = rhs;
+            decay_array_value(out);
+            return 1;
+        }
         if (expr->binary.op == SUB && lhs.pointer_level > 0 && rhs.pointer_level > 0) {
             out->base_type = "i32";
             out->pointer_level = 0;

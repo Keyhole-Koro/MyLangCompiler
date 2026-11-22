@@ -160,8 +160,11 @@ void gen_lvalue_addr(CompilerContext *cc, ASTNode *node, StringBuilder *sb, cons
         TypeInfo lhs_type = (TypeInfo){0};
         if (!infer_expr_type(cc, node->member_access.lhs, &lhs_type) ||
             !lhs_type.base_type || lhs_type.base_type[0] == '\0') {
-            sb_append(sb, "  ; unknown member base type\n");
-            break;
+            // Without the struct there is no offset, and emitting a comment
+            // instead read and wrote through whatever the register held.
+            fprintf(stderr, "Codegen error at %d:%d: cannot tell which struct '.%s' is read from\n",
+                    node->line, node->col, node->member_access.member);
+            exit(1);
         }
         const MemberInfo *mi = find_member_info(cc, lhs_type.base_type, node->member_access.member);
         if (!mi) {
@@ -188,8 +191,9 @@ void gen_lvalue_addr(CompilerContext *cc, ASTNode *node, StringBuilder *sb, cons
         if (!infer_expr_type(cc, node->arrow_access.lhs, &lhs_type) ||
             lhs_type.pointer_level <= 0 ||
             !lhs_type.base_type || lhs_type.base_type[0] == '\0') {
-            sb_append(sb, "  ; unknown pointer base for arrow access\n");
-            break;
+            fprintf(stderr, "Codegen error at %d:%d: cannot tell which struct '->%s' points at\n",
+                    node->line, node->col, node->arrow_access.member);
+            exit(1);
         }
         const MemberInfo *mi = find_member_info(cc, lhs_type.base_type, node->arrow_access.member);
         if (!mi) {

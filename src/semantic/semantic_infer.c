@@ -89,6 +89,17 @@ int semantic_binary_is_arithmetic(TokenKind op) {
            op == LSH || op == RSH || op == AMPERSAND || op == BITXOR || op == BITOR;
 }
 
+/* An array used as a value is a pointer to its first element, and for
+ * T[a][b] that element is a T[b]: the first dimension goes, the rest stay
+ * with the element, as codegen's infer_identifier_type has it. Dropping them
+ * all made grid[i][j] on a struct array a T plus an index. */
+static void semantic_typeinfo_decay_array(SemanticTypeInfo *type) {
+    for (int i = 1; i < type->dims_count; i++) type->dims[i - 1] = type->dims[i];
+    type->dims_count = type->dims_count > 0 ? type->dims_count - 1 : 0;
+    type->is_array = type->dims_count > 0;
+    type->pointer_level++;
+}
+
 static int semantic_infer_binary_type(SemanticContext *ctx, ASTNode *expr, SemanticTypeInfo *out) {
     SemanticTypeInfo left;
     SemanticTypeInfo right;
@@ -110,9 +121,7 @@ static int semantic_infer_binary_type(SemanticContext *ctx, ASTNode *expr, Seman
     if ((expr->binary.op == ADD || expr->binary.op == SUB) &&
         left.is_array && semantic_typeinfo_is_integer_like_or_enum(ctx, &right)) {
         *out = left;
-        out->is_array = 0;
-        out->dims_count = 0;
-        out->pointer_level++;
+        semantic_typeinfo_decay_array(out);
         return 1;
     }
     if (expr->binary.op == ADD &&
@@ -123,9 +132,7 @@ static int semantic_infer_binary_type(SemanticContext *ctx, ASTNode *expr, Seman
     if (expr->binary.op == ADD &&
         right.is_array && semantic_typeinfo_is_integer_like_or_enum(ctx, &left)) {
         *out = right;
-        out->is_array = 0;
-        out->dims_count = 0;
-        out->pointer_level++;
+        semantic_typeinfo_decay_array(out);
         return 1;
     }
 
