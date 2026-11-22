@@ -144,7 +144,8 @@ typedef struct {
     char *ptr;
     int line;
     int col;
-    LexerMode mode_stack[16];
+    LexerMode *mode_stack; /* owned; grows as DOM elements nest */
+    int mode_capacity;
     int depth;
     int mlx_tag_depth;
     TokenKind last_token_kind;
