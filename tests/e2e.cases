@@ -204,3 +204,4 @@ zeroInitLocals|1333|succeed/scope/zeroInitLocals.mln
 moveThenLeave|321|succeed/semantic/moveThenLeave.mln
 dataStructsCopy|6|succeed/semantic/dataStructsCopy.mln,../../MyStdLib/core/option.mln
 arraysCopy|1213457|succeed/semantic/arraysCopy.mln,../../MyStdLib/core/result.mln
+fieldNamedLikeFunction|40237|succeed/function/fieldNamedLikeFunction.mln

@@ -1,0 +1,15 @@
+// A struct field and a function share a name. The field is a slot of P, and
+// `bump` alone is still the function: as a value, as an argument, in a call.
+struct P {
+    i32 bump;
+};
+
+i32 bump(i32 x) { return x + 1; }
+
+i32 twice(fn(i32) -> i32 f, i32 x) { return f(f(x)); }
+
+i32 main() {
+    P p = P { bump: 40 };
+    fn(i32) -> i32 g = bump;
+    return p.bump * 1000 + g(1) * 100 + twice(bump, 5) + bump(2) * 10;
+}

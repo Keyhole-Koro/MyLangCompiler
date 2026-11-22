@@ -142,6 +142,25 @@ static void walk_block_items(SemanticContext *ctx, ASTNode **items, int count) {
     }
 }
 
+/* A struct's members name its fields, not variables: their types are
+ * checked and nothing is declared, so a field never hides a function or a
+ * variable of the same name. */
+static void walk_struct_members(SemanticContext *ctx, ASTNode **members, int count) {
+    for (int i = 0; i < count; i++) {
+        ASTNode *member = members[i];
+        if (!member) continue;
+        if (member->type != AST_VAR_DECL) {
+            semantic_walk_stmt(ctx, member);
+            continue;
+        }
+        semantic_walk_stmt(ctx, member->var_decl.var_type);
+        if (member->var_decl.init) {
+            semantic_walk_expr(ctx, member->var_decl.init, EXPRCTX_READ);
+            semantic_check_initializer_type(ctx, member);
+        }
+    }
+}
+
 void semantic_walk_stmt(SemanticContext *ctx, ASTNode *node) {
     int is_copy;
 
@@ -338,10 +357,10 @@ void semantic_walk_stmt(SemanticContext *ctx, ASTNode *node) {
         semantic_walk_expr(ctx, node->enum_member.value, EXPRCTX_READ);
         break;
     case AST_STRUCT:
-        walk_block_items(ctx, node->struct_stmt.members, node->struct_stmt.member_count);
+        walk_struct_members(ctx, node->struct_stmt.members, node->struct_stmt.member_count);
         break;
     case AST_TYPEDEF_STRUCT:
-        walk_block_items(ctx, node->typedef_struct.members, node->typedef_struct.member_count);
+        walk_struct_members(ctx, node->typedef_struct.members, node->typedef_struct.member_count);
         break;
     case AST_BREAK:
     case AST_CONTINUE:
